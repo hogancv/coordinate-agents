@@ -1,0 +1,4 @@
+interface:
+  display_name: "Coordinate CLI Agents"
+  short_description: "Coordinate Codex and Antigravity through a file bus"
+  default_prompt: "Use $coordinate-cli-agents to enter collaborative mode in this project."
