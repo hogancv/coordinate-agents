@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cli = join(root, 'bin', 'coordinate-cli-agents.mjs');
+const currentVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
 function invoke(args, env = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
@@ -44,7 +45,7 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
       assert.ok(existsSync(join(target, 'scripts', 'agent-bus.mjs')));
       const metadata = JSON.parse(readFileSync(join(target, '.coordinate-cli-agents.json'), 'utf8'));
       assert.equal(metadata.package, '@hogancv/coordinate-cli-agents');
-      assert.equal(metadata.version, '1.0.0');
+      assert.equal(metadata.version, currentVersion);
     }
 
     const healthy = invoke(['doctor', ...common]);
