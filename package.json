@@ -1,0 +1,48 @@
+{
+  "name": "@hogancv/coordinate-cli-agents",
+  "version": "1.0.0",
+  "description": "Install and coordinate Codex CLI and Google Antigravity CLI through a shared project-local file bus.",
+  "type": "module",
+  "bin": {
+    "coordinate-cli-agents": "bin/coordinate-cli-agents.mjs"
+  },
+  "files": [
+    "agents",
+    "bin",
+    "references",
+    "scripts",
+    "SKILL.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "node bin/coordinate-cli-agents.mjs --help && npm test",
+    "prepack": "npm run check"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hogancv/coordinate-cli-agents.git"
+  },
+  "homepage": "https://github.com/hogancv/coordinate-cli-agents#readme",
+  "bugs": {
+    "url": "https://github.com/hogancv/coordinate-cli-agents/issues"
+  },
+  "keywords": [
+    "codex",
+    "antigravity",
+    "agent",
+    "multi-agent",
+    "cli",
+    "skill"
+  ],
+  "author": "hogancv",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -5,7 +5,7 @@ description: Coordinate Codex CLI and Antigravity CLI as two persistent roles th
 
 # Coordinate CLI Agents
 
-Enter a resumable two-CLI workflow in the current Git repository. Use the bundled PowerShell script for all bus operations; do not hand-edit queue files.
+Enter a resumable two-CLI workflow in the current Git repository. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
 
 ## Establish context
 
@@ -14,11 +14,11 @@ Enter a resumable two-CLI workflow in the current Git repository. Use the bundle
    - Codex CLI -> `codex`
    - Antigravity CLI / `agy` -> `antigravity`
 3. If identity is genuinely ambiguous, ask only which role to assume.
-4. Locate this skill directory and set `$BusTool` to `scripts/agent-bus.ps1` within it.
+4. Locate this skill directory and use `scripts/agent-bus.mjs` within it as `<bus-tool>`.
 5. Initialize idempotently:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool init -Root $Repo
+```sh
+node "<bus-tool>" init --root "<repository-root>"
 ```
 
 Initialization uses `.git/info/exclude` so runtime messages do not dirty the repository.
@@ -47,31 +47,26 @@ Initialization uses `.git/info/exclude` so runtime messages do not dirty the rep
 
 Send messages atomically:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool send `
-  -Root $Repo -From codex -To antigravity -Type IMPLEMENT `
-  -Subject "Implement approved specification" -BodyFile $SpecPath
+```sh
+node "<bus-tool>" send --root "<repository-root>" --from codex --to antigravity --type IMPLEMENT --subject "Implement approved specification" --body-file "<spec-path>"
 ```
 
 Wait without busy-spinning; the command claims the oldest message into `processing` and prints its absolute path:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool wait `
-  -Root $Repo -Role codex -TimeoutMinutes 120 -PollSeconds 5
+```sh
+node "<bus-tool>" wait --root "<repository-root>" --role codex --timeout-minutes 120 --poll-seconds 5
 ```
 
 After processing, archive it:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool complete `
-  -Root $Repo -MessagePath $MessagePath
+```sh
+node "<bus-tool>" complete --root "<repository-root>" --message-path "<message-path>"
 ```
 
 Update only the current role's state:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool state `
-  -Root $Repo -Role codex -State WAITING -Details "Waiting for implementation"
+```sh
+node "<bus-tool>" state --root "<repository-root>" --role codex --state WAITING --details "Waiting for implementation"
 ```
 
 ## Collaboration loop
@@ -97,7 +92,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $BusTool state `
 
 ## Waiting limitations and recovery
 
-- A wait remains active only while the CLI session and its PowerShell process remain alive.
+- A wait remains active only while the CLI session and its Node.js process remain alive.
 - On timeout, preserve all state, report `TIMEOUT`, and resume with another `wait` when asked.
 - After a terminal restart, invoke this skill again; inspect `status`, then process `new` and role-owned `processing` messages.
 - Never claim completion from prose alone. Require files, commits, and command evidence.
