@@ -7,6 +7,9 @@ Each role owns `new`, `processing`, and `processed` beneath `.agent-bus/inbox/<r
 - Writers create a temporary UTF-8 message under `.agent-bus/tmp/`, then atomically move it to `new`.
 - A waiter claims the oldest message by atomically moving it from `new` to `processing`.
 - The recipient moves a successfully handled message to `processed`.
+- Claims have lease sidecars. `recover` returns expired claims to `new`; inspect for matching work or replies before recovery.
+- Retry sends with a stable `--dedupe-key`; the same sender/recipient/key tuple is delivered once.
+- Invalid messages move to `.agent-bus/quarantine/<role>/` with a local error record.
 
 ## Message types
 
@@ -25,6 +28,14 @@ Each role owns `new`, `processing`, and `processed` beneath `.agent-bus/inbox/<r
 Run `status` first. A message left in `processing` belongs to the role that claimed it. Read and finish it if the prior CLI died. Move it back to `new` only when it was never acted upon and no matching commit or reply exists.
 
 Never delete queue history as part of normal recovery.
+
+State is append-only under `.agent-bus/state/<role>/`. `status` selects the newest valid record and reports invalid records instead of failing on corrupt JSON.
+
+## Local data and cleanup
+
+The bus is plaintext and can include full prompts, specifications, review comments, code excerpts, paths, commit hashes, logs, host/process metadata, and evidence. Never put credentials in it. Local Git exclusion is not encryption and does not stop backups or other local processes from reading the directory.
+
+After retention is no longer needed, remove the complete bus with `clean --confirm DELETE_AGENT_BUS`. Inspect and redact the directory before sharing it.
 
 ## Git ownership
 

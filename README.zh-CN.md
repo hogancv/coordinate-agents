@@ -6,6 +6,10 @@
 
 不需要 CAO Server、常驻服务、数据库或共享 API 凭据。
 
+![完整端到端终端演示](./assets/demo.gif)
+
+该动图由 `npm run demo` 在真实的隔离 Git 仓库中生成，完整执行需求提交、Antigravity 实现与提交、自动化测试、Codex 审查真实 commit/证据，以及 `REVIEW_APPROVED`。脱敏后的原始记录位于 [`assets/demo-transcript.txt`](./assets/demo-transcript.txt)。
+
 ## 角色合同
 
 - **Codex**：澄清需求、编写实现规格、审查真实提交和验证证据、规划发布，并执行获得批准的发布操作；不修改产品代码。
@@ -118,6 +122,34 @@ RELEASE_APPROVED
 - `.agent-bus/` 只会写入当前仓库本地的 `.git/info/exclude`，不会修改受版本控制的 `.gitignore`。
 - 不要让两个角色同时执行 Git 写操作。
 
+消息认领默认带有 4 小时租约。进程中断后，先确认没有对应的实现、commit 或回复，再恢复遗留消息：
+
+```sh
+BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
+REPO="$(git rev-parse --show-toplevel)"
+node "$BUS_TOOL" recover --root "$REPO" --role antigravity --stale-after-seconds 14400
+```
+
+重试发送时使用 `--dedupe-key <稳定轮次标识>`。相同发送方、接收方和去重键的并发发送只会产生一条消息。消息先写入同卷临时文件，刷新并关闭后再原子重命名；认领也使用原子重命名；重复完成操作是幂等的。损坏消息会被隔离而不会交给代理，状态文件损坏时会回退到最新的有效追加式状态记录。
+
+## 安全边界与数据清理
+
+`.agent-bus/` 是**本地明文工作数据**，不是密钥保险库，其中可能保存：
+
+- 完整提示词、需求、规格、问题和 review 意见；
+- commit hash、文件路径、验证日志，以及证据中主动加入的 diff 或源码片段；
+- 角色状态、进程/主机信息、消息租约、去重记录和队列历史。
+
+不要写入访问令牌、Cookie、密码、私钥或非必要生产数据。本包不会加密该目录，它只继承仓库目录的操作系统权限。`.git/info/exclude` 只能避免普通 Git 跟踪，**不能**阻止本机管理员、备份工具、云同步客户端、恶意软件或以同一用户运行的其他进程读取。分享诊断信息前，应先检查并脱敏 `.agent-bus/`。
+
+正常恢复不会删除历史。协作结束且不再需要审计记录后，可使用明确确认永久删除总线数据：
+
+```sh
+node "$BUS_TOOL" clean --root "$REPO" --confirm DELETE_AGENT_BUS
+```
+
+该命令只删除 `.agent-bus/` 下的规格、消息、证据、review、发布记录、日志、状态、租约和去重记录，不删除产品文件或 Git commit。
+
 ## 手动诊断
 
 正常使用时由技能自动调用脚本。需要排障时：
@@ -130,15 +162,24 @@ node "$BUS_TOOL" init --root "$REPO"
 node "$BUS_TOOL" status --root "$REPO"
 ```
 
-支持的总线命令：`init`、`send`、`wait`、`complete`、`state` 和 `status`。
+支持的总线命令：`init`、`send`、`wait`、`complete`、`recover`、`state`、`status` 和 `clean`。
 
 ## 开发与发布前检查
 
 ```sh
 npm test
 npm run check
+npm run demo
 npm pack --dry-run
 ```
+
+## 发布可信度
+
+- CI 在 Linux、Windows 和 macOS 上测试 Node.js 18、22。
+- 只有 GitHub Release 的 `vX.Y.Z` 标签与 `package.json` 完全一致时才允许发布。
+- 正式版本使用 npm 标签 `latest`，GitHub 预发布版本使用 `next`。
+- `.github/workflows/release.yml` 使用 npm Trusted Publishing（OIDC），不保存长期发布 Token；`publishConfig` 已启用 npm provenance。
+- 首次自动发布前，维护者必须在 npm 中为 `hogancv/coordinate-cli-agents` 配置 Trusted Publisher：仓库 `coordinate-cli-agents`、工作流 `release.yml`、允许操作 `npm publish`。
 
 ## 许可证
 

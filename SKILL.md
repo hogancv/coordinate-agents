@@ -51,6 +51,8 @@ Send messages atomically:
 node "<bus-tool>" send --root "<repository-root>" --from codex --to antigravity --type IMPLEMENT --subject "Implement approved specification" --body-file "<spec-path>"
 ```
 
+Add `--dedupe-key "<stable-round-id>"` whenever a send may be retried.
+
 Wait without busy-spinning; the command claims the oldest message into `processing` and prints its absolute path:
 
 ```sh
@@ -68,6 +70,8 @@ Update only the current role's state:
 ```sh
 node "<bus-tool>" state --root "<repository-root>" --role codex --state WAITING --details "Waiting for implementation"
 ```
+
+Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`, `REVIEWING`, `CHANGES_REQUESTED`, `APPROVED`, `RELEASING`, `STOPPED`, and `ERROR`.
 
 ## Collaboration loop
 
@@ -95,7 +99,9 @@ node "<bus-tool>" state --root "<repository-root>" --role codex --state WAITING 
 - A wait remains active only while the CLI session and its Node.js process remain alive.
 - On timeout, preserve all state, report `TIMEOUT`, and resume with another `wait` when asked.
 - After a terminal restart, invoke this skill again; inspect `status`, then process `new` and role-owned `processing` messages.
+- Recover an expired claim only after checking for a matching commit, evidence, or reply: `recover --role <role> --stale-after-seconds 14400`.
 - Never claim completion from prose alone. Require files, commits, and command evidence.
 - Never let both roles perform Git write operations simultaneously.
+- Treat `.agent-bus/` as plaintext: it may retain prompts, code excerpts, logs, paths, commit hashes, and host/process metadata. Never store credentials there. Read the protocol security section before sharing or cleaning it.
 
 Read `references/protocol.md` only for message schema, recovery rules, or troubleshooting.

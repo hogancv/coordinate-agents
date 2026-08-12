@@ -1,0 +1,20 @@
+[SETUP] Create an isolated Git repository
+
+[CODEX] Clarify requirement and submit implementation specification
+queued: <demo-repo>/.agent-bus/inbox/antigravity/new/<message>.md
+
+[ANTIGRAVITY] Claim message, implement, test, and commit
+claimed: <demo-repo>/.agent-bus/inbox/antigravity/processing/<message>.md
+validation: node --test PASS
+commit: 13578945938b
+
+[CODEX] Claim result and review real commit plus validation evidence
+review: APPROVED
+
+[ANTIGRAVITY] Receive approval and stop editing
+
+[RESULT] IMPLEMENTED -> TESTED -> COMMITTED -> REVIEW_APPROVED
+repository: <demo-repo>
+commit: 13578945938b...
+tests: PASS
+bus: PASS
