@@ -234,6 +234,44 @@ npm pack --dry-run
 - `.github/workflows/release.yml` 使用 npm Trusted Publishing（OIDC），不保存长期发布 Token；`publishConfig` 已启用 npm provenance。
 - 首次自动发布前，维护者必须在 npm 中为 `hogancv/coordinate-cli-agents` 配置 Trusted Publisher：仓库 `coordinate-cli-agents`、工作流 `release.yml`、允许操作 `npm publish`。
 
+## 常见问题
+
+### coordinate-cli-agents 是什么？
+
+它是官方 [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm 包和 Codex Skill，用于建立双角色编程工作流。Codex 负责需求、规格、审查和发布控制；Google Antigravity CLI（`agy`）独占产品代码与测试的实现工作。
+
+### 如何让 Codex CLI 和 Antigravity CLI 协作？
+
+先按[通过 npm 安装](#通过-npm-安装)，再在目标 Git 仓库中执行 [`quickstart`](#开始协作)。分别在两个终端运行它输出的两条命令，后续只需继续向 Codex 提需求。
+
+### 如何在同一个 Git 仓库中使用两个编程代理？
+
+使用同一个仓库和两个 CLI 会话，但任何时刻只允许一个角色执行 Git 写操作。项目本地的 `.agent-bus` 负责传递规格、实现结果、审查结论、租约与恢复状态，不共享账号凭据。
+
+### 如何防止两个 AI 代理同时修改代码？
+
+安装后的角色契约规定 Antigravity 是唯一的产品代码编写者。Codex 只能澄清、编写规格、检查提交、审查证据以及执行经明确批准的发布，不得修改实现文件；工作流也明确禁止并发 Git 写操作。
+
+### 如何从 npm 安装 Codex Skill？
+
+执行 `npx @hogancv/coordinate-cli-agents@latest install --codex`，重启 Codex CLI，再执行 `npx @hogancv/coordinate-cli-agents@latest doctor --codex --lang zh-CN` 验证。需要让 AI 代为安装时，请使用规范入口 [`AI_INSTALL.md`](./AI_INSTALL.md)。
+
+### Codex CLI 和 Antigravity CLI 的角色有什么区别？
+
+Codex 澄清需求、编写规格与验收条件、审查提交和证据、要求返工并执行发布门禁。Antigravity 编写源代码与测试、验证 UI/浏览器行为、修复构建问题并提交结果，但不执行发布。
+
+### 如何恢复被中断的多代理开发工作？
+
+重新调用此 Skill 并检查 `status`；消息和状态会跨终端重启保留。只有确认不存在对应实现、提交或回复后，才恢复超时的已认领消息。详见[恢复与轮询](#恢复与轮询)。
+
+### `.agent-bus` 安全吗？
+
+它是本地明文工作数据，不是加密的秘密存储。`.git/info/exclude` 只能避免普通 Git 跟踪，无法阻止本地进程、管理员、备份或同步工具读取。不要写入任何凭据；详见[安全边界与数据清理](#安全边界与数据清理)和 [`SECURITY.md`](./SECURITY.md)。
+
+### 如何卸载 coordinate-cli-agents？
+
+执行 `npx @hogancv/coordinate-cli-agents@latest uninstall --lang zh-CN`。默认只移除可识别且未修改的包管理安装；未知或已修改目录会被拒绝，除非你明确使用 `--force`。
+
 ## 许可证
 
 [MIT](./LICENSE)

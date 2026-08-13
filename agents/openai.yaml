@@ -1,4 +1,4 @@
 interface:
   display_name: "Coordinate CLI Agents"
-  short_description: "Quick-start Codex and Antigravity collaboration"
-  default_prompt: "Use $coordinate-cli-agents to quick-start Codex and Antigravity collaboration in this Git repository."
+  short_description: "Codex specifies and reviews; Antigravity implements"
+  default_prompt: "Use $coordinate-cli-agents to coordinate Codex CLI and Google Antigravity CLI in this Git repository: Codex owns requirements, specifications, review, and the release gate, while Antigravity exclusively implements code."

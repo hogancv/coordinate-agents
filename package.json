@@ -1,7 +1,7 @@
 {
   "name": "@hogancv/coordinate-cli-agents",
-  "version": "1.2.1",
-  "description": "Install and coordinate Codex CLI and Google Antigravity CLI through a shared project-local file bus.",
+  "version": "1.2.2",
+  "description": "Coordinate Codex CLI specifications and code review with Google Antigravity CLI implementation through a recoverable local agent bus.",
   "type": "module",
   "bin": {
     "coordinate-cli-agents": "bin/coordinate-cli-agents.mjs"
@@ -40,9 +40,17 @@
   },
   "keywords": [
     "codex",
+    "codex-cli",
     "antigravity",
+    "agy",
     "agent",
     "multi-agent",
+    "multi-agent-collaboration",
+    "specification",
+    "implementation",
+    "code-review",
+    "release-gate",
+    "recovery",
     "cli",
     "skill"
   ],

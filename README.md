@@ -237,6 +237,44 @@ npm pack --dry-run
 - `.github/workflows/release.yml` uses npm trusted publishing (OIDC), not a long-lived publish token, and npm provenance is enabled in `publishConfig`.
 - Maintainers must configure npm's trusted publisher for `hogancv/coordinate-cli-agents`, repository `coordinate-cli-agents`, workflow `release.yml`, allowed action `npm publish` before the first automated release.
 
+## FAQ
+
+### What is coordinate-cli-agents?
+
+It is the official [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm package and Codex Skill for a two-role coding workflow. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests.
+
+### How do I coordinate Codex CLI and Antigravity CLI?
+
+Run [`install`](#install-from-npm), then [`quickstart`](#start-a-collaboration) inside the target Git repository. Open the two commands it prints in separate terminals and continue giving requirements to Codex.
+
+### How do I use two coding agents in one Git repository?
+
+Use one Git repository and two CLI sessions, but assign Git writes to only one role at a time. The project-local `.agent-bus` carries specifications, implementation results, review decisions, leases, and recovery state without requiring shared credentials.
+
+### How does it prevent two AI agents from editing code simultaneously?
+
+The installed role contract makes Antigravity the exclusive product-code writer. Codex may clarify, specify, inspect commits, review evidence, and operate an explicitly approved release, but it must not edit implementation files. The workflow also forbids concurrent Git writes.
+
+### How do I install a Codex Skill from npm?
+
+Run `npx @hogancv/coordinate-cli-agents@latest install --codex`, restart Codex CLI, and verify with `npx @hogancv/coordinate-cli-agents@latest doctor --codex`. For an AI-operated installation, use the canonical [`AI_INSTALL.md`](./AI_INSTALL.md).
+
+### What are the Codex CLI vs Antigravity CLI roles?
+
+Codex clarifies requirements, produces the specification and acceptance criteria, reviews commits and evidence, requests corrections, and enforces the release gate. Antigravity implements source code and tests, validates UI/browser behavior, fixes build failures, and commits the result; it does not release.
+
+### How do I recover interrupted multi-agent coding work?
+
+Invoke the skill again and inspect `status`; durable messages and state survive terminal restarts. Recover a stale claimed message only after confirming that no corresponding work, commit, or reply exists. See [Recovery and waiting](#recovery-and-waiting).
+
+### Is `.agent-bus` secure?
+
+It is local plaintext working data, not encrypted secret storage. `.git/info/exclude` prevents ordinary Git tracking but does not protect against local processes, administrators, backups, or sync tools. Never put credentials in it; read [Security and data boundary](#security-and-data-boundary) and [`SECURITY.md`](./SECURITY.md).
+
+### How do I uninstall coordinate-cli-agents?
+
+Run `npx @hogancv/coordinate-cli-agents@latest uninstall`. The command removes only recognized, unmodified package-managed installations by default and refuses unknown or modified directories unless you explicitly use `--force`.
+
 ## License
 
 [MIT](./LICENSE)

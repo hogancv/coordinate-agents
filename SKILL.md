@@ -1,6 +1,7 @@
 ---
 name: coordinate-cli-agents
-description: Coordinate Codex CLI and Antigravity CLI as two persistent roles through a shared project-local file bus. Use when either CLI is asked to quick-start collaborative mode, pair with the other CLI, initialize or resume `.agent-bus`, exchange implementation/review messages, wait for the peer, or run the Codex-plans-and-reviews / Antigravity-implements workflow.
+description: >-
+  Coordinate OpenAI Codex CLI and Google Antigravity CLI (agy) for multi-agent collaboration in the same Git repository. Use when the user wants Codex to clarify requirements, write a specification, review commits, or enforce a release gate while Antigravity exclusively performs implementation; also use to install, diagnose, resume, recover, update, or uninstall this workflow and its recoverable `.agent-bus`. Do not use for single-agent coding tasks, general Codex-versus-Antigravity comparisons, or workflows where both agents may edit product code.
 ---
 
 # Coordinate CLI Agents

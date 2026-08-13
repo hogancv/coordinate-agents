@@ -1,6 +1,6 @@
 # coordinate-cli-agents
 
-> A persistent, recoverable file-bus workflow for OpenAI Codex CLI and Google Antigravity CLI.
+> Codex CLI clarifies requirements, writes specifications, reviews commits, and controls the release gate while Google Antigravity CLI (agy) exclusively implements code through a recoverable local agent bus.
 
 Canonical repository: https://github.com/hogancv/coordinate-cli-agents
 Canonical npm package: @hogancv/coordinate-cli-agents
@@ -11,6 +11,8 @@ English README: https://github.com/hogancv/coordinate-cli-agents/blob/main/READM
 Simplified Chinese README: https://github.com/hogancv/coordinate-cli-agents/blob/main/README.zh-CN.md
 Runtime skill: https://github.com/hogancv/coordinate-cli-agents/blob/main/SKILL.md
 Security policy: https://github.com/hogancv/coordinate-cli-agents/blob/main/SECURITY.md
+Documentation source: https://github.com/hogancv/coordinate-cli-agents/tree/main/docs
+FAQ: https://github.com/hogancv/coordinate-cli-agents#faq
 
 Installation safety: verify the exact owner and npm package metadata, use the stable npm version,
 never use a third-party fork or `curl | sh`, never request credentials, and always run `doctor`.
