@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync,
-  readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync,
+  lstatSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { hostname } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -50,6 +50,43 @@ function repoRoot(candidate) {
   return resolve(git(['rev-parse', '--show-toplevel'], cwd));
 }
 
+function assertContained(root, candidate) {
+  const relation = relative(root, candidate);
+  if (relation === '..' || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
+    throw new Error(`Refusing agent-bus path outside repository: ${candidate}`);
+  }
+}
+
+function assertSafePath(root, candidate) {
+  assertContained(root, candidate);
+  let cursor = candidate;
+  while (cursor !== root) {
+    if (existsSync(cursor)) {
+      const metadata = lstatSync(cursor);
+      if (metadata.isSymbolicLink()) throw new Error(`Refusing symbolic link or junction in agent-bus path: ${cursor}`);
+      const canonical = realpathSync(cursor);
+      assertContained(root, canonical);
+    }
+    cursor = dirname(cursor);
+  }
+  return candidate;
+}
+
+function safeInternalStat(bus, path) {
+  assertContained(bus, path);
+  const metadata = lstatSync(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
+    throw new Error(`Refusing linked or non-regular agent-bus file: ${path}`);
+  }
+  assertContained(bus, realpathSync(path));
+  return metadata;
+}
+
+function readInternalFile(bus, path) {
+  safeInternalStat(bus, path);
+  return readFileSync(path, 'utf8');
+}
+
 function syncFile(path) {
   const fd = openSync(path, 'r');
   try {
@@ -87,14 +124,18 @@ function writeLease(messagePath, bus, leaseSeconds) {
 }
 
 function initialize(root) {
-  const bus = join(root, '.agent-bus');
+  const bus = assertSafePath(root, join(root, '.agent-bus'));
   const directories = [
     'inbox/codex/new', 'inbox/codex/processing', 'inbox/codex/processed',
     'inbox/antigravity/new', 'inbox/antigravity/processing', 'inbox/antigravity/processed',
     'quarantine/codex', 'quarantine/antigravity', 'specs', 'reviews', 'evidence',
     'releases', 'state/codex', 'state/antigravity', 'dedupe', 'locks', 'logs', 'tmp',
   ];
-  for (const directory of directories) mkdirSync(join(bus, directory), { recursive: true });
+  for (const directory of directories) {
+    const path = assertSafePath(root, join(bus, directory));
+    mkdirSync(path, { recursive: true });
+    assertSafePath(root, path);
+  }
 
   let exclude = git(['rev-parse', '--git-path', 'info/exclude'], root);
   if (!isAbsolute(exclude)) exclude = resolve(root, exclude);
@@ -110,9 +151,9 @@ function sleepSync(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
-function localLockOwnerIsAlive(lock) {
+function localLockOwnerIsAlive(bus, lock) {
   try {
-    const owner = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8'));
+    const owner = JSON.parse(readInternalFile(bus, join(lock, 'owner.json')));
     if (owner.host !== hostname() || !Number.isInteger(owner.pid)) return false;
     process.kill(owner.pid, 0);
     return true;
@@ -129,7 +170,7 @@ function acquireLock(bus, name, { timeoutMs = 10_000, staleMs = 30_000 } = {}) {
       writeFileSync(join(lock, 'owner.json'), `${JSON.stringify({ owner, pid: process.pid, host: hostname(), acquired_at: new Date().toISOString() })}\n`, 'utf8');
       return () => {
         try {
-          const current = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8'));
+          const current = JSON.parse(readInternalFile(bus, join(lock, 'owner.json')));
           if (current.owner === owner) rmSync(lock, { recursive: true, force: true });
         } catch (error) {
           if (error.code !== 'ENOENT') throw error;
@@ -138,7 +179,7 @@ function acquireLock(bus, name, { timeoutMs = 10_000, staleMs = 30_000 } = {}) {
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
       try {
-        if (Date.now() - statSync(lock).mtimeMs > staleMs && !localLockOwnerIsAlive(lock)) {
+        if (Date.now() - statSync(lock).mtimeMs > staleMs && !localLockOwnerIsAlive(bus, lock)) {
           rmSync(lock, { recursive: true, force: true });
           continue;
         }
@@ -200,7 +241,7 @@ function send(options, bus) {
     if (dedupeKey) {
       const recordPath = join(bus, 'dedupe', `${dedupeHash}.json`);
       if (existsSync(recordPath)) {
-        const prior = JSON.parse(readFileSync(recordPath, 'utf8'));
+        const prior = JSON.parse(readInternalFile(bus, recordPath));
         const existing = findMessageByName(bus, to, prior.message_name);
         if (existing) {
           console.log(resolve(existing));
@@ -239,8 +280,8 @@ function send(options, bus) {
   }
 }
 
-function parseMessage(path, expectedRole) {
-  const content = readFileSync(path, 'utf8');
+function parseMessage(path, expectedRole, bus) {
+  const content = readInternalFile(bus, path);
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (!match) throw new Error('missing YAML front matter');
   const fields = {};
@@ -273,14 +314,14 @@ function recoverStale(bus, rolesToRecover, staleAfterSeconds, includeLocks = tru
         // lease publication. Give that gap its own grace period; otherwise use
         // the recorded lease expiry, with the CLI threshold as a conservative
         // fallback for old-format leases.
-        let expired = Date.now() - statSync(message).ctimeMs >= staleAfterSeconds * 1000;
+        let expired = Date.now() - safeInternalStat(bus, message).ctimeMs >= staleAfterSeconds * 1000;
         if (existsSync(lease)) {
           try {
-            const record = JSON.parse(readFileSync(lease, 'utf8'));
+            const record = JSON.parse(readInternalFile(bus, lease));
             expired = Number.isNaN(Date.parse(record.expires_at))
-              ? Date.now() - statSync(lease).mtimeMs >= staleAfterSeconds * 1000
+              ? Date.now() - safeInternalStat(bus, lease).mtimeMs >= staleAfterSeconds * 1000
               : Date.now() >= Date.parse(record.expires_at);
-          } catch { expired = Date.now() - statSync(lease).mtimeMs >= staleAfterSeconds * 1000; }
+          } catch { expired = Date.now() - safeInternalStat(bus, lease).mtimeMs >= staleAfterSeconds * 1000; }
         }
         if (!expired) continue;
         try {
@@ -301,7 +342,7 @@ function recoverStale(bus, rolesToRecover, staleAfterSeconds, includeLocks = tru
   if (includeLocks) {
     for (const name of readdirSync(join(bus, 'locks'))) {
       const lock = join(bus, 'locks', name);
-      if (Date.now() - statSync(lock).mtimeMs < staleAfterSeconds * 1000 || localLockOwnerIsAlive(lock)) continue;
+      if (Date.now() - statSync(lock).mtimeMs < staleAfterSeconds * 1000 || localLockOwnerIsAlive(bus, lock)) continue;
       rmSync(lock, { recursive: true, force: true });
       recovered.push({ kind: 'lock', name });
     }
@@ -333,7 +374,7 @@ async function wait(options, bus) {
           renameSync(source, claimed);
           writeLease(claimed, bus, leaseSeconds);
           try {
-            parseMessage(claimed, role);
+            parseMessage(claimed, role, bus);
           } catch (error) {
             rmSync(`${claimed}.lease.json`, { force: true });
             quarantine(claimed, role, bus, error.message);
@@ -368,6 +409,7 @@ function complete(options, bus) {
     console.log(resolve(destination));
     return;
   }
+  safeInternalStat(bus, messagePath);
   renameSync(messagePath, destination);
   rmSync(`${messagePath}.lease.json`, { force: true });
   console.log(resolve(destination));
@@ -401,7 +443,7 @@ function latestState(bus, role) {
   let invalid = 0;
   for (const name of files) {
     try {
-      const record = JSON.parse(readFileSync(join(directory, name), 'utf8'));
+      const record = JSON.parse(readInternalFile(bus, join(directory, name)));
       if (record.agent !== role || !states.has(record.state) || Number.isNaN(Date.parse(record.updated_at))) throw new Error('invalid state record');
       return { record, invalid };
     } catch { invalid += 1; }

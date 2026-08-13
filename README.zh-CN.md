@@ -29,6 +29,30 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "
 
 该动图由 `npm run demo` 在真实的隔离 Git 仓库中生成，完整执行需求提交、Antigravity 实现与提交、自动化测试、Codex 审查真实 commit/证据，以及 `REVIEW_APPROVED`。脱敏后的原始记录位于 [`assets/demo-transcript.txt`](./assets/demo-transcript.txt)。
 
+## 让 AI 帮你安装
+
+仓库根目录提供一份统一的中英双语 [AI 安装指南](./AI_INSTALL.md)。把下面任一提示词交给 AI
+助手即可；AI 必须先核对官方身份，不得索取凭据或使用未知脚本，安装后必须执行 `doctor`，并在
+用户另行要求前停止，不得自动启动协作任务。
+
+**同时安装两个代理**
+
+```text
+从官方仓库 https://github.com/hogancv/coordinate-cli-agents 安装 coordinate-cli-agents。先读取仓库根目录的 AI_INSTALL.md，核对仓库所有者、npm 包名、最新稳定版本和安装影响，然后按照文档为 Codex CLI 与 Antigravity CLI 安装。安装完成后运行 doctor --lang zh-CN 验证并向我报告结果。不要使用第三方 Fork，不要索取凭据，不要修改我的产品代码，也不要在验证成功前启动协作任务。
+```
+
+**只安装 Codex**
+
+```text
+从官方仓库 hogancv/coordinate-cli-agents 安装 Codex 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Codex 端，完成后运行 doctor --codex --lang zh-CN。不要修改当前项目代码。
+```
+
+**只安装 Antigravity**
+
+```text
+从官方仓库 hogancv/coordinate-cli-agents 安装 Antigravity 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Antigravity 端，完成后运行 doctor --antigravity --lang zh-CN。不要修改当前项目代码。
+```
+
 ## 环境要求
 
 - Windows、macOS 或 Linux
@@ -52,7 +76,7 @@ npx @hogancv/coordinate-cli-agents@latest install
 ~/.gemini/skills/coordinate-cli-agents
 ```
 
-安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装；对于来源不明或被本地修改的目录，除非明确提供 `--force`，否则不会覆盖。
+安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装，包括已修改的受管理副本。来源不明的目录在未明确提供 `--force` 时不会被覆盖；卸载已修改的副本同样必须显式使用 `--force`。
 
 验证安装：
 
@@ -60,7 +84,7 @@ npx @hogancv/coordinate-cli-agents@latest install
 npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
 ```
 
-`doctor` 会检查 Node.js、Git、`codex`、`agy` 以及两份技能安装。缺失组件和由本包管理但损坏的安装会得到按当前平台检测生成的修复命令；无法识别的现有技能目录则会得到先备份或移动的非破坏性操作说明。Linux 用户应检查检测出的包管理器命令，并确认所在发行版提供 Node.js 18+。
+`doctor` 会检查 Node.js、Git、`codex`、`agy` 以及两份技能安装。缺失组件和由本包管理但损坏的安装会得到根据当前平台生成的建议修复命令；无法识别的现有技能目录则会得到先备份或移动的非破坏性操作说明。Linux 用户必须先确认建议适用于自己的发行版且能提供 Node.js 18+，再执行该命令。
 
 常用命令：
 

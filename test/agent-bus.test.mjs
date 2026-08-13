@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
@@ -204,4 +204,59 @@ test('requires an explicit confirmation before cleaning sensitive bus data', () 
     assert.equal(accepted.status, 0, accepted.stderr);
     assert.equal(existsSync(join(repo, '.agent-bus')), false);
   } finally { rmSync(repo, { recursive: true, force: true }); }
+});
+
+test('refuses a symbolic link or junction at the runtime bus boundary', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'agent-bus-path-test-'));
+  const repo = join(sandbox, 'repo');
+  const outside = join(sandbox, 'outside');
+  try {
+    mkdirSync(repo);
+    mkdirSync(outside);
+    git(repo, ['init']);
+    symlinkSync(outside, join(repo, '.agent-bus'), process.platform === 'win32' ? 'junction' : 'dir');
+    const result = invoke(repo, ['send', '--from', 'codex', '--to', 'antigravity', '--type', 'IMPLEMENT', '--subject', 'Unsafe', '--body', 'must not escape']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Refusing symbolic link or junction in agent-bus path/);
+    assert.deepEqual(readdirSync(outside), []);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('refuses a symbolic link or junction inside the runtime bus', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'agent-bus-inner-path-test-'));
+  const repo = join(sandbox, 'repo');
+  const outside = join(sandbox, 'outside');
+  try {
+    mkdirSync(repo);
+    mkdirSync(outside);
+    git(repo, ['init']);
+    mkdirSync(join(repo, '.agent-bus', 'inbox', 'antigravity'), { recursive: true });
+    symlinkSync(outside, join(repo, '.agent-bus', 'inbox', 'antigravity', 'new'), process.platform === 'win32' ? 'junction' : 'dir');
+    const result = invoke(repo, ['send', '--from', 'codex', '--to', 'antigravity', '--type', 'IMPLEMENT', '--subject', 'Unsafe', '--body', 'must not escape']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Refusing symbolic link or junction in agent-bus path/);
+    assert.deepEqual(readdirSync(outside), []);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('does not read a hard-linked state record from outside the runtime bus', () => {
+  const repo = repository();
+  const outside = join(repo, 'outside-state.json');
+  try {
+    writeFileSync(outside, JSON.stringify({
+      agent: 'codex', state: 'WAITING', details: 'OUTSIDE_SECRET_MARKER',
+      related_commit: '', updated_at: new Date().toISOString(), process_id: 1, machine_name: 'outside',
+    }), 'utf8');
+    linkSync(outside, join(repo, '.agent-bus', 'state', 'codex', '99999999999999999-outside.json'));
+    const result = invoke(repo, ['status']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /OUTSIDE_SECRET_MARKER/);
+    assert.match(result.stdout, /"invalid_state_records"/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });

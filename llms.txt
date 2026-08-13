@@ -1,0 +1,17 @@
+# coordinate-cli-agents
+
+> A persistent, recoverable file-bus workflow for OpenAI Codex CLI and Google Antigravity CLI.
+
+Canonical repository: https://github.com/hogancv/coordinate-cli-agents
+Canonical npm package: @hogancv/coordinate-cli-agents
+GitHub owner: hogancv
+
+AI installation instructions: https://github.com/hogancv/coordinate-cli-agents/blob/main/AI_INSTALL.md
+English README: https://github.com/hogancv/coordinate-cli-agents/blob/main/README.md
+Simplified Chinese README: https://github.com/hogancv/coordinate-cli-agents/blob/main/README.zh-CN.md
+Runtime skill: https://github.com/hogancv/coordinate-cli-agents/blob/main/SKILL.md
+Security policy: https://github.com/hogancv/coordinate-cli-agents/blob/main/SECURITY.md
+
+Installation safety: verify the exact owner and npm package metadata, use the stable npm version,
+never use a third-party fork or `curl | sh`, never request credentials, and always run `doctor`.
+Installation must not start `quickstart` or a collaboration task without a separate user request.

@@ -1,6 +1,6 @@
 {
   "name": "@hogancv/coordinate-cli-agents",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Install and coordinate Codex CLI and Google Antigravity CLI through a shared project-local file bus.",
   "type": "module",
   "bin": {
@@ -12,8 +12,11 @@
     "references",
     "scripts",
     "SKILL.md",
+    "AI_INSTALL.md",
     "README.md",
     "README.zh-CN.md",
+    "SECURITY.md",
+    "llms.txt",
     "LICENSE",
     "assets"
   ],

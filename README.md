@@ -29,6 +29,30 @@ No role prompt needs to be copied or maintained manually. Choose `--template bug
 
 The recording is generated from a real isolated Git repository by `npm run demo`. It exercises requirement submission, Antigravity's implementation and commit, automated tests, Codex's commit/evidence review, and `REVIEW_APPROVED`. The sanitized source transcript is in [`assets/demo-transcript.txt`](./assets/demo-transcript.txt).
 
+## Let an AI install it
+
+The repository includes a single canonical, bilingual [AI installation guide](./AI_INSTALL.md).
+Give an AI assistant one of these prompts; it must verify the official identity, avoid credentials
+and unknown scripts, run `doctor`, and stop before starting a collaboration task.
+
+**Install both agents**
+
+```text
+Install coordinate-cli-agents from the official repository https://github.com/hogancv/coordinate-cli-agents. First read AI_INSTALL.md at the repository root and verify the repository owner, npm package name, latest stable version, and installation impact. Then follow the document to install it for both Codex CLI and Antigravity CLI. After installation, run doctor --lang en and report the results. Do not use a third-party fork, request credentials, modify my product code, or start a collaboration task before verification succeeds.
+```
+
+**Install Codex only**
+
+```text
+Install the Codex skill from the official hogancv/coordinate-cli-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Codex side. After installation, run doctor --codex --lang en. Do not modify the current project code.
+```
+
+**Install Antigravity only**
+
+```text
+Install the Antigravity skill from the official hogancv/coordinate-cli-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Antigravity side. After installation, run doctor --antigravity --lang en. Do not modify the current project code.
+```
+
 ## Requirements
 
 - Windows, macOS, or Linux
@@ -52,7 +76,7 @@ The installer copies a permanent skill payload to:
 ~/.gemini/skills/coordinate-cli-agents
 ```
 
-It does **not** link either location to the temporary npm cache. Existing package-managed installations are backed up before replacement. An unrecognized or locally modified directory is preserved unless you explicitly pass `--force`.
+It does **not** link either location to the temporary npm cache. Existing package-managed installations, including modified managed copies, are backed up before replacement. An unrecognized directory is preserved unless you explicitly pass `--force`; uninstall also refuses a modified copy unless explicitly forced.
 
 Verify the installation:
 
@@ -60,7 +84,7 @@ Verify the installation:
 npx @hogancv/coordinate-cli-agents@latest doctor
 ```
 
-`doctor` checks Node.js, Git, `codex`, `agy`, and both installed skill copies. Missing components and package-managed damage receive a detected-platform repair command. An unrecognized existing skill directory instead gets a non-destructive instruction to back it up or move it first. On Linux, review the detected package-manager command and confirm it supplies Node.js 18+ for your distribution.
+`doctor` checks Node.js, Git, `codex`, `agy`, and both installed skill copies. Missing components and package-managed damage receive a suggested repair command based on the detected platform. An unrecognized existing skill directory instead gets a non-destructive instruction to back it up or move it first. On Linux, review the suggestion for your distribution and confirm it supplies Node.js 18+ before running it.
 
 Useful variants:
 

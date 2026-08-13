@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -142,6 +143,75 @@ test('protects an unrecognized existing skill directory', () => {
   }
 });
 
+test('does not trust arbitrary JSON as package-managed installation metadata', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-metadata-'));
+  const codexHome = join(sandbox, 'codex');
+  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const marker = join(target, 'important-user-file.txt');
+  try {
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, '.coordinate-cli-agents.json'), '{}\n', 'utf8');
+    writeFileSync(marker, 'preserve me\n', 'utf8');
+
+    const install = invoke(['install', '--codex', '--codex-home', codexHome, '--lang', 'en']);
+    assert.equal(install.status, 1);
+    assert.match(install.stderr, /refusing to remove an unrecognized directory/);
+    assert.equal(readFileSync(marker, 'utf8'), 'preserve me\n');
+
+    const uninstall = invoke(['uninstall', '--codex', '--codex-home', codexHome, '--lang', 'en']);
+    assert.equal(uninstall.status, 1);
+    assert.match(uninstall.stderr, /refusing to remove an unrecognized directory/);
+    assert.equal(readFileSync(marker, 'utf8'), 'preserve me\n');
+
+    const digest = createHash('sha256').update(readFileSync(marker)).digest('hex');
+    writeFileSync(join(target, '.coordinate-cli-agents.json'), JSON.stringify({
+      package: '@hogancv/coordinate-cli-agents',
+      version: '999.0.0',
+      installedAt: new Date().toISOString(),
+      manifest: { 'important-user-file.txt': digest },
+    }), 'utf8');
+    const forged = invoke(['uninstall', '--codex', '--codex-home', codexHome, '--lang', 'en']);
+    assert.equal(forged.status, 1);
+    assert.equal(readFileSync(marker, 'utf8'), 'preserve me\n');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('uninstall preserves extra files inside a package-managed installation', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-extra-uninstall-'));
+  const codexHome = join(sandbox, 'codex');
+  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const extra = join(target, 'personal-notes.txt');
+  try {
+    const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
+    assert.equal(invoke(['install', ...common]).status, 0);
+    writeFileSync(extra, 'preserve me\n', 'utf8');
+    const result = invoke(['uninstall', ...common]);
+    assert.equal(result.status, 1);
+    assert.equal(readFileSync(extra, 'utf8'), 'preserve me\n');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('uninstall preserves a modified package-managed installation without force', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-modified-uninstall-'));
+  const codexHome = join(sandbox, 'codex');
+  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  try {
+    const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
+    assert.equal(invoke(['install', ...common]).status, 0);
+    writeFileSync(join(target, 'SKILL.md'), 'user modification\n', 'utf8');
+    const result = invoke(['uninstall', ...common]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /refusing to remove an unrecognized directory/);
+    assert.equal(readFileSync(join(target, 'SKILL.md'), 'utf8'), 'user modification\n');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
 test('quickstart initializes the bus and generates two launch commands from a task template', () => {
   const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-quickstart-'));
   try {
@@ -263,6 +333,29 @@ test('doctor prints a repair command for every missing component and skill', () 
     assert.match(result.stderr, /antigravity\.google\/cli\/install/);
     assert.ok(result.stderr.includes(`coordinate-cli-agents@${currentVersion}`));
     assert.match(result.stderr, /install.*--codex/s);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('single-agent doctor treats the unselected CLI as informational', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-single-doctor-'));
+  const codexHome = join(sandbox, 'codex');
+  try {
+    const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
+    assert.equal(invoke(['install', ...common]).status, 0);
+    const env = fakeCliEnvironment(sandbox, ['git', 'codex']);
+    const fakeBin = join(sandbox, 'fake-bin');
+    if (process.platform === 'win32') writeFileSync(join(fakeBin, 'agy.cmd'), '@exit /b 1\r\n', 'utf8');
+    else {
+      writeFileSync(join(fakeBin, 'agy'), '#!/bin/sh\nexit 1\n', 'utf8');
+      chmodSync(join(fakeBin, 'agy'), 0o755);
+    }
+    const result = invoke(['doctor', ...common], env);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Codex CLI: available/);
+    assert.match(result.stderr, /Antigravity CLI \(agy\): missing/);
+    assert.match(result.stdout, /All prerequisites and selected installations are healthy/);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }

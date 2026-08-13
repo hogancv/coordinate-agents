@@ -266,10 +266,33 @@ function readMetadata(targetPath) {
   }
 }
 
+function hasExpectedManagedIdentity(metadata, expectedManifest) {
+  return Boolean(
+    metadata
+    && metadata.package === packageJson.name
+    && typeof metadata.version === 'string'
+    && metadata.version.length > 0
+    && typeof metadata.installedAt === 'string'
+    && Number.isFinite(Date.parse(metadata.installedAt))
+    && metadata.manifest
+    && typeof metadata.manifest === 'object'
+    && !Array.isArray(metadata.manifest)
+    && Object.keys(metadata.manifest).length > 0
+    && Object.entries(metadata.manifest).every(([file, hash]) => (
+      typeof file === 'string'
+      && file.length > 0
+      && typeof hash === 'string'
+      && /^[0-9a-f]{64}$/.test(hash)
+    ))
+    && Object.keys(metadata.manifest).length === Object.keys(expectedManifest).length
+    && Object.entries(expectedManifest).every(([file, hash]) => metadata.manifest[file] === hash)
+  );
+}
+
 function verifyTarget(targetPath, expectedManifest) {
   if (!existsSync(targetPath)) return { ok: false, missing: true, details: 'directory missing' };
   const metadata = readMetadata(targetPath);
-  if (!metadata || metadata.package !== packageJson.name) {
+  if (!hasExpectedManagedIdentity(metadata, expectedManifest)) {
     return { ok: false, managed: false, details: 'installation metadata missing or unrecognized' };
   }
   const failures = [];
@@ -317,7 +340,7 @@ function installTarget(target, expectedManifest, options, t) {
     return;
   }
   const unmanagedGitCheckout = existsSync(join(target.path, '.git'));
-  if (existsSync(target.path) && !readMetadata(target.path) && (unmanagedGitCheckout || !payloadMatches(target.path, expectedManifest)) && !options.force) {
+  if (existsSync(target.path) && !hasExpectedManagedIdentity(readMetadata(target.path), expectedManifest) && (unmanagedGitCheckout || !payloadMatches(target.path, expectedManifest)) && !options.force) {
     throw new Error(format(t.skipRemove, { target: target.name, path: target.path }));
   }
 
@@ -352,6 +375,13 @@ function installTarget(target, expectedManifest, options, t) {
   }
 }
 
+function isIntactManagedInstallation(targetPath, expectedManifest) {
+  const metadata = readMetadata(targetPath);
+  if (!hasExpectedManagedIdentity(metadata, expectedManifest) || !payloadMatches(targetPath, expectedManifest)) return false;
+  const allowed = new Set([...Object.keys(expectedManifest), metadataFile]);
+  return walkFiles(targetPath).every(file => allowed.has(file));
+}
+
 function executableVersion(command, args = ['--version']) {
   const result = spawnSync(command, args, { encoding: 'utf8', windowsHide: true, shell: process.platform === 'win32' });
   if (result.error || result.status !== 0) return null;
@@ -364,7 +394,7 @@ function repairCommands() {
       node: 'winget install --id OpenJS.NodeJS.LTS -e',
       git: 'winget install --id Git.Git -e',
       codex: 'npm install --global @openai/codex@latest',
-      antigravity: 'irm https://antigravity.google/cli/install.ps1 | iex',
+      antigravity: 'Invoke-WebRequest https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\\antigravity-install.ps1"; Write-Host "Review the downloaded official script, then run: & $env:TEMP\\antigravity-install.ps1"',
     };
   }
   if (process.platform === 'darwin') {
@@ -372,27 +402,27 @@ function repairCommands() {
       node: 'brew install node',
       git: 'xcode-select --install',
       codex: 'npm install --global @openai/codex@latest',
-      antigravity: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      antigravity: 'curl -fsSLo "${TMPDIR:-/tmp}/antigravity-install.sh" https://antigravity.google/cli/install.sh && printf \'Review the downloaded official script, then run: bash %s\\n\' "${TMPDIR:-/tmp}/antigravity-install.sh"',
     };
   }
   const has = (command) => executableVersion(command, ['--version']) !== null;
   if (has('dnf')) return {
     node: 'sudo dnf install -y nodejs npm', git: 'sudo dnf install -y git',
-    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSLo "${TMPDIR:-/tmp}/antigravity-install.sh" https://antigravity.google/cli/install.sh && printf \'Review the downloaded official script, then run: bash %s\\n\' "${TMPDIR:-/tmp}/antigravity-install.sh"',
   };
   if (has('pacman')) return {
     node: 'sudo pacman -S --needed nodejs npm', git: 'sudo pacman -S --needed git',
-    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSLo "${TMPDIR:-/tmp}/antigravity-install.sh" https://antigravity.google/cli/install.sh && printf \'Review the downloaded official script, then run: bash %s\\n\' "${TMPDIR:-/tmp}/antigravity-install.sh"',
   };
   if (has('zypper')) return {
     node: 'sudo zypper install nodejs npm', git: 'sudo zypper install git',
-    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    codex: 'npm install --global @openai/codex@latest', antigravity: 'curl -fsSLo "${TMPDIR:-/tmp}/antigravity-install.sh" https://antigravity.google/cli/install.sh && printf \'Review the downloaded official script, then run: bash %s\\n\' "${TMPDIR:-/tmp}/antigravity-install.sh"',
   };
   return {
     node: 'sudo apt-get update && sudo apt-get install -y nodejs npm',
     git: 'sudo apt-get update && sudo apt-get install -y git',
     codex: 'npm install --global @openai/codex@latest',
-    antigravity: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    antigravity: 'curl -fsSLo "${TMPDIR:-/tmp}/antigravity-install.sh" https://antigravity.google/cli/install.sh && printf \'Review the downloaded official script, then run: bash %s\\n\' "${TMPDIR:-/tmp}/antigravity-install.sh"',
   };
 }
 
@@ -608,14 +638,14 @@ function run(argv) {
       console.error(format(t.repair, { command: repairs.node }));
     }
     for (const component of [
-      { name: 'Git', command: 'git', repair: repairs.git },
-      { name: 'Codex CLI', command: 'codex', repair: repairs.codex },
-      { name: 'Antigravity CLI (agy)', command: 'agy', repair: repairs.antigravity },
+      { name: 'Git', command: 'git', repair: repairs.git, required: true },
+      { name: 'Codex CLI', command: 'codex', repair: repairs.codex, required: options.codex },
+      { name: 'Antigravity CLI (agy)', command: 'agy', repair: repairs.antigravity, required: options.antigravity },
     ]) {
       const version = executableVersion(component.command);
       if (version) console.log(format(t.componentHealthy, { component: component.name, version }));
       else {
-        healthy = false;
+        if (component.required) healthy = false;
         console.error(format(t.componentMissing, { component: component.name }));
         console.error(format(t.repair, { command: component.repair }));
       }
@@ -646,7 +676,7 @@ function run(argv) {
   if (options.command === 'uninstall') {
     for (const target of selectedTargets) {
       if (!existsSync(target.path)) continue;
-      if (!readMetadata(target.path) && !options.force) {
+      if (!isIntactManagedInstallation(target.path, expectedManifest) && !options.force) {
         console.error(format(t.skipRemove, { target: target.name, path: target.path }));
         process.exitCode = 1;
         continue;
