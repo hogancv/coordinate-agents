@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { delimiter } from 'node:path';
@@ -239,8 +239,9 @@ test('launch passes the generated prompt and repository to Codex without shell i
     });
     assert.equal(launched.status, 0, launched.stderr);
     const observed = JSON.parse(readFileSync(capture, 'utf8'));
-    assert.deepEqual(observed.argv, ['-C', resolve(sandbox), prompt]);
-    assert.equal(observed.cwd, resolve(sandbox));
+    const canonicalSandbox = realpathSync(sandbox);
+    assert.deepEqual(observed.argv, ['-C', canonicalSandbox, prompt]);
+    assert.equal(realpathSync(observed.cwd), canonicalSandbox);
     assert.match(prompt, /A&B, %PATH%, \$HOME/);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
