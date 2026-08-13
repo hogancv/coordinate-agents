@@ -1,4 +1,4 @@
 interface:
   display_name: "Coordinate CLI Agents"
-  short_description: "Coordinate Codex and Antigravity through a file bus"
-  default_prompt: "Use $coordinate-cli-agents to enter collaborative mode in this project."
+  short_description: "Quick-start Codex and Antigravity collaboration"
+  default_prompt: "Use $coordinate-cli-agents to quick-start Codex and Antigravity collaboration in this Git repository."

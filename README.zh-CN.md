@@ -6,26 +6,28 @@
 
 不需要 CAO Server、常驻服务、数据库或共享 API 凭据。
 
+## 60 秒快速开始
+
+前提：已安装 Node.js 18+、Git，并已完成 `codex` 和 `agy` 的账号认证。
+
+在你的 Git 仓库中运行：
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest install --lang zh-CN
+npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "开发 Todo Web 应用，支持新增、完成、删除和本地持久化" --lang zh-CN
+```
+
+`quickstart` 会初始化本地总线，并准确输出两条简短、可复制的命令：
+
+1. 把 **Codex** 命令粘贴到终端 1。
+2. 把 **Antigravity** 命令粘贴到终端 2。
+3. 以后只和 Codex 沟通；Antigravity 会通过总线接收实现任务。
+
+不再需要手动复制或维护两段角色提示词。首次任务可选择 `--template bug`、`--template feature` 或 `--template refactor`；后续工作直接按同一清单向 Codex 提出新需求。
+
 ![完整端到端终端演示](./assets/demo.gif)
 
 该动图由 `npm run demo` 在真实的隔离 Git 仓库中生成，完整执行需求提交、Antigravity 实现与提交、自动化测试、Codex 审查真实 commit/证据，以及 `REVIEW_APPROVED`。脱敏后的原始记录位于 [`assets/demo-transcript.txt`](./assets/demo-transcript.txt)。
-
-## 角色合同
-
-- **Codex**：澄清需求、编写实现规格、审查真实提交和验证证据、规划发布，并执行获得批准的发布操作；不修改产品代码。
-- **Antigravity**：唯一的实现代码编写者，负责源码、测试、UI、构建修复和浏览器验证；不执行发布。
-
-```text
-用户需求
-   │
-   ▼
-Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
-  ▲                                      │
-  └── IMPLEMENTATION_DONE + commit ──────┘
-   │
-   ├── CHANGES_REQUESTED ───────────────▶ 继续修改
-   └── REVIEW_APPROVED ─────────────────▶ 等待
-```
 
 ## 环境要求
 
@@ -58,6 +60,8 @@ npx @hogancv/coordinate-cli-agents@latest install
 npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
 ```
 
+`doctor` 会检查 Node.js、Git、`codex`、`agy` 以及两份技能安装。缺失组件和由本包管理但损坏的安装会得到按当前平台检测生成的修复命令；无法识别的现有技能目录则会得到先备份或移动的非破坏性操作说明。Linux 用户应检查检测出的包管理器命令，并确认所在发行版提供 Node.js 18+。
+
 常用命令：
 
 ```sh
@@ -88,23 +92,48 @@ coordinate-cli-agents doctor --lang zh-CN
 
 ## 开始协作
 
-打开两个终端，并让它们进入**同一个 Git 仓库**。
+首次为一个项目配置协作时，运行一次 `quickstart`：
 
-### Codex 终端
-
-```text
-调用 $coordinate-cli-agents 进入协同模式。你是 Codex，只负责需求澄清、规格、验收标准、真实提交与验证证据的 review，以及发布门禁，不得修改产品代码。把可直接实施的规格通过 agent bus 发给 Antigravity；等待 IMPLEMENTATION_DONE；验证提交、测试、构建和证据；然后发送 CHANGES_REQUESTED 或 REVIEW_APPROVED。没有收到我输入的精确授权 RELEASE_APPROVED 之前不得发布。
-
-需求：开发一个 Todo List Web 应用，支持新增、完成、删除和本地持久化。
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --root . --template bug --task "Todo 标题包含 emoji 时保存会崩溃" --lang zh-CN
 ```
 
-### Antigravity 终端
+生成的启动命令会调用 `coordinate-cli-agents launch`，从 `.agent-bus/launch/` 读取角色提示词，将工作目录设为正确的仓库，并启动对应的交互式 CLI。仓库路径会编码为 shell 安全参数，因此同一条命令可用于 PowerShell、命令提示符和 POSIX shell。`quickstart` 会拒绝覆盖已有启动提示词，也不会跟随符号链接或目录联接。后续任务直接在现有 Codex 会话中提出；若终端已关闭，则重新运行之前输出的 Codex 启动命令。
 
-```text
-调用 $coordinate-cli-agents 进入协同模式。你是 Antigravity，是唯一允许修改产品代码的代理。立即检查 agent bus 并等待 Codex 的 IMPLEMENT 或 CHANGES_REQUESTED；收到后完成实现，运行适用的格式化、lint、类型检查、测试、生产构建和浏览器验证；提交本轮实现；保存验证证据；发送包含 commit hash 的 IMPLEMENTATION_DONE；然后继续等待 review。不得执行发布。
+## 任务模板
+
+| 模板 | 适用场景 | Codex 在实施前必须明确 |
+| --- | --- | --- |
+| `bug` | 缺陷和回归 | 复现步骤、预期与实际行为、根因、最小修复、回归测试 |
+| `feature` | 新增用户可见功能 | 用户价值、UX/API、范围、边界情况、兼容性、验收标准 |
+| `refactor` | 内部结构调整 | 不变量、非目标、全绿基线、增量变更、前后对比验证 |
+
+示例：
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "空查询导致搜索崩溃" --lang zh-CN
+npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "增加截止日期和逾期筛选" --lang zh-CN
+npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "提取持久化模块且不改变 UI 行为" --lang zh-CN
 ```
 
-以后只需要继续在 Codex 终端提出需求或回答澄清问题，Antigravity 会从文件总线接收实现任务。
+每种模板需要提供的信息清单见 [`references/task-templates.md`](./references/task-templates.md)。
+
+## 工作原理
+
+- **Codex**：澄清需求、编写实现规格、审查真实提交和验证证据、规划发布，并执行获得批准的发布操作；不修改产品代码。
+- **Antigravity**：唯一的实现代码编写者，负责源码、测试、UI、构建修复和浏览器验证；不执行发布。
+
+```text
+用户需求
+   │
+   ▼
+Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
+  ▲                                      │
+  └── IMPLEMENTATION_DONE + commit ──────┘
+   │
+   ├── CHANGES_REQUESTED ───────────────▶ 继续修改
+   └── REVIEW_APPROVED ─────────────────▶ 等待
+```
 
 ## 发布门禁
 

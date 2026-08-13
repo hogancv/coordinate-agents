@@ -6,26 +6,28 @@ Install a persistent, recoverable collaboration workflow for **OpenAI Codex CLI*
 
 No CAO server, daemon, database, or shared API credential is required.
 
+## 60-second quick start
+
+Prerequisites: Node.js 18+, Git, and authenticated `codex` and `agy` commands.
+
+From your Git repository, run:
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest install
+npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "Build a Todo web app with add, complete, delete, and local persistence"
+```
+
+`quickstart` initializes the local bus and prints exactly two short, copyable commands:
+
+1. Paste the **Codex** command into terminal 1.
+2. Paste the **Antigravity** command into terminal 2.
+3. Continue talking only to Codex; Antigravity receives implementation work through the bus.
+
+No role prompt needs to be copied or maintained manually. Choose `--template bug`, `--template feature`, or `--template refactor` for the initial task; for later work, give Codex a new requirement following the same checklist.
+
 ![End-to-end terminal demo](./assets/demo.gif)
 
 The recording is generated from a real isolated Git repository by `npm run demo`. It exercises requirement submission, Antigravity's implementation and commit, automated tests, Codex's commit/evidence review, and `REVIEW_APPROVED`. The sanitized source transcript is in [`assets/demo-transcript.txt`](./assets/demo-transcript.txt).
-
-## Role contract
-
-- **Codex** clarifies requirements, writes implementation specifications, reviews committed changes and validation evidence, plans releases, and performs approved release actions. It never edits product code.
-- **Antigravity** is the only implementation writer. It owns source code, tests, UI, build fixes, and browser validation. It never releases.
-
-```text
-User request
-    │
-    ▼
- Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
-    ▲                                      │
-    └── IMPLEMENTATION_DONE + commit ──────┘
-    │
-    ├── CHANGES_REQUESTED ───────────────▶ revise
-    └── REVIEW_APPROVED ─────────────────▶ wait
-```
 
 ## Requirements
 
@@ -57,6 +59,8 @@ Verify the installation:
 ```sh
 npx @hogancv/coordinate-cli-agents@latest doctor
 ```
+
+`doctor` checks Node.js, Git, `codex`, `agy`, and both installed skill copies. Missing components and package-managed damage receive a detected-platform repair command. An unrecognized existing skill directory instead gets a non-destructive instruction to back it up or move it first. On Linux, review the detected package-manager command and confirm it supplies Node.js 18+ for your distribution.
 
 Useful variants:
 
@@ -91,23 +95,48 @@ coordinate-cli-agents doctor
 
 ## Start a collaboration
 
-Open two terminals in the **same Git repository**.
+Run `quickstart` once when setting up collaboration in a project:
 
-### Codex terminal
-
-```text
-Use $coordinate-cli-agents and enter collaboration mode. You are Codex. Only clarify requirements, write specifications and acceptance criteria, review committed work and validation evidence, and manage the release gate. Never modify product code. Send an implementation-ready specification to Antigravity, wait for IMPLEMENTATION_DONE, review the real commit and evidence, then send CHANGES_REQUESTED or REVIEW_APPROVED. Do not release until I enter the exact authorization RELEASE_APPROVED.
-
-Requirement: Build a Todo List web application with add, complete, delete, and local persistence.
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --root . --template bug --task "Saving a Todo with an emoji crashes the page"
 ```
 
-### Antigravity terminal
+The generated launch commands call `coordinate-cli-agents launch`, load the role prompts from `.agent-bus/launch/`, set the correct repository as the working directory, and start each interactive CLI. The repository path is encoded into a shell-safe argument, so the same printed command works in PowerShell, Command Prompt, and POSIX shells. `quickstart` refuses to overwrite existing launch prompts or follow symbolic links/junctions. For later tasks, keep using the existing Codex session (or re-run the previously printed Codex launch command) and state the new requirement there.
 
-```text
-Use $coordinate-cli-agents and enter collaboration mode. You are Antigravity and the only agent allowed to modify product code. Check the agent bus immediately and wait for IMPLEMENT or CHANGES_REQUESTED from Codex. Implement the specification, run relevant formatting, linting, type checks, tests, production build, and browser validation, commit the completed round, save evidence, send IMPLEMENTATION_DONE with the commit hash, then wait for review. Never release.
+## Task templates
+
+| Template | Use it for | Codex requires before implementation |
+| --- | --- | --- |
+| `bug` | Defects and regressions | Reproduction, expected vs actual behavior, root cause, minimal fix, regression test |
+| `feature` | New user-visible behavior | User value, UX/API, scope, edge cases, compatibility, acceptance criteria |
+| `refactor` | Internal restructuring | Invariants, non-goals, green baseline, incremental change, before/after verification |
+
+Examples:
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "Search crashes on an empty query"
+npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "Add due dates and an overdue filter"
+npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "Extract persistence without changing UI behavior"
 ```
 
-Continue giving requirements and clarification answers in the Codex terminal. Antigravity receives implementation work through the file bus.
+See [`references/task-templates.md`](./references/task-templates.md) for the information checklist for each template.
+
+## How it works
+
+- **Codex** clarifies requirements, writes implementation specifications, reviews committed changes and validation evidence, plans releases, and performs approved release actions. It never edits product code.
+- **Antigravity** is the only implementation writer. It owns source code, tests, UI, build fixes, and browser validation. It never releases.
+
+```text
+User request
+    │
+    ▼
+ Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
+    ▲                                      │
+    └── IMPLEMENTATION_DONE + commit ──────┘
+    │
+    ├── CHANGES_REQUESTED ───────────────▶ revise
+    └── REVIEW_APPROVED ─────────────────▶ wait
+```
 
 ## Release gate
 

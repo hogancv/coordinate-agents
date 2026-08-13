@@ -1,11 +1,21 @@
 ---
 name: coordinate-cli-agents
-description: Coordinate Codex CLI and Antigravity CLI as two persistent roles through a shared project-local file bus. Use when either CLI is asked to enter collaborative mode, pair with the other CLI, initialize or resume `.agent-bus`, exchange implementation/review messages, wait for the peer, or run the Codex-plans-and-reviews / Antigravity-implements workflow.
+description: Coordinate Codex CLI and Antigravity CLI as two persistent roles through a shared project-local file bus. Use when either CLI is asked to quick-start collaborative mode, pair with the other CLI, initialize or resume `.agent-bus`, exchange implementation/review messages, wait for the peer, or run the Codex-plans-and-reviews / Antigravity-implements workflow.
 ---
 
 # Coordinate CLI Agents
 
 Enter a resumable two-CLI workflow in the current Git repository. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
+
+## Quick-start a new collaboration
+
+When asked to set up the two terminals, run the package CLI rather than asking the user to copy long role prompts:
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
+```
+
+Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts, and prints one copyable launch command for each terminal. Read `references/task-templates.md` only when the user needs help structuring the task.
 
 ## Establish context
 
