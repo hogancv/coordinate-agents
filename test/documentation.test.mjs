@@ -125,6 +125,47 @@ test('documentation site exposes stable task-focused pages and canonical metadat
   assert.match(read(join('docs', 'index.md')), /https:\/\/github\.com\/hogancv\/coordinate-cli-agents/);
 });
 
+test('published llms index is canonical, synchronized, and points to rendered documentation', () => {
+  const canonical = read(join('docs', 'llms.txt'));
+  assert.equal(read('llms.txt'), canonical);
+  for (const url of [
+    'https://hogancv.github.io/coordinate-cli-agents/',
+    'https://hogancv.github.io/coordinate-cli-agents/getting-started.html',
+    'https://hogancv.github.io/coordinate-cli-agents/install-with-ai.html',
+    'https://hogancv.github.io/coordinate-cli-agents/security.html',
+    'https://hogancv.github.io/coordinate-cli-agents/faq.html',
+  ]) assert.ok(canonical.includes(url), `docs/llms.txt is missing ${url}`);
+  assert.match(read(join('docs', 'index.md')), /\[Machine-readable documentation index\]\(\.\/llms\.txt\)/);
+});
+
+test('evidence-focused docs contain complete workflows, comparison, and concrete failures', () => {
+  const gettingStarted = read(join('docs', 'getting-started.md'));
+  for (const evidence of ['about **5 minutes**', 'Before installation', 'IMPLEMENTATION_DONE',
+    'REVIEW_APPROVED', 'RELEASE_APPROVED', 'npm run demo', 'Success and failure signals']) {
+    assert.ok(gettingStarted.includes(evidence), `getting-started is missing ${evidence}`);
+  }
+  const install = read(join('docs', 'install-with-ai.md'));
+  for (const evidence of ['Codex installation conversation', 'Antigravity installation conversation',
+    'Commands the AI may execute', 'Commands the AI must not execute implicitly',
+    'Common failures and recovery', 'Installation result report', 'doctor` exit status `0`']) {
+    assert.ok(install.includes(evidence), `install-with-ai is missing ${evidence}`);
+  }
+  const comparison = read(join('docs', 'comparison.md'));
+  for (const evidence of ['Single agent', 'Manual dual terminals', '`coordinate-cli-agents`',
+    'Antigravity only', 'Codex only', 'Local persistent `.agent-bus`',
+    'Exact user authorization', 'Do not use this project when']) {
+    assert.ok(comparison.includes(evidence), `comparison is missing ${evidence}`);
+  }
+  const troubleshooting = read(join('docs', 'troubleshooting.md'));
+  for (const evidence of ['Skill not discovered', 'Node version too low',
+    '`codex` or `agy` is not found', 'Unknown installation directory',
+    '`doctor` fails after installation', 'Message remains in `processing`',
+    '`.agent-bus` is damaged or unsafe', 'Windows path normalization',
+    'npm registry metadata is inconsistent', 'npm ERR! code ETARGET']) {
+    assert.ok(troubleshooting.includes(evidence), `troubleshooting is missing ${evidence}`);
+  }
+});
+
 test('repository AI, security, and machine index files have distinct documented roles', () => {
   const agents = read('AGENTS.md');
   const security = read('SECURITY.md');
@@ -141,9 +182,10 @@ test('repository AI, security, and machine index files have distinct documented 
 
 test('npm package carries machine installation and security documentation', () => {
   const packageJson = JSON.parse(read('package.json'));
-  for (const name of ['AI_INSTALL.md', 'SECURITY.md', 'llms.txt']) {
+  for (const name of ['AI_INSTALL.md', 'SECURITY.md', 'llms.txt', 'docs/llms.txt']) {
     assert.ok(packageJson.files.includes(name), `${name} is absent from package files`);
   }
+  assert.match(packageJson.scripts['check:llms'], /sync-llms\.mjs --check/);
 });
 
 test('doctor never pipes a downloaded Antigravity installer directly into a shell', () => {

@@ -1,6 +1,6 @@
 {
   "name": "@hogancv/coordinate-cli-agents",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Coordinate Codex CLI specifications and code review with Google Antigravity CLI implementation through a recoverable local agent bus.",
   "type": "module",
   "bin": {
@@ -17,13 +17,16 @@
     "README.zh-CN.md",
     "SECURITY.md",
     "llms.txt",
+    "docs/llms.txt",
     "LICENSE",
     "assets"
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node bin/coordinate-cli-agents.mjs --help && npm test",
-    "prepack": "npm run check",
+    "sync:llms": "node scripts/sync-llms.mjs",
+    "check:llms": "node scripts/sync-llms.mjs --check",
+    "check": "node bin/coordinate-cli-agents.mjs --help && npm run check:llms && npm test",
+    "prepack": "npm run sync:llms && npm run check",
     "demo": "node scripts/demo.mjs",
     "release:check": "npm ci && npm run check && npm pack --dry-run"
   },

@@ -22,7 +22,7 @@ The agents communicate through a recoverable project-local `.agent-bus`. No CAO 
 - [Troubleshooting](./troubleshooting.html)
 - [Role comparison](./comparison.html)
 - [FAQ](./faq.html)
+- [Machine-readable documentation index](./llms.txt)
 - [简体中文入口](./zh-CN/)
 
 Canonical sources: [GitHub](https://github.com/hogancv/coordinate-cli-agents) · [npm](https://www.npmjs.com/package/@hogancv/coordinate-cli-agents)
-

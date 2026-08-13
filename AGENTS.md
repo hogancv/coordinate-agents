@@ -22,7 +22,8 @@ fixtures, logs, documentation, or release artifacts.
 - `references/`: protocol and task-template details loaded by the skill as needed.
 - `AI_INSTALL.md`: canonical safe installation procedure for AI assistants.
 - `README.md` and `README.zh-CN.md`: user-facing English and Simplified Chinese documentation.
-- `docs/`: GitHub Pages source for stable, search-friendly task and FAQ pages.
+- `docs/`: GitHub Pages source for stable, evidence-focused task and FAQ pages. `docs/llms.txt`
+  is the canonical machine index; `npm run sync:llms` generates the repository-root copy.
 - `test/`: Node.js tests, including cross-platform CLI, protocol, docs, and release checks.
 - `.github/workflows/`: pinned CI and trusted npm publishing workflows.
 
@@ -61,7 +62,8 @@ authoritative Windows, macOS, Linux, Node.js 18, and Node.js 22 matrix.
    `references/` and link it directly from `SKILL.md`.
 6. Keep English and Simplified Chinese user flows semantically synchronized. If commands,
    prerequisites, paths, role behavior, or security rules change, review all of:
-   `README.md`, `README.zh-CN.md`, `docs/`, `AI_INSTALL.md`, `SKILL.md`, `SECURITY.md`, and `llms.txt`.
+   `README.md`, `README.zh-CN.md`, `docs/`, `AI_INSTALL.md`, `SKILL.md`, `SECURITY.md`, and
+   `docs/llms.txt`. Never edit the generated root `llms.txt` directly.
 7. If installation payload contents change, update `package.json` `files`, package tests, and the
    package version as appropriate. Keep `package-lock.json` synchronized.
 8. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens
