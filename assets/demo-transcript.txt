@@ -1,4 +1,4 @@
-[SETUP] Create an isolated Git repository
+[SETUP] Create an isolated Git repository (Default reference workflow)
 
 [CODEX] Clarify requirement and submit implementation specification
 queued: <demo-repo>/.agent-bus/inbox/antigravity/new/<message>.md

@@ -2,7 +2,7 @@
 
 简体中文 | [English](./README.md)
 
-基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册并扩展任意 CLI 或桌面级编程代理。
+基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面级编程代理接入。
 
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
@@ -72,7 +72,7 @@ graph TD
         A1[codex-cli 适配器]
         A2[antigravity-cli 适配器]
         A3[generic-cli 适配器]
-        A4[桌面代理挂载模型 Desktop Adapter]
+        A4[桌面代理扩展模型 Desktop Adapter]
     end
     P --> REG
     I --> REG
@@ -88,7 +88,7 @@ graph TD
 
 1. **协作编排层 (Coordination Layer)**：将工作流角色（`planner`、`implementer`、`reviewer`）映射到具体代理，并严格管理人类发布审批门禁。
 2. **代理总线协议层 (Agent Bus Protocol Layer)**：管理代理注册表、消息生命周期、租赁锁、仅追加状态及崩溃恢复机制，与具体厂商和传输介质解耦。
-3. **适配器与运行时层 (Adapters & Runtime Layer)**：桥接具体执行界面（CLI 可执行文件、桌面包装器、IPC 通信），完成任务输入与执行。
+3. **适配器与运行时层 (Adapters & Runtime Layer)**：桥接具体执行界面（内置 `codex-cli`、`antigravity-cli` 适配器、动态 `generic-cli` 适配器及桌面适配器扩展模型），完成任务输入与执行。
 
 ### 代理身份 vs 工作流角色
 

@@ -26,7 +26,7 @@ function step(label, detail = '') {
 }
 
 try {
-  step('SETUP', 'Create an isolated Git repository');
+  step('SETUP', 'Create an isolated Git repository (Default reference workflow)');
   run('git', ['init', '--initial-branch=main']);
   run('git', ['config', 'user.name', 'Demo Agent']);
   run('git', ['config', 'user.email', 'demo@users.noreply.github.com']);

@@ -6,6 +6,9 @@ description: A verified first-run lifecycle for Codex CLI specifications, Antigr
 
 # Getting started
 
+> [!NOTE]
+> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-cli-agents#dynamic-agent-registration) and custom role assignments.
+
 This walkthrough starts from an existing Git repository and ends with a reviewed commit. It takes
 about **5 minutes** after Node.js, Git, Codex CLI, and Antigravity CLI (`agy`) are installed and
 authenticated. Model response time is the main variable.

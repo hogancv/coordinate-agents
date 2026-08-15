@@ -1,34 +1,37 @@
 ---
 layout: page
 title: FAQ
-description: Answers about Codex and Antigravity collaboration, installation, recovery, security, and uninstalling.
+description: Answers about multi-agent coordination, Codex and Antigravity reference roles, adapter architecture, recovery, and security.
 ---
 
 # Frequently asked questions
 
 ## What is coordinate-cli-agents?
 
-A Codex Skill and npm package that gives Codex CLI and Google Antigravity CLI distinct, recoverable roles in one Git repository.
+A local-first coordination protocol, runtime, and CLI skill for multi-agent software engineering in Git repositories. It coordinates arbitrary CLI and desktop agents via adapters, with OpenAI Codex CLI and Google Antigravity CLI as first-party reference adapters and the default workflow.
 
-## How do I prevent two AI agents from editing code simultaneously?
+## How do I prevent multiple AI agents from editing code simultaneously?
 
-Make Antigravity the exclusive implementation writer. Codex specifies and reviews but never edits product code. Do not run concurrent Git writes.
+Assign clear, non-overlapping workflow roles. In the default reference workflow, Antigravity is the exclusive implementation writer while Codex specifies requirements and reviews commits. Do not execute concurrent Git writes on the same worktree.
 
 ## Does it share my accounts or API credentials?
 
-No. Each CLI keeps its native authentication and subscription. Never place credentials in `.agent-bus`.
+No. Each agent and CLI maintains its native authentication and environment independently. Never place API tokens or credentials in `.agent-bus`.
+
+## Can custom or third-party CLI agents be added?
+
+Yes. Custom CLI agents can be registered dynamically using `coordinate-cli-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
 
 ## Can interrupted work be resumed?
 
-Yes. Queue messages and append-only state survive terminal restarts. Inspect status before recovering a stale claim.
+Yes. Message queues (`new`, `processing`, `processed`) and append-only state logs survive terminal restarts. Use `coordinate-cli-agents doctor` or `scripts/agent-bus.mjs recover` to recover stale claims.
 
 ## Is `.agent-bus` encrypted?
 
-No. It is local plaintext and is excluded from ordinary Git tracking, not encrypted.
+No. It is a local plaintext directory on the filesystem and is excluded from ordinary Git tracking via `.git/info/exclude`, not an encrypted store.
 
 ## How do I uninstall it?
 
-Run `npx @hogancv/coordinate-cli-agents@latest uninstall`. Unknown or modified installations are preserved unless force is explicit.
+Run `npx @hogancv/coordinate-cli-agents@latest uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
 
 For detailed answers and exact commands, read the [English README](https://github.com/hogancv/coordinate-cli-agents#faq) or [Simplified Chinese README](https://github.com/hogancv/coordinate-cli-agents/blob/main/README.zh-CN.md#常见问题).
-

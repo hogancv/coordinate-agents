@@ -152,7 +152,7 @@ test('evidence-focused docs contain complete workflows, comparison, and concrete
   }
   const comparison = read(join('docs', 'comparison.md'));
   for (const evidence of ['Single agent', 'Manual dual terminals', '`coordinate-cli-agents`',
-    'Antigravity only', 'Codex only', 'Local persistent `.agent-bus`',
+    'Configured Implementer', 'Configured Reviewer', 'Local persistent `.agent-bus`',
     'Exact user authorization', 'Do not use this project when']) {
     assert.ok(comparison.includes(evidence), `comparison is missing ${evidence}`);
   }
@@ -204,7 +204,7 @@ test('documentation defines agent-agnostic runtime, adapter architecture, and dy
     'Agent Bus Protocol Layer',
     'Adapters & Runtime Layer',
     'generic-cli',
-    'Desktop Adapter Attachment Model',
+    'Desktop Adapter Extension Model',
     'Receive',
     'Execute',
     'Observe',
@@ -223,7 +223,7 @@ test('documentation defines agent-agnostic runtime, adapter architecture, and dy
     '代理总线协议层',
     '适配器与运行时层',
     'generic-cli',
-    '桌面代理挂载模型',
+    '桌面代理扩展模型',
     'Receive（接收）',
     'Execute（执行）',
     'Observe（观测）',
@@ -235,4 +235,41 @@ test('documentation defines agent-agnostic runtime, adapter architecture, and dy
   ]) {
     assert.ok(chinese.includes(phrase), `Chinese README missing architectural term: ${phrase}`);
   }
+});
+
+test('canonical index, site pages, and demo prose distinguish runtime protocol from default reference workflow', () => {
+  const llms = read(join('docs', 'llms.txt'));
+  assert.match(llms, /local-first coordination protocol and runtime/i);
+  assert.match(llms, /reference adapters/i);
+  assert.match(llms, /default reference workflow/i);
+
+  const faq = read(join('docs', 'faq.md'));
+  assert.match(faq, /local-first coordination protocol, runtime/i);
+  assert.match(faq, /reference adapters/i);
+  assert.match(faq, /generic-cli/);
+
+  const zhIndex = read(join('docs', 'zh-CN', 'index.md'));
+  assert.match(zhIndex, /本地优先协调协议与运行时/);
+  assert.match(zhIndex, /参考适配器/);
+
+  const comparison = read(join('docs', 'comparison.md'));
+  assert.match(comparison, /Protocol & Runtime/);
+  assert.match(comparison, /default reference workflow/i);
+
+  const gettingStarted = read(join('docs', 'getting-started.md'));
+  assert.match(gettingStarted, /default reference workflow/i);
+
+  const troubleshooting = read(join('docs', 'troubleshooting.md'));
+  assert.match(troubleshooting, /default Codex and Antigravity reference adapters/i);
+
+  const codexDoc = read(join('docs', 'codex-cli.md'));
+  assert.match(codexDoc, /Reference planner/i);
+  assert.match(codexDoc, /default reference workflow/i);
+
+  const agyDoc = read(join('docs', 'antigravity-cli.md'));
+  assert.match(agyDoc, /Reference implementer/i);
+  assert.match(agyDoc, /default reference workflow/i);
+
+  const demoTranscript = read(join('assets', 'demo-transcript.txt'));
+  assert.match(demoTranscript, /Default reference workflow/i);
 });

@@ -1,12 +1,12 @@
 # coordinate-cli-agents
 
-> Coordinate OpenAI Codex CLI and Google Antigravity CLI (agy) in one Git repository. Codex clarifies requirements, writes the specification, reviews commits, and controls the release gate. Antigravity exclusively implements and tests product code. A recoverable local `.agent-bus` persists handoffs without sharing account credentials.
+> A local-first coordination protocol and runtime for AI coding agents in Git repositories. Coordinates arbitrary CLI and desktop agents via adapters, with OpenAI Codex CLI and Google Antigravity CLI (agy) as canonical first-party reference adapters and default workflow. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
 
 Canonical documentation: https://hogancv.github.io/coordinate-cli-agents/
-Getting started: https://hogancv.github.io/coordinate-cli-agents/getting-started.html
+Getting started (Reference workflow): https://hogancv.github.io/coordinate-cli-agents/getting-started.html
 Install with AI: https://hogancv.github.io/coordinate-cli-agents/install-with-ai.html
-Codex role: https://hogancv.github.io/coordinate-cli-agents/codex-cli.html
-Antigravity role: https://hogancv.github.io/coordinate-cli-agents/antigravity-cli.html
+Codex role (Reference planner/reviewer): https://hogancv.github.io/coordinate-cli-agents/codex-cli.html
+Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-cli-agents/antigravity-cli.html
 Protocol: https://hogancv.github.io/coordinate-cli-agents/protocol.html
 Security: https://hogancv.github.io/coordinate-cli-agents/security.html
 Troubleshooting: https://hogancv.github.io/coordinate-cli-agents/troubleshooting.html
@@ -19,6 +19,6 @@ Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-cli-age
 AI installation contract: https://github.com/hogancv/coordinate-cli-agents/blob/main/AI_INSTALL.md
 Runtime Skill: https://github.com/hogancv/coordinate-cli-agents/blob/main/SKILL.md
 
-Use this project when one agent must specify and review while the other is the sole product-code writer, with durable recovery and explicit release approval. Do not use it for a single-agent task or when both agents must edit product code.
+Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or desktop tools via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 
 Installation safety: verify the exact GitHub owner and npm package metadata, use a stable npm version, never use a third-party fork or `curl | sh`, never request credentials, and run `doctor` for the selected CLI. Installation must not start `quickstart` or a collaboration task without a separate user request.

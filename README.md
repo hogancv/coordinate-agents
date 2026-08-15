@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while any CLI or desktop coding agent can be registered dynamically.
+A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI agents can be registered dynamically and desktop agents are supportable via the adapter extension model.
 
 No CAO server, daemon, database, or shared API credential is required.
 
@@ -27,7 +27,7 @@ No role prompt needs to be copied or maintained manually. Choose `--template bug
 
 ![End-to-end terminal demo](./assets/demo.gif)
 
-The recording is generated from a real isolated Git repository by `npm run demo`. It exercises requirement submission, Antigravity's implementation and commit, automated tests, Codex's commit/evidence review, and `REVIEW_APPROVED`. The sanitized source transcript is in [`assets/demo-transcript.txt`](./assets/demo-transcript.txt).
+The recording is generated from a real isolated Git repository by `npm run demo` demonstrating the default reference workflow. It exercises requirement submission, Antigravity's implementation and commit, automated tests, Codex's commit/evidence review, and `REVIEW_APPROVED`. The sanitized source transcript is in [`assets/demo-transcript.txt`](./assets/demo-transcript.txt).
 
 ## Let an AI install it
 
@@ -72,7 +72,7 @@ graph TD
         A1[codex-cli Adapter]
         A2[antigravity-cli Adapter]
         A3[generic-cli Adapter]
-        A4[Desktop Adapter Attachment Model]
+        A4[Desktop Adapter Extension Model]
     end
     P --> REG
     I --> REG
@@ -88,7 +88,7 @@ graph TD
 
 1. **Coordination Layer**: Maps workflow roles (`planner`, `implementer`, `reviewer`) to registered agents and manages human release authorization.
 2. **Agent Bus Protocol Layer**: Core message bus, queue lifecycle, lease sidecars, append-only states, and crash recovery. Independent of vendor-specific transports.
-3. **Adapter & Runtime Layer**: Bridges concrete execution surfaces (CLI executables, desktop wrappers, IPC) with structured tasks.
+3. **Adapter & Runtime Layer**: Bridges concrete execution surfaces (built-in `codex-cli`, `antigravity-cli`, dynamic `generic-cli`, and desktop adapter extension model) with structured tasks.
 
 ### Agent Identity vs Workflow Role
 

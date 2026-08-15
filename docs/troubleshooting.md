@@ -6,6 +6,9 @@ description: Match real coordinate-cli-agents, Node, Codex, agy, agent-bus, Wind
 
 # Troubleshooting
 
+> [!NOTE]
+> This guide covers common issues with host Skill installations, the default Codex and Antigravity reference adapters, `.agent-bus` recovery, and dynamic agent registration via `agent doctor`.
+
 Start with the same package version and target used for installation:
 
 ```sh
