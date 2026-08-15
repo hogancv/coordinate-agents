@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, with an extension model for custom and desktop agents.
+A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC execution surfaces integrate through the adapter extension model.
 
 No CAO server, daemon, database, or shared API credential is required.
 

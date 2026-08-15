@@ -127,3 +127,41 @@ test('custom adapter can be registered and used with custom lifecycle', () => {
     error: null,
   });
 });
+
+test('generic-cli supports {agent} placeholder and rejects {role}', () => {
+  const generic = getAdapter('generic-cli', {
+    id: 'test-agent',
+    command: 'node',
+    args: ['--agent', '{agent}', '--dir', '{root}', '--message', '{prompt}', '--lang', '{lang}'],
+  });
+
+  const launchContext = {
+    root: '/tmp/repo',
+    prompt: 'Implement feature',
+    agent: 'test-agent',
+    language: 'en',
+    activation: 0,
+  };
+
+  const resolved = generic.resolveLaunch(launchContext);
+  assert.equal(resolved.command, 'node');
+  assert.deepEqual(resolved.args, [
+    '--agent', 'test-agent',
+    '--dir', '/tmp/repo',
+    '--message', 'Implement feature',
+    '--lang', 'en',
+  ]);
+
+  // Negative test: {role} placeholder is explicitly rejected
+  const genericLegacy = getAdapter('generic-cli', {
+    id: 'test-agent',
+    command: 'node',
+    args: ['--target', '{role}', '--prompt', '{prompt}'],
+  });
+
+  assert.throws(
+    () => genericLegacy.resolveLaunch(launchContext),
+    /Unsupported template placeholder: \{role\}\. Use \{agent\}\./
+  );
+});
+

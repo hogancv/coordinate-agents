@@ -756,7 +756,7 @@ function runLaunchChild(resolved, root, setActiveChild) {
   });
 }
 
-async function launchRole(options, t) {
+async function launchAgent(options, t) {
   const agentId = options.agent;
   if (!agentId) throw new Error(format(t.badAgent, { agent: '' }));
   validateAgentId(agentId);
@@ -817,7 +817,6 @@ async function launchRole(options, t) {
         root,
         prompt: activationPrompt,
         agent: agentId,
-        role: agentId,
         language: options.language,
         activation,
       });
@@ -947,7 +946,7 @@ async function run(argv) {
   if (options.command === 'quickstart' || options.command === 'launch') {
     try {
       if (options.command === 'quickstart') quickstart(options, t, language);
-      else await launchRole(options, t);
+      else await launchAgent(options, t);
     } catch (error) {
       console.error(error.message || String(error));
       process.exitCode = 1;

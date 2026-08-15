@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const thisFile = fileURLToPath(import.meta.url);
 const read = name => readFileSync(join(root, name), 'utf8');
 
 test('skill description carries explicit discovery triggers and exclusions', () => {
@@ -271,7 +272,24 @@ test('canonical index, site pages, and demo prose distinguish runtime protocol f
   assert.match(demoTranscript, /Default reference workflow/i);
 });
 
-test('repository contains zero stale legacy identity references', () => {
+function getRepositoryFiles(dir = root, fileList = []) {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (['.git', 'node_modules', 'coverage', 'dist', 'build', '.tmp', 'temp'].includes(entry.name)) {
+        continue;
+      }
+      getRepositoryFiles(fullPath, fileList);
+    } else if (entry.isFile()) {
+      if (/\.(gif|png|jpg|jpeg|ico|gz|tgz|tar|zip)$/i.test(entry.name)) continue;
+      fileList.push(fullPath);
+    }
+  }
+  return fileList;
+}
+
+test('repository-wide invariant: recursive scan finds zero stale legacy identity references', () => {
   const stalePatterns = [
     'coordinate-cli-agents',
     '@hogancv/coordinate-cli-agents',
@@ -279,80 +297,82 @@ test('repository contains zero stale legacy identity references', () => {
     'hogancv/coordinate-cli-agents',
     'hogancv.github.io/coordinate-cli-agents',
   ];
-  const files = [
-    'package.json',
-    'package-lock.json',
-    'SKILL.md',
-    'AI_INSTALL.md',
-    'README.md',
-    'README.zh-CN.md',
-    'SECURITY.md',
-    'AGENTS.md',
-    'llms.txt',
-    'docs/llms.txt',
-    'docs/_config.yml',
-    'docs/index.md',
-    'docs/getting-started.md',
-    'docs/install-with-ai.md',
-    'docs/codex-cli.md',
-    'docs/antigravity-cli.md',
-    'docs/protocol.md',
-    'docs/security.md',
-    'docs/troubleshooting.md',
-    'docs/comparison.md',
-    'docs/faq.md',
-    'docs/zh-CN/index.md',
-    'references/protocol.md',
-    'references/task-templates.md',
-    'bin/coordinate-agents.mjs',
-    'scripts/agent-bus.mjs',
-    'scripts/config.mjs',
-    'scripts/agent-observer.mjs',
-    'scripts/demo.mjs',
-    'scripts/sync-llms.mjs',
-    'adapters/index.mjs',
-    'adapters/base.mjs',
-    'adapters/codex-cli.mjs',
-    'adapters/antigravity-cli.mjs',
-    'adapters/generic-cli.mjs',
-    'agents/openai.yaml',
-  ];
-  for (const file of files) {
-    const content = read(file);
+  const allFiles = getRepositoryFiles();
+  assert.ok(allFiles.length > 25, `Expected repository walk to find files, found ${allFiles.length}`);
+
+  for (const fullPath of allFiles) {
+    if (fullPath === thisFile) continue;
+    const relPath = relative(root, fullPath);
+    const content = readFileSync(fullPath, 'utf8');
     for (const pattern of stalePatterns) {
       assert.equal(
         content.includes(pattern),
         false,
-        `Found stale pattern "${pattern}" in ${file}`
+        `Found stale legacy pattern "${pattern}" in ${relPath}`
       );
     }
   }
 });
 
+test('repository-wide invariant: zero deprecated CLI --role alias across repository', () => {
+  const allFiles = getRepositoryFiles();
+  for (const fullPath of allFiles) {
+    const relPath = relative(root, fullPath);
+    // test/cli.test.mjs is permitted only for testing unknown option rejection
+    if (relPath === join('test', 'cli.test.mjs')) continue;
+    if (fullPath === thisFile) continue;
+
+    const content = readFileSync(fullPath, 'utf8');
+    assert.doesNotMatch(
+      content,
+      /(?:^|['"\s])--role(?:\s|=|['"]|$)/,
+      `Found deprecated CLI flag "--role" in ${relPath}; use "--agent" instead`
+    );
+  }
+});
+
+test('repository-wide invariant: zero {role} placeholder in generic CLI or docs', () => {
+  const allFiles = getRepositoryFiles();
+  for (const fullPath of allFiles) {
+    const relPath = relative(root, fullPath);
+    // test/adapters.test.mjs and adapters/generic-cli.mjs test and implement rejection of {role}
+    if (relPath === join('test', 'adapters.test.mjs')) continue;
+    if (relPath === join('adapters', 'generic-cli.mjs')) continue;
+    // bin/coordinate-agents.mjs uses {role} solely in UI prompt display labels for workflow roles
+    if (relPath === join('bin', 'coordinate-agents.mjs')) continue;
+    if (fullPath === thisFile) continue;
+
+    const content = readFileSync(fullPath, 'utf8');
+    assert.doesNotMatch(
+      content,
+      /(?<!\$)\{role\}/,
+      `Found forbidden placeholder "{role}" in ${relPath}; use "{agent}" for agent identity`
+    );
+  }
+});
+
+test('repository-wide invariant: adapter resolveLaunch contracts use agent, not role', () => {
+  const binContent = read('bin/coordinate-agents.mjs');
+  assert.match(binContent, /adapter\.resolveLaunch\(\{\s*root,\s*prompt:\s*activationPrompt,\s*agent:\s*agentId,/);
+  assert.doesNotMatch(binContent, /adapter\.resolveLaunch\([^)]*role:\s*agentId/);
+
+  const genericAdapterContent = read('adapters/generic-cli.mjs');
+  assert.match(genericAdapterContent, /resolveLaunch\(\{\s*root,\s*prompt,\s*agent,\s*language\s*\}\)/);
+  assert.doesNotMatch(genericAdapterContent, /resolveLaunch\([^)]*\brole\b/);
+});
+
 test('documentation forbids unscoped npx coordinate-agents invocations', () => {
-  const docs = [
-    'README.md',
-    'README.zh-CN.md',
-    'AI_INSTALL.md',
-    'SKILL.md',
-    'docs/index.md',
-    'docs/getting-started.md',
-    'docs/install-with-ai.md',
-    'docs/codex-cli.md',
-    'docs/antigravity-cli.md',
-    'docs/protocol.md',
-    'docs/security.md',
-    'docs/troubleshooting.md',
-    'docs/comparison.md',
-    'docs/faq.md',
-    'docs/zh-CN/index.md',
-  ];
-  for (const doc of docs) {
-    const content = read(doc);
+  const allFiles = getRepositoryFiles();
+  const docFiles = allFiles.filter(p => /\.md$/i.test(p));
+  assert.ok(docFiles.length > 5, 'Expected to scan documentation markdown files');
+
+  for (const fullPath of docFiles) {
+    const relPath = relative(root, fullPath);
+    const content = readFileSync(fullPath, 'utf8');
     assert.doesNotMatch(
       content,
       /npx (?!@hogancv\/)coordinate-agents\b/,
-      `Unscoped "npx coordinate-agents" found in ${doc}; must use "npx @hogancv/coordinate-agents"`
+      `Unscoped "npx coordinate-agents" found in ${relPath}; must use "npx @hogancv/coordinate-agents"`
     );
   }
 });

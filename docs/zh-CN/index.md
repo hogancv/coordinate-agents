@@ -1,7 +1,7 @@
 ---
 layout: page
 title: coordinate-agents 简体中文文档
-description: 面向 AI 编码代理的本地优先协调协议与运行时，支持通过适配器接入任意 CLI/桌面代理，以 Codex CLI 与 Antigravity CLI 作为首发参考适配器。
+description: 面向 AI 编码代理的本地优先协调协议与运行时。以 Codex CLI 与 Antigravity CLI 作为首发参考适配器，支持 generic-cli 接入自定义 CLI 代理，并通过适配器扩展模型支持桌面端与外部执行环境接入。
 permalink: /zh-CN/
 ---
 

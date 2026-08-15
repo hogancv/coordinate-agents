@@ -19,7 +19,7 @@ graph TD
         A1[codex-cli Adapter]
         A2[antigravity-cli Adapter]
         A3[generic-cli Adapter]
-        A4[Future Desktop Adapter Model]
+        A4[Desktop Adapter Extension Model]
     end
     P --> REG
     I --> REG
@@ -145,7 +145,7 @@ For adapters observing external or desktop agents:
 Adapters live under `adapters/` and implement a unified interface:
 
 - `detect()`: checks executable availability and version.
-- `resolveLaunch({ root, prompt, role, language })`: returns `{ command, prefix, args }` without shell interpolation.
+- `resolveLaunch({ root, prompt, agent, language, activation })`: returns `{ command, prefix, args }` without shell interpolation.
 - `launchPolicy()`: returns normalized `one-shot` or `bus-supervised` lifecycle policy.
 - `resumePrompt({ agentId, root, activation })`: supplies compact context for a later supervised activation.
 - `capabilities()`: reports supported actions (`launch`, `detect`, `dispatch`).
@@ -154,17 +154,17 @@ Adapters live under `adapters/` and implement a unified interface:
 
 1. `codex-cli`: Codex CLI detection and one-shot `-C <root> <prompt>` execution.
 2. `antigravity-cli`: Antigravity CLI (`agy`) detection and bus-supervised `--prompt-interactive <prompt>` execution.
-3. `generic-cli`: Configurable third-party CLI execution with template arguments (e.g. `["--dir", "{root}", "--message", "{prompt}"]`).
+3. `generic-cli`: Configurable third-party CLI execution with template arguments (e.g. `["--dir", "{root}", "--message", "{prompt}", "--agent", "{agent}"]`). Supports `{prompt}`, `{root}`, `{agent}`, and `{lang}`; rejects deprecated role placeholders.
 
 ### Durable launch supervision
 
 For `bus-supervised` adapters, Runtime performs the first activation normally. After a zero exit it observes the registered Agent's `new` and `processing` queues plus latest state without moving a message or writing a lease. Work wakes a new activation with the Adapter's resume prompt; `STOPPED` ends successfully. A non-zero child exit ends supervision as a failure. Ctrl+C or termination is forwarded to the active non-detached child. `launch --once` disables supervision without naming a vendor.
 
-### Desktop Adapter capability model
+### Desktop and external adapter extension model
 
-For future desktop GUI agents (e.g. desktop AI apps):
+For desktop GUI, MCP, HTTP, or IPC execution surfaces:
 1. **Attachment precedence**: Official API/SDK > MCP server > WebSocket/IPC > Local HTTP > CLI bridge > Filesystem watcher > UI automation.
-2. **Translation loop**: The adapter polls `.agent-bus`, extracts the prompt, transmits it to the desktop agent via its preferred bridge, monitors progress, and writes back `IMPLEMENTATION_DONE` or `REVIEW_APPROVED`. The desktop agent does not need direct `.agent-bus` awareness.
+2. **Translation loop**: The adapter polls `.agent-bus`, extracts the prompt, transmits it to the external agent via its preferred bridge, monitors progress, and writes back `IMPLEMENTATION_DONE` or `REVIEW_APPROVED`. The external agent does not need direct `.agent-bus` awareness.
 
 ## Git ownership and release gate
 

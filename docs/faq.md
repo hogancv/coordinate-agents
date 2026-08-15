@@ -8,7 +8,7 @@ description: Answers about multi-agent coordination, Codex and Antigravity refer
 
 ## What is coordinate-agents?
 
-A local-first coordination protocol, runtime, and CLI skill for multi-agent software engineering in Git repositories. It coordinates arbitrary CLI and desktop agents via adapters, with OpenAI Codex CLI and Google Antigravity CLI as first-party reference adapters and the default workflow.
+A local-first coordination protocol, runtime, and CLI skill for multi-agent software engineering in Git repositories. The core is agent-agnostic with an adapter-based runtime. OpenAI Codex CLI and Google Antigravity CLI serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop/IPC surfaces connect through the adapter extension model.
 
 ## How do I prevent multiple AI agents from editing code simultaneously?
 

@@ -48,7 +48,7 @@ export class GenericCliAdapter extends AgentAdapter {
     return { available: true, version };
   }
 
-  resolveLaunch({ root, prompt, role, agent, language }) {
+  resolveLaunch({ root, prompt, agent, language }) {
     const command = this.config.command;
     if (!command) throw new Error('Cannot launch generic CLI without configured command');
     const resolved = resolveGenericExecutable(command);
@@ -59,14 +59,19 @@ export class GenericCliAdapter extends AgentAdapter {
       ? this.config.args
       : ['{prompt}'];
 
-    const agentId = agent || role || '';
+    for (const arg of templateArgs) {
+      if (typeof arg === 'string' && arg.includes('{role}')) {
+        throw new Error('Unsupported template placeholder: {role}. Use {agent}.');
+      }
+    }
+
+    const agentId = agent || '';
     const resolvedArgs = templateArgs.map(arg => {
       if (typeof arg !== 'string') return String(arg);
       return arg
         .replaceAll('{prompt}', prompt)
         .replaceAll('{root}', resolve(root || process.cwd()))
         .replaceAll('{agent}', agentId)
-        .replaceAll('{role}', agentId)
         .replaceAll('{lang}', language || '');
     });
 

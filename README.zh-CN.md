@@ -2,7 +2,7 @@
 
 简体中文 | [English](./README.md)
 
-基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面级编程代理接入。
+基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。协议核心与具体代理无关，使用基于适配器的运行时。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认参考工作流，同时支持通过 `generic-cli` 动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面端、MCP、HTTP、IPC 等外部执行环境接入。
 
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
@@ -290,7 +290,7 @@ npm pack --dry-run
 
 ### 什么是 coordinate-agents？
 
-它是官方发布的 [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm 包与 Codex/Antigravity Skill，用于结构化多代理编程协作工作流。Codex 负责需求澄清、规格制定、代码审查与发布门禁控制；Google Antigravity CLI（`agy`）则专注于业务代码与测试的实现，同时支持动态接入任意 CLI 及桌面代理。
+它是官方发布的 [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm 包与 Codex/Antigravity Skill，用于结构化多代理编程协作工作流。协议核心与具体代理无关，Codex 默认作为规划者与审查者参考适配器，Google Antigravity CLI（`agy`）默认作为实现者参考适配器，同时支持通过 `generic-cli` 动态接入自定义 CLI 代理，并通过适配器扩展模型支持桌面端等外部环境接入。
 
 ### 如何让 Codex CLI 和 Antigravity CLI 协作？
 
