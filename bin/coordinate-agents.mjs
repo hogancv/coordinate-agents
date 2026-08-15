@@ -100,8 +100,8 @@ Examples:
     promptsWritten: 'Generated role prompts: {path}',
     codexCommand: '1. Codex terminal (copy and run):',
     antigravityCommand: '2. Antigravity terminal (copy and run):',
-    plannerCommand: '1. {agent} ({role}) terminal (copy and run):',
-    implementerCommand: '2. {agent} ({role}) terminal (copy and run):',
+    plannerCommand: '1. {agent} ({roles}) terminal (copy and run):',
+    implementerCommand: '2. {agent} ({roles}) terminal (copy and run):',
     launchMissing: 'Generated prompt is missing. Run quickstart first: {command}',
     launchExists: 'Launch prompts already exist at {path}. Use the previously generated launch commands; continue new tasks in Codex.',
     unsafeBusPath: 'Refusing unsafe agent-bus path (symlink, junction, or outside repository): {path}',
@@ -172,8 +172,8 @@ Examples:
     promptsWritten: '已生成角色提示词：{path}',
     codexCommand: '1. Codex 终端（复制并运行）：',
     antigravityCommand: '2. Antigravity 终端（复制并运行）：',
-    plannerCommand: '1. {agent}（{role}）终端（复制并运行）：',
-    implementerCommand: '2. {agent}（{role}）终端（复制并运行）：',
+    plannerCommand: '1. {agent}（{roles}）终端（复制并运行）：',
+    implementerCommand: '2. {agent}（{roles}）终端（复制并运行）：',
     launchMissing: '找不到生成的提示词。请先运行 quickstart：{command}',
     launchExists: '启动提示词已存在：{path}。请使用之前生成的启动命令；后续新任务直接在 Codex 中继续。',
     unsafeBusPath: '拒绝使用不安全的 agent-bus 路径（符号链接、目录联接或仓库外路径）：{path}',
@@ -732,7 +732,7 @@ function quickstart(options, t, language) {
   } else {
     for (const [agentId, rolesSet] of agentRolesMap.entries()) {
       const rolesLabel = [...rolesSet].join(', ');
-      console.log(`\n${format(t.plannerCommand, { agent: agentId, role: rolesLabel })}\n${packageCommand('launch', { ...base, agent: agentId })}`);
+      console.log(`\n${format(t.plannerCommand, { agent: agentId, roles: rolesLabel })}\n${packageCommand('launch', { ...base, agent: agentId })}`);
     }
   }
 }

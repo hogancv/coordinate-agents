@@ -338,8 +338,6 @@ test('repository-wide invariant: zero {role} placeholder in generic CLI or docs'
     // test/adapters.test.mjs and adapters/generic-cli.mjs test and implement rejection of {role}
     if (relPath === join('test', 'adapters.test.mjs')) continue;
     if (relPath === join('adapters', 'generic-cli.mjs')) continue;
-    // bin/coordinate-agents.mjs uses {role} solely in UI prompt display labels for workflow roles
-    if (relPath === join('bin', 'coordinate-agents.mjs')) continue;
     if (fullPath === thisFile) continue;
 
     const content = readFileSync(fullPath, 'utf8');

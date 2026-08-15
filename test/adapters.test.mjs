@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 import test from 'node:test';
 import { AgentAdapter, getAdapter, listAdapters, registerAdapter } from '../adapters/index.mjs';
 
@@ -129,14 +131,15 @@ test('custom adapter can be registered and used with custom lifecycle', () => {
 });
 
 test('generic-cli supports {agent} placeholder and rejects {role}', () => {
+  const testRoot = resolve(tmpdir(), 'coordinate-agents-adapter-test');
   const generic = getAdapter('generic-cli', {
     id: 'test-agent',
-    command: 'node',
+    command: process.execPath,
     args: ['--agent', '{agent}', '--dir', '{root}', '--message', '{prompt}', '--lang', '{lang}'],
   });
 
   const launchContext = {
-    root: '/tmp/repo',
+    root: testRoot,
     prompt: 'Implement feature',
     agent: 'test-agent',
     language: 'en',
@@ -144,10 +147,10 @@ test('generic-cli supports {agent} placeholder and rejects {role}', () => {
   };
 
   const resolved = generic.resolveLaunch(launchContext);
-  assert.equal(resolved.command, 'node');
+  assert.equal(resolved.command, process.execPath);
   assert.deepEqual(resolved.args, [
     '--agent', 'test-agent',
-    '--dir', '/tmp/repo',
+    '--dir', testRoot,
     '--message', 'Implement feature',
     '--lang', 'en',
   ]);
@@ -155,7 +158,7 @@ test('generic-cli supports {agent} placeholder and rejects {role}', () => {
   // Negative test: {role} placeholder is explicitly rejected
   const genericLegacy = getAdapter('generic-cli', {
     id: 'test-agent',
-    command: 'node',
+    command: process.execPath,
     args: ['--target', '{role}', '--prompt', '{prompt}'],
   });
 
