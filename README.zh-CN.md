@@ -2,13 +2,13 @@
 
 简体中文 | [English](./README.md)
 
-为 **OpenAI Codex CLI** 和 **Google Antigravity CLI（`agy`）**安装一套可持久化、可恢复的协作工作流。两个代理通过项目内的 `.agent-bus` 通信，并保留各自原生账号、订阅和模型权限。
+基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册并扩展任意 CLI 或桌面级编程代理。
 
-不需要 CAO Server、常驻服务、数据库或共享 API 凭据。
+无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
 ## 60 秒快速开始
 
-前提：已安装 Node.js 18+、Git，并已完成 `codex` 和 `agy` 的账号认证。
+前提：已安装 Node.js 18+、Git，并已完成 `codex` 和 `agy` 的账号认证（或使用已注册的自定义代理）。
 
 在你的 Git 仓库中运行：
 
@@ -53,13 +53,87 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "
 从官方仓库 hogancv/coordinate-cli-agents 安装 Antigravity 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Antigravity 端，完成后运行 doctor --antigravity --lang zh-CN。不要修改当前项目代码。
 ```
 
+## 架构：代理总线、适配器与工作流角色
+
+```mermaid
+graph TD
+    subgraph 协作编排层 Coordination Layer
+        P[工作流角色: 规划者 Planner]
+        I[工作流角色: 实现者 Implementer]
+        R[工作流角色: 审查者 Reviewer]
+    end
+    subgraph 代理总线协议层 Agent Bus Protocol Layer
+        REG[代理注册中心 config.json]
+        Q[独立收件箱: new / processing / processed]
+        DEDUPE[幂等去重与租赁锁]
+        STATE[仅追加状态日志]
+    end
+    subgraph 适配器与运行时层 Adapters & Runtime Layer
+        A1[codex-cli 适配器]
+        A2[antigravity-cli 适配器]
+        A3[generic-cli 适配器]
+        A4[桌面代理挂载模型 Desktop Adapter]
+    end
+    P --> REG
+    I --> REG
+    R --> REG
+    REG --> Q
+    Q --> A1
+    Q --> A2
+    Q --> A3
+    Q --> A4
+```
+
+### 三层架构体系
+
+1. **协作编排层 (Coordination Layer)**：将工作流角色（`planner`、`implementer`、`reviewer`）映射到具体代理，并严格管理人类发布审批门禁。
+2. **代理总线协议层 (Agent Bus Protocol Layer)**：管理代理注册表、消息生命周期、租赁锁、仅追加状态及崩溃恢复机制，与具体厂商和传输介质解耦。
+3. **适配器与运行时层 (Adapters & Runtime Layer)**：桥接具体执行界面（CLI 可执行文件、桌面包装器、IPC 通信），完成任务输入与执行。
+
+### 代理身份 vs 工作流角色
+
+- **代理身份 (Agent Identity)**：标识具体的执行引擎与传输形式（如 `codex`、`antigravity`、`claude`、`custom-agent`）。在 `.agent-bus/config.json` 中配置。
+- **工作流角色 (Workflow Role)**：定义开发闭环中的职责：
+  - **规划与审查者 (Planner / Reviewer)**（默认：`codex`）：明确用户需求，在 `.agent-bus/specs/` 编写规格说明，审查 commit 与测试构建证据，管控发布门禁。严禁修改业务实现代码。
+  - **实现者 (Implementer)**（默认：`antigravity`）：业务代码与测试的唯一编写者。实现功能、执行验证、提交 commit，并在 `.agent-bus/evidence/` 输出证据。严禁执行发布。
+
+### 兼容性五维准则
+
+任何接入代理总线的代理或适配器需满足：
+- **Receive（接收）**：从 `inbox/<agent_id>/new` 原子移动认领任务至 `processing`。
+- **Execute（执行）**：在本地 Git 工作区执行任务指令。
+- **Observe（观测）**：跟踪标准化运行状态（`idle`, `working`, `completed`, `failed`, `waiting`）。
+- **Result（产出）**：记录输出产物、commit 哈希或审查发现。
+- **Report（汇报）**：写入状态日志并发送原子交接消息。
+
+## 动态代理注册与扩展
+
+无需修改总线核心代码即可注册第三方或自定义 CLI 代理：
+
+```sh
+# 注册自定义 CLI 代理
+npx @hogancv/coordinate-cli-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+
+# 列出所有已注册代理及当前工作流角色分配
+npx @hogancv/coordinate-cli-agents@latest agent list
+
+# 诊断检查所有已注册代理及其 CLI 适配器可用性
+npx @hogancv/coordinate-cli-agents@latest agent doctor
+```
+
+启动包含自定义角色分配的协作：
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "开发搜索功能"
+```
+
 ## 环境要求
 
 - Windows、macOS 或 Linux
 - Node.js 18 或更高版本
 - Git
-- 已完成认证的 Codex CLI
-- 已完成认证的 Antigravity CLI
+- 已完成认证的 Codex CLI（用于 Codex 参考适配器）
+- 已完成认证的 Antigravity CLI（用于 Antigravity 参考适配器）
 
 ## 通过 npm 安装
 
@@ -98,114 +172,90 @@ npx @hogancv/coordinate-cli-agents@latest install --antigravity --lang zh-CN
 # 明确执行更新
 npx @hogancv/coordinate-cli-agents@latest update --lang zh-CN
 
-# 卸载由 npm 包管理的技能
-npx @hogancv/coordinate-cli-agents@latest uninstall --lang zh-CN
+# 中文输出诊断
+npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
+
+# 移除由本包管理的安装
+npx @hogancv/coordinate-cli-agents@latest uninstall
 ```
 
-安装器支持 `CODEX_HOME` 和 `GEMINI_HOME` 环境变量，也可以使用 `--codex-home <路径>` 和 `--antigravity-home <路径>`指定自定义根目录。
+安装器遵循 `CODEX_HOME` 与 `GEMINI_HOME`。也可以使用 `--codex-home <路径>` 和 `--antigravity-home <路径>` 自定义目标目录。
 
-安装后重新启动两个 CLI，使其重新发现技能。
+安装后请重启两个 CLI 以便重新发现技能。
 
-也可以全局安装命令，以后不再通过 `npx` 调用：
+或者全局安装命令以便直接使用：
 
 ```sh
 npm install --global @hogancv/coordinate-cli-agents
-coordinate-cli-agents install --lang zh-CN
-coordinate-cli-agents doctor --lang zh-CN
+coordinate-cli-agents install
+coordinate-cli-agents doctor
 ```
-
-## 开始协作
-
-首次为一个项目配置协作时，运行一次 `quickstart`：
-
-```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --root . --template bug --task "Todo 标题包含 emoji 时保存会崩溃" --lang zh-CN
-```
-
-生成的启动命令会调用 `coordinate-cli-agents launch`，从 `.agent-bus/launch/` 读取角色提示词，将工作目录设为正确的仓库，并启动对应的交互式 CLI。仓库路径会编码为 shell 安全参数，因此同一条命令可用于 PowerShell、命令提示符和 POSIX shell。`quickstart` 会拒绝覆盖已有启动提示词，也不会跟随符号链接或目录联接。后续任务直接在现有 Codex 会话中提出；若终端已关闭，则重新运行之前输出的 Codex 启动命令。
 
 ## 任务模板
 
-| 模板 | 适用场景 | Codex 在实施前必须明确 |
+| 模板 | 适用场景 | 规划者在实现前必须明确的内容 |
 | --- | --- | --- |
-| `bug` | 缺陷和回归 | 复现步骤、预期与实际行为、根因、最小修复、回归测试 |
-| `feature` | 新增用户可见功能 | 用户价值、UX/API、范围、边界情况、兼容性、验收标准 |
-| `refactor` | 内部结构调整 | 不变量、非目标、全绿基线、增量变更、前后对比验证 |
+| `bug` | 缺陷与功能回退 | 复现步骤、预期与实际表现、根因分析、最小修复方案、回归测试 |
+| `feature` | 新的用户可见功能 | 用户价值、交互/API 设计、作用域、边界情况、兼容性、验收标准 |
+| `refactor` | 内部结构重构 | 不变式约束、非目标说明、绿色基线、增量修改、重构前后对比验证 |
 
 示例：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "空查询导致搜索崩溃" --lang zh-CN
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "增加截止日期和逾期筛选" --lang zh-CN
-npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "提取持久化模块且不改变 UI 行为" --lang zh-CN
+npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "空查询导致搜索崩溃"
+npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "添加截止日期与逾期过滤器"
+npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "抽离持久化层且不改变 UI 行为"
 ```
 
-每种模板需要提供的信息清单见 [`references/task-templates.md`](./references/task-templates.md)。
-
-## 工作原理
-
-- **Codex**：澄清需求、编写实现规格、审查真实提交和验证证据、规划发布，并执行获得批准的发布操作；不修改产品代码。
-- **Antigravity**：唯一的实现代码编写者，负责源码、测试、UI、构建修复和浏览器验证；不执行发布。
-
-```text
-用户需求
-   │
-   ▼
-Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
-  ▲                                      │
-  └── IMPLEMENTATION_DONE + commit ──────┘
-   │
-   ├── CHANGES_REQUESTED ───────────────▶ 继续修改
-   └── REVIEW_APPROVED ─────────────────▶ 等待
-```
+各模板的详细信息清单请参见 [`references/task-templates.md`](./references/task-templates.md)。
 
 ## 发布门禁
 
-`REVIEW_APPROVED` 只表示审查通过，不等于允许发布。Codex 只有在用户针对已描述的发布计划输入以下精确授权后，才能执行 merge、tag、push、deploy 或 publish：
+`REVIEW_APPROVED` 并不是发布授权。只有当用户针对明确说明的发布方案输入完全一致的授权文本时，规划/审查者才可执行分支合并、打标签、推送、部署或发布：
 
 ```text
 RELEASE_APPROVED
 ```
 
-## 恢复与轮询
+## 故障恢复与等待机制
 
 - `wait` 默认每 5 秒轮询一次，最长等待 120 分钟。
-- 只有对应 CLI 会话及其 Node.js 进程仍在运行时，等待才会继续。
-- 消息和状态会跨终端重启保留；重新调用技能即可检查并恢复 `new` 或当前角色拥有的 `processing` 消息。
-- `.agent-bus/` 只会写入当前仓库本地的 `.git/info/exclude`，不会修改受版本控制的 `.gitignore`。
-- 不要让两个角色同时执行 Git 写操作。
+- 等待仅在当前 CLI 会话及其 Node.js 进程保持存活时有效。
+- 消息与状态在终端重启后依然保留。再次调用本技能即可检查并继续处理 `new` 或由当前代理认领的 `processing` 消息。
+- `.agent-bus/` 写入当前仓库本地的 `.git/info/exclude`，不会污染版本库跟踪的 `.gitignore`。
+- 严禁多个角色同时进行 Git 写入。
 
-消息认领默认带有 4 小时租约。进程中断后，先确认没有对应的实现、commit 或回复，再恢复遗留消息：
+任务认领默认具有 4 小时租赁期。仅当确认未产生对应工作成果、commit 或回复后，才可回收异常中断的认领：
 
 ```sh
 BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
-node "$BUS_TOOL" recover --root "$REPO" --role antigravity --stale-after-seconds 14400
+node "$BUS_TOOL" recover --root "$REPO" --agent antigravity --stale-after-seconds 14400
 ```
 
-重试发送时使用 `--dedupe-key <稳定轮次标识>`。相同发送方、接收方和去重键的并发发送只会产生一条消息。消息先写入同卷临时文件，刷新并关闭后再原子重命名；认领也使用原子重命名；重复完成操作是幂等的。损坏消息会被隔离而不会交给代理，状态文件损坏时会回退到最新的有效追加式状态记录。
+重发消息时请使用 `--dedupe-key <稳定轮次标识>`。相同发送方、接收方与去重键的并发发送会自动归并为一条消息。消息发布使用同分区临时文件、刷盘并原子重命名；认领使用原子重命名；完成操作具备幂等性。损坏的消息会自动隔离而非交付，状态读取则自动回退至最新有效的仅追加记录。
 
-## 安全边界与数据清理
+## 安全与数据边界
 
-`.agent-bus/` 是**本地明文工作数据**，不是密钥保险库，其中可能保存：
+`.agent-bus/` 属于**本地明文工作数据**，而非机密存储区。它可能包含：
 
-- 完整提示词、需求、规格、问题和 review 意见；
-- commit hash、文件路径、验证日志，以及证据中主动加入的 diff 或源码片段；
-- 角色状态、进程/主机信息、消息租约、去重记录和队列历史。
+- 完整的提示词、需求、规格说明、澄清问答与审查评论；
+- commit 哈希、文件路径、验证日志，以及证据中的代码片段或 diff；
+- 角色状态、进程与主机元数据、消息租赁锁、去重记录与历史队列。
 
-不要写入访问令牌、Cookie、密码、私钥或非必要生产数据。本包不会加密该目录，它只继承仓库目录的操作系统权限。`.git/info/exclude` 只能避免普通 Git 跟踪，**不能**阻止本机管理员、备份工具、云同步客户端、恶意软件或以同一用户运行的其他进程读取。分享诊断信息前，应先检查并脱敏 `.agent-bus/`。
+请勿在总线消息中放置访问令牌、Cookie、密码、私钥或未经脱敏的生产数据。总线继承当前仓库目录的操作系统权限，本包不对其进行加密。`.git/info/exclude` 仅防止普通的 Git 跟踪，但**不能**阻止本地管理员、备份工具、网盘同步、恶意程序或同权限进程读取。对外提供诊断信息前，请仔细检查并脱敏 `.agent-bus/`。
 
-正常恢复不会删除历史。协作结束且不再需要审计记录后，可使用明确确认永久删除总线数据：
+常规恢复操作会保留历史记录。协作和审计完成后，可使用显式确认彻底清除总线数据：
 
 ```sh
 node "$BUS_TOOL" clean --root "$REPO" --confirm DELETE_AGENT_BUS
 ```
 
-该命令只删除 `.agent-bus/` 下的规格、消息、证据、review、发布记录、日志、状态、租约和去重记录，不删除产品文件或 Git commit。
+该命令会永久删除 `.agent-bus/` 下的所有规格、消息、证据、审查、发布、日志、状态、租赁与去重记录，但不会删除业务代码与 Git commits。
 
 ## 手动诊断
 
-正常使用时由技能自动调用脚本。需要排障时：
+通常情况下，Skill 会自动调用总线脚本。如需手动排查：
 
 ```sh
 BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
@@ -215,9 +265,9 @@ node "$BUS_TOOL" init --root "$REPO"
 node "$BUS_TOOL" status --root "$REPO"
 ```
 
-支持的总线命令：`init`、`send`、`wait`、`complete`、`recover`、`state`、`status` 和 `clean`。
+支持的总线子命令：`init`、`send`、`wait`、`complete`、`recover`、`state`、`status`、`agent-add`、`agent-list` 与 `clean`。
 
-## 开发与发布前检查
+## 参与开发
 
 ```sh
 npm test
@@ -226,51 +276,51 @@ npm run demo
 npm pack --dry-run
 ```
 
-## 发布可信度
+## 发布完整性
 
-- CI 在 Linux、Windows 和 macOS 上测试 Node.js 18、22。
-- 只有 GitHub Release 的 `vX.Y.Z` 标签与 `package.json` 完全一致时才允许发布。
-- 正式版本使用 npm 标签 `latest`，GitHub 预发布版本使用 `next`。
-- `.github/workflows/release.yml` 使用 npm Trusted Publishing（OIDC），不保存长期发布 Token；`publishConfig` 已启用 npm provenance。
-- 首次自动发布前，维护者必须在 npm 中为 `hogancv/coordinate-cli-agents` 配置 Trusted Publisher：仓库 `coordinate-cli-agents`、工作流 `release.yml`、允许操作 `npm publish`。
+- CI 在 Linux、Windows 和 macOS 上对 Node.js 18 与 22 进行测试。
+- 仅当 GitHub Release 的 `vX.Y.Z` 标签与 `package.json` 完全一致时才触发发布。
+- 稳定版使用 npm 标签 `latest`；预发布版使用 `next`。
+- `.github/workflows/release.yml` 使用 npm Trusted Publishing (OIDC)，杜绝长期发布 Token，并在 `publishConfig` 中启用 npm Provenance。
+- 维护者必须在首次自动发布前，为 `hogancv/coordinate-cli-agents` 仓库配置 npm Trusted Publisher。
 
-## 常见问题
+## 常见问题 (FAQ)
 
-### coordinate-cli-agents 是什么？
+### 什么是 coordinate-cli-agents？
 
-它是官方 [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm 包和 Codex Skill，用于建立双角色编程工作流。Codex 负责需求、规格、审查和发布控制；Google Antigravity CLI（`agy`）独占产品代码与测试的实现工作。
+它是官方发布的 [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm 包与 Codex Skill，用于多代理编程协作工作流。Codex 负责需求澄清、规格制定、代码审查与发布门禁控制；Google Antigravity CLI（`agy`）则专注于业务代码与测试的实现。
 
 ### 如何让 Codex CLI 和 Antigravity CLI 协作？
 
-先按[通过 npm 安装](#通过-npm-安装)，再在目标 Git 仓库中执行 [`quickstart`](#开始协作)。分别在两个终端运行它输出的两条命令，后续只需继续向 Codex 提需求。
+在目标 Git 仓库中先后运行 [`install`](#通过-npm-安装) 和 [`quickstart`](#60-秒快速开始)。分别在两个独立终端中运行输出的命令，然后继续向 Codex 提出需求即可。
 
-### 如何在同一个 Git 仓库中使用两个编程代理？
+### 如何在一个 Git 仓库中运行两个编程代理？
 
-使用同一个仓库和两个 CLI 会话，但任何时刻只允许一个角色执行 Git 写操作。项目本地的 `.agent-bus` 负责传递规格、实现结果、审查结论、租约与恢复状态，不共享账号凭据。
+在同一个 Git 仓库中打开两个 CLI 会话，但同一时刻仅允许一个角色拥有 Git 写入权限。项目本地的 `.agent-bus` 用于传递规格说明、实现结果、审查结论、租赁状态与恢复信息，无需共享 API 凭据。
 
 ### 如何防止两个 AI 代理同时修改代码？
 
-安装后的角色契约规定 Antigravity 是唯一的产品代码编写者。Codex 只能澄清、编写规格、检查提交、审查证据以及执行经明确批准的发布，不得修改实现文件；工作流也明确禁止并发 Git 写操作。
+通过安装的角色契约，Antigravity 是业务代码的唯一修改者。Codex 负责澄清、编写规格、检查 commit、审查证据与操作经明确授权的发布，但严禁修改实现文件。该工作流同时禁止并发 Git 写入。
 
 ### 如何从 npm 安装 Codex Skill？
 
-执行 `npx @hogancv/coordinate-cli-agents@latest install --codex`，重启 Codex CLI，再执行 `npx @hogancv/coordinate-cli-agents@latest doctor --codex --lang zh-CN` 验证。需要让 AI 代为安装时，请使用规范入口 [`AI_INSTALL.md`](./AI_INSTALL.md)。
+运行 `npx @hogancv/coordinate-cli-agents@latest install --codex --lang zh-CN`，重启 Codex CLI，并通过 `npx @hogancv/coordinate-cli-agents@latest doctor --codex --lang zh-CN` 进行验证。若由 AI 执行安装，请使用官方标准的 [`AI_INSTALL.md`](./AI_INSTALL.md)。
 
-### Codex CLI 和 Antigravity CLI 的角色有什么区别？
+### Codex CLI 与 Antigravity CLI 的分工是什么？
 
-Codex 澄清需求、编写规格与验收条件、审查提交和证据、要求返工并执行发布门禁。Antigravity 编写源代码与测试、验证 UI/浏览器行为、修复构建问题并提交结果，但不执行发布。
+Codex 负责澄清需求、生成规格说明与验收标准、审查 commit 和证据、指出需要修改的问题，并把关发布门禁。Antigravity 负责实现源码与测试、验证 UI/浏览器行为、修复构建问题并提交 commit；它不执行发布。
 
 ### 如何恢复被中断的多代理开发工作？
 
-重新调用此 Skill 并检查 `status`；消息和状态会跨终端重启保留。只有确认不存在对应实现、提交或回复后，才恢复超时的已认领消息。详见[恢复与轮询](#恢复与轮询)。
+重新调用本技能并检查 `status`；持久化消息与状态在终端重启后依然保留。仅在确认未产生对应工作成果、commit 或回复后，才可回收过期的认领消息。详见[故障恢复与等待机制](#故障恢复与等待机制)。
 
 ### `.agent-bus` 安全吗？
 
-它是本地明文工作数据，不是加密的秘密存储。`.git/info/exclude` 只能避免普通 Git 跟踪，无法阻止本地进程、管理员、备份或同步工具读取。不要写入任何凭据；详见[安全边界与数据清理](#安全边界与数据清理)和 [`SECURITY.md`](./SECURITY.md)。
+它属于本地明文工作数据，而非加密的机密存储。`.git/info/exclude` 仅防止普通 Git 跟踪，无法防御本地其他进程、管理员、备份工具或同步软件。切勿在其中存储凭据；请阅读[安全与数据边界](#安全与数据边界)和 [`SECURITY.md`](./SECURITY.md)。
 
 ### 如何卸载 coordinate-cli-agents？
 
-执行 `npx @hogancv/coordinate-cli-agents@latest uninstall --lang zh-CN`。默认只移除可识别且未修改的包管理安装；未知或已修改目录会被拒绝，除非你明确使用 `--force`。
+运行 `npx @hogancv/coordinate-cli-agents@latest uninstall`。该命令默认仅清理可识别且未被修改的受管安装，遇到未知目录或已修改内容时会拒绝删除，除非显式指定 `--force`。
 
 ## 许可证
 

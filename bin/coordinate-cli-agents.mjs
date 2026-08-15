@@ -21,11 +21,12 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { getAdapter } from '../adapters/index.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
 const skillName = 'coordinate-cli-agents';
-const payloadEntries = ['SKILL.md', 'agents', 'references', 'scripts'];
+const payloadEntries = ['SKILL.md', 'adapters', 'agents', 'references', 'scripts'];
 const metadataFile = '.coordinate-cli-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
 
@@ -38,6 +39,7 @@ Commands:
   update        Reinstall the packaged version and back up the old copy
   quickstart    Initialize a project and print two copyable launch commands
   launch        Start one CLI with its generated collaboration prompt
+  agent         Manage registered agents (add, list, doctor)
   doctor        Check prerequisites/installations and print repair commands
   uninstall     Remove installations created by this package
   help          Show this help
@@ -47,10 +49,17 @@ Options:
   --antigravity           Target Antigravity only
   --codex-home <path>     Override CODEX_HOME (default: ~/.codex)
   --antigravity-home <p>  Override GEMINI_HOME (default: ~/.gemini)
-  --root <path>            Project Git repository (default: current directory)
-  --role <role>            Launch role: codex or antigravity
-  --template <type>        Task template: bug, feature, or refactor
-  --task <text>            Task summary included in the Codex launch prompt
+  --root <path>           Project Git repository (default: current directory)
+  --agent <id>            Launch or target agent ID (default: codex or antigravity)
+  --role <role>           (Alias for --agent) Launch role: codex or antigravity
+  --planner <agent>       Workflow planner agent (default: codex)
+  --implementer <agent>   Workflow implementer agent (default: antigravity)
+  --reviewer <agent>      Workflow reviewer agent (default: codex)
+  --adapter <adapter>     Adapter for agent registration (default: generic-cli)
+  --command <cmd>         Executable command for agent registration
+  --args <args>           Command argument template (JSON array or comma-separated)
+  --template <type>       Task template: bug, feature, or refactor
+  --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
   --force                 Replace/remove an unrecognized existing directory
   --version               Print package version
@@ -59,6 +68,7 @@ Options:
 Examples:
   npx @hogancv/coordinate-cli-agents install
   npx @hogancv/coordinate-cli-agents quickstart --template feature --task "Build a Todo app"
+  npx @hogancv/coordinate-cli-agents agent add claude --adapter generic-cli --command claude
   npx @hogancv/coordinate-cli-agents doctor`,
     installed: 'Installed {target}: {path}',
     updated: 'Updated {target}: {path}',
@@ -80,12 +90,15 @@ Examples:
     promptsWritten: 'Generated role prompts: {path}',
     codexCommand: '1. Codex terminal (copy and run):',
     antigravityCommand: '2. Antigravity terminal (copy and run):',
+    plannerCommand: '1. {agent} ({role}) terminal (copy and run):',
+    implementerCommand: '2. {agent} ({role}) terminal (copy and run):',
     launchMissing: 'Generated prompt is missing. Run quickstart first: {command}',
     launchExists: 'Launch prompts already exist at {path}. Use the previously generated launch commands; continue new tasks in Codex.',
     unsafeBusPath: 'Refusing unsafe agent-bus path (symlink, junction, or outside repository): {path}',
     notGitRepo: 'Not a Git repository: {path}',
     badTemplate: 'Unsupported template: {template}. Use bug, feature, or refactor.',
     badRole: 'Unsupported role: {role}. Use codex or antigravity.',
+    badAgent: 'Unknown agent "{agent}". Ensure the agent is registered in .agent-bus/config.json.',
     launchFailed: '{role} exited with status {status}.',
     unknownCommand: 'Unknown command: {command}',
     missingValue: 'Missing value for {option}',
@@ -99,6 +112,7 @@ Examples:
   update        备份旧副本并重新安装当前包版本
   quickstart    初始化项目并生成两条可复制的启动命令
   launch        使用已生成的协作提示词启动一个 CLI
+  agent         管理注册的 Agent（add, list, doctor）
   doctor        检查依赖和安装，并输出对应修复命令
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -109,9 +123,16 @@ Examples:
   --codex-home <路径>     覆盖 CODEX_HOME（默认：~/.codex）
   --antigravity-home <p>  覆盖 GEMINI_HOME（默认：~/.gemini）
   --root <路径>           项目 Git 仓库（默认：当前目录）
-  --role <角色>           启动角色：codex 或 antigravity
+  --agent <id>            启动或操作的 Agent ID
+  --role <角色>           （--agent 的别名）启动角色：codex 或 antigravity
+  --planner <agent>       工作流规划者 Agent（默认：codex）
+  --implementer <agent>   工作流实现者 Agent（默认：antigravity）
+  --reviewer <agent>      工作流审查者 Agent（默认：codex）
+  --adapter <adapter>     注册 Agent 的适配器（默认：generic-cli）
+  --command <cmd>         注册 Agent 的可执行命令
+  --args <args>           注册 Agent 的命令行参数模板（JSON 数组或逗号分隔）
   --template <类型>       任务模板：bug、feature 或 refactor
-  --task <文本>           写入 Codex 启动提示词的任务摘要
+  --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
   --force                 替换或删除无法识别的现有目录
   --version               输出包版本
@@ -120,6 +141,7 @@ Examples:
 示例：
   npx @hogancv/coordinate-cli-agents install
   npx @hogancv/coordinate-cli-agents quickstart --template feature --task "开发 Todo 应用"
+  npx @hogancv/coordinate-cli-agents agent add claude --adapter generic-cli --command claude
   npx @hogancv/coordinate-cli-agents doctor --lang zh-CN`,
     installed: '已安装 {target}：{path}',
     updated: '已更新 {target}：{path}',
@@ -141,12 +163,15 @@ Examples:
     promptsWritten: '已生成角色提示词：{path}',
     codexCommand: '1. Codex 终端（复制并运行）：',
     antigravityCommand: '2. Antigravity 终端（复制并运行）：',
+    plannerCommand: '1. {agent}（{role}）终端（复制并运行）：',
+    implementerCommand: '2. {agent}（{role}）终端（复制并运行）：',
     launchMissing: '找不到生成的提示词。请先运行 quickstart：{command}',
     launchExists: '启动提示词已存在：{path}。请使用之前生成的启动命令；后续新任务直接在 Codex 中继续。',
     unsafeBusPath: '拒绝使用不安全的 agent-bus 路径（符号链接、目录联接或仓库外路径）：{path}',
     notGitRepo: '不是 Git 仓库：{path}',
     badTemplate: '不支持的任务模板：{template}。请使用 bug、feature 或 refactor。',
     badRole: '不支持的角色：{role}。请使用 codex 或 antigravity。',
+    badAgent: '未知 Agent "{agent}"。请确保该 Agent 已在 .agent-bus/config.json 中注册。',
     launchFailed: '{role} 退出，状态码 {status}。',
     unknownCommand: '未知命令：{command}',
     missingValue: '选项缺少参数：{option}',
@@ -157,6 +182,8 @@ Examples:
 function parseArgs(argv) {
   const result = {
     command: 'help',
+    subcommand: null,
+    targetAgent: null,
     codex: false,
     antigravity: false,
     force: false,
@@ -169,12 +196,27 @@ function parseArgs(argv) {
     root: process.cwd(),
     rootBase64: null,
     role: null,
+    agent: null,
+    planner: null,
+    implementer: null,
+    reviewer: null,
+    adapter: 'generic-cli',
+    agentCommand: null,
+    agentArgs: null,
     template: 'feature',
     task: '',
     language: null,
   };
   const args = [...argv];
-  if (args[0] && !args[0].startsWith('-')) result.command = args.shift();
+  if (args[0] && !args[0].startsWith('-')) {
+    result.command = args.shift();
+    if (result.command === 'agent' && args[0] && !args[0].startsWith('-')) {
+      result.subcommand = args.shift();
+      if (args[0] && !args[0].startsWith('-')) {
+        result.targetAgent = args.shift();
+      }
+    }
+  }
   while (args.length) {
     const option = args.shift();
     if (option === '--codex') result.codex = true;
@@ -182,7 +224,11 @@ function parseArgs(argv) {
     else if (option === '--force') result.force = true;
     else if (option === '--help' || option === '-h') result.help = true;
     else if (option === '--version') result.version = true;
-    else if (['--codex-home', '--antigravity-home', '--codex-home-base64', '--antigravity-home-base64', '--root', '--root-base64', '--role', '--template', '--task', '--lang'].includes(option)) {
+    else if ([
+      '--codex-home', '--antigravity-home', '--codex-home-base64', '--antigravity-home-base64',
+      '--root', '--root-base64', '--role', '--agent', '--planner', '--implementer', '--reviewer',
+      '--adapter', '--command', '--args', '--template', '--task', '--lang',
+    ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
       if (option === '--codex-home') result.codexHome = resolve(value);
@@ -192,6 +238,13 @@ function parseArgs(argv) {
       if (option === '--root') result.root = resolve(value);
       if (option === '--root-base64') result.rootBase64 = value;
       if (option === '--role') result.role = value.toLowerCase();
+      if (option === '--agent') result.agent = value.toLowerCase();
+      if (option === '--planner') result.planner = value.toLowerCase();
+      if (option === '--implementer') result.implementer = value.toLowerCase();
+      if (option === '--reviewer') result.reviewer = value.toLowerCase();
+      if (option === '--adapter') result.adapter = value;
+      if (option === '--command') result.agentCommand = value;
+      if (option === '--args') result.agentArgs = value;
       if (option === '--template') result.template = value.toLowerCase();
       if (option === '--task') result.task = value;
       if (option === '--lang') result.language = value;
@@ -206,6 +259,8 @@ function parseArgs(argv) {
   if (result.rootBase64) result.root = resolve(Buffer.from(result.rootBase64, 'base64url').toString('utf8'));
   if (result.codexHomeBase64) result.codexHome = resolve(Buffer.from(result.codexHomeBase64, 'base64url').toString('utf8'));
   if (result.antigravityHomeBase64) result.antigravityHome = resolve(Buffer.from(result.antigravityHomeBase64, 'base64url').toString('utf8'));
+  if (!result.agent && result.role) result.agent = result.role;
+  if (!result.role && result.agent) result.role = result.agent;
   return result;
 }
 
@@ -429,6 +484,7 @@ function repairCommands() {
 function packageCommand(command, options) {
   let result = `npx --yes ${packageJson.name}@${packageJson.version} ${command}`;
   if (options.role) result += ` --role ${options.role}`;
+  else if (options.agent) result += ` --agent ${options.agent}`;
   if (options.root) result += ` --root-base64 ${Buffer.from(options.root, 'utf8').toString('base64url')}`;
   if (options.language) result += ` --lang ${options.language === 'zh' ? 'zh-CN' : options.language}`;
   return result;
@@ -494,18 +550,24 @@ function taskGuidance(template, language) {
   return guidance[language][template];
 }
 
-function rolePrompts(options, language) {
+function rolePrompts(options, language, planner = 'codex', implementer = 'antigravity') {
   const task = options.task.trim() || (language === 'zh' ? '先询问我本轮的具体需求。' : 'Ask me for the concrete task for this round.');
   if (language === 'zh') {
-    return {
-      codex: `调用 $coordinate-cli-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`,
-      antigravity: '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。',
-    };
+    const plannerPrompt = planner === 'codex'
+      ? `调用 $coordinate-cli-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`
+      : `调用 $coordinate-cli-agents 并作为规划者（${planner}）恢复当前仓库的协作。你负责需求澄清、规格编写、提交/证据审查与发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    const implementerPrompt = implementer === 'antigravity'
+      ? '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。'
+      : `调用 $coordinate-cli-agents 并作为实现者（${implementer}）恢复当前仓库的协作。立即等待任务指令；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待审查；不得发布。`;
+    return { [planner]: plannerPrompt, [implementer]: implementerPrompt };
   }
-  return {
-    codex: `Use $coordinate-cli-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`,
-    antigravity: 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.',
-  };
+  const plannerPrompt = planner === 'codex'
+    ? `Use $coordinate-cli-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`
+    : `Use $coordinate-cli-agents as planner (${planner}) and resume collaboration in this repository. Own clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  const implementerPrompt = implementer === 'antigravity'
+    ? 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.'
+    : `Use $coordinate-cli-agents as implementer (${implementer}) and resume collaboration in this repository. Wait for instructions; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.`;
+  return { [planner]: plannerPrompt, [implementer]: implementerPrompt };
 }
 
 function quickstart(options, t, language) {
@@ -522,15 +584,32 @@ function quickstart(options, t, language) {
   assertSafePath(root, launchDir, t);
   mkdirSync(launchDir, { recursive: true });
   assertSafePath(root, launchDir, t);
-  const prompts = rolePrompts(options, language);
-  const promptPaths = [join(launchDir, 'codex.txt'), join(launchDir, 'antigravity.txt')];
+
+  let busConfig = { agents: [{ id: 'codex' }, { id: 'antigravity' }], workflow: { planner: 'codex', implementer: 'antigravity' } };
+  const cfgPath = join(busPath, 'config.json');
+  if (existsSync(cfgPath)) {
+    try {
+      busConfig = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    } catch { /* use defaults */ }
+  }
+
+  const planner = options.planner || busConfig.workflow?.planner || 'codex';
+  const implementer = options.implementer || busConfig.workflow?.implementer || 'antigravity';
+
+  const prompts = rolePrompts(options, language, planner, implementer);
+  const promptPaths = [
+    join(launchDir, `${planner}.txt`),
+    join(launchDir, `${implementer}.txt`),
+  ];
   if (promptPaths.some(existsSync)) throw new Error(format(t.launchExists, { path: launchDir }));
   const created = [];
   try {
-    publishNewFile(promptPaths[0], `${prompts.codex}\n`);
+    publishNewFile(promptPaths[0], `${prompts[planner]}\n`);
     created.push(promptPaths[0]);
-    publishNewFile(promptPaths[1], `${prompts.antigravity}\n`);
-    created.push(promptPaths[1]);
+    if (planner !== implementer) {
+      publishNewFile(promptPaths[1], `${prompts[implementer]}\n`);
+      created.push(promptPaths[1]);
+    }
   } catch (error) {
     for (const path of created) removePath(path);
     throw error;
@@ -539,41 +618,106 @@ function quickstart(options, t, language) {
   const base = { root, language: language === 'zh' ? 'zh-CN' : 'en' };
   console.log(format(t.quickstartReady, { root }));
   console.log(format(t.promptsWritten, { path: launchDir }));
-  console.log(`\n${t.codexCommand}\n${packageCommand('launch', { ...base, role: 'codex' })}`);
-  console.log(`\n${t.antigravityCommand}\n${packageCommand('launch', { ...base, role: 'antigravity' })}`);
-}
-
-function resolveLaunchExecutable(command) {
-  if (process.platform !== 'win32') return { command, prefix: [] };
-  const located = spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true });
-  if (located.status !== 0) return { command, prefix: [] };
-  for (const path of located.stdout.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
-    if (/\.(exe|com)$/i.test(path)) return { command: path, prefix: [] };
-    if (/\.cmd$/i.test(path) && command === 'codex') {
-      const entrypoint = join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
-      if (existsSync(entrypoint)) return { command: process.execPath, prefix: [entrypoint] };
-    }
+  if (planner === 'codex' && implementer === 'antigravity') {
+    console.log(`\n${t.codexCommand}\n${packageCommand('launch', { ...base, role: 'codex' })}`);
+    console.log(`\n${t.antigravityCommand}\n${packageCommand('launch', { ...base, role: 'antigravity' })}`);
+  } else {
+    console.log(`\n${format(t.plannerCommand, { agent: planner, role: 'planner' })}\n${packageCommand('launch', { ...base, role: planner })}`);
+    console.log(`\n${format(t.implementerCommand, { agent: implementer, role: 'implementer' })}\n${packageCommand('launch', { ...base, role: implementer })}`);
   }
-  return { command, prefix: [] };
 }
 
 function launchRole(options, t) {
-  if (!['codex', 'antigravity'].includes(options.role)) throw new Error(format(t.badRole, { role: options.role || '' }));
+  const agentId = options.agent || options.role;
+  if (!agentId) throw new Error(format(t.badRole, { role: '' }));
   const root = assertGitRepository(options.root, t);
   assertSafePath(root, join(root, '.agent-bus'), t);
   assertSafePath(root, join(root, '.agent-bus', 'launch'), t);
-  const promptPath = join(root, '.agent-bus', 'launch', `${options.role}.txt`);
+  const promptPath = join(root, '.agent-bus', 'launch', `${agentId}.txt`);
   if (!existsSync(promptPath)) {
     throw new Error(format(t.launchMissing, { command: packageCommand('quickstart', { root, language: options.language }) }));
   }
   assertSafePath(root, promptPath, t, false);
   const prompt = readFileSync(promptPath, 'utf8').trim();
-  const command = options.role === 'codex' ? 'codex' : 'agy';
-  const args = options.role === 'codex' ? ['-C', root, prompt] : ['--prompt-interactive', prompt];
-  const executable = resolveLaunchExecutable(command);
-  const result = spawnSync(executable.command, [...executable.prefix, ...args], { cwd: root, stdio: 'inherit', windowsHide: false });
+
+  const cfgPath = join(root, '.agent-bus', 'config.json');
+  let agentConfig = { id: agentId, adapter: agentId === 'codex' ? 'codex-cli' : (agentId === 'antigravity' ? 'antigravity-cli' : 'generic-cli'), command: agentId === 'antigravity' ? 'agy' : agentId };
+  if (existsSync(cfgPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+      const found = cfg.agents?.find(a => a.id === agentId);
+      if (found) agentConfig = found;
+      else if (agentId !== 'codex' && agentId !== 'antigravity') {
+        throw new Error(format(t.badAgent, { agent: agentId }));
+      }
+    } catch (err) {
+      if (err.message.includes('Unknown agent')) throw err;
+    }
+  } else if (agentId !== 'codex' && agentId !== 'antigravity') {
+    throw new Error(format(t.badRole, { role: agentId }));
+  }
+
+  const adapter = getAdapter(agentConfig.adapter, agentConfig);
+  const resolved = adapter.resolveLaunch({ root, prompt, role: agentId, language: options.language });
+  const isCmdOrBat = process.platform === 'win32' && /\.(cmd|bat)$/i.test(resolved.command) && resolved.prefix.length === 0;
+  const result = spawnSync(resolved.command, [...resolved.prefix, ...resolved.args], {
+    cwd: root,
+    stdio: 'inherit',
+    windowsHide: false,
+    shell: isCmdOrBat,
+  });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(format(t.launchFailed, { role: options.role, status: result.status }));
+  if (result.status !== 0) throw new Error(format(t.launchFailed, { role: agentId, status: result.status }));
+}
+
+function handleAgentCommand(options, t) {
+  const root = assertGitRepository(options.root, t);
+  const busTool = join(packageRoot, 'scripts', 'agent-bus.mjs');
+  if (options.subcommand === 'add') {
+    const agentId = options.targetAgent || options.agent;
+    if (!agentId) throw new Error('--agent <id> is required for agent add.');
+    const args = ['agent-add', '--root', root, '--agent', agentId, '--adapter', options.adapter || 'generic-cli'];
+    if (options.agentCommand) args.push('--command', options.agentCommand);
+    if (options.agentArgs) args.push('--args', options.agentArgs);
+    const result = spawnSync(process.execPath, [busTool, ...args], { encoding: 'utf8', windowsHide: true });
+    if (result.status !== 0) throw new Error((result.stderr || result.stdout || 'agent add failed').trim());
+    console.log(result.stdout.trim());
+    return;
+  }
+  if (options.subcommand === 'list') {
+    const result = spawnSync(process.execPath, [busTool, 'agent-list', '--root', root], { encoding: 'utf8', windowsHide: true });
+    if (result.status !== 0) throw new Error((result.stderr || result.stdout || 'agent list failed').trim());
+    console.log(result.stdout.trim());
+    return;
+  }
+  if (options.subcommand === 'doctor') {
+    const cfgPath = join(root, '.agent-bus', 'config.json');
+    if (!existsSync(cfgPath)) {
+      console.log('No .agent-bus/config.json found. Run quickstart or agent-bus init first.');
+      return;
+    }
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    console.log(`Checking ${cfg.agents.length} registered agents:`);
+    let allHealthy = true;
+    for (const agent of cfg.agents) {
+      try {
+        const adapter = getAdapter(agent.adapter, agent);
+        const detection = adapter.detect();
+        if (detection.available) {
+          console.log(`  ${agent.id} (${agent.adapter}): healthy (${detection.version || 'available'})`);
+        } else {
+          allHealthy = false;
+          console.error(`  ${agent.id} (${agent.adapter}): missing or unavailable (${detection.details || 'unknown'})`);
+        }
+      } catch (err) {
+        allHealthy = false;
+        console.error(`  ${agent.id} (${agent.adapter}): error (${err.message})`);
+      }
+    }
+    if (!allHealthy) process.exitCode = 1;
+    return;
+  }
+  throw new Error(`Unknown agent subcommand: ${options.subcommand}. Use add, list, or doctor.`);
 }
 
 function run(argv) {
@@ -604,6 +748,16 @@ function run(argv) {
 
   const expectedManifest = payloadManifest();
   const selectedTargets = targets(options);
+
+  if (options.command === 'agent') {
+    try {
+      handleAgentCommand(options, t);
+    } catch (error) {
+      console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
 
   if (options.command === 'quickstart' || options.command === 'launch') {
     try {

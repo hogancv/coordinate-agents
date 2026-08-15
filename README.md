@@ -2,13 +2,13 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-Install a persistent, recoverable collaboration workflow for **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)**. The two agents communicate through a project-local `.agent-bus` while keeping their native accounts, subscriptions, and model access.
+A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while any CLI or desktop coding agent can be registered dynamically.
 
 No CAO server, daemon, database, or shared API credential is required.
 
 ## 60-second quick start
 
-Prerequisites: Node.js 18+, Git, and authenticated `codex` and `agy` commands.
+Prerequisites: Node.js 18+, Git, and authenticated `codex` and `agy` commands (or custom registered agents).
 
 From your Git repository, run:
 
@@ -53,13 +53,87 @@ Install the Codex skill from the official hogancv/coordinate-cli-agents reposito
 Install the Antigravity skill from the official hogancv/coordinate-cli-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Antigravity side. After installation, run doctor --antigravity --lang en. Do not modify the current project code.
 ```
 
+## Architecture: Agent Bus, Adapters, and Roles
+
+```mermaid
+graph TD
+    subgraph Coordination Layer
+        P[Workflow Role: Planner]
+        I[Workflow Role: Implementer]
+        R[Workflow Role: Reviewer]
+    end
+    subgraph Agent Bus Protocol Layer
+        REG[Agent Registry / config.json]
+        Q[Inboxes: new / processing / processed]
+        DEDUPE[Deduplication & Leases]
+        STATE[Append-Only State Logs]
+    end
+    subgraph Adapters & Runtime Layer
+        A1[codex-cli Adapter]
+        A2[antigravity-cli Adapter]
+        A3[generic-cli Adapter]
+        A4[Desktop Adapter Attachment Model]
+    end
+    P --> REG
+    I --> REG
+    R --> REG
+    REG --> Q
+    Q --> A1
+    Q --> A2
+    Q --> A3
+    Q --> A4
+```
+
+### Three architectural layers
+
+1. **Coordination Layer**: Maps workflow roles (`planner`, `implementer`, `reviewer`) to registered agents and manages human release authorization.
+2. **Agent Bus Protocol Layer**: Core message bus, queue lifecycle, lease sidecars, append-only states, and crash recovery. Independent of vendor-specific transports.
+3. **Adapter & Runtime Layer**: Bridges concrete execution surfaces (CLI executables, desktop wrappers, IPC) with structured tasks.
+
+### Agent Identity vs Workflow Role
+
+- **Agent Identity**: Identifies a specific engine and transport (e.g. `codex`, `antigravity`, `claude`, `my-bot`). Configured under `.agent-bus/config.json`.
+- **Workflow Role**: Defines functional responsibility in a development loop:
+  - **Planner / Reviewer** (Default: `codex`): Clarifies user intent, drafts specifications under `.agent-bus/specs/`, verifies test/build evidence, and controls release gates. Never touches implementation files.
+  - **Implementer** (Default: `antigravity`): Exclusive product-code and test writer. Implements features, runs validation, commits changes, and submits evidence under `.agent-bus/evidence/`. Never performs releases.
+
+### Compatibility criteria
+
+Any agent or adapter connecting to the Agent Bus must support:
+- **Receive**: Claim incoming tasks from `inbox/<agent_id>/new` via atomic move to `processing`.
+- **Execute**: Run task instructions within the local Git repository workspace.
+- **Observe**: Track runtime state (`idle`, `working`, `completed`, `failed`, `waiting`).
+- **Result**: Record output artifacts, commit hashes, or review findings.
+- **Report**: Write state logs and send atomic handoff messages.
+
+## Dynamic agent registration
+
+Register third-party or custom CLI agents without modifying bus code:
+
+```sh
+# Register a custom CLI agent
+npx @hogancv/coordinate-cli-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+
+# List registered agents and workflow configuration
+npx @hogancv/coordinate-cli-agents@latest agent list
+
+# Verify all registered agents and their CLI adapters
+npx @hogancv/coordinate-cli-agents@latest agent doctor
+```
+
+Run a collaboration with custom role assignments:
+
+```sh
+npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "Add search feature"
+```
+
 ## Requirements
 
 - Windows, macOS, or Linux
 - Node.js 18 or newer
 - Git
-- Authenticated Codex CLI
-- Authenticated Antigravity CLI
+- Authenticated Codex CLI (for Codex reference adapter)
+- Authenticated Antigravity CLI (for Antigravity reference adapter)
 
 ## Install from npm
 
@@ -117,19 +191,9 @@ coordinate-cli-agents install
 coordinate-cli-agents doctor
 ```
 
-## Start a collaboration
-
-Run `quickstart` once when setting up collaboration in a project:
-
-```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --root . --template bug --task "Saving a Todo with an emoji crashes the page"
-```
-
-The generated launch commands call `coordinate-cli-agents launch`, load the role prompts from `.agent-bus/launch/`, set the correct repository as the working directory, and start each interactive CLI. The repository path is encoded into a shell-safe argument, so the same printed command works in PowerShell, Command Prompt, and POSIX shells. `quickstart` refuses to overwrite existing launch prompts or follow symbolic links/junctions. For later tasks, keep using the existing Codex session (or re-run the previously printed Codex launch command) and state the new requirement there.
-
 ## Task templates
 
-| Template | Use it for | Codex requires before implementation |
+| Template | Use it for | Planner requires before implementation |
 | --- | --- | --- |
 | `bug` | Defects and regressions | Reproduction, expected vs actual behavior, root cause, minimal fix, regression test |
 | `feature` | New user-visible behavior | User value, UX/API, scope, edge cases, compatibility, acceptance criteria |
@@ -145,26 +209,9 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task 
 
 See [`references/task-templates.md`](./references/task-templates.md) for the information checklist for each template.
 
-## How it works
-
-- **Codex** clarifies requirements, writes implementation specifications, reviews committed changes and validation evidence, plans releases, and performs approved release actions. It never edits product code.
-- **Antigravity** is the only implementation writer. It owns source code, tests, UI, build fixes, and browser validation. It never releases.
-
-```text
-User request
-    │
-    ▼
- Codex ── IMPLEMENT ──▶ .agent-bus ──▶ Antigravity
-    ▲                                      │
-    └── IMPLEMENTATION_DONE + commit ──────┘
-    │
-    ├── CHANGES_REQUESTED ───────────────▶ revise
-    └── REVIEW_APPROVED ─────────────────▶ wait
-```
-
 ## Release gate
 
-`REVIEW_APPROVED` is not release authorization. Codex may merge, tag, push, deploy, or publish only after the user enters this exact authorization for the described release plan:
+`REVIEW_APPROVED` is not release authorization. The planner/reviewer may merge, tag, push, deploy, or publish only after the user enters this exact authorization for the described release plan:
 
 ```text
 RELEASE_APPROVED
@@ -176,14 +223,14 @@ RELEASE_APPROVED
 - Waiting continues only while the CLI session and its Node.js process remain alive.
 - Messages and state survive terminal restarts. Invoke the skill again to inspect and resume `new` or role-owned `processing` messages.
 - `.agent-bus/` is added to the repository's local `.git/info/exclude`, not its tracked `.gitignore`.
-- Never let both roles perform Git writes at the same time.
+- Never let multiple roles perform Git writes at the same time.
 
 Claims have a four-hour lease by default. Recover a message left behind by an interrupted process only after confirming that no matching work, commit, or reply already exists:
 
 ```sh
 BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
-node "$BUS_TOOL" recover --root "$REPO" --role antigravity --stale-after-seconds 14400
+node "$BUS_TOOL" recover --root "$REPO" --agent antigravity --stale-after-seconds 14400
 ```
 
 Use `--dedupe-key <stable-round-id>` when retrying a send. Concurrent sends with the same sender, recipient, and dedupe key resolve to one message. Message publication uses a same-volume temporary file, flush/close, and atomic rename; claiming uses an atomic rename; completion is idempotent. Invalid messages are quarantined instead of delivered, and status falls back to the newest valid append-only state record.
@@ -218,7 +265,7 @@ node "$BUS_TOOL" init --root "$REPO"
 node "$BUS_TOOL" status --root "$REPO"
 ```
 
-Supported bus commands: `init`, `send`, `wait`, `complete`, `recover`, `state`, `status`, and `clean`.
+Supported bus commands: `init`, `send`, `wait`, `complete`, `recover`, `state`, `status`, `agent-add`, `agent-list`, and `clean`.
 
 ## Development
 
@@ -241,11 +288,11 @@ npm pack --dry-run
 
 ### What is coordinate-cli-agents?
 
-It is the official [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm package and Codex Skill for a two-role coding workflow. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests.
+It is the official [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm package and Codex Skill for a multi-agent coding workflow. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests.
 
 ### How do I coordinate Codex CLI and Antigravity CLI?
 
-Run [`install`](#install-from-npm), then [`quickstart`](#start-a-collaboration) inside the target Git repository. Open the two commands it prints in separate terminals and continue giving requirements to Codex.
+Run [`install`](#install-from-npm), then [`quickstart`](#60-second-quick-start) inside the target Git repository. Open the two commands it prints in separate terminals and continue giving requirements to Codex.
 
 ### How do I use two coding agents in one Git repository?
 

@@ -1,12 +1,13 @@
 {
   "name": "@hogancv/coordinate-cli-agents",
-  "version": "1.2.3",
-  "description": "Coordinate Codex CLI specifications and code review with Google Antigravity CLI implementation through a recoverable local agent bus.",
+  "version": "2.0.0",
+  "description": "A local-first coordination protocol and runtime for AI coding agents.",
   "type": "module",
   "bin": {
     "coordinate-cli-agents": "bin/coordinate-cli-agents.mjs"
   },
   "files": [
+    "adapters",
     "agents",
     "bin",
     "references",
@@ -42,12 +43,16 @@
     "url": "https://github.com/hogancv/coordinate-cli-agents/issues"
   },
   "keywords": [
+    "agent",
+    "multi-agent",
+    "coordination",
+    "protocol",
+    "runtime",
+    "adapters",
     "codex",
     "codex-cli",
     "antigravity",
     "agy",
-    "agent",
-    "multi-agent",
     "multi-agent-collaboration",
     "specification",
     "implementation",

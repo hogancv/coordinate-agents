@@ -1,48 +1,172 @@
-# Agent Bus Protocol
+# Agent Bus Protocol and Runtime Architecture
 
-## Queues
+A local-first, serverless coordination protocol and runtime for multi-agent software engineering in Git repositories.
 
-Each role owns `new`, `processing`, and `processed` beneath `.agent-bus/inbox/<role>/`.
+```mermaid
+graph TD
+    subgraph Coordination Layer
+        P[Workflow Role: Planner]
+        I[Workflow Role: Implementer]
+        R[Workflow Role: Reviewer]
+    end
+    subgraph Agent Bus Protocol Layer
+        REG[Agent Registry / config.json]
+        Q[Inboxes: new / processing / processed]
+        DEDUPE[Deduplication & Leases]
+        STATE[Append-Only State Logs]
+    end
+    subgraph Adapters & Runtime Layer
+        A1[codex-cli Adapter]
+        A2[antigravity-cli Adapter]
+        A3[generic-cli Adapter]
+        A4[Future Desktop Adapter Model]
+    end
+    P --> REG
+    I --> REG
+    R --> REG
+    REG --> Q
+    Q --> A1
+    Q --> A2
+    Q --> A3
+    Q --> A4
+```
 
-- Writers create a temporary UTF-8 message under `.agent-bus/tmp/`, then atomically move it to `new`.
-- A waiter claims the oldest message by atomically moving it from `new` to `processing`.
-- The recipient moves a successfully handled message to `processed`.
-- Claims have lease sidecars. `recover` returns expired claims to `new`; inspect for matching work or replies before recovery.
-- Retry sends with a stable `--dedupe-key`; the same sender/recipient/key tuple is delivered once.
-- Invalid messages move to `.agent-bus/quarantine/<role>/` with a local error record.
+## Architectural layers
 
-## Message types
+1. **Coordination Logic**: maps workflow roles (planner, implementer, reviewer) to registered agents, generates role-specific launch prompts, and enforces specification/review/release policies.
+2. **Agent Bus Protocol**: manages agent registry (`.agent-bus/config.json`), message routing, queues, lease sidecars, deduplication, append-only state, and quarantine. The protocol layer is decoupled from vendor implementations and concrete transports.
+3. **Agent Adapters / Runtime**: detects CLI availability and resolves launch commands/arguments using argument arrays without shell-string interpolation.
 
-- `REQUIREMENTS`: raw or clarified product request
-- `IMPLEMENT`: implementation-ready specification
-- `IMPLEMENTATION_DONE`: committed implementation plus evidence
-- `CHANGES_REQUESTED`: blocking review findings
-- `REVIEW_APPROVED`: review sign-off
-- `RELEASE_REQUEST`: release plan awaiting authorization
-- `RELEASE_RESULT`: verified release outcome
-- `QUESTION` / `ANSWER`: bounded clarification
-- `STOP`: end collaboration safely
+## Agent Identity vs Workflow Role
 
-## Recovery
+- **Agent Identity (`agent_id`)**: A unique, persistent identifier (1-64 lowercase alphanumeric chars, `_`, `-`) bound to a concrete runtime adapter and command (e.g., `codex`, `antigravity`, `claude`, `test-bot`).
+- **Workflow Role**: A functional responsibility within a collaboration task:
+  - `planner`: clarifies requirements, produces specifications, and controls release gates. Default: `codex`.
+  - `implementer`: solely writes product source code, tests, and build fixes. Default: `antigravity`.
+  - `reviewer`: inspects commits and evidence against acceptance criteria. Default: `codex`.
 
-Run `status` first. A message left in `processing` belongs to the role that claimed it. Read and finish it if the prior CLI died. Move it back to `new` only when it was never acted upon and no matching commit or reply exists.
+One agent may fulfill multiple roles (e.g. planner and reviewer), and roles can be reassigned in `.agent-bus/config.json` or via `quickstart --planner <id> --implementer <id>`.
 
-Never delete queue history as part of normal recovery.
+## Dynamic configuration (`.agent-bus/config.json`)
 
-State is append-only under `.agent-bus/state/<role>/`. `status` selects the newest valid record and reports invalid records instead of failing on corrupt JSON.
+Stored project-locally at `.agent-bus/config.json`:
 
-## Local data and cleanup
+```json
+{
+  "version": 1,
+  "agents": [
+    { "id": "codex", "adapter": "codex-cli", "command": "codex" },
+    { "id": "antigravity", "adapter": "antigravity-cli", "command": "agy" }
+  ],
+  "workflow": {
+    "planner": "codex",
+    "implementer": "antigravity",
+    "reviewer": "codex"
+  }
+}
+```
 
-The bus is plaintext and can include full prompts, specifications, review comments, code excerpts, paths, commit hashes, logs, host/process metadata, and evidence. Never put credentials in it. Local Git exclusion is not encryption and does not stop backups or other local processes from reading the directory.
+- Initialized idempotently by `agent-bus init` or `quickstart`.
+- New agents are registered atomically via `coordinate-cli-agents agent add <id> --adapter <adapter> --command <cmd>` or `agent-bus agent-add`.
+- Registration creates dedicated inbox stages, state, and quarantine directories for that agent without disturbing existing queues.
 
-After retention is no longer needed, remove the complete bus with `clean --confirm DELETE_AGENT_BUS`. Inspect and redact the directory before sharing it.
+## Queues and message routing
 
-## Git ownership
+Each registered agent owns an isolated queue hierarchy under `.agent-bus/inbox/<agent_id>/`:
+- `new/`: incoming messages waiting to be claimed.
+- `processing/`: in-flight message claimed by the recipient, accompanied by a `<message>.lease.json` sidecar.
+- `processed/`: archived historical messages after completion.
 
-- Antigravity alone writes implementation files and implementation commits.
-- Codex may run read-only Git inspection. It may perform release Git writes only after `RELEASE_APPROVED` and after Antigravity is idle with a clean worktree.
-- Every `IMPLEMENTATION_DONE` must identify a real commit and evidence file.
+### Message lifecycle
 
-## Release gate
+1. **Send**: The sender writes atomically to `.agent-bus/inbox/<to>/new/<timestamp>-<type>-<id>.md`.
+2. **Claim/Wait**: Recipient atomically moves the oldest message to `.agent-bus/inbox/<to>/processing/` and creates a lease sidecar.
+3. **Complete**: After successful processing, recipient moves the message to `.agent-bus/inbox/<to>/processed/` and removes the lease sidecar.
+4. **Quarantine**: If message parsing fails, the message is moved to `.agent-bus/quarantine/<to>/` with an `.error.json` diagnostics file.
 
-`REVIEW_APPROVED` is not release authorization. Only the user's exact `RELEASE_APPROVED` authorizes the specifically described release actions.
+### Message format
+
+UTF-8 encoded YAML frontmatter followed by Markdown body:
+
+```markdown
+---
+id: <sha256-or-uuid>
+from: codex
+to: antigravity
+type: IMPLEMENT
+created_at: 2026-08-15T08:00:00.000Z
+related_commit: <hash>
+dedupe_key: <stable-round-key>
+subject: "Implement todo completion"
+---
+# Specification / Content
+...
+```
+
+### Message types
+
+- `REQUIREMENTS`: raw or clarified user requirements.
+- `IMPLEMENT`: implementation-ready specification.
+- `IMPLEMENTATION_DONE`: committed implementation plus test and build evidence.
+- `CHANGES_REQUESTED`: blocking review findings requiring revisions.
+- `REVIEW_APPROVED`: review sign-off.
+- `RELEASE_REQUEST`: proposed release plan awaiting human authorization.
+- `RELEASE_RESULT`: verified release outcome.
+- `QUESTION` / `ANSWER`: structured clarification.
+- `STOP`: cleanly terminate the collaboration loop.
+
+## States and diagnostics
+
+### Protocol states (persisted under `.agent-bus/state/<agent_id>/`)
+
+- `IDLE`: ready for new task.
+- `CLARIFYING`: asking questions / clarifying scope.
+- `SPEC_READY`: specification completed and queued.
+- `IMPLEMENTING`: actively editing, testing, or building code.
+- `WAITING`: waiting for peer message or review.
+- `REVIEWING`: verifying commits and evidence.
+- `CHANGES_REQUESTED`: feedback sent to implementer.
+- `APPROVED`: review approved.
+- `RELEASING`: executing approved release plan.
+- `STOPPED`: stopped cleanly.
+- `ERROR`: error encountered.
+
+### Adapter-observed normalized states
+
+For adapters observing external or desktop agents:
+- `idle`: process available, no task active.
+- `working`: process currently executing a task.
+- `completed`: task finished with artifacts/evidence.
+- `failed`: task ended with error.
+- `waiting`: process blocked waiting on input or bus message.
+
+## Adapter subsystem and contracts
+
+Adapters live under `adapters/` and implement a unified interface:
+
+- `detect()`: checks executable availability and version.
+- `resolveLaunch({ root, prompt, role, language })`: returns `{ command, prefix, args }` without shell interpolation.
+- `capabilities()`: reports supported actions (`launch`, `detect`, `dispatch`).
+
+### Reference adapters
+
+1. `codex-cli`: Codex CLI detection and `-C <root> <prompt>` execution.
+2. `antigravity-cli`: Antigravity CLI (`agy`) detection and `--prompt-interactive <prompt>` execution.
+3. `generic-cli`: Configurable third-party CLI execution with template arguments (e.g. `["--dir", "{root}", "--message", "{prompt}"]`).
+
+### Desktop Adapter capability model
+
+For future desktop GUI agents (e.g. desktop AI apps):
+1. **Attachment precedence**: Official API/SDK > MCP server > WebSocket/IPC > Local HTTP > CLI bridge > Filesystem watcher > UI automation.
+2. **Translation loop**: The adapter polls `.agent-bus`, extracts the prompt, transmits it to the desktop agent via its preferred bridge, monitors progress, and writes back `IMPLEMENTATION_DONE` or `REVIEW_APPROVED`. The desktop agent does not need direct `.agent-bus` awareness.
+
+## Git ownership and release gate
+
+- **Sole Implementer Rule**: Only the agent in the `implementer` role may edit product code, tests, and configuration.
+- **Planner/Reviewer**: Inspects repository state in read-only mode during development rounds.
+- **Human Release Gate**: `REVIEW_APPROVED` does **not** authorize release or deployment. Only the exact user authorization string `RELEASE_APPROVED` permits merge, tag, push, deploy, or publish actions.
+
+## Recovery and cleanup
+
+- **Recovery**: `agent-bus recover --agent <id> --stale-after-seconds <sec>` safely moves abandoned processing messages with expired leases back to `new`.
+- **Cleanup**: Permanent removal of `.agent-bus/` requires `agent-bus clean --confirm DELETE_AGENT_BUS`.

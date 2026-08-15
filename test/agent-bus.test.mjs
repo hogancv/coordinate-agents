@@ -260,3 +260,144 @@ test('does not read a hard-linked state record from outside the runtime bus', ()
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('registers a third agent dynamically and manages inbox/state/quarantine directories', () => {
+  const repo = repository();
+  try {
+    const addResult = invoke(repo, ['agent-add', '--agent', 'claude', '--adapter', 'generic-cli', '--command', 'claude']);
+    assert.equal(addResult.status, 0, addResult.stderr);
+
+    const listResult = invoke(repo, ['agent-list']);
+    assert.equal(listResult.status, 0, listResult.stderr);
+    const list = JSON.parse(listResult.stdout);
+    assert.ok(list.agents.some(a => a.id === 'claude' && a.adapter === 'generic-cli'));
+
+    assert.ok(existsSync(join(repo, '.agent-bus', 'inbox', 'claude', 'new')));
+    assert.ok(existsSync(join(repo, '.agent-bus', 'inbox', 'claude', 'processing')));
+    assert.ok(existsSync(join(repo, '.agent-bus', 'inbox', 'claude', 'processed')));
+    assert.ok(existsSync(join(repo, '.agent-bus', 'state', 'claude')));
+    assert.ok(existsSync(join(repo, '.agent-bus', 'quarantine', 'claude')));
+
+    const duplicateResult = invoke(repo, ['agent-add', '--agent', 'claude', '--adapter', 'generic-cli']);
+    assert.equal(duplicateResult.status, 1);
+    assert.match(duplicateResult.stderr, /already registered/i);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('supports third agent message routing, claiming, state persistence, and status output', () => {
+  const repo = repository();
+  try {
+    invoke(repo, ['agent-add', '--agent', 'reviewer-bot', '--adapter', 'generic-cli', '--command', 'reviewer-bot']);
+
+    const sent = invoke(repo, ['send', '--from', 'antigravity', '--to', 'reviewer-bot', '--type', 'REVIEW_REQUEST', '--subject', 'Please review', '--body', 'Check diff']);
+    assert.equal(sent.status, 0, sent.stderr);
+
+    const waiting = invoke(repo, ['wait', '--agent', 'reviewer-bot', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
+    assert.equal(waiting.status, 0, waiting.stderr);
+    const claimed = waiting.stdout.trim();
+    assert.match(readFileSync(claimed, 'utf8'), /type: REVIEW_REQUEST/);
+    assert.match(readFileSync(claimed, 'utf8'), /to: reviewer-bot/);
+
+    const completed = invoke(repo, ['complete', '--message-path', claimed]);
+    assert.equal(completed.status, 0, completed.stderr);
+    assert.match(completed.stdout, /inbox[\\/]reviewer-bot[\\/]processed/);
+
+    assert.equal(invoke(repo, ['state', '--agent', 'reviewer-bot', '--state', 'REVIEWING', '--details', 'Analyzing diff']).status, 0);
+    assert.equal(invoke(repo, ['state', '--agent', 'reviewer-bot', '--state', 'APPROVED']).status, 0);
+
+    const statusResult = invoke(repo, ['status']);
+    assert.equal(statusResult.status, 0, statusResult.stderr);
+    const status = JSON.parse(statusResult.stdout);
+    assert.equal(status.states['reviewer-bot'].state, 'APPROVED');
+    assert.equal(status.queues['reviewer-bot'].processed, 1);
+    assert.equal(status.queues['reviewer-bot'].new, 0);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('rejects messages to or from unregistered agents without side effects', () => {
+  const repo = repository();
+  try {
+    const sendUnknownTo = invoke(repo, ['send', '--from', 'codex', '--to', 'phantom-agent', '--type', 'IMPLEMENT', '--subject', 'Test', '--body', 'content']);
+    assert.equal(sendUnknownTo.status, 1);
+    assert.match(sendUnknownTo.stderr, /registered agents/i);
+
+    const sendUnknownFrom = invoke(repo, ['send', '--from', 'ghost-agent', '--to', 'codex', '--type', 'IMPLEMENT', '--subject', 'Test', '--body', 'content']);
+    assert.equal(sendUnknownFrom.status, 1);
+    assert.match(sendUnknownFrom.stderr, /registered agents/i);
+
+    const waitUnknown = invoke(repo, ['wait', '--agent', 'phantom-agent', '--timeout-minutes', '0.01']);
+    assert.equal(waitUnknown.status, 1);
+    assert.match(waitUnknown.stderr, /registered agent/i);
+
+    const stateUnknown = invoke(repo, ['state', '--agent', 'phantom-agent', '--state', 'WAITING']);
+    assert.equal(stateUnknown.status, 1);
+    assert.match(stateUnknown.stderr, /registered agents/i);
+
+    assert.equal(existsSync(join(repo, '.agent-bus', 'inbox', 'phantom-agent')), false);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('rejects invalid, reserved, and traversal agent IDs', () => {
+  const repo = repository();
+  try {
+    const invalidIds = [
+      '', '..', '../outside', 'UPPERCASE', 'has space', 'agent/slash',
+      'agent\\backslash', '1startswithnumber', '_startwithunderscore',
+      'con', 'prn', 'aux', 'nul', 'com1', 'lpt1', 'con.txt',
+    ];
+    for (const id of invalidIds) {
+      const result = invoke(repo, ['agent-add', '--agent', id, '--adapter', 'generic-cli']);
+      assert.equal(result.status, 1, `Expected agent-add to reject invalid ID: "${id}"`);
+      assert.match(result.stderr, /invalid agent id|reserved device name|is required/i);
+    }
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('supports dynamic-agent deduplication and stale claim recovery', () => {
+  const repo = repository();
+  try {
+    invoke(repo, ['agent-add', '--agent', 'worker-c', '--adapter', 'generic-cli', '--command', 'worker']);
+
+    const send1 = invoke(repo, ['send', '--from', 'codex', '--to', 'worker-c', '--type', 'TASK', '--subject', 'Dedupe', '--body', 'payload', '--dedupe-key', 'key-99']);
+    const send2 = invoke(repo, ['send', '--from', 'codex', '--to', 'worker-c', '--type', 'TASK', '--subject', 'Dedupe', '--body', 'payload', '--dedupe-key', 'key-99']);
+    assert.equal(send1.status, 0, send1.stderr);
+    assert.equal(send2.status, 0, send2.stderr);
+    assert.equal(send1.stdout.trim(), send2.stdout.trim());
+
+    const claimed = invoke(repo, ['wait', '--agent', 'worker-c', '--timeout-minutes', '1', '--poll-seconds', '0.01', '--lease-seconds', '0.05']).stdout.trim();
+    assert.ok(existsSync(claimed));
+
+    const old = new Date(Date.now() - 5000);
+    const lease = JSON.parse(readFileSync(`${claimed}.lease.json`, 'utf8'));
+    lease.expires_at = old.toISOString();
+    writeFileSync(`${claimed}.lease.json`, `${JSON.stringify(lease)}\n`, 'utf8');
+
+    const recovered = JSON.parse(invoke(repo, ['recover', '--agent', 'worker-c', '--stale-after-seconds', '1']).stdout);
+    assert.equal(recovered.recovered.filter(item => item.kind === 'message' && item.role === 'worker-c').length, 1);
+    assert.equal(existsSync(claimed), false);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('rejects corrupted or invalid bus configuration gracefully', () => {
+  const repo = repository();
+  try {
+    const cfgPath = join(repo, '.agent-bus', 'config.json');
+    writeFileSync(cfgPath, '{invalid json', 'utf8');
+    const result = invoke(repo, ['status']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Failed to load valid .agent-bus\/config.json/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+

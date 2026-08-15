@@ -9,9 +9,41 @@ import { hostname } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const roles = new Set(['codex', 'antigravity']);
 const states = new Set(['IDLE', 'CLARIFYING', 'SPEC_READY', 'IMPLEMENTING', 'WAITING', 'REVIEWING', 'CHANGES_REQUESTED', 'APPROVED', 'RELEASING', 'STOPPED', 'ERROR']);
 const messageFields = ['id', 'from', 'to', 'type', 'created_at', 'subject'];
+
+const DEFAULT_CONFIG = {
+  version: 1,
+  agents: [
+    { id: 'codex', adapter: 'codex-cli', command: 'codex' },
+    { id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' },
+  ],
+  workflow: {
+    planner: 'codex',
+    implementer: 'antigravity',
+    reviewer: 'codex',
+  },
+};
+
+const RESERVED_DEVICE_NAMES = new Set([
+  'con', 'prn', 'aux', 'nul',
+  'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
+  'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
+]);
+
+function validateAgentId(id) {
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new Error('Agent ID must be a non-empty string.');
+  }
+  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) {
+    throw new Error(`Invalid agent ID "${id}". Agent ID must be 1-64 lowercase alphanumeric characters, underscores, or hyphens, starting with a lowercase letter.`);
+  }
+  const base = id.toLowerCase().split('.')[0];
+  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(id.toLowerCase())) {
+    throw new Error(`Invalid agent ID "${id}". Cannot use reserved device name.`);
+  }
+  return id;
+}
 
 function parseArgs(argv) {
   if (!argv.length || ['--help', '-h', 'help'].includes(argv[0])) return { command: 'help' };
@@ -20,7 +52,8 @@ function parseArgs(argv) {
   while (args.length) {
     const option = args.shift();
     if (!option.startsWith('--')) throw new Error(`Unknown argument: ${option}`);
-    const key = option.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    let key = option.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    if (key === 'command') key = 'agentCommand';
     if (!args.length || args[0].startsWith('--')) throw new Error(`Missing value for ${option}`);
     result[key] = args.shift();
   }
@@ -30,6 +63,19 @@ function parseArgs(argv) {
 function requireValue(options, name) {
   if (options[name] === undefined || options[name] === '') throw new Error(`--${name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)} is required for ${options.command}.`);
   return options[name];
+}
+
+function resolveAgentOption(options, required = false) {
+  const agent = options.agent;
+  const role = options.role;
+  if (agent && role && agent !== role) {
+    throw new Error(`Conflicting options: --agent "${agent}" and --role "${role}" must match.`);
+  }
+  const selected = agent || role;
+  if (required && !selected) {
+    throw new Error(`--agent (or --role) is required for ${options.command}.`);
+  }
+  return selected;
 }
 
 function positiveNumber(value, name, fallback) {
@@ -91,8 +137,6 @@ function syncFile(path) {
   const fd = openSync(path, 'r');
   try {
     try { fsyncSync(fd); } catch (error) {
-      // Some Windows filesystems reject fsync on read-only descriptors. The
-      // close + same-volume rename still prevents readers seeing partial data.
       if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(error.code)) throw error;
     }
   } finally { closeSync(fd); }
@@ -123,18 +167,111 @@ function writeLease(messagePath, bus, leaseSeconds) {
   }, null, 2)}\n`, join(bus, 'tmp'));
 }
 
+function validateConfig(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('Config must be a JSON object.');
+  }
+  if (config.version !== 1) {
+    throw new Error(`Unsupported config version: ${config.version}. Expected 1.`);
+  }
+  if (!Array.isArray(config.agents) || config.agents.length === 0) {
+    throw new Error('Config must define a non-empty "agents" array.');
+  }
+  const ids = new Set();
+  for (const agent of config.agents) {
+    if (!agent || typeof agent !== 'object' || Array.isArray(agent)) throw new Error('Invalid agent record in config.');
+    validateAgentId(agent.id);
+    if (ids.has(agent.id)) throw new Error(`Duplicate agent ID in config: ${agent.id}`);
+    ids.add(agent.id);
+    if (!agent.adapter || typeof agent.adapter !== 'string') {
+      throw new Error(`Agent "${agent.id}" is missing required "adapter" string.`);
+    }
+  }
+  if (config.workflow) {
+    if (typeof config.workflow !== 'object' || Array.isArray(config.workflow)) {
+      throw new Error('Config workflow must be an object.');
+    }
+    for (const [role, agentId] of Object.entries(config.workflow)) {
+      if (!ids.has(agentId)) {
+        throw new Error(`Workflow role "${role}" references unregistered agent "${agentId}".`);
+      }
+    }
+  }
+  return config;
+}
+
+function configPath(bus) {
+  return join(bus, 'config.json');
+}
+
+function readConfig(bus) {
+  const cfgFile = configPath(bus);
+  if (!existsSync(cfgFile)) {
+    return DEFAULT_CONFIG;
+  }
+  try {
+    const content = readInternalFile(bus, cfgFile);
+    const parsed = JSON.parse(content);
+    return validateConfig(parsed);
+  } catch (err) {
+    throw new Error(`Failed to load valid .agent-bus/config.json: ${err.message}`);
+  }
+}
+
+function writeConfig(bus, config) {
+  validateConfig(config);
+  const destination = configPath(bus);
+  atomicWrite(destination, `${JSON.stringify(config, null, 2)}\n`, join(bus, 'tmp'));
+}
+
+function getRegisteredAgentMap(bus) {
+  const cfg = readConfig(bus);
+  const map = new Map();
+  for (const agent of cfg.agents) {
+    map.set(agent.id, agent);
+  }
+  return map;
+}
+
+function getRegisteredAgentIds(bus) {
+  return new Set(getRegisteredAgentMap(bus).keys());
+}
+
+function ensureAgentDirectories(bus, agentId, root) {
+  validateAgentId(agentId);
+  const agentDirs = [
+    `inbox/${agentId}/new`,
+    `inbox/${agentId}/processing`,
+    `inbox/${agentId}/processed`,
+    `quarantine/${agentId}`,
+    `state/${agentId}`,
+  ];
+  for (const directory of agentDirs) {
+    const fullPath = assertSafePath(root, join(bus, directory));
+    mkdirSync(fullPath, { recursive: true });
+    assertSafePath(root, fullPath);
+  }
+}
+
 function initialize(root) {
   const bus = assertSafePath(root, join(root, '.agent-bus'));
-  const directories = [
-    'inbox/codex/new', 'inbox/codex/processing', 'inbox/codex/processed',
-    'inbox/antigravity/new', 'inbox/antigravity/processing', 'inbox/antigravity/processed',
-    'quarantine/codex', 'quarantine/antigravity', 'specs', 'reviews', 'evidence',
-    'releases', 'state/codex', 'state/antigravity', 'dedupe', 'locks', 'logs', 'tmp',
+  const sharedDirectories = [
+    'specs', 'reviews', 'evidence', 'releases', 'dedupe', 'locks', 'logs', 'tmp', 'launch',
   ];
-  for (const directory of directories) {
+  for (const directory of sharedDirectories) {
     const path = assertSafePath(root, join(bus, directory));
     mkdirSync(path, { recursive: true });
     assertSafePath(root, path);
+  }
+
+  const cfgFile = configPath(bus);
+  if (!existsSync(cfgFile)) {
+    writeConfig(bus, DEFAULT_CONFIG);
+  }
+
+  const config = readConfig(bus);
+  for (const agent of config.agents) {
+    ensureAgentDirectories(bus, agent.id, root);
   }
 
   let exclude = git(['rev-parse', '--git-path', 'info/exclude'], root);
@@ -205,22 +342,24 @@ function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function findMessageByName(bus, role, name) {
+function findMessageByName(bus, agent, name) {
   for (const stage of ['new', 'processing', 'processed']) {
-    const candidate = join(bus, 'inbox', role, stage, name);
+    const candidate = join(bus, 'inbox', agent, stage, name);
     if (existsSync(candidate)) return candidate;
   }
-  const quarantined = join(bus, 'quarantine', role, name);
+  const quarantined = join(bus, 'quarantine', agent, name);
   return existsSync(quarantined) ? quarantined : null;
 }
 
-function findMessageBySuffix(bus, role, suffix) {
+function findMessageBySuffix(bus, agent, suffix) {
   for (const stage of ['new', 'processing', 'processed']) {
-    const directory = join(bus, 'inbox', role, stage);
+    const directory = join(bus, 'inbox', agent, stage);
+    if (!existsSync(directory)) continue;
     const name = readdirSync(directory).find(candidate => candidate.endsWith(suffix));
     if (name) return join(directory, name);
   }
-  const quarantineDirectory = join(bus, 'quarantine', role);
+  const quarantineDirectory = join(bus, 'quarantine', agent);
+  if (!existsSync(quarantineDirectory)) return null;
   const name = readdirSync(quarantineDirectory).find(candidate => candidate.endsWith(suffix));
   return name ? join(quarantineDirectory, name) : null;
 }
@@ -228,7 +367,10 @@ function findMessageBySuffix(bus, role, suffix) {
 function send(options, bus) {
   const from = requireValue(options, 'from');
   const to = requireValue(options, 'to');
-  if (!roles.has(from) || !roles.has(to)) throw new Error('--from and --to must be codex or antigravity.');
+  const registered = getRegisteredAgentIds(bus);
+  if (!registered.has(from) || !registered.has(to)) {
+    throw new Error(`--from and --to must be registered agents. Unknown: ${[!registered.has(from) ? from : null, !registered.has(to) ? to : null].filter(Boolean).join(', ')}. Registered: ${[...registered].join(', ')}.`);
+  }
   const type = requireValue(options, 'type').toUpperCase().replace(/[^A-Z0-9_-]/g, '_');
   const subject = safeSubject(requireValue(options, 'subject'));
   const body = (options.bodyFile ? readFileSync(resolve(options.bodyFile), 'utf8') : requireValue(options, 'body')).replace(/^\uFEFF/, '');
@@ -248,8 +390,6 @@ function send(options, bus) {
           return;
         }
       }
-      // If a writer stopped after publishing the message but before recording
-      // deduplication metadata, recover it by the deterministic hash suffix.
       const orphan = findMessageBySuffix(bus, to, `-${dedupeHash.slice(0, 12)}.md`);
       if (orphan) {
         const record = { message_id: dedupeHash, message_name: basename(orphan), created_at: new Date().toISOString() };
@@ -280,7 +420,7 @@ function send(options, bus) {
   }
 }
 
-function parseMessage(path, expectedRole, bus) {
+function parseMessage(path, expectedAgent, bus) {
   const content = readInternalFile(bus, path);
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (!match) throw new Error('missing YAML front matter');
@@ -290,30 +430,28 @@ function parseMessage(path, expectedRole, bus) {
     if (separator > 0) fields[line.slice(0, separator).trim()] = line.slice(separator + 1).trim().replace(/^"|"$/g, '');
   }
   for (const field of messageFields) if (!fields[field]) throw new Error(`missing ${field}`);
-  if (!roles.has(fields.from) || !roles.has(fields.to) || fields.to !== expectedRole) throw new Error('invalid message role');
+  const registered = getRegisteredAgentIds(bus);
+  if (!registered.has(fields.from) || !registered.has(fields.to) || fields.to !== expectedAgent) throw new Error('invalid message agent');
   if (Number.isNaN(Date.parse(fields.created_at))) throw new Error('invalid created_at');
   return fields;
 }
 
-function quarantine(path, role, bus, reason) {
-  const destination = join(bus, 'quarantine', role, basename(path));
+function quarantine(path, agent, bus, reason) {
+  const destination = join(bus, 'quarantine', agent, basename(path));
   renameSync(path, destination);
   atomicWrite(`${destination}.error.json`, `${JSON.stringify({ reason, quarantined_at: new Date().toISOString() }, null, 2)}\n`, join(bus, 'tmp'));
 }
 
-function recoverStale(bus, rolesToRecover, staleAfterSeconds, includeLocks = true) {
+function recoverStale(bus, agentsToRecover, staleAfterSeconds, includeLocks = true) {
   const recovered = [];
-  for (const role of rolesToRecover) {
-    const release = acquireLock(bus, `queue-${role}`);
+  for (const agent of agentsToRecover) {
+    const release = acquireLock(bus, `queue-${agent}`);
     try {
-      const processing = join(bus, 'inbox', role, 'processing');
+      const processing = join(bus, 'inbox', agent, 'processing');
+      if (!existsSync(processing)) continue;
       for (const name of readdirSync(processing).filter(item => item.endsWith('.md')).sort()) {
         const message = join(processing, name);
         const lease = `${message}.lease.json`;
-        // A missing lease means a claimant was interrupted between rename and
-        // lease publication. Give that gap its own grace period; otherwise use
-        // the recorded lease expiry, with the CLI threshold as a conservative
-        // fallback for old-format leases.
         let expired = Date.now() - safeInternalStat(bus, message).ctimeMs >= staleAfterSeconds * 1000;
         if (existsSync(lease)) {
           try {
@@ -325,12 +463,10 @@ function recoverStale(bus, rolesToRecover, staleAfterSeconds, includeLocks = tru
         }
         if (!expired) continue;
         try {
-          // Change the path on every recovery. An interrupted claimant holding
-          // the old path can no longer complete a later claimant's lease.
           const recoveredName = `${name.slice(0, -3)}-r${randomUUID().slice(0, 8)}.md`;
-          renameSync(message, join(bus, 'inbox', role, 'new', recoveredName));
+          renameSync(message, join(bus, 'inbox', agent, 'new', recoveredName));
           rmSync(lease, { force: true });
-          recovered.push({ kind: 'message', role, name: recoveredName, prior_name: name });
+          recovered.push({ kind: 'message', role: agent, agent, name: recoveredName, prior_name: name });
         } catch (error) {
           if (!['ENOENT', 'EEXIST', 'EPERM'].includes(error.code)) throw error;
         }
@@ -355,16 +491,19 @@ function sleep(milliseconds) {
 }
 
 async function wait(options, bus) {
-  const role = requireValue(options, 'role');
-  if (!roles.has(role)) throw new Error('--role must be codex or antigravity.');
+  const agent = resolveAgentOption(options, true);
+  const registered = getRegisteredAgentIds(bus);
+  if (!registered.has(agent)) {
+    throw new Error(`--agent (or --role) must be a registered agent. Given: "${agent}". Registered agents: ${[...registered].join(', ')}.`);
+  }
   const timeoutMinutes = positiveNumber(options.timeoutMinutes, 'timeout-minutes', 120);
   const pollSeconds = positiveNumber(options.pollSeconds, 'poll-seconds', 5);
   const leaseSeconds = positiveNumber(options.leaseSeconds, 'lease-seconds', 14_400);
-  const newDirectory = join(bus, 'inbox', role, 'new');
-  const processingDirectory = join(bus, 'inbox', role, 'processing');
+  const newDirectory = join(bus, 'inbox', agent, 'new');
+  const processingDirectory = join(bus, 'inbox', agent, 'processing');
   const deadline = Date.now() + timeoutMinutes * 60_000;
   while (Date.now() < deadline) {
-    const release = acquireLock(bus, `queue-${role}`);
+    const release = acquireLock(bus, `queue-${agent}`);
     try {
       const candidate = readdirSync(newDirectory).filter(name => name.endsWith('.md')).sort()[0];
       if (candidate) {
@@ -374,10 +513,10 @@ async function wait(options, bus) {
           renameSync(source, claimed);
           writeLease(claimed, bus, leaseSeconds);
           try {
-            parseMessage(claimed, role, bus);
+            parseMessage(claimed, agent, bus);
           } catch (error) {
             rmSync(`${claimed}.lease.json`, { force: true });
-            quarantine(claimed, role, bus, error.message);
+            quarantine(claimed, agent, bus, error.message);
             continue;
           }
           console.log(resolve(claimed));
@@ -400,7 +539,8 @@ function complete(options, bus) {
   const inboxRoot = resolve(bus, 'inbox');
   const normalizedRelative = relative(inboxRoot, messagePath);
   const parts = normalizedRelative.split(sep);
-  if (normalizedRelative.startsWith('..') || isAbsolute(normalizedRelative) || parts.length !== 3 || !roles.has(parts[0]) || parts[1] !== 'processing' || !parts[2]?.endsWith('.md')) {
+  const registered = getRegisteredAgentIds(bus);
+  if (normalizedRelative.startsWith('..') || isAbsolute(normalizedRelative) || parts.length !== 3 || !registered.has(parts[0]) || parts[1] !== 'processing' || !parts[2]?.endsWith('.md')) {
     throw new Error('Message path must be a file in this bus processing directory.');
   }
   const roleDirectory = dirname(dirname(messagePath));
@@ -416,35 +556,43 @@ function complete(options, bus) {
 }
 
 function recover(options, bus) {
-  const selectedRoles = options.role ? [options.role] : [...roles];
-  if (selectedRoles.some(role => !roles.has(role))) throw new Error('--role must be codex or antigravity.');
+  const agent = resolveAgentOption(options, false);
+  const registered = getRegisteredAgentIds(bus);
+  if (agent && !registered.has(agent)) {
+    throw new Error(`Unknown agent: ${agent}. Registered agents: ${[...registered].join(', ')}.`);
+  }
+  const selectedAgents = agent ? [agent] : [...registered];
   const staleAfterSeconds = positiveNumber(options.staleAfterSeconds, 'stale-after-seconds', 14_400);
-  console.log(JSON.stringify({ recovered: recoverStale(bus, selectedRoles, staleAfterSeconds) }, null, 2));
+  console.log(JSON.stringify({ recovered: recoverStale(bus, selectedAgents, staleAfterSeconds) }, null, 2));
 }
 
 function setState(options, bus) {
-  const role = requireValue(options, 'role');
+  const agent = resolveAgentOption(options, true);
+  const registered = getRegisteredAgentIds(bus);
+  if (!registered.has(agent)) {
+    throw new Error(`Unknown agent: ${agent}. Registered agents: ${[...registered].join(', ')}.`);
+  }
   const state = requireValue(options, 'state');
-  if (!roles.has(role)) throw new Error('--role must be codex or antigravity.');
   if (!states.has(state)) throw new Error(`Unsupported state: ${state}`);
   const record = {
-    agent: role, state, details: options.details || '', related_commit: options.relatedCommit || '',
+    agent, state, details: options.details || '', related_commit: options.relatedCommit || '',
     updated_at: new Date().toISOString(), process_id: process.pid, machine_name: hostname(),
   };
   const name = `${record.updated_at.replace(/[-:TZ.]/g, '')}-${randomUUID().slice(0, 8)}.json`;
-  const destination = join(bus, 'state', role, name);
+  const destination = join(bus, 'state', agent, name);
   atomicWrite(destination, `${JSON.stringify(record, null, 2)}\n`, join(bus, 'tmp'));
   console.log(resolve(destination));
 }
 
-function latestState(bus, role) {
-  const directory = join(bus, 'state', role);
+function latestState(bus, agent) {
+  const directory = join(bus, 'state', agent);
+  if (!existsSync(directory)) return { record: null, invalid: 0 };
   const files = readdirSync(directory).filter(name => name.endsWith('.json')).sort().reverse();
   let invalid = 0;
   for (const name of files) {
     try {
       const record = JSON.parse(readInternalFile(bus, join(directory, name)));
-      if (record.agent !== role || !states.has(record.state) || Number.isNaN(Date.parse(record.updated_at))) throw new Error('invalid state record');
+      if (record.agent !== agent || !states.has(record.state) || Number.isNaN(Date.parse(record.updated_at))) throw new Error('invalid state record');
       return { record, invalid };
     } catch { invalid += 1; }
   }
@@ -452,20 +600,59 @@ function latestState(bus, role) {
 }
 
 function status(root, bus) {
-  const roleStates = {};
+  const config = readConfig(bus);
+  const agentStates = {};
   const queues = {};
   const diagnostics = { invalid_state_records: {}, quarantined_messages: {} };
-  for (const role of roles) {
-    const latest = latestState(bus, role);
-    roleStates[role] = latest.record;
-    diagnostics.invalid_state_records[role] = latest.invalid;
-    diagnostics.quarantined_messages[role] = readdirSync(join(bus, 'quarantine', role)).filter(name => name.endsWith('.md')).length;
-    queues[role] = {};
+  for (const agent of config.agents) {
+    const id = agent.id;
+    const latest = latestState(bus, id);
+    agentStates[id] = latest.record;
+    diagnostics.invalid_state_records[id] = latest.invalid;
+    const quarantineDir = join(bus, 'quarantine', id);
+    diagnostics.quarantined_messages[id] = existsSync(quarantineDir) ? readdirSync(quarantineDir).filter(name => name.endsWith('.md')).length : 0;
+    queues[id] = {};
     for (const stage of ['new', 'processing', 'processed']) {
-      queues[role][stage] = readdirSync(join(bus, 'inbox', role, stage)).filter(name => name.endsWith('.md')).length;
+      const stageDir = join(bus, 'inbox', id, stage);
+      queues[id][stage] = existsSync(stageDir) ? readdirSync(stageDir).filter(name => name.endsWith('.md')).length : 0;
     }
   }
-  console.log(JSON.stringify({ root, bus, states: roleStates, queues, diagnostics }, null, 2));
+  console.log(JSON.stringify({ root, bus, config, states: agentStates, queues, diagnostics }, null, 2));
+}
+
+function agentAdd(options, bus, root) {
+  const id = validateAgentId(requireValue(options, 'agent'));
+  const adapter = requireValue(options, 'adapter');
+  const command = options.agentCommand || options.command || id;
+  let args = undefined;
+  if (options.args) {
+    try {
+      args = JSON.parse(options.args);
+    } catch {
+      args = options.args.split(',').map(s => s.trim());
+    }
+  }
+
+  const release = acquireLock(bus, 'config');
+  try {
+    const config = readConfig(bus);
+    if (config.agents.some(a => a.id === id)) {
+      throw new Error(`Agent already registered: ${id}`);
+    }
+    const newAgent = { id, adapter, command };
+    if (args) newAgent.args = args;
+    config.agents.push(newAgent);
+    writeConfig(bus, config);
+    ensureAgentDirectories(bus, id, root);
+    console.log(JSON.stringify({ added: id, agent: newAgent, config }, null, 2));
+  } finally {
+    release();
+  }
+}
+
+function agentList(options, bus) {
+  const config = readConfig(bus);
+  console.log(JSON.stringify({ agents: config.agents, workflow: config.workflow || {} }, null, 2));
 }
 
 function clean(options, bus) {
@@ -477,10 +664,13 @@ function clean(options, bus) {
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
-  const validCommands = new Set(['help', 'init', 'send', 'wait', 'complete', 'recover', 'state', 'status', 'clean']);
+  const validCommands = new Set([
+    'help', 'init', 'send', 'wait', 'complete', 'recover',
+    'state', 'status', 'clean', 'agent-add', 'agent-list',
+  ]);
   if (!validCommands.has(options.command)) throw new Error(`Unknown command: ${options.command}`);
   if (options.command === 'help') {
-    console.log(`agent-bus <command> [options]\n\nCommands: init, send, wait, complete, recover, state, status, clean\nStates: ${[...states].join(', ')}\nUse --root <repository> on any command.`);
+    console.log(`agent-bus <command> [options]\n\nCommands: init, send, wait, complete, recover, state, status, agent-add, agent-list, clean\nStates: ${[...states].join(', ')}\nUse --root <repository> on any command.`);
     return;
   }
   const root = repoRoot(options.root);
@@ -492,6 +682,8 @@ async function main() {
   else if (options.command === 'recover') recover(options, bus);
   else if (options.command === 'state') setState(options, bus);
   else if (options.command === 'status') status(root, bus);
+  else if (options.command === 'agent-add') agentAdd(options, bus, root);
+  else if (options.command === 'agent-list') agentList(options, bus);
   else clean(options, bus);
 }
 

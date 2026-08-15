@@ -52,6 +52,30 @@ function fakeCodexLauncher(rootPath) {
   return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
 }
 
+function fakeGenericLauncher(rootPath, commandName = 'custom-agent') {
+  const bin = join(rootPath, 'custom-bin');
+  const source = `#!/usr/bin/env node
+const fs = require('fs');
+if (process.env.CAPTURE) {
+  fs.writeFileSync(process.env.CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));
+} else {
+  console.log('1.0.0');
+}
+`;
+  mkdirSync(bin, { recursive: true });
+  if (process.platform === 'win32') {
+    const entry = join(bin, `${commandName}.cmd`);
+    const script = join(bin, `${commandName}.cjs`);
+    writeFileSync(script, source, 'utf8');
+    writeFileSync(entry, `@node "${script}" %*\r\n`, 'utf8');
+  } else {
+    const path = join(bin, commandName);
+    writeFileSync(path, source, 'utf8');
+    chmodSync(path, 0o755);
+  }
+  return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
+}
+
 test('prints English and Chinese help', () => {
   const en = invoke(['help', '--lang', 'en']);
   assert.equal(en.status, 0, en.stderr);
@@ -93,6 +117,10 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
     const agyTarget = join(antigravityHome, 'skills', 'coordinate-cli-agents');
     for (const target of [codexTarget, agyTarget]) {
       assert.ok(existsSync(join(target, 'SKILL.md')));
+      assert.ok(existsSync(join(target, 'adapters', 'index.mjs')));
+      assert.ok(existsSync(join(target, 'adapters', 'codex-cli.mjs')));
+      assert.ok(existsSync(join(target, 'adapters', 'antigravity-cli.mjs')));
+      assert.ok(existsSync(join(target, 'adapters', 'generic-cli.mjs')));
       assert.ok(existsSync(join(target, 'scripts', 'agent-bus.ps1')));
       assert.ok(existsSync(join(target, 'scripts', 'agent-bus.mjs')));
       assert.ok(existsSync(join(target, 'references', 'task-templates.md')));
@@ -360,3 +388,92 @@ test('single-agent doctor treats the unselected CLI as informational', () => {
     rmSync(sandbox, { recursive: true, force: true });
   }
 });
+
+test('agent add, list, and doctor manage registered agents via CLI', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-agent-cmd-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    const addResult = invoke(['agent', 'add', 'custom-helper', '--adapter', 'generic-cli', '--command', 'custom-helper', '--root', sandbox]);
+    assert.equal(addResult.status, 0, addResult.stderr);
+
+    const listResult = invoke(['agent', 'list', '--root', sandbox]);
+    assert.equal(listResult.status, 0, listResult.stderr);
+    assert.match(listResult.stdout, /custom-helper/);
+
+    const env = fakeGenericLauncher(sandbox, 'custom-helper');
+    const doctorResult = invoke(['agent', 'doctor', '--root', sandbox], env);
+    assert.equal(doctorResult.status, 0, doctorResult.stderr);
+    assert.match(doctorResult.stdout, /custom-helper \(generic-cli\): healthy/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('quickstart supports workflow role reassignment', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-custom-workflow-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    invoke(['agent', 'add', 'architect', '--adapter', 'generic-cli', '--command', 'architect', '--root', sandbox]);
+    invoke(['agent', 'add', 'coder', '--adapter', 'generic-cli', '--command', 'coder', '--root', sandbox]);
+
+    const result = invoke([
+      'quickstart', '--root', sandbox, '--template', 'feature',
+      '--planner', 'architect', '--implementer', 'coder',
+      '--task', 'Build an advanced feature', '--lang', 'en',
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /architect \(planner\) terminal/);
+    assert.match(result.stdout, /coder \(implementer\) terminal/);
+    assert.match(result.stdout, /launch.*--role.*architect/s);
+    assert.match(result.stdout, /launch.*--role.*coder/s);
+
+    const plannerPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'architect.txt'), 'utf8');
+    const coderPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'coder.txt'), 'utf8');
+    assert.match(plannerPrompt, /planner \(architect\)/);
+    assert.match(plannerPrompt, /Build an advanced feature/);
+    assert.match(coderPrompt, /implementer \(coder\)/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('launch generic-cli adapter executes with configured arguments without shell interpolation', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-generic-launch-'));
+  const capture = join(sandbox, 'capture.json');
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    invoke([
+      'agent', 'add', 'claude-bot', '--adapter', 'generic-cli',
+      '--command', 'claude-bot', '--args', '["--dir", "{root}", "--message", "{prompt}"]',
+      '--root', sandbox,
+    ]);
+
+    const task = 'Refactor $SPECIAL, %VAR%, and "quoted symbols"';
+    invoke([
+      'quickstart', '--root', sandbox, '--planner', 'codex', '--implementer', 'claude-bot',
+      '--template', 'refactor', '--task', task, '--lang', 'en',
+    ]);
+
+    const env = {
+      ...fakeGenericLauncher(sandbox, 'claude-bot'),
+      CAPTURE: capture,
+    };
+
+    const launched = invoke(['launch', '--agent', 'claude-bot', '--root', sandbox, '--lang', 'en'], env);
+    assert.equal(launched.status, 0, launched.stderr);
+
+    const observed = JSON.parse(readFileSync(capture, 'utf8'));
+    const gitRoot = spawnSync('git', ['-C', sandbox, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' }).stdout.trim();
+    assert.equal(resolve(observed.cwd).toLowerCase(), resolve(gitRoot).toLowerCase());
+    assert.equal(observed.argv[0], '--dir');
+    assert.equal(resolve(observed.argv[1]).toLowerCase(), resolve(gitRoot).toLowerCase());
+    assert.equal(observed.argv[2], '--message');
+    assert.match(observed.argv[3], /implementer \(claude-bot\)/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+

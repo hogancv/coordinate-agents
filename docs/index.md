@@ -1,13 +1,13 @@
 ---
 layout: home
 title: coordinate-cli-agents
-description: A recoverable multi-agent collaboration workflow for OpenAI Codex CLI and Google Antigravity CLI.
+description: A local-first coordination protocol and runtime for AI coding agents.
 permalink: /
 ---
 
-# Codex specifies and reviews. Antigravity implements.
+# Local-first coordination protocol and runtime for AI coding agents
 
-`coordinate-cli-agents` coordinates **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** in the same Git repository without sharing account credentials. Codex owns requirement clarification, specifications, commit review, and the release gate. Antigravity exclusively edits product code and tests.
+`coordinate-cli-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI and desktop coding agents can be registered dynamically.
 
 The agents communicate through a recoverable project-local `.agent-bus`. No CAO server, daemon, database, or shared API key is required.
 
