@@ -5,9 +5,19 @@ import { AgentAdapter, NORMALIZED_STATUSES } from './base.mjs';
 
 function resolveGenericExecutable(command) {
   if (process.platform !== 'win32') return { command, prefix: [], safe: true };
+  const candidates = [];
+  if (existsSync(command)) {
+    candidates.push(command);
+  }
   const located = spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true });
-  if (located.status !== 0) return { command, prefix: [], safe: false };
-  for (const path of located.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
+  if (located.status === 0) {
+    for (const path of located.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
+      if (!candidates.includes(path)) candidates.push(path);
+    }
+  }
+  if (candidates.length === 0) return { command, prefix: [], safe: false };
+
+  for (const path of candidates) {
     if (/\.(exe|com)$/i.test(path)) return { command: path, prefix: [], safe: true };
     if (/\.js$/i.test(path)) return { command: process.execPath, prefix: [path], safe: true };
     if (/\.(cmd|bat)$/i.test(path)) {
