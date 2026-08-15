@@ -25,6 +25,8 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "
 
 不再需要手动复制或维护两段角色提示词。首次任务可选择 `--template bug`、`--template feature` 或 `--template refactor`；后续工作直接按同一清单向 Codex 提出新需求。
 
+参考适配器会声明自己的启动生命周期。Codex 采用一次性交互启动；Antigravity 采用总线监督启动：Agent 正常退出后，同一个 `launch` 进程会继续以非破坏方式等待，后续审查反馈或其他总线消息到达时自动再次启动 `agy`。监督器不会认领消息或创建租约。可按 Ctrl+C 终止，发送 `STOP` 让 Agent 写入 `STOPPED`，或在需要单次激活的脚本中使用与 Agent 无关的 `launch --once` 逃生选项。
+
 ![完整端到端终端演示](./assets/demo.gif)
 
 该动图由 `npm run demo` 在真实的隔离 Git 仓库中生成，完整执行需求提交、Antigravity 实现与提交、自动化测试、Codex 审查真实 commit/证据，以及 `REVIEW_APPROVED`。脱敏后的原始记录位于 [`assets/demo-transcript.txt`](./assets/demo-transcript.txt)。
@@ -221,6 +223,7 @@ RELEASE_APPROVED
 
 - `wait` 默认每 5 秒轮询一次，最长等待 120 分钟。
 - 等待仅在当前 CLI 会话及其 Node.js 进程保持存活时有效。
+- 总线监督型 `launch` 也会在 Agent 正常退出后保持存活；它只观察 `new`、该 Agent 所有的 `processing` 和 `STOPPED` 状态，不会代替 Agent 认领任务。子进程非零退出会停止监督并报告失败。
 - 消息与状态在终端重启后依然保留。再次调用本技能即可检查并继续处理 `new` 或由当前代理认领的 `processing` 消息。
 - `.agent-bus/` 写入当前仓库本地的 `.git/info/exclude`，不会污染版本库跟踪的 `.gitignore`。
 - 严禁多个角色同时进行 Git 写入。

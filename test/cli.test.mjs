@@ -4,12 +4,13 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { delimiter } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cli = join(root, 'bin', 'coordinate-cli-agents.mjs');
+const busTool = join(root, 'scripts', 'agent-bus.mjs');
 const currentVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
 function invoke(args, env = {}) {
@@ -104,6 +105,55 @@ if (process.env.CAPTURE) {
     chmodSync(path, 0o755);
   }
   return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
+}
+
+function fakeSupervisedAgyLauncher(rootPath) {
+  const bin = join(rootPath, 'supervisor & fixtures');
+  const script = join(bin, 'agy.cjs');
+  const source = `const fs = require('fs');
+const { spawnSync } = require('child_process');
+const countPath = process.env.ACTIVATION_COUNT;
+const count = fs.existsSync(countPath) ? Number(fs.readFileSync(countPath, 'utf8')) + 1 : 1;
+fs.writeFileSync(countPath, String(count));
+if (process.env.STOP_AFTER && count >= Number(process.env.STOP_AFTER)) {
+  const stopped = spawnSync(process.execPath, [process.env.BUS_TOOL, 'state', '--root', process.env.TEST_ROOT, '--agent', 'antigravity', '--state', 'STOPPED', '--details', 'supervisor test complete']);
+  if (stopped.status !== 0) process.exit(stopped.status || 1);
+}
+process.exit(Number(process.env.AGENT_EXIT_CODE || 0));
+`;
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(script, source, 'utf8');
+  if (process.platform === 'win32') {
+    writeFileSync(join(bin, 'agy.cmd'), `@"${process.execPath}" "${script}" %*\r\n`, 'utf8');
+  } else {
+    const executable = join(bin, 'agy');
+    writeFileSync(executable, `#!${process.execPath}\n${source}`, 'utf8');
+    chmodSync(executable, 0o755);
+  }
+  return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
+}
+
+function busInvoke(args) {
+  return spawnSync(process.execPath, [busTool, ...args], { encoding: 'utf8' });
+}
+
+async function waitUntil(predicate, timeoutMs = 8_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 50));
+  }
+  throw new Error(`Condition was not met within ${timeoutMs}ms`);
+}
+
+function childExit(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+  }
+  return new Promise((resolvePromise, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code, signal) => resolvePromise({ code, signal }));
+  });
 }
 
 test('prints English and Chinese help', () => {
@@ -371,6 +421,137 @@ test('launch passes the generated prompt and repository to Codex without shell i
     assert.deepEqual(observed.argv, ['-C', resolve(gitRoot), prompt]);
     assert.equal(resolve(observed.cwd).toLowerCase(), resolve(gitRoot).toLowerCase());
     assert.match(prompt, /A&B, %PATH%, \$HOME/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('bus-supervised launch waits without claiming, resumes on work, and stops cleanly', async () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-'));
+  const activationCount = join(sandbox, 'activation-count.txt');
+  let child = null;
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+    const quickstart = invoke(['quickstart', '--root', sandbox, '--task', 'Durable launch', '--lang', 'en']);
+    assert.equal(quickstart.status, 0, quickstart.stderr);
+
+    child = spawn(process.execPath, [cli, 'launch', '--agent', 'antigravity', '--root', sandbox, '--lang', 'en'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        ...fakeSupervisedAgyLauncher(sandbox),
+        ACTIVATION_COUNT: activationCount,
+        STOP_AFTER: '2',
+        BUS_TOOL: busTool,
+        TEST_ROOT: sandbox,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    const exitPromise = childExit(child);
+
+    await waitUntil(() => existsSync(activationCount) && readFileSync(activationCount, 'utf8') === '1');
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 700));
+    assert.equal(child.exitCode, null, `supervisor exited after first activation: ${stderr}`);
+
+    let status = JSON.parse(busInvoke(['status', '--root', sandbox]).stdout);
+    assert.equal(status.queues.antigravity.new, 0);
+    assert.equal(status.queues.antigravity.processing, 0);
+
+    const sent = busInvoke([
+      'send', '--root', sandbox, '--from', 'codex', '--to', 'antigravity',
+      '--type', 'CHANGES_REQUESTED', '--subject', 'Resume supervised work', '--body', 'Review feedback',
+    ]);
+    assert.equal(sent.status, 0, sent.stderr);
+    status = JSON.parse(busInvoke(['status', '--root', sandbox]).stdout);
+    assert.equal(status.queues.antigravity.new, 1);
+    assert.equal(status.queues.antigravity.processing, 0);
+
+    const exit = await exitPromise;
+    assert.deepEqual(exit, { code: 0, signal: null }, stderr);
+    assert.equal(readFileSync(activationCount, 'utf8'), '2');
+    status = JSON.parse(busInvoke(['status', '--root', sandbox]).stdout);
+    assert.equal(status.states.antigravity.state, 'STOPPED');
+    assert.equal(status.queues.antigravity.new, 1);
+    assert.equal(status.queues.antigravity.processing, 0);
+  } finally {
+    if (child && child.exitCode === null && child.signalCode === null) {
+      child.kill();
+      await childExit(child).catch(() => {});
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('bus-supervised launch exits for existing STOPPED state without invoking the Agent', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-stopped-'));
+  const activationCount = join(sandbox, 'activation-count.txt');
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+    assert.equal(invoke(['quickstart', '--root', sandbox, '--task', 'Stopped launch', '--lang', 'en']).status, 0);
+    assert.equal(busInvoke(['state', '--root', sandbox, '--agent', 'antigravity', '--state', 'STOPPED']).status, 0);
+    const launched = invoke(['launch', '--agent', 'antigravity', '--root', sandbox, '--lang', 'en'], {
+      ...fakeSupervisedAgyLauncher(sandbox),
+      ACTIVATION_COUNT: activationCount,
+    });
+    assert.equal(launched.status, 0, launched.stderr);
+    assert.equal(existsSync(activationCount), false);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('bus-supervised launch propagates a non-zero child exit without retry', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-failure-'));
+  const activationCount = join(sandbox, 'activation-count.txt');
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+    assert.equal(invoke(['quickstart', '--root', sandbox, '--task', 'Failed launch', '--lang', 'en']).status, 0);
+    const launched = invoke(['launch', '--agent', 'antigravity', '--root', sandbox, '--lang', 'en'], {
+      ...fakeSupervisedAgyLauncher(sandbox),
+      ACTIVATION_COUNT: activationCount,
+      AGENT_EXIT_CODE: '7',
+    });
+    assert.equal(launched.status, 1);
+    assert.match(launched.stderr, /exited with status 7/);
+    assert.equal(readFileSync(activationCount, 'utf8'), '1');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('--once disables Adapter-declared launch supervision', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-once-'));
+  const activationCount = join(sandbox, 'activation-count.txt');
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+    assert.equal(invoke(['quickstart', '--root', sandbox, '--task', 'One-shot launch', '--lang', 'en']).status, 0);
+    const launched = invoke(['launch', '--agent', 'antigravity', '--once', '--root', sandbox, '--lang', 'en'], {
+      ...fakeSupervisedAgyLauncher(sandbox),
+      ACTIVATION_COUNT: activationCount,
+    });
+    assert.equal(launched.status, 0, launched.stderr);
+    assert.equal(readFileSync(activationCount, 'utf8'), '1');
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('bus-supervised launch fails safely on a corrupt newest state record', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-corrupt-state-'));
+  const activationCount = join(sandbox, 'activation-count.txt');
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+    assert.equal(invoke(['quickstart', '--root', sandbox, '--task', 'Corrupt state', '--lang', 'en']).status, 0);
+    writeFileSync(join(sandbox, '.agent-bus', 'state', 'antigravity', '99999999999999999-invalid.json'), '{', 'utf8');
+    const launched = invoke(['launch', '--agent', 'antigravity', '--root', sandbox, '--lang', 'en'], {
+      ...fakeSupervisedAgyLauncher(sandbox),
+      ACTIVATION_COUNT: activationCount,
+    });
+    assert.equal(launched.status, 1);
+    assert.match(launched.stderr, /JSON|Unexpected end|Expected property name/);
+    assert.equal(existsSync(activationCount), false);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }

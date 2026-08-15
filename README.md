@@ -25,6 +25,8 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "
 
 No role prompt needs to be copied or maintained manually. Choose `--template bug`, `--template feature`, or `--template refactor` for the initial task; for later work, give Codex a new requirement following the same checklist.
 
+The reference adapters declare their launch lifecycle. Codex is one-shot interactive. Antigravity is bus-supervised: after a clean Agent exit, the same `launch` process waits non-destructively and starts `agy` again when later review feedback or another Bus message arrives. The supervisor never claims messages or creates leases. End it with Ctrl+C, deliver `STOP` so the Agent records `STOPPED`, or use the Agent-agnostic `launch --once` escape hatch for scripts that require one activation.
+
 ![End-to-end terminal demo](./assets/demo.gif)
 
 The recording is generated from a real isolated Git repository by `npm run demo` demonstrating the default reference workflow. It exercises requirement submission, Antigravity's implementation and commit, automated tests, Codex's commit/evidence review, and `REVIEW_APPROVED`. The sanitized source transcript is in [`assets/demo-transcript.txt`](./assets/demo-transcript.txt).
@@ -221,6 +223,7 @@ RELEASE_APPROVED
 
 - `wait` polls every five seconds for up to 120 minutes by default.
 - Waiting continues only while the CLI session and its Node.js process remain alive.
+- A bus-supervised launch also remains alive between clean Agent activations. It observes `new`, Agent-owned `processing`, and `STOPPED` state without claiming work; a non-zero child exit stops supervision and is reported as failure.
 - Messages and state survive terminal restarts. Invoke the skill again to inspect and resume `new` or role-owned `processing` messages.
 - `.agent-bus/` is added to the repository's local `.git/info/exclude`, not its tracked `.gitignore`.
 - Never let multiple roles perform Git writes at the same time.

@@ -14,6 +14,8 @@ description: How the local-first Agent Bus coordinates messages, claims, reviews
 2. **Agent Bus Protocol Layer**: Core message bus, queue lifecycle (`new/`, `processing/`, `processed/`), lease sidecars, append-only states, and crash recovery. Independent of vendor-specific transports.
 3. **Adapters & Runtime Layer**: Bridges concrete execution surfaces (CLI executables, desktop wrappers, IPC) with structured tasks.
 
+Adapters also declare a normalized launch policy. `one-shot` launches once, while `bus-supervised` keeps the parent Runtime alive after clean exits, observes queue/state changes without claiming work, and reactivates the Agent with compact resume context. `STOPPED` ends cleanly, non-zero exits fail without restart, and `launch --once` disables supervision generically.
+
 Typical workflow:
 
 1. Planner (default: Codex) sends `IMPLEMENT` with a specification.

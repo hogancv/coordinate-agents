@@ -146,13 +146,19 @@ Adapters live under `adapters/` and implement a unified interface:
 
 - `detect()`: checks executable availability and version.
 - `resolveLaunch({ root, prompt, role, language })`: returns `{ command, prefix, args }` without shell interpolation.
+- `launchPolicy()`: returns normalized `one-shot` or `bus-supervised` lifecycle policy.
+- `resumePrompt({ agentId, root, activation })`: supplies compact context for a later supervised activation.
 - `capabilities()`: reports supported actions (`launch`, `detect`, `dispatch`).
 
 ### Reference adapters
 
-1. `codex-cli`: Codex CLI detection and `-C <root> <prompt>` execution.
-2. `antigravity-cli`: Antigravity CLI (`agy`) detection and `--prompt-interactive <prompt>` execution.
+1. `codex-cli`: Codex CLI detection and one-shot `-C <root> <prompt>` execution.
+2. `antigravity-cli`: Antigravity CLI (`agy`) detection and bus-supervised `--prompt-interactive <prompt>` execution.
 3. `generic-cli`: Configurable third-party CLI execution with template arguments (e.g. `["--dir", "{root}", "--message", "{prompt}"]`).
+
+### Durable launch supervision
+
+For `bus-supervised` adapters, Runtime performs the first activation normally. After a zero exit it observes the registered Agent's `new` and `processing` queues plus latest state without moving a message or writing a lease. Work wakes a new activation with the Adapter's resume prompt; `STOPPED` ends successfully. A non-zero child exit ends supervision as a failure. Ctrl+C or termination is forwarded to the active non-detached child. `launch --once` disables supervision without naming a vendor.
 
 ### Desktop Adapter capability model
 

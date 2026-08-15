@@ -18,3 +18,5 @@ In the default reference workflow, Google Antigravity CLI (`agy`) fulfills the i
 - creates a focused Git commit and reports `IMPLEMENTATION_DONE`.
 
 Antigravity does not approve its own work and does not merge, tag, push, deploy, or publish. It retains its native Google account authentication and model subscription.
+
+The `antigravity-cli` reference Adapter declares a bus-supervised launch policy. After a clean `agy` exit, the parent `launch` command waits without claiming messages and starts `agy` again when later work appears. A `STOPPED` state or Ctrl+C ends supervision; a non-zero child exit fails without retry. Use `launch --once` only for an intentional single activation.

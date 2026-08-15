@@ -18,6 +18,8 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --root "<repository-root>" 
 
 Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>` and `--implementer <agent>`. Read `references/task-templates.md` for task structure guidelines.
 
+Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
+
 ## Establish context
 
 1. Resolve the repository root with `git rev-parse --show-toplevel`.
@@ -113,6 +115,7 @@ Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`
 ## Waiting limitations and recovery
 
 - A wait remains active only while the CLI session and its Node.js process remain alive.
+- A bus-supervised launch remains active after a clean Agent exit and wakes for any valid `new` or Agent-owned `processing` work. Non-zero exits terminate supervision instead of restarting.
 - On timeout, preserve all state, report `TIMEOUT`, and resume with another `wait` when asked.
 - After a terminal restart, inspect `status`, then process `new` and agent-owned `processing` messages.
 - Recover an expired claim only after checking for a matching commit, evidence, or reply: `recover --agent <agent_id> --stale-after-seconds 14400`.

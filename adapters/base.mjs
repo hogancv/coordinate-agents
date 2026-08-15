@@ -23,6 +23,14 @@ export class AgentAdapter {
     throw new Error('resolveLaunch() must be implemented by adapter subclass');
   }
 
+  launchPolicy() {
+    return { mode: 'one-shot' };
+  }
+
+  resumePrompt({ agentId }) {
+    return `Invoke the installed coordinate-cli-agents skill and resume the existing collaboration as registered Agent ${agentId}. Inspect the project-local Agent Bus, process pending work, report results through the Bus, and preserve claim/complete semantics.`;
+  }
+
   dispatch(_message, _context = {}) {
     throw new Error('dispatch() is not supported by this adapter');
   }
@@ -61,6 +69,7 @@ export class AgentAdapter {
       supportsHeadless: false,
       supportsInteractive: true,
       supportsStateReporting: true,
+      launchPolicy: this.launchPolicy().mode,
     };
   }
 }

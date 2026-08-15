@@ -76,6 +76,10 @@ npx --yes @hogancv/coordinate-cli-agents@1.2.3 launch --role antigravity ...
 Run the two printed commands in separate terminals. Exact commands contain an encoded project path
 so spaces and Windows metacharacters do not require manual quoting.
 
+Keep the Antigravity launch terminal open. Its Adapter-declared supervisor waits after each clean
+`agy` exit and reactivates it for later review feedback without claiming the Bus message itself.
+Use Ctrl+C or a processed `STOP` message to end it; `--once` opts into one activation for scripts.
+
 `quickstart` adds a project-local `.agent-bus/` directory and excludes it through
 `.git/info/exclude`; it does not add bus messages to commits. The project source tree is unchanged
 until Antigravity implements an approved specification.

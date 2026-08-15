@@ -20,8 +20,9 @@ import {
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { getAdapter } from '../adapters/index.mjs';
+import { observeAgentBus, waitForAgentActivity } from '../scripts/agent-observer.mjs';
 import {
   assertContained,
   assertSafePath as assertSafePathUtil,
@@ -71,6 +72,7 @@ Options:
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
   --force                 Replace/remove an unrecognized existing directory
+  --once                  Disable Adapter-declared durable launch supervision
   --version               Print package version
   -h, --help              Show this help
 
@@ -144,6 +146,7 @@ Examples:
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
   --force                 替换或删除无法识别的现有目录
+  --once                  禁用 Adapter 声明的持久启动监督
   --version               输出包版本
   -h, --help              显示帮助
 
@@ -196,6 +199,7 @@ function parseArgs(argv) {
     codex: false,
     antigravity: false,
     force: false,
+    once: false,
     help: false,
     version: false,
     codexHome: process.env.CODEX_HOME || join(homedir(), '.codex'),
@@ -231,6 +235,7 @@ function parseArgs(argv) {
     if (option === '--codex') result.codex = true;
     else if (option === '--antigravity') result.antigravity = true;
     else if (option === '--force') result.force = true;
+    else if (option === '--once') result.once = true;
     else if (option === '--help' || option === '-h') result.help = true;
     else if (option === '--version') result.version = true;
     else if ([
@@ -722,7 +727,26 @@ function quickstart(options, t, language) {
   }
 }
 
-function launchRole(options, t) {
+function runLaunchChild(resolved, root, setActiveChild) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(resolved.command, [...resolved.prefix, ...resolved.args], {
+      cwd: root,
+      stdio: 'inherit',
+      windowsHide: false,
+    });
+    setActiveChild(child);
+    child.once('error', error => {
+      setActiveChild(null);
+      reject(error);
+    });
+    child.once('exit', (status, signal) => {
+      setActiveChild(null);
+      resolvePromise({ status, signal });
+    });
+  });
+}
+
+async function launchRole(options, t) {
   const agentOption = options.agent;
   const roleOption = options.role;
   if (agentOption && roleOption && agentOption !== roleOption) {
@@ -753,14 +777,76 @@ function launchRole(options, t) {
   }
 
   const adapter = getAdapter(agentConfig.adapter, agentConfig);
-  const resolved = adapter.resolveLaunch({ root, prompt, role: agentId, language: options.language });
-  const result = spawnSync(resolved.command, [...resolved.prefix, ...resolved.args], {
-    cwd: root,
-    stdio: 'inherit',
-    windowsHide: false,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(format(t.launchFailed, { role: agentId, status: result.status }));
+  const policy = adapter.launchPolicy();
+  if (!policy || !['one-shot', 'bus-supervised'].includes(policy.mode)) {
+    throw new Error(`Adapter "${agentConfig.adapter}" returned an invalid launch policy.`);
+  }
+  const supervised = policy.mode === 'bus-supervised' && !options.once;
+  const controller = new AbortController();
+  let activeChild = null;
+  let interruptedSignal = null;
+  const setActiveChild = child => { activeChild = child; };
+  const interrupt = signal => {
+    if (interruptedSignal) return;
+    interruptedSignal = signal;
+    controller.abort(new Error(`Launch interrupted by ${signal}.`));
+    if (activeChild && !activeChild.killed) {
+      try { activeChild.kill(signal); } catch {
+        try { activeChild.kill(); } catch { /* child already unavailable */ }
+      }
+    }
+  };
+  const onSigint = () => interrupt('SIGINT');
+  const onSigterm = () => interrupt('SIGTERM');
+  process.on('SIGINT', onSigint);
+  process.on('SIGTERM', onSigterm);
+
+  try {
+    if (supervised && observeAgentBus(busPath, agentId).stopped) return;
+    let activation = 0;
+    while (true) {
+      const activationPrompt = activation === 0
+        ? prompt
+        : adapter.resumePrompt({ agentId, root, activation });
+      const resolved = adapter.resolveLaunch({
+        root,
+        prompt: activationPrompt,
+        role: agentId,
+        language: options.language,
+        activation,
+      });
+      const result = await runLaunchChild(resolved, root, setActiveChild);
+      if (interruptedSignal) {
+        process.exitCode = interruptedSignal === 'SIGINT' ? 130 : 143;
+        return;
+      }
+      if (result.status !== 0) {
+        const status = result.status ?? result.signal ?? 'unknown';
+        throw new Error(format(t.launchFailed, { role: agentId, status }));
+      }
+      if (!supervised) return;
+
+      const observation = observeAgentBus(busPath, agentId);
+      if (observation.stopped) return;
+      if (!observation.hasWork) {
+        await waitForAgentActivity(busPath, agentId, {
+          pollIntervalMs: policy.pollIntervalMs || 500,
+          signal: controller.signal,
+        });
+      }
+      if (observeAgentBus(busPath, agentId).stopped) return;
+      activation += 1;
+    }
+  } catch (error) {
+    if (interruptedSignal) {
+      process.exitCode = interruptedSignal === 'SIGINT' ? 130 : 143;
+      return;
+    }
+    throw error;
+  } finally {
+    process.off('SIGINT', onSigint);
+    process.off('SIGTERM', onSigterm);
+  }
 }
 
 function handleAgentCommand(options, t) {
@@ -813,7 +899,7 @@ function handleAgentCommand(options, t) {
   throw new Error(`Unknown agent subcommand: ${options.subcommand}. Use add, list, or doctor.`);
 }
 
-function run(argv) {
+async function run(argv) {
   let options;
   let language = detectLanguage(null);
   try {
@@ -855,7 +941,7 @@ function run(argv) {
   if (options.command === 'quickstart' || options.command === 'launch') {
     try {
       if (options.command === 'quickstart') quickstart(options, t, language);
-      else launchRole(options, t);
+      else await launchRole(options, t);
     } catch (error) {
       console.error(error.message || String(error));
       process.exitCode = 1;
@@ -939,4 +1025,4 @@ function run(argv) {
   process.exitCode = 2;
 }
 
-run(process.argv.slice(2));
+await run(process.argv.slice(2));

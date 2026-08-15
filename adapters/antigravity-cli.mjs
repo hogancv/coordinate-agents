@@ -57,6 +57,10 @@ export class AntigravityCliAdapter extends AgentAdapter {
     };
   }
 
+  launchPolicy() {
+    return { mode: 'bus-supervised', pollIntervalMs: 500 };
+  }
+
   capabilities() {
     return {
       ...super.capabilities(),

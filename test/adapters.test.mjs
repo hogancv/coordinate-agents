@@ -36,6 +36,8 @@ test('AgentAdapter defines normalized statuses and default lifecycle methods', (
   assert.equal(caps.supportsHeadless, false);
   assert.equal(caps.supportsInteractive, true);
   assert.equal(caps.supportsStateReporting, true);
+  assert.deepEqual(adapter.launchPolicy(), { mode: 'one-shot' });
+  assert.equal(caps.launchPolicy, 'one-shot');
 });
 
 test('registered adapters provide capabilities and correct adapter instances', () => {
@@ -54,6 +56,8 @@ test('registered adapters provide capabilities and correct adapter instances', (
   assert.equal(agy.name, 'antigravity-cli');
   const agyCaps = agy.capabilities();
   assert.equal(agyCaps.name, 'antigravity-cli');
+  assert.equal(agy.launchPolicy().mode, 'bus-supervised');
+  assert.equal(agyCaps.launchPolicy, 'bus-supervised');
 
   const generic = getAdapter('generic-cli', { id: 'custom', command: 'echo' });
   assert.equal(generic.name, 'generic-cli');

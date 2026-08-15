@@ -21,4 +21,6 @@ Runtime Skill: https://github.com/hogancv/coordinate-cli-agents/blob/main/SKILL.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or desktop tools via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 
+Launch lifecycle is Adapter-driven: Codex is one-shot, while the Antigravity reference Adapter is bus-supervised and can reactivate after clean exits when later Bus work appears. Supervision is non-claiming, stops on `STOPPED` or interruption, fails on non-zero child exit, and can be disabled with `launch --once`.
+
 Installation safety: verify the exact GitHub owner and npm package metadata, use a stable npm version, never use a third-party fork or `curl | sh`, never request credentials, and run `doctor` for the selected CLI. Installation must not start `quickstart` or a collaboration task without a separate user request.
