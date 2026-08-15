@@ -186,7 +186,7 @@ test('documents a 60-second path and three first-use task templates', () => {
 test('package.json provides canonical bin only', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
-  assert.equal(packageJson.version, '2.1.0');
+  assert.equal(packageJson.version, '2.1.1');
   assert.deepEqual(Object.keys(packageJson.bin), ['coordinate-agents']);
   assert.equal(packageJson.bin['coordinate-agents'], 'bin/coordinate-agents.mjs');
 });
