@@ -35,6 +35,36 @@ function fakeCliEnvironment(rootPath, names = ['codex', 'agy']) {
   return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
 }
 
+function fakeAgentDoctorEnvironment(rootPath, names) {
+  const bin = join(rootPath, 'agent-doctor-bin');
+  const gitNames = process.platform === 'win32' ? ['git.exe', 'git.cmd', 'git.bat'] : ['git'];
+  const gitDirectory = (process.env.PATH || '')
+    .split(delimiter)
+    .find(directory => gitNames.some(name => existsSync(join(directory, name))));
+  assert.ok(gitDirectory, 'Git executable directory must be discoverable for the test fixture');
+  mkdirSync(bin, { recursive: true });
+  for (const name of names) {
+    if (process.platform === 'win32') {
+      const script = join(bin, `${name}.cjs`);
+      writeFileSync(script, "console.log('test-fixture-1.0.0');\n", 'utf8');
+      writeFileSync(join(bin, `${name}.cmd`), `@node "${script}" %*\r\n`, 'utf8');
+    } else {
+      const path = join(bin, name);
+      writeFileSync(path, "#!/bin/sh\necho test-fixture-1.0.0\n", 'utf8');
+      chmodSync(path, 0o755);
+    }
+  }
+
+  // Keep Windows system tools such as where.exe available, but exclude the
+  // developer's normal PATH so installed agent CLIs cannot mask fixture gaps.
+  const systemPath = process.platform === 'win32'
+    ? join(process.env.SystemRoot || 'C:\\Windows', 'System32')
+    : '';
+  return {
+    PATH: [bin, gitDirectory, systemPath].filter(Boolean).join(delimiter),
+  };
+}
+
 function fakeCodexLauncher(rootPath) {
   const bin = join(rootPath, 'launch-bin');
   const source = `#!/usr/bin/env node\nrequire('fs').writeFileSync(process.env.CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));\n`;
@@ -401,10 +431,12 @@ test('agent add, list, and doctor manage registered agents via CLI', () => {
     assert.equal(listResult.status, 0, listResult.stderr);
     assert.match(listResult.stdout, /custom-helper/);
 
-    const env = fakeGenericLauncher(sandbox, 'custom-helper');
+    const env = fakeAgentDoctorEnvironment(sandbox, ['codex', 'agy', 'custom-helper']);
     const doctorResult = invoke(['agent', 'doctor', '--root', sandbox], env);
     assert.equal(doctorResult.status, 0, doctorResult.stderr);
-    assert.match(doctorResult.stdout, /custom-helper \(generic-cli\): healthy/);
+    assert.match(doctorResult.stdout, /codex \(codex-cli\): healthy \(test-fixture-1\.0\.0\)/);
+    assert.match(doctorResult.stdout, /antigravity \(antigravity-cli\): healthy \(test-fixture-1\.0\.0\)/);
+    assert.match(doctorResult.stdout, /custom-helper \(generic-cli\): healthy \(test-fixture-1\.0\.0\)/);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }

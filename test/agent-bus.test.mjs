@@ -462,7 +462,10 @@ test('rejects symlinked or hardlinked bus configuration', () => {
     if (symlinkCreated) {
       const result = invoke(repo, ['status']);
       assert.equal(result.status, 1);
-      assert.match(result.stderr, /Unsafe or invalid/);
+      assert.match(
+        result.stderr,
+        /Failed to load valid \.agent-bus\/config\.json: (?:Unsafe or invalid|Refusing linked or non-regular agent-bus file)/,
+      );
     }
   } finally {
     rmSync(repo, { recursive: true, force: true });
