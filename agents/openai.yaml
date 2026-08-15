@@ -1,4 +1,4 @@
 interface:
   display_name: "Coordinate CLI Agents"
-  short_description: "Codex specifies and reviews; Antigravity implements"
-  default_prompt: "Use $coordinate-cli-agents to coordinate Codex CLI and Google Antigravity CLI in this Git repository: Codex owns requirements, specifications, review, and the release gate, while Antigravity exclusively implements code."
+  short_description: "Agent-agnostic local coordination protocol and runtime"
+  default_prompt: "Use $coordinate-cli-agents to coordinate AI CLI agents in this Git repository: manage workflow roles (planner, implementer, reviewer), durable .agent-bus messaging, adapters, and human-gated releases, using Codex and Antigravity as default reference adapters."

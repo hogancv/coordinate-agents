@@ -28,6 +28,7 @@ import {
   readConfig,
   validateAgentId,
   validateConfig,
+  withConfigTransaction,
   writeConfig,
 } from '../scripts/config.mjs';
 
@@ -569,8 +570,12 @@ function taskGuidance(template, language) {
 
 function buildAgentPrompt({ agentId, roles, options, language, planner, implementer, reviewer }) {
   const task = options.task.trim() || (language === 'zh' ? '先询问我本轮的具体需求。' : 'Ask me for the concrete task for this round.');
-  const isDefaultCodex = agentId === 'codex' && roles.includes('planner') && !roles.includes('implementer');
-  const isDefaultAgy = agentId === 'antigravity' && roles.includes('implementer') && !roles.includes('planner');
+  const isDefaultCodex = agentId === 'codex' &&
+    roles.length === 2 && roles.includes('planner') && roles.includes('reviewer') && !roles.includes('implementer') &&
+    planner === 'codex' && reviewer === 'codex';
+  const isDefaultAgy = agentId === 'antigravity' &&
+    roles.length === 1 && roles.includes('implementer') && !roles.includes('planner') && !roles.includes('reviewer') &&
+    implementer === 'antigravity';
 
   if (language === 'zh') {
     if (isDefaultCodex) {
@@ -579,8 +584,14 @@ function buildAgentPrompt({ agentId, roles, options, language, planner, implemen
     if (isDefaultAgy) {
       return '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
     }
+    if (roles.includes('planner') && roles.includes('implementer') && roles.includes('reviewer')) {
+      return `调用 $coordinate-cli-agents 并作为规划、实现与审查者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    }
+    if (roles.includes('implementer') && roles.includes('reviewer')) {
+      return `调用 $coordinate-cli-agents 并作为实现与审查者（${agentId}）恢复当前仓库的协作。负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE，同时负责审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    }
     if (roles.includes('planner') && roles.includes('implementer')) {
-      return `调用 $coordinate-cli-agents 并作为${roles.join('与')}（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-cli-agents 并作为规划与实现者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
     if (roles.includes('planner') || roles.includes('reviewer')) {
       const label = roles.includes('planner') && roles.includes('reviewer') ? '规划与审查者' : (roles.includes('planner') ? '规划者' : '审查者');
@@ -596,8 +607,14 @@ function buildAgentPrompt({ agentId, roles, options, language, planner, implemen
   if (isDefaultAgy) {
     return 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
   }
+  if (roles.includes('planner') && roles.includes('implementer') && roles.includes('reviewer')) {
+    return `Use $coordinate-cli-agents as planner, implementer, and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  }
+  if (roles.includes('implementer') && roles.includes('reviewer')) {
+    return `Use $coordinate-cli-agents as implementer and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, send IMPLEMENTATION_DONE with evidence, and perform reviews; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  }
   if (roles.includes('planner') && roles.includes('implementer')) {
-    return `Use $coordinate-cli-agents as ${roles.join(' and ')} (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-cli-agents as planner and implementer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
   if (roles.includes('planner') || roles.includes('reviewer')) {
     const label = roles.includes('planner') && roles.includes('reviewer') ? 'planner and reviewer' : (roles.includes('planner') ? 'planner' : 'reviewer');
@@ -642,9 +659,6 @@ function quickstart(options, t, language) {
     throw new Error(format(t.badAgent, { agent: reviewer }));
   }
 
-  busConfig.workflow = { planner, implementer, reviewer };
-  writeConfig(busPath, busConfig);
-
   const agentRolesMap = new Map();
   for (const [role, id] of Object.entries({ planner, implementer, reviewer })) {
     if (!agentRolesMap.has(id)) agentRolesMap.set(id, new Set());
@@ -681,6 +695,16 @@ function quickstart(options, t, language) {
   } catch (error) {
     for (const path of created) removePath(path);
     throw error;
+  }
+
+  try {
+    withConfigTransaction(busPath, (cfg) => {
+      cfg.workflow = { planner, implementer, reviewer };
+      return cfg;
+    });
+  } catch (cfgError) {
+    for (const path of created) removePath(path);
+    throw cfgError;
   }
 
   const base = { root, language: language === 'zh' ? 'zh-CN' : 'en' };

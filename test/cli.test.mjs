@@ -551,3 +551,81 @@ test('launch rejects conflicting --agent and --role values', () => {
     rmSync(sandbox, { recursive: true, force: true });
   }
 });
+
+test('quickstart generates merged prompts for multi-role agents and preserves defaults', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-multirole-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    // Test Antigravity as implementer + reviewer
+    const result1 = invoke([
+      'quickstart', '--root', sandbox, '--template', 'feature',
+      '--planner', 'codex', '--implementer', 'antigravity', '--reviewer', 'antigravity',
+      '--task', 'Build multi-role support', '--lang', 'en',
+    ]);
+    assert.equal(result1.status, 0, result1.stderr);
+
+    const agyPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'antigravity.txt'), 'utf8');
+    assert.match(agyPrompt, /implementer and reviewer \(antigravity\)/);
+
+    // Clean launch dir for next test
+    rmSync(join(sandbox, '.agent-bus', 'launch'), { recursive: true, force: true });
+
+    // Test Codex as planner + implementer + reviewer
+    const result2 = invoke([
+      'quickstart', '--root', sandbox, '--template', 'bug',
+      '--planner', 'codex', '--implementer', 'codex', '--reviewer', 'codex',
+      '--task', 'Fix solo workflow', '--lang', 'en',
+    ]);
+    assert.equal(result2.status, 0, result2.stderr);
+
+    const codexPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'codex.txt'), 'utf8');
+    assert.match(codexPrompt, /planner, implementer, and reviewer \(codex\)/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('quickstart failure when prompts exist leaves prior workflow unchanged', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-tx-fail-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    // Initial quickstart with default workflow
+    const first = invoke([
+      'quickstart', '--root', sandbox, '--template', 'feature',
+      '--planner', 'codex', '--implementer', 'antigravity', '--reviewer', 'codex',
+      '--task', 'Initial task', '--lang', 'en',
+    ]);
+    assert.equal(first.status, 0, first.stderr);
+
+    const initialCfg = JSON.parse(readFileSync(join(sandbox, '.agent-bus', 'config.json'), 'utf8'));
+    assert.deepEqual(initialCfg.workflow, {
+      planner: 'codex',
+      implementer: 'antigravity',
+      reviewer: 'codex',
+    });
+
+    // Add another agent
+    invoke(['agent', 'add', 'architect', '--adapter', 'generic-cli', '--command', 'architect', '--root', sandbox]);
+
+    // Second quickstart with new roles should fail because prompt files already exist
+    const second = invoke([
+      'quickstart', '--root', sandbox, '--template', 'feature',
+      '--planner', 'architect', '--implementer', 'antigravity', '--reviewer', 'architect',
+      '--task', 'Attempted second task', '--lang', 'en',
+    ]);
+    assert.equal(second.status, 1);
+    assert.match(second.stderr, /launch prompts already exist/i);
+
+    // Verify config workflow was NOT mutated by the failed quickstart
+    const cfgAfterFailed = JSON.parse(readFileSync(join(sandbox, '.agent-bus', 'config.json'), 'utf8'));
+    assert.deepEqual(cfgAfterFailed.workflow, {
+      planner: 'codex',
+      implementer: 'antigravity',
+      reviewer: 'codex',
+    });
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});

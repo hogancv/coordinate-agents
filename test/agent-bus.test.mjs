@@ -479,3 +479,25 @@ test('rejects conflicting --agent and --role options', () => {
     rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('agentAdd rolls back complete agent root directories upon registration failure', () => {
+  const repo = repository();
+  try {
+    const bus = join(repo, '.agent-bus');
+    // Pre-create duplicate agent in config to trigger conflict failure during transaction
+    const result = invoke(repo, ['agent-add', '--agent', 'codex', '--adapter', 'generic-cli']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /already registered/i);
+
+    // Now test a new agent ID where directory validation or path injection fails
+    const invalidIdResult = invoke(repo, ['agent-add', '--agent', 'new-agent', '--adapter', 'generic-cli', '--args', 'invalid json']);
+    assert.equal(invalidIdResult.status, 1);
+
+    // Verify no partial agent roots remain
+    assert.equal(existsSync(join(bus, 'inbox', 'new-agent')), false);
+    assert.equal(existsSync(join(bus, 'state', 'new-agent')), false);
+    assert.equal(existsSync(join(bus, 'quarantine', 'new-agent')), false);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

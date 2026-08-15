@@ -3,6 +3,7 @@ import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync,
   lstatSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
+import { hostname } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export const DEFAULT_CONFIG = Object.freeze({
@@ -166,4 +167,65 @@ export function writeConfig(bus, config) {
   validateConfig(config);
   const destination = configPath(bus);
   atomicWrite(destination, `${JSON.stringify(config, null, 2)}\n`, join(bus, 'tmp'));
+}
+
+export function acquireConfigLock(bus, { timeoutMs = 10_000, staleMs = 30_000 } = {}) {
+  const locksDir = join(bus, 'locks');
+  mkdirSync(locksDir, { recursive: true });
+  const lock = join(locksDir, 'config');
+  const owner = randomUUID();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      mkdirSync(lock);
+      writeFileSync(join(lock, 'owner.json'), `${JSON.stringify({ owner, pid: process.pid, host: hostname(), acquired_at: new Date().toISOString() })}\n`, 'utf8');
+      return () => {
+        try {
+          const content = readFileSync(join(lock, 'owner.json'), 'utf8');
+          const current = JSON.parse(content);
+          if (current.owner === owner) rmSync(lock, { recursive: true, force: true });
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      };
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try {
+        const stats = statSync(lock);
+        const ownerPath = join(lock, 'owner.json');
+        let isAlive = false;
+        if (existsSync(ownerPath)) {
+          const ownerInfo = JSON.parse(readFileSync(ownerPath, 'utf8'));
+          if (ownerInfo.host === hostname() && Number.isInteger(ownerInfo.pid)) {
+            try {
+              process.kill(ownerInfo.pid, 0);
+              isAlive = true;
+            } catch { isAlive = false; }
+          }
+        }
+        if (!isAlive || (Date.now() - stats.mtimeMs > staleMs)) {
+          rmSync(lock, { recursive: true, force: true });
+          continue;
+        }
+      } catch { /* ignore */ }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+  }
+  throw new Error(`Failed to acquire config lock on ${lock}: timeout after ${timeoutMs}ms`);
+}
+
+export function withConfigTransaction(bus, updateFn) {
+  assertSafePath(bus, bus);
+  const release = acquireConfigLock(bus);
+  try {
+    const current = readConfig(bus);
+    const updated = updateFn(JSON.parse(JSON.stringify(current)));
+    if (updated !== undefined) {
+      writeConfig(bus, updated);
+      return updated;
+    }
+    return current;
+  } finally {
+    release();
+  }
 }

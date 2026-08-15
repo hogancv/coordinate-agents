@@ -36,6 +36,10 @@ export class AgentAdapter {
   }
 
   reportState(state, details = null) {
+    const validStatuses = Object.values(NORMALIZED_STATUSES);
+    if (!validStatuses.includes(state)) {
+      throw new Error(`Invalid normalized status: "${state}". Must be one of: ${validStatuses.join(', ')}`);
+    }
     this.state = { status: state, details, lastUpdated: new Date().toISOString() };
     return this.state;
   }

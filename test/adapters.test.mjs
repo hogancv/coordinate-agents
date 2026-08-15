@@ -28,6 +28,9 @@ test('AgentAdapter defines normalized statuses and default lifecycle methods', (
   assert.ok(state.lastUpdated);
   assert.deepEqual(adapter.observeStatus(), state);
 
+  // Negative test: invalid status rejection
+  assert.throws(() => adapter.reportState('invalid-state'), /Invalid normalized status/);
+
   const caps = adapter.capabilities();
   assert.equal(caps.name, 'base');
   assert.equal(caps.supportsHeadless, false);

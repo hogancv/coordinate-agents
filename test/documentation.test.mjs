@@ -193,3 +193,46 @@ test('doctor never pipes a downloaded Antigravity installer directly into a shel
   assert.doesNotMatch(cli, /install\.(?:sh|ps1)['"]?\s*\|\s*(?:bash|sh|iex)/i);
   assert.match(cli, /Review the downloaded official script/);
 });
+
+test('documentation defines agent-agnostic runtime, adapter architecture, and dynamic registration in both language flows', () => {
+  const english = read('README.md');
+  const chinese = read('README.zh-CN.md');
+
+  for (const phrase of [
+    'Agent Bus, Adapters, and Roles',
+    'Coordination Layer',
+    'Agent Bus Protocol Layer',
+    'Adapters & Runtime Layer',
+    'generic-cli',
+    'Desktop Adapter Attachment Model',
+    'Receive',
+    'Execute',
+    'Observe',
+    'Result',
+    'Report',
+    'agent add',
+    'agent list',
+    'agent doctor',
+  ]) {
+    assert.ok(english.includes(phrase), `English README missing architectural term: ${phrase}`);
+  }
+
+  for (const phrase of [
+    '架构：代理总线、适配器与工作流角色',
+    '协作编排层',
+    '代理总线协议层',
+    '适配器与运行时层',
+    'generic-cli',
+    '桌面代理挂载模型',
+    'Receive（接收）',
+    'Execute（执行）',
+    'Observe（观测）',
+    'Result（产出）',
+    'Report（汇报）',
+    'agent add',
+    'agent list',
+    'agent doctor',
+  ]) {
+    assert.ok(chinese.includes(phrase), `Chinese README missing architectural term: ${phrase}`);
+  }
+});

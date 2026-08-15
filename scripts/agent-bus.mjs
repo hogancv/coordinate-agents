@@ -492,12 +492,30 @@ function agentAdd(options, bus, root) {
   let args = undefined;
   if (options.args) {
     try {
-      args = JSON.parse(options.args);
-      if (!Array.isArray(args)) throw new Error('Args must be an array of strings.');
-    } catch {
-      args = options.args.split(',').map(s => s.trim());
+      const parsed = JSON.parse(options.args);
+      if (!Array.isArray(parsed) || !parsed.every(a => typeof a === 'string')) {
+        throw new Error('Agent args must be a JSON array of strings.');
+      }
+      args = parsed;
+    } catch (err) {
+      throw new Error(`Invalid --args JSON: ${err.message}`);
     }
   }
+  const agentInboxRoot = join(bus, 'inbox', id);
+  const agentStateRoot = join(bus, 'state', id);
+  const agentQuarantineRoot = join(bus, 'quarantine', id);
+
+  const inboxPreExisted = existsSync(agentInboxRoot);
+  const statePreExisted = existsSync(agentStateRoot);
+  const quarantinePreExisted = existsSync(agentQuarantineRoot);
+
+  const rollbackRoots = [];
+  if (!inboxPreExisted) rollbackRoots.push(agentInboxRoot);
+  if (!statePreExisted) rollbackRoots.push(agentStateRoot);
+  if (!quarantinePreExisted) rollbackRoots.push(agentQuarantineRoot);
+
+  const newAgent = { id, adapter, command };
+  if (args) newAgent.args = args;
 
   const release = acquireLock(bus, 'config');
   try {
@@ -505,36 +523,46 @@ function agentAdd(options, bus, root) {
     if (config.agents.some(a => a.id === id)) {
       throw new Error(`Agent already registered: ${id}`);
     }
-    const newAgent = { id, adapter, command };
-    if (args) newAgent.args = args;
     const testConfig = {
       ...config,
       agents: [...config.agents, newAgent],
     };
     validateConfig(testConfig);
 
-    const createdDirs = [];
     try {
-      const agentDirs = [
-        `inbox/${id}/new`,
-        `inbox/${id}/processing`,
-        `inbox/${id}/processed`,
-        `quarantine/${id}`,
-        `state/${id}`,
-      ];
-      for (const directory of agentDirs) {
-        const fullPath = assertSafePath(root, join(bus, directory));
-        if (!existsSync(fullPath)) {
-          mkdirSync(fullPath, { recursive: true });
-          createdDirs.push(fullPath);
-        }
-        assertSafePath(root, fullPath);
-      }
+      assertSafePath(root, join(agentInboxRoot, 'new'));
+      mkdirSync(join(agentInboxRoot, 'new'), { recursive: true });
+      assertSafePath(root, join(agentInboxRoot, 'new'));
+
+      assertSafePath(root, join(agentInboxRoot, 'processing'));
+      mkdirSync(join(agentInboxRoot, 'processing'), { recursive: true });
+      assertSafePath(root, join(agentInboxRoot, 'processing'));
+
+      assertSafePath(root, join(agentInboxRoot, 'processed'));
+      mkdirSync(join(agentInboxRoot, 'processed'), { recursive: true });
+      assertSafePath(root, join(agentInboxRoot, 'processed'));
+
+      assertSafePath(root, agentQuarantineRoot);
+      mkdirSync(agentQuarantineRoot, { recursive: true });
+      assertSafePath(root, agentQuarantineRoot);
+
+      assertSafePath(root, agentStateRoot);
+      mkdirSync(agentStateRoot, { recursive: true });
+      assertSafePath(root, agentStateRoot);
+
       writeConfig(bus, testConfig);
       console.log(JSON.stringify({ added: id, agent: newAgent, config: testConfig }, null, 2));
     } catch (err) {
-      for (const dir of createdDirs.reverse()) {
-        try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore rollback error */ }
+      const rollbackErrors = [];
+      for (const dir of rollbackRoots) {
+        try {
+          if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+        } catch (rbErr) {
+          rollbackErrors.push(`Failed to remove ${dir}: ${rbErr.message}`);
+        }
+      }
+      if (rollbackErrors.length > 0) {
+        throw new Error(`Failed to register agent '${id}': ${err.message}. Rollback errors: ${rollbackErrors.join('; ')}`);
       }
       throw err;
     }

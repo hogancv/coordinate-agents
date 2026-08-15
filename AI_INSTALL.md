@@ -10,6 +10,7 @@ This is the canonical installation procedure for AI assistants installing
 ## Contents / 目录
 
 - [Canonical identity](#canonical-identity--官方身份)
+- [Architecture & Scope: Host Skill vs Project Agent](#architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理)
 - [Security rules](#security-rules--安全规则)
 - [Preflight checks](#preflight-checks--安装前检查)
 - [Install both agents](#install-both-agents--安装两个代理)
@@ -21,6 +22,23 @@ This is the canonical installation procedure for AI assistants installing
 - [Uninstall](#uninstall--卸载)
 - [Restore a backup](#restore-a-backup--恢复备份)
 - [Troubleshooting](#troubleshooting--故障排查)
+
+## Architecture & Scope: Host Skill vs Project Agent / 架构与范围：宿主技能与项目代理
+
+`coordinate-cli-agents` provides two distinct layers:
+
+1. **Host Skill Installation (User Environment)**:
+   - Installs the coordination skill into host CLI environments (OpenAI Codex CLI at `~/.codex/skills/coordinate-cli-agents` and/or Google Antigravity CLI at `~/.gemini/skills/coordinate-cli-agents`).
+   - These first-party CLI hosts act as default reference adapters for interactive AI workflows.
+
+2. **Project-Local Agent Registration & Protocol Runtime (Git Repository)**:
+   - A durable, serverless `.agent-bus` protocol engine in each Git project.
+   - Dynamic agents and custom tools can be registered into the project via `npx coordinate-cli-agents agent add <id> --adapter <adapter>`.
+   - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
+
+`coordinate-cli-agents` 包含两个不同层级：
+1. **宿主技能安装（用户环境）**：将技能安装到 Codex 与 Antigravity CLI 等宿主环境中，作为交互式默认参考适配器。
+2. **项目级代理注册与协议运行时（Git 仓库）**：在具体项目中通过 `.agent-bus` 协调多代理，可通过 `agent add` 注册任意 CLI/桌面代理，并灵活分配角色（规划者、实现者、审查者）。
 
 ## Canonical identity / 官方身份
 
