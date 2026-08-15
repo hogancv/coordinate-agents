@@ -4,9 +4,6 @@
 
 基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面级编程代理接入。
 
-> **更名与迁移提示 (Project Rename)**  
-> `coordinate-agents` 此前名为 `coordinate-cli-agents`。随着协调运行时演进至更广泛的代理协作生态，项目已正式更名。
-
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
 ## 60 秒快速开始
@@ -155,7 +152,7 @@ npx @hogancv/coordinate-agents@latest install
 ~/.gemini/skills/coordinate-agents
 ```
 
-安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装，包括旧版本 `coordinate-cli-agents` 受管目录。来源不明的目录在未明确提供 `--force` 时不会被覆盖；卸载已修改的副本同样必须显式使用 `--force`。
+安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装。来源不明的目录在未明确提供 `--force` 时不会被覆盖；卸载已修改的副本同样必须显式使用 `--force`。
 
 验证安装：
 

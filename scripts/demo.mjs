@@ -45,7 +45,7 @@ try {
   console.log(`queued: ${implement}`);
 
   step('ANTIGRAVITY', 'Claim message, implement, test, and commit');
-  const claimedByAgy = bus(['wait', '--role', 'antigravity', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
+  const claimedByAgy = bus(['wait', '--agent', 'antigravity', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
   console.log(`claimed: ${claimedByAgy}`);
   writeFileSync(join(repo, 'app.mjs'), "export function addTodo(items, title) { return [...items, { title, done: false }]; }\nexport function completeTodo(items, index) { return items.map((item, i) => i === index ? { ...item, done: true } : item); }\n");
   writeFileSync(join(repo, 'test', 'app.test.mjs'), "import assert from 'node:assert/strict'; import test from 'node:test'; import { addTodo, completeTodo } from '../app.mjs'; test('adds a todo', () => assert.equal(addTodo([], 'Ship')[0].title, 'Ship')); test('completes a todo', () => assert.equal(completeTodo(addTodo([], 'Ship'), 0)[0].done, true));\n");
@@ -61,7 +61,7 @@ try {
   console.log(`commit: ${commit.slice(0, 12)}`);
 
   step('CODEX', 'Claim result and review real commit plus validation evidence');
-  const claimedByCodex = bus(['wait', '--role', 'codex', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
+  const claimedByCodex = bus(['wait', '--agent', 'codex', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
   const reviewedCommit = run('git', ['rev-parse', 'HEAD']);
   assertEqual(reviewedCommit, commit, 'reviewed commit mismatch');
   run(process.execPath, ['--test']);
@@ -71,11 +71,11 @@ try {
   console.log('review: APPROVED');
 
   step('ANTIGRAVITY', 'Receive approval and stop editing');
-  const approval = bus(['wait', '--role', 'antigravity', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
+  const approval = bus(['wait', '--agent', 'antigravity', '--timeout-minutes', '1', '--poll-seconds', '0.01']);
   assertIncludes(readFileSync(approval, 'utf8'), 'REVIEW_APPROVED', 'approval message missing');
   bus(['complete', '--message-path', approval]);
-  bus(['state', '--role', 'codex', '--state', 'APPROVED', '--related-commit', commit]);
-  bus(['state', '--role', 'antigravity', '--state', 'WAITING', '--related-commit', commit]);
+  bus(['state', '--agent', 'codex', '--state', 'APPROVED', '--related-commit', commit]);
+  bus(['state', '--agent', 'antigravity', '--state', 'WAITING', '--related-commit', commit]);
 
   const status = JSON.parse(bus(['status']));
   assertEqual(status.states.codex.state, 'APPROVED', 'Codex did not approve');

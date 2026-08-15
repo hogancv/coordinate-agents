@@ -81,7 +81,7 @@ First confirm the worker process is gone; recovering active work can duplicate i
 
 ```sh
 node <skill>/scripts/agent-bus.mjs status --root <repo>
-node <skill>/scripts/agent-bus.mjs recover --role antigravity \
+node <skill>/scripts/agent-bus.mjs recover --agent antigravity \
   --stale-after-seconds 14400 --root <repo>
 ```
 

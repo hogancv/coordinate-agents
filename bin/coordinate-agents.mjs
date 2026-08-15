@@ -36,10 +36,8 @@ import {
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
 const skillName = 'coordinate-agents';
-const legacySkillName = 'coordinate-cli-agents';
 const payloadEntries = ['SKILL.md', 'adapters', 'agents', 'references', 'scripts'];
 const metadataFile = '.coordinate-agents.json';
-const legacyMetadataFile = '.coordinate-cli-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
 
 const messages = {
@@ -63,7 +61,6 @@ Options:
   --antigravity-home <p>  Override GEMINI_HOME (default: ~/.gemini)
   --root <path>           Project Git repository (default: current directory)
   --agent <id>            Launch or target agent ID (default: codex or antigravity)
-  --role <role>           (Alias for --agent) Launch role: codex or antigravity
   --planner <agent>       Workflow planner agent (default: codex)
   --implementer <agent>   Workflow implementer agent (default: antigravity)
   --reviewer <agent>      Workflow reviewer agent (default: codex)
@@ -110,15 +107,11 @@ Examples:
     unsafeBusPath: 'Refusing unsafe agent-bus path (symlink, junction, or outside repository): {path}',
     notGitRepo: 'Not a Git repository: {path}',
     badTemplate: 'Unsupported template: {template}. Use bug, feature, or refactor.',
-    badRole: 'Unsupported role: {role}. Use codex or antigravity.',
     badAgent: 'Unknown agent "{agent}". Ensure the agent is registered in .agent-bus/config.json.',
-    launchFailed: '{role} exited with status {status}.',
+    launchFailed: 'Agent {agent} exited with status {status}.',
     unknownCommand: 'Unknown command: {command}',
     missingValue: 'Missing value for {option}',
     badLanguage: 'Unsupported language: {language}',
-    legacyMigrated: 'Migrated legacy installation from {oldPath} to {newPath}',
-    legacyFound: '{target}: legacy installation found at {path}; migrate to {newPath} with: {command}',
-    legacyDuplicate: '{target}: duplicate legacy installation found at {path}',
   },
   zh: {
     usage: `coordinate-agents <命令> [选项]
@@ -140,7 +133,6 @@ Examples:
   --antigravity-home <p>  覆盖 GEMINI_HOME（默认：~/.gemini）
   --root <路径>           项目 Git 仓库（默认：当前目录）
   --agent <id>            启动或操作的 Agent ID
-  --role <角色>           （--agent 的别名）启动角色：codex 或 antigravity
   --planner <agent>       工作流规划者 Agent（默认：codex）
   --implementer <agent>   工作流实现者 Agent（默认：antigravity）
   --reviewer <agent>      工作流审查者 Agent（默认：codex）
@@ -187,15 +179,11 @@ Examples:
     unsafeBusPath: '拒绝使用不安全的 agent-bus 路径（符号链接、目录联接或仓库外路径）：{path}',
     notGitRepo: '不是 Git 仓库：{path}',
     badTemplate: '不支持的任务模板：{template}。请使用 bug、feature 或 refactor。',
-    badRole: '不支持的角色：{role}。请使用 codex 或 antigravity。',
     badAgent: '未知 Agent "{agent}"。请确保该 Agent 已在 .agent-bus/config.json 中注册。',
-    launchFailed: '{role} 退出，状态码 {status}。',
+    launchFailed: 'Agent {agent} 退出，状态码 {status}。',
     unknownCommand: '未知命令：{command}',
     missingValue: '选项缺少参数：{option}',
     badLanguage: '不支持的语言：{language}',
-    legacyMigrated: '已将旧版本安装从 {oldPath} 安全迁移至 {newPath}',
-    legacyFound: '{target}：发现旧版本安装（{path}），请运行以下命令迁移至 {newPath}：{command}',
-    legacyDuplicate: '{target}：发现重复的旧版本安装（{path}）',
   },
 };
 
@@ -216,7 +204,6 @@ function parseArgs(argv) {
     antigravityHomeBase64: null,
     root: process.cwd(),
     rootBase64: null,
-    role: null,
     agent: null,
     planner: null,
     implementer: null,
@@ -248,7 +235,7 @@ function parseArgs(argv) {
     else if (option === '--version') result.version = true;
     else if ([
       '--codex-home', '--antigravity-home', '--codex-home-base64', '--antigravity-home-base64',
-      '--root', '--root-base64', '--role', '--agent', '--planner', '--implementer', '--reviewer',
+      '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
       '--adapter', '--command', '--args', '--template', '--task', '--lang',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
@@ -259,13 +246,8 @@ function parseArgs(argv) {
       if (option === '--antigravity-home-base64') result.antigravityHomeBase64 = value;
       if (option === '--root') result.root = resolve(value);
       if (option === '--root-base64') result.rootBase64 = value;
-      if (option === '--role') {
-        const val = value.toLowerCase();
-        result.role = val;
-      }
       if (option === '--agent') {
-        const val = value.toLowerCase();
-        result.agent = val;
+        result.agent = value.toLowerCase();
       }
       if (option === '--planner') result.planner = value.toLowerCase();
       if (option === '--implementer') result.implementer = value.toLowerCase();
@@ -280,9 +262,6 @@ function parseArgs(argv) {
       throw new Error(`UNKNOWN_OPTION:${option}`);
     }
   }
-  if (result.agent && result.role && result.agent !== result.role) {
-    throw new Error(`Conflicting options: --agent "${result.agent}" and --role "${result.role}" must match.`);
-  }
   if (!result.codex && !result.antigravity) {
     result.codex = true;
     result.antigravity = true;
@@ -290,8 +269,6 @@ function parseArgs(argv) {
   if (result.rootBase64) result.root = resolve(Buffer.from(result.rootBase64, 'base64url').toString('utf8'));
   if (result.codexHomeBase64) result.codexHome = resolve(Buffer.from(result.codexHomeBase64, 'base64url').toString('utf8'));
   if (result.antigravityHomeBase64) result.antigravityHome = resolve(Buffer.from(result.antigravityHomeBase64, 'base64url').toString('utf8'));
-  if (!result.agent && result.role) result.agent = result.role;
-  if (!result.role && result.agent) result.role = result.agent;
   return result;
 }
 
@@ -351,21 +328,13 @@ function readMetadata(targetPath) {
       return null;
     }
   }
-  const legacyPath = join(targetPath, legacyMetadataFile);
-  if (existsSync(legacyPath)) {
-    try {
-      return JSON.parse(readFileSync(legacyPath, 'utf8'));
-    } catch {
-      return null;
-    }
-  }
   return null;
 }
 
 function hasExpectedManagedIdentity(metadata, expectedManifest) {
   return Boolean(
     metadata
-    && (metadata.package === packageJson.name || metadata.package === '@hogancv/coordinate-cli-agents')
+    && metadata.package === packageJson.name
     && typeof metadata.version === 'string'
     && metadata.version.length > 0
     && typeof metadata.installedAt === 'string'
@@ -388,7 +357,7 @@ function hasExpectedManagedIdentity(metadata, expectedManifest) {
 function isRecognizedManagedInstallation(targetPath) {
   if (!existsSync(targetPath)) return false;
   const metadata = readMetadata(targetPath);
-  if (!metadata || (metadata.package !== packageJson.name && metadata.package !== '@hogancv/coordinate-cli-agents')) {
+  if (!metadata || metadata.package !== packageJson.name) {
     return false;
   }
   if (!metadata.manifest || typeof metadata.manifest !== 'object' || Array.isArray(metadata.manifest)) {
@@ -401,7 +370,7 @@ function isRecognizedManagedInstallation(targetPath) {
     const filePath = join(targetPath, file);
     if (!existsSync(filePath) || !statSync(filePath).isFile() || hashFile(filePath) !== hash) return false;
   }
-  const allowed = new Set([...Object.keys(metadata.manifest), metadataFile, legacyMetadataFile]);
+  const allowed = new Set([...Object.keys(metadata.manifest), metadataFile]);
   const diskFiles = walkFiles(targetPath);
   return diskFiles.every(file => allowed.has(file));
 }
@@ -451,11 +420,9 @@ function installTarget(target, expectedManifest, options, t) {
     return;
   }
 
-  const legacyPath = join(dirname(target.path), legacySkillName);
   const prior = verifyTarget(target.path, expectedManifest);
-  const hasLegacy = existsSync(legacyPath) && resolve(legacyPath) !== targetResolved;
 
-  if (prior.ok && prior.version === packageJson.version && !hasLegacy) {
+  if (prior.ok && prior.version === packageJson.version) {
     console.log(format(t.current, { target: target.name, path: target.path }));
     return;
   }
@@ -463,13 +430,6 @@ function installTarget(target, expectedManifest, options, t) {
   const unmanagedGitCheckout = existsSync(join(target.path, '.git'));
   if (existsSync(target.path) && !hasExpectedManagedIdentity(readMetadata(target.path), expectedManifest) && (unmanagedGitCheckout || !payloadMatches(target.path, expectedManifest)) && !options.force) {
     throw new Error(format(t.skipRemove, { target: target.name, path: target.path }));
-  }
-
-  let shouldMigrateLegacy = false;
-  if (hasLegacy) {
-    if (isRecognizedManagedInstallation(legacyPath) || options.force) {
-      shouldMigrateLegacy = true;
-    }
   }
 
   mkdirSync(dirname(target.path), { recursive: true });
@@ -498,11 +458,6 @@ function installTarget(target, expectedManifest, options, t) {
       throw error;
     }
 
-    if (hasLegacy && shouldMigrateLegacy && existsSync(legacyPath)) {
-      removePath(legacyPath);
-      console.log(format(t.legacyMigrated, { oldPath: legacyPath, newPath: target.path }));
-    }
-
     console.log(format(prior.missing ? t.installed : t.updated, { target: target.name, path: target.path }));
   } finally {
     removePath(staging);
@@ -512,7 +467,7 @@ function installTarget(target, expectedManifest, options, t) {
 function isIntactManagedInstallation(targetPath, expectedManifest) {
   const metadata = readMetadata(targetPath);
   if (!hasExpectedManagedIdentity(metadata, expectedManifest) || !payloadMatches(targetPath, expectedManifest)) return false;
-  const allowed = new Set([...Object.keys(expectedManifest), metadataFile, legacyMetadataFile]);
+  const allowed = new Set([...Object.keys(expectedManifest), metadataFile]);
   return walkFiles(targetPath).every(file => allowed.has(file));
 }
 
@@ -562,8 +517,7 @@ function repairCommands() {
 
 function packageCommand(command, options) {
   let result = `npx --yes ${packageJson.name}@${packageJson.version} ${command}`;
-  if (options.role) result += ` --role ${options.role}`;
-  else if (options.agent) result += ` --agent ${options.agent}`;
+  if (options.agent) result += ` --agent ${options.agent}`;
   if (options.root) result += ` --root-base64 ${Buffer.from(options.root, 'utf8').toString('base64url')}`;
   if (options.language) result += ` --lang ${options.language === 'zh' ? 'zh-CN' : options.language}`;
   return result;
@@ -773,8 +727,8 @@ function quickstart(options, t, language) {
   console.log(format(t.promptsWritten, { path: launchDir }));
 
   if (planner === 'codex' && implementer === 'antigravity' && reviewer === 'codex') {
-    console.log(`\n${t.codexCommand}\n${packageCommand('launch', { ...base, role: 'codex' })}`);
-    console.log(`\n${t.antigravityCommand}\n${packageCommand('launch', { ...base, role: 'antigravity' })}`);
+    console.log(`\n${t.codexCommand}\n${packageCommand('launch', { ...base, agent: 'codex' })}`);
+    console.log(`\n${t.antigravityCommand}\n${packageCommand('launch', { ...base, agent: 'antigravity' })}`);
   } else {
     for (const [agentId, rolesSet] of agentRolesMap.entries()) {
       const rolesLabel = [...rolesSet].join(', ');
@@ -803,13 +757,8 @@ function runLaunchChild(resolved, root, setActiveChild) {
 }
 
 async function launchRole(options, t) {
-  const agentOption = options.agent;
-  const roleOption = options.role;
-  if (agentOption && roleOption && agentOption !== roleOption) {
-    throw new Error(`Conflicting options: --agent "${agentOption}" and --role "${roleOption}" must match.`);
-  }
-  const agentId = agentOption || roleOption;
-  if (!agentId) throw new Error(format(t.badRole, { role: '' }));
+  const agentId = options.agent;
+  if (!agentId) throw new Error(format(t.badAgent, { agent: '' }));
   validateAgentId(agentId);
 
   const root = assertGitRepository(options.root, t);
@@ -867,6 +816,7 @@ async function launchRole(options, t) {
       const resolved = adapter.resolveLaunch({
         root,
         prompt: activationPrompt,
+        agent: agentId,
         role: agentId,
         language: options.language,
         activation,
@@ -878,7 +828,7 @@ async function launchRole(options, t) {
       }
       if (result.status !== 0) {
         const status = result.status ?? result.signal ?? 'unknown';
-        throw new Error(format(t.launchFailed, { role: agentId, status }));
+        throw new Error(format(t.launchFailed, { agent: agentId, status }));
       }
       if (!supervised) return;
 
@@ -1040,34 +990,15 @@ async function run(argv) {
       }
     }
     for (const target of selectedTargets) {
-      const legacyPath = join(dirname(target.path), legacySkillName);
       const result = verifyTarget(target.path, expectedManifest);
       if (result.missing) {
-        if (existsSync(legacyPath) && isRecognizedManagedInstallation(legacyPath)) {
-          healthy = false;
-          console.error(format(t.legacyFound, {
-            target: target.name,
-            path: legacyPath,
-            newPath: target.path,
-            command: targetRepairCommand('install', target, options),
-          }));
-          console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
-        } else {
-          healthy = false;
-          console.error(format(t.missing, { target: target.name, path: target.path }));
-          console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
-        }
+        healthy = false;
+        console.error(format(t.missing, { target: target.name, path: target.path }));
+        console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
       } else {
         found = true;
         if (result.ok) {
           console.log(format(t.healthy, { target: target.name, version: result.version, path: target.path }));
-          if (existsSync(legacyPath) && resolve(legacyPath) !== resolve(target.path)) {
-            if (isRecognizedManagedInstallation(legacyPath)) {
-              healthy = false;
-              console.error(format(t.legacyDuplicate, { target: target.name, path: legacyPath }));
-              console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
-            }
-          }
         } else {
           healthy = false;
           console.error(format(t.invalid, { target: target.name, details: result.details, path: target.path }));
@@ -1084,7 +1015,6 @@ async function run(argv) {
 
   if (options.command === 'uninstall') {
     for (const target of selectedTargets) {
-      const legacyPath = join(dirname(target.path), legacySkillName);
       if (existsSync(target.path)) {
         if (!isIntactManagedInstallation(target.path, expectedManifest) && !options.force) {
           console.error(format(t.skipRemove, { target: target.name, path: target.path }));
@@ -1093,15 +1023,6 @@ async function run(argv) {
         }
         removePath(target.path);
         console.log(format(t.removed, { target: target.name, path: target.path }));
-      }
-      if (existsSync(legacyPath) && resolve(legacyPath) !== resolve(target.path)) {
-        if (!isRecognizedManagedInstallation(legacyPath) && !options.force) {
-          console.error(format(t.skipRemove, { target: `${target.name} (legacy)`, path: legacyPath }));
-          process.exitCode = 1;
-          continue;
-        }
-        removePath(legacyPath);
-        console.log(format(t.removed, { target: `${target.name} (legacy)`, path: legacyPath }));
       }
     }
     return;

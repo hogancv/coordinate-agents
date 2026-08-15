@@ -49,15 +49,10 @@ function requireValue(options, name) {
 
 function resolveAgentOption(options, required = false) {
   const agent = options.agent;
-  const role = options.role;
-  if (agent && role && agent !== role) {
-    throw new Error(`Conflicting options: --agent "${agent}" and --role "${role}" must match.`);
+  if (required && !agent) {
+    throw new Error(`--agent is required for ${options.command}.`);
   }
-  const selected = agent || role;
-  if (required && !selected) {
-    throw new Error(`--agent (or --role) is required for ${options.command}.`);
-  }
-  return selected;
+  return agent;
 }
 
 function positiveNumber(value, name, fallback) {
@@ -359,7 +354,7 @@ async function wait(options, bus) {
   const agent = resolveAgentOption(options, true);
   const registered = getRegisteredAgentIds(bus);
   if (!registered.has(agent)) {
-    throw new Error(`--agent (or --role) must be a registered agent. Given: "${agent}". Registered agents: ${[...registered].join(', ')}.`);
+    throw new Error(`--agent must be a registered agent. Given: "${agent}". Registered agents: ${[...registered].join(', ')}.`);
   }
   const timeoutMinutes = positiveNumber(options.timeoutMinutes, 'timeout-minutes', 120);
   const pollSeconds = positiveNumber(options.pollSeconds, 'poll-seconds', 5);
@@ -408,8 +403,8 @@ function complete(options, bus) {
   if (normalizedRelative.startsWith('..') || isAbsolute(normalizedRelative) || parts.length !== 3 || !registered.has(parts[0]) || parts[1] !== 'processing' || !parts[2]?.endsWith('.md')) {
     throw new Error('Message path must be a file in this bus processing directory.');
   }
-  const roleDirectory = dirname(dirname(messagePath));
-  const destination = join(roleDirectory, 'processed', basename(messagePath));
+  const agentDirectory = dirname(dirname(messagePath));
+  const destination = join(agentDirectory, 'processed', basename(messagePath));
   if (!existsSync(messagePath) && existsSync(destination)) {
     console.log(resolve(destination));
     return;

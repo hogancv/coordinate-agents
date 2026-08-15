@@ -2,10 +2,7 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI agents can be registered dynamically and desktop agents are supportable via the adapter extension model.
-
-> **Note on Project Rename / 迁移提示**  
-> `coordinate-agents` was previously known as `coordinate-cli-agents`. The project was renamed as its coordination runtime evolved beyond CLI-specific agents into a broader agent coordination system.
+A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, with an extension model for custom and desktop agents.
 
 No CAO server, daemon, database, or shared API credential is required.
 
@@ -155,7 +152,7 @@ The installer copies a permanent skill payload to:
 ~/.gemini/skills/coordinate-agents
 ```
 
-It does **not** link either location to the temporary npm cache. Existing package-managed installations, including legacy `coordinate-cli-agents` managed copies, are safely migrated and backed up before replacement. An unrecognized directory is preserved unless you explicitly pass `--force`; uninstall also refuses a modified copy unless explicitly forced.
+It does **not** link either location to the temporary npm cache. Existing package-managed installations are safely backed up before replacement. An unrecognized directory is preserved unless you explicitly pass `--force`; uninstall also refuses a modified copy unless explicitly forced.
 
 Verify the installation:
 

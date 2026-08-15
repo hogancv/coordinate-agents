@@ -1,12 +1,18 @@
 ---
 name: coordinate-agents
 description: >-
-  Coordinate OpenAI Codex CLI and Google Antigravity CLI (agy) for multi-agent collaboration in the same Git repository. Use when the user wants Codex to clarify requirements, write a specification, review commits, or enforce a release gate while Antigravity exclusively performs implementation; also use to install, diagnose, resume, recover, update, or uninstall this workflow and its recoverable `.agent-bus`. Do not use for single-agent coding tasks, general Codex-versus-Antigravity comparisons, or workflows where both agents may edit product code.
+  Coordinate multiple AI coding agents in the same Git repository through a
+  local-first, recoverable Agent Bus. Use for structured multi-agent workflows,
+  role-based planning, implementation and review, durable handoffs, recovery,
+  adapter-backed agent execution, and human-gated releases. Codex CLI and
+  Google Antigravity CLI are the default first-party reference adapters.
+  Do not use for ordinary single-agent tasks or unsafe concurrent writes to the
+  same worktree.
 ---
 
 # Coordinate Agents
 
-A local-first coordination protocol and runtime for AI coding agents in a Git repository. Codex CLI and Antigravity CLI serve as the default first-party reference workflow. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
+A local-first coordination protocol and runtime for AI coding agents in a Git repository. Codex CLI and Antigravity CLI serve as the default first-party reference adapters and reference workflow. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
 
 ## Quick-start a collaboration
 
@@ -16,7 +22,7 @@ When asked to set up collaboration, run the package CLI rather than asking the u
 npx @hogancv/coordinate-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
 ```
 
-Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>` and `--implementer <agent>`. Read `references/task-templates.md` for task structure guidelines.
+Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>`, `--implementer <agent>`, or `--reviewer <agent>`. Read `references/task-templates.md` for task structure guidelines.
 
 Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
 
@@ -89,7 +95,7 @@ Update the current agent's state:
 node "<bus-tool>" state --root "<repository-root>" --agent antigravity --state WAITING --details "Waiting for review"
 ```
 
-Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`, `REVIEWING`, `CHANGES_REQUESTED`, `APPROVED`, `RELEASING`, `STOPPED`, and `ERROR`. (`--role` is accepted as a backward-compatible alias for `--agent`).
+Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`, `REVIEWING`, `CHANGES_REQUESTED`, `APPROVED`, `RELEASING`, `STOPPED`, and `ERROR`.
 
 ## Collaboration loop
 

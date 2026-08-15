@@ -11,22 +11,19 @@ test('skill description carries explicit discovery triggers and exclusions', () 
   const skill = read('SKILL.md');
   const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
   for (const value of [
-    'OpenAI Codex CLI',
-    'Google Antigravity CLI (agy)',
-    'multi-agent collaboration',
-    'specification',
-    'implementation',
-    'review commits',
-    'release gate',
-    'install',
-    'diagnose',
-    'resume',
+    'coordinate-agents',
+    'multi-agent',
+    'Agent Bus',
+    'role-based',
+    'adapters',
     'recover',
-    'update',
-    'uninstall',
+    'review',
+    'release',
+    'Codex CLI',
+    'Google Antigravity CLI',
   ]) assert.ok(frontmatter.includes(value), `SKILL.md description is missing ${value}`);
-  assert.match(frontmatter, /Do not use for single-agent coding tasks/);
-  assert.match(frontmatter, /both agents may edit product code/);
+  assert.match(frontmatter, /Do not use for ordinary single-agent tasks/);
+  assert.match(frontmatter, /unsafe concurrent writes to the\s+same worktree/);
 });
 
 test('AI installation guide defines canonical identity and the complete safe lifecycle', () => {
@@ -46,7 +43,7 @@ test('AI installation guide defines canonical identity and the complete safe lif
     '~/.codex/skills/coordinate-agents',
     '~/.gemini/skills/coordinate-agents',
     'coordinate-agents.backup-',
-    '## Upgrade & Migration / 更新与迁移',
+    '## Upgrade / 更新',
     '## Uninstall / 卸载',
     '## Restore a backup / 恢复备份',
     '## Troubleshooting / 故障排查',
@@ -273,3 +270,90 @@ test('canonical index, site pages, and demo prose distinguish runtime protocol f
   const demoTranscript = read(join('assets', 'demo-transcript.txt'));
   assert.match(demoTranscript, /Default reference workflow/i);
 });
+
+test('repository contains zero stale legacy identity references', () => {
+  const stalePatterns = [
+    'coordinate-cli-agents',
+    '@hogancv/coordinate-cli-agents',
+    'Coordinate CLI Agents',
+    'hogancv/coordinate-cli-agents',
+    'hogancv.github.io/coordinate-cli-agents',
+  ];
+  const files = [
+    'package.json',
+    'package-lock.json',
+    'SKILL.md',
+    'AI_INSTALL.md',
+    'README.md',
+    'README.zh-CN.md',
+    'SECURITY.md',
+    'AGENTS.md',
+    'llms.txt',
+    'docs/llms.txt',
+    'docs/_config.yml',
+    'docs/index.md',
+    'docs/getting-started.md',
+    'docs/install-with-ai.md',
+    'docs/codex-cli.md',
+    'docs/antigravity-cli.md',
+    'docs/protocol.md',
+    'docs/security.md',
+    'docs/troubleshooting.md',
+    'docs/comparison.md',
+    'docs/faq.md',
+    'docs/zh-CN/index.md',
+    'references/protocol.md',
+    'references/task-templates.md',
+    'bin/coordinate-agents.mjs',
+    'scripts/agent-bus.mjs',
+    'scripts/config.mjs',
+    'scripts/agent-observer.mjs',
+    'scripts/demo.mjs',
+    'scripts/sync-llms.mjs',
+    'adapters/index.mjs',
+    'adapters/base.mjs',
+    'adapters/codex-cli.mjs',
+    'adapters/antigravity-cli.mjs',
+    'adapters/generic-cli.mjs',
+    'agents/openai.yaml',
+  ];
+  for (const file of files) {
+    const content = read(file);
+    for (const pattern of stalePatterns) {
+      assert.equal(
+        content.includes(pattern),
+        false,
+        `Found stale pattern "${pattern}" in ${file}`
+      );
+    }
+  }
+});
+
+test('documentation forbids unscoped npx coordinate-agents invocations', () => {
+  const docs = [
+    'README.md',
+    'README.zh-CN.md',
+    'AI_INSTALL.md',
+    'SKILL.md',
+    'docs/index.md',
+    'docs/getting-started.md',
+    'docs/install-with-ai.md',
+    'docs/codex-cli.md',
+    'docs/antigravity-cli.md',
+    'docs/protocol.md',
+    'docs/security.md',
+    'docs/troubleshooting.md',
+    'docs/comparison.md',
+    'docs/faq.md',
+    'docs/zh-CN/index.md',
+  ];
+  for (const doc of docs) {
+    const content = read(doc);
+    assert.doesNotMatch(
+      content,
+      /npx (?!@hogancv\/)coordinate-agents\b/,
+      `Unscoped "npx coordinate-agents" found in ${doc}; must use "npx @hogancv/coordinate-agents"`
+    );
+  }
+});
+

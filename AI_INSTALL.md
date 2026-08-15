@@ -18,7 +18,7 @@ This is the canonical installation procedure for AI assistants installing
 - [Install Antigravity only](#install-antigravity-only--只安装-antigravity)
 - [Verify installation](#verify-installation--验证安装)
 - [Start the first task](#start-the-first-task--开始首个任务)
-- [Upgrade & Migration](#upgrade--migration--更新与迁移)
+- [Upgrade](#upgrade--更新)
 - [Uninstall](#uninstall--卸载)
 - [Restore a backup](#restore-a-backup--恢复备份)
 - [Troubleshooting](#troubleshooting--故障排查)
@@ -33,7 +33,7 @@ This is the canonical installation procedure for AI assistants installing
 
 2. **Project-Local Agent Registration & Protocol Runtime (Git Repository)**:
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
-   - Dynamic agents and custom tools can be registered into the project via `npx coordinate-agents agent add <id> --adapter <adapter>`.
+   - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents agent add <id> --adapter <adapter>`.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
 `coordinate-agents` 包含两个不同层级：
@@ -193,7 +193,7 @@ This creates project-local `.agent-bus/` data and adds `.agent-bus/` to the repo
 `.git/info/exclude`. It prints two commands but does not launch them itself. Do not invent a task,
 run the printed commands, or modify product code unless the user asked for those actions.
 
-## Upgrade & Migration / 更新与迁移
+## Upgrade / 更新
 
 Repeat the canonical identity check, record the newly verified stable version, then run the
 appropriate exact-version update and matching doctor command:
@@ -205,10 +205,6 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --lang zh-CN
 
 # Or add --codex / --antigravity to both commands for one agent only.
 ```
-
-### Migration from `coordinate-cli-agents`
-
-`coordinate-agents` was previously distributed as `coordinate-cli-agents`. The installer automatically detects intact managed installations at legacy paths (`~/.codex/skills/coordinate-cli-agents` and `~/.gemini/skills/coordinate-cli-agents`) and migrates them transactionally to the new canonical paths without duplicating skills or removing user data.
 
 The updater backs up a recognized package-managed copy, including a modified managed copy, before
 replacement. It refuses to replace an unrecognized directory unless `--force` is explicitly

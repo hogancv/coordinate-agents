@@ -183,11 +183,12 @@ test('documents a 60-second path and three first-use task templates', () => {
   assert.match(chinese, /不再需要手动复制或维护两段角色提示词/);
 });
 
-test('package.json provides canonical bin and backwards compatible alias', () => {
+test('package.json provides canonical bin only', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
+  assert.equal(packageJson.version, '2.1.0');
+  assert.deepEqual(Object.keys(packageJson.bin), ['coordinate-agents']);
   assert.equal(packageJson.bin['coordinate-agents'], 'bin/coordinate-agents.mjs');
-  assert.equal(packageJson.bin['coordinate-cli-agents'], 'bin/coordinate-agents.mjs');
 });
 
 test('installs, verifies, detects modification, updates and uninstalls both targets', () => {
@@ -237,57 +238,6 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
     assert.equal(uninstall.status, 0, uninstall.stderr);
     assert.equal(existsSync(codexTarget), false);
     assert.equal(existsSync(agyTarget), false);
-  } finally {
-    rmSync(sandbox, { recursive: true, force: true });
-  }
-});
-
-test('transactionally migrates intact legacy coordinate-cli-agents installations', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-legacy-migrate-'));
-  const codexHome = join(sandbox, 'codex');
-  const legacyTarget = join(codexHome, 'skills', 'coordinate-cli-agents');
-  const canonicalTarget = join(codexHome, 'skills', 'coordinate-agents');
-  const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
-  const doctorEnv = fakeCliEnvironment(sandbox);
-
-  try {
-    // 1. Manually scaffold an intact legacy installation
-    mkdirSync(legacyTarget, { recursive: true });
-    const skillContent = readFileSync(join(root, 'SKILL.md'), 'utf8');
-    writeFileSync(join(legacyTarget, 'SKILL.md'), skillContent, 'utf8');
-    const skillHash = createHash('sha256').update(skillContent).digest('hex');
-
-    writeFileSync(join(legacyTarget, '.coordinate-cli-agents.json'), JSON.stringify({
-      package: '@hogancv/coordinate-cli-agents',
-      version: '1.0.0',
-      installedAt: '2026-08-01T00:00:00.000Z',
-      manifest: {
-        'SKILL.md': skillHash,
-      },
-    }, null, 2), 'utf8');
-
-    // 2. Doctor should detect legacy installation and provide migration advice
-    const legacyDoc = invoke(['doctor', ...common], doctorEnv);
-    assert.equal(legacyDoc.status, 1);
-    assert.match(legacyDoc.stderr, /legacy installation found/);
-    assert.match(legacyDoc.stderr, /Fix:.*install.*--codex/);
-
-    // 3. Running install should migrate transactionally to coordinate-agents and remove legacy directory
-    const installResult = invoke(['install', ...common]);
-    assert.equal(installResult.status, 0, installResult.stderr);
-    assert.match(installResult.stdout, /Migrated legacy.*coordinate-cli-agents/);
-
-    // Canonical exists and is healthy
-    assert.equal(existsSync(canonicalTarget), true);
-    assert.equal(existsSync(join(canonicalTarget, 'SKILL.md')), true);
-    assert.equal(existsSync(join(canonicalTarget, '.coordinate-agents.json')), true);
-
-    // Legacy directory was cleaned up to avoid duplicate active skills
-    assert.equal(existsSync(legacyTarget), false);
-
-    // Doctor is now completely healthy
-    const healthy = invoke(['doctor', ...common], doctorEnv);
-    assert.equal(healthy.status, 0, healthy.stderr);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }
@@ -391,8 +341,8 @@ test('quickstart initializes the bus and generates two launch commands from a ta
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Codex terminal \(copy and run\)/);
     assert.match(result.stdout, /Antigravity terminal \(copy and run\)/);
-    assert.match(result.stdout, /launch.*--role.*codex/s);
-    assert.match(result.stdout, /launch.*--role.*antigravity/s);
+    assert.match(result.stdout, /launch.*--agent.*codex/s);
+    assert.match(result.stdout, /launch.*--agent.*antigravity/s);
     assert.match(result.stdout, /--root-base64 [A-Za-z0-9_-]+/);
     assert.equal(result.stdout.includes(`--root '${sandbox}'`), false);
 
@@ -469,7 +419,7 @@ test('launch passes the generated prompt and repository to Codex without shell i
     assert.equal(quickstartResult.status, 0, quickstartResult.stderr);
     const prompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'codex.txt'), 'utf8').trim();
 
-    const launched = invoke(['launch', '--role', 'codex', '--root', sandbox, '--lang', 'en'], {
+    const launched = invoke(['launch', '--agent', 'codex', '--root', sandbox, '--lang', 'en'], {
       ...fakeCodexLauncher(sandbox),
       CAPTURE: capture,
     });
@@ -810,14 +760,14 @@ test('quickstart rejects unregistered agents in workflow roles', () => {
   }
 });
 
-test('launch rejects conflicting --agent and --role values', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-conflict-test-'));
+test('launch rejects unknown --role option', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-role-reject-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
-    const result = invoke(['launch', '--agent', 'codex', '--role', 'antigravity', '--root', sandbox]);
+    const result = invoke(['launch', '--role', 'codex', '--root', sandbox]);
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /Conflicting options: --agent.*and --role.*must match/);
+    assert.match(result.stderr, /Unknown option: --role/);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
   }
