@@ -47,7 +47,7 @@ function fakeAgentDoctorEnvironment(rootPath, names) {
     if (process.platform === 'win32') {
       const script = join(bin, `${name}.cjs`);
       writeFileSync(script, "console.log('test-fixture-1.0.0');\n", 'utf8');
-      writeFileSync(join(bin, `${name}.cmd`), `@node "${script}" %*\r\n`, 'utf8');
+      writeFileSync(join(bin, `${name}.cmd`), `@"${process.execPath}" "${script}" %*\r\n`, 'utf8');
     } else {
       const path = join(bin, name);
       writeFileSync(path, "#!/bin/sh\necho test-fixture-1.0.0\n", 'utf8');
