@@ -8,7 +8,7 @@ version before reporting a problem that may already be fixed.
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting or a private Security Advisory for
-[`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents/security/advisories/new).
+[`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents/security/advisories/new).
 Include the affected version, operating system, minimal reproduction, impact, and any proposed
 mitigation. Do not include real credentials, private repository contents, or unrelated
 `.agent-bus` data.
@@ -20,16 +20,16 @@ security contact. Do not publish exploit details or secrets in a public issue.
 
 The only official identities are:
 
-- Repository: `https://github.com/hogancv/coordinate-cli-agents`
-- npm package: `@hogancv/coordinate-cli-agents`
+- Repository: `https://github.com/hogancv/coordinate-agents`
+- npm package: `@hogancv/coordinate-agents`
 
 Follow [`AI_INSTALL.md`](./AI_INSTALL.md). Verify the owner, package metadata, and stable version
 before installation. Do not use a third-party mirror, fork, repackaged archive, unknown installer,
 or `curl | sh`. The installer never needs an account token, cookie, password, private key, browser
 profile, or recovery code. Report any request for those values as suspicious.
 
-The installer writes selected skill copies under `~/.codex/skills/coordinate-cli-agents` and/or
-`~/.gemini/skills/coordinate-cli-agents`, plus sibling backups during managed updates. It refuses
+The installer writes selected skill copies under `~/.codex/skills/coordinate-agents` and/or
+`~/.gemini/skills/coordinate-agents`, plus sibling backups during managed updates. It refuses
 to overwrite or remove unrecognized directories unless the user explicitly chooses `--force`.
 Run `doctor` after installation and treat any non-zero result as a failure.
 

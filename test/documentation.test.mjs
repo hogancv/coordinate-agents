@@ -32,8 +32,8 @@ test('skill description carries explicit discovery triggers and exclusions', () 
 test('AI installation guide defines canonical identity and the complete safe lifecycle', () => {
   const guide = read('AI_INSTALL.md');
   for (const value of [
-    'https://github.com/hogancv/coordinate-cli-agents',
-    '@hogancv/coordinate-cli-agents',
+    'https://github.com/hogancv/coordinate-agents',
+    '@hogancv/coordinate-agents',
     'GitHub owner',
     'dist-tags.latest',
     'node --version',
@@ -43,10 +43,10 @@ test('AI installation guide defines canonical identity and the complete safe lif
     'doctor --lang zh-CN',
     'doctor --codex --lang zh-CN',
     'doctor --antigravity --lang zh-CN',
-    '~/.codex/skills/coordinate-cli-agents',
-    '~/.gemini/skills/coordinate-cli-agents',
-    'coordinate-cli-agents.backup-',
-    '## Upgrade / 更新',
+    '~/.codex/skills/coordinate-agents',
+    '~/.gemini/skills/coordinate-agents',
+    'coordinate-agents.backup-',
+    '## Upgrade & Migration / 更新与迁移',
     '## Uninstall / 卸载',
     '## Restore a backup / 恢复备份',
     '## Troubleshooting / 故障排查',
@@ -67,7 +67,7 @@ test('both READMEs expose three AI installation prompts beside quick start', () 
     assert.match(document, /AI_INSTALL\.md/);
     assert.match(document, /doctor --codex/);
     assert.match(document, /doctor --antigravity/);
-    assert.match(document, /hogancv\/coordinate-cli-agents/);
+    assert.match(document, /hogancv\/coordinate-agents/);
   }
   assert.match(english, /Do not use a third-party fork, request credentials/);
   assert.match(chinese, /不要使用第三方 Fork，不要索取凭据/);
@@ -77,7 +77,7 @@ test('README FAQ answers natural-language discovery questions', () => {
   const english = read('README.md');
   const chinese = read('README.zh-CN.md');
   for (const question of [
-    'What is coordinate-cli-agents?',
+    'What is coordinate-agents?',
     'How do I coordinate Codex CLI and Antigravity CLI?',
     'How do I use two coding agents in one Git repository?',
     'How does it prevent two AI agents from editing code simultaneously?',
@@ -85,9 +85,9 @@ test('README FAQ answers natural-language discovery questions', () => {
     'What are the Codex CLI vs Antigravity CLI roles?',
     'How do I recover interrupted multi-agent coding work?',
     'Is `.agent-bus` secure?',
-    'How do I uninstall coordinate-cli-agents?',
+    'How do I uninstall coordinate-agents?',
   ]) assert.ok(english.includes(`### ${question}`), `README FAQ is missing ${question}`);
-  assert.match(english, /https:\/\/github\.com\/hogancv\/coordinate-cli-agents/);
+  assert.match(english, /https:\/\/github\.com\/hogancv\/coordinate-agents/);
   assert.match(english, /AI_INSTALL\.md/);
   assert.match(english, /SECURITY\.md/);
   for (const phrase of [
@@ -96,7 +96,7 @@ test('README FAQ answers natural-language discovery questions', () => {
     '如何防止两个 AI 代理同时修改代码？',
     '如何从 npm 安装 Codex Skill？',
     '如何恢复被中断的多代理开发工作？',
-    '如何卸载 coordinate-cli-agents？',
+    '如何卸载 coordinate-agents？',
   ]) assert.ok(chinese.includes(phrase), `Chinese README FAQ is missing ${phrase}`);
 });
 
@@ -120,20 +120,20 @@ test('documentation site exposes stable task-focused pages and canonical metadat
   }
   const config = read(join('docs', '_config.yml'));
   assert.match(config, /url: https:\/\/hogancv\.github\.io/);
-  assert.match(config, /baseurl: \/coordinate-cli-agents/);
+  assert.match(config, /baseurl: \/coordinate-agents/);
   assert.match(config, /jekyll-sitemap/);
-  assert.match(read(join('docs', 'index.md')), /https:\/\/github\.com\/hogancv\/coordinate-cli-agents/);
+  assert.match(read(join('docs', 'index.md')), /https:\/\/github\.com\/hogancv\/coordinate-agents/);
 });
 
 test('published llms index is canonical, synchronized, and points to rendered documentation', () => {
   const canonical = read(join('docs', 'llms.txt'));
   assert.equal(read('llms.txt'), canonical);
   for (const url of [
-    'https://hogancv.github.io/coordinate-cli-agents/',
-    'https://hogancv.github.io/coordinate-cli-agents/getting-started.html',
-    'https://hogancv.github.io/coordinate-cli-agents/install-with-ai.html',
-    'https://hogancv.github.io/coordinate-cli-agents/security.html',
-    'https://hogancv.github.io/coordinate-cli-agents/faq.html',
+    'https://hogancv.github.io/coordinate-agents/',
+    'https://hogancv.github.io/coordinate-agents/getting-started.html',
+    'https://hogancv.github.io/coordinate-agents/install-with-ai.html',
+    'https://hogancv.github.io/coordinate-agents/security.html',
+    'https://hogancv.github.io/coordinate-agents/faq.html',
   ]) assert.ok(canonical.includes(url), `docs/llms.txt is missing ${url}`);
   assert.match(read(join('docs', 'index.md')), /\[Machine-readable documentation index\]\(\.\/llms\.txt\)/);
 });
@@ -151,7 +151,7 @@ test('evidence-focused docs contain complete workflows, comparison, and concrete
     assert.ok(install.includes(evidence), `install-with-ai is missing ${evidence}`);
   }
   const comparison = read(join('docs', 'comparison.md'));
-  for (const evidence of ['Single agent', 'Manual dual terminals', '`coordinate-cli-agents`',
+  for (const evidence of ['Single agent', 'Manual dual terminals', '`coordinate-agents`',
     'Configured Implementer', 'Configured Reviewer', 'Local persistent `.agent-bus`',
     'Exact user authorization', 'Do not use this project when']) {
     assert.ok(comparison.includes(evidence), `comparison is missing ${evidence}`);
@@ -176,7 +176,7 @@ test('repository AI, security, and machine index files have distinct documented 
   assert.match(agents, /RELEASE_APPROVED/);
   assert.match(security, /private vulnerability reporting/i);
   assert.match(security, /\.agent-bus\/.*local plaintext/s);
-  assert.match(llms, /Canonical repository: https:\/\/github\.com\/hogancv\/coordinate-cli-agents/);
+  assert.match(llms, /Canonical repository: https:\/\/github\.com\/hogancv\/coordinate-agents/);
   assert.match(llms, /AI_INSTALL\.md/);
 });
 
@@ -189,7 +189,7 @@ test('npm package carries machine installation and security documentation', () =
 });
 
 test('doctor never pipes a downloaded Antigravity installer directly into a shell', () => {
-  const cli = read(join('bin', 'coordinate-cli-agents.mjs'));
+  const cli = read(join('bin', 'coordinate-agents.mjs'));
   assert.doesNotMatch(cli, /install\.(?:sh|ps1)['"]?\s*\|\s*(?:bash|sh|iex)/i);
   assert.match(cli, /Review the downloaded official script/);
 });

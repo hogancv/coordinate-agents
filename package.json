@@ -1,10 +1,11 @@
 {
-  "name": "@hogancv/coordinate-cli-agents",
+  "name": "@hogancv/coordinate-agents",
   "version": "2.0.1",
   "description": "A local-first coordination protocol and runtime for AI coding agents.",
   "type": "module",
   "bin": {
-    "coordinate-cli-agents": "bin/coordinate-cli-agents.mjs"
+    "coordinate-agents": "bin/coordinate-agents.mjs",
+    "coordinate-cli-agents": "bin/coordinate-agents.mjs"
   },
   "files": [
     "adapters",
@@ -26,7 +27,7 @@
     "test": "node --test",
     "sync:llms": "node scripts/sync-llms.mjs",
     "check:llms": "node scripts/sync-llms.mjs --check",
-    "check": "node bin/coordinate-cli-agents.mjs --help && npm run check:llms && npm test",
+    "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm test",
     "prepack": "npm run sync:llms && npm run check",
     "demo": "node scripts/demo.mjs",
     "release:check": "npm ci && npm run check && npm pack --dry-run"
@@ -36,14 +37,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hogancv/coordinate-cli-agents.git"
+    "url": "git+https://github.com/hogancv/coordinate-agents.git"
   },
-  "homepage": "https://github.com/hogancv/coordinate-cli-agents#readme",
+  "homepage": "https://github.com/hogancv/coordinate-agents#readme",
   "bugs": {
-    "url": "https://github.com/hogancv/coordinate-cli-agents/issues"
+    "url": "https://github.com/hogancv/coordinate-agents/issues"
   },
   "keywords": [
     "agent",
+    "ai-agents",
     "multi-agent",
     "coordination",
     "protocol",
@@ -59,7 +61,6 @@
     "code-review",
     "release-gate",
     "recovery",
-    "cli",
     "skill"
   ],
   "author": "hogancv",

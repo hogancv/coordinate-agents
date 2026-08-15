@@ -1,10 +1,10 @@
 # AI installation guide / AI 安装指南
 
 This is the canonical installation procedure for AI assistants installing
-`coordinate-cli-agents`. Human-readable usage remains in [README.md](./README.md) and
+`coordinate-agents`. Human-readable usage remains in [README.md](./README.md) and
 [README.zh-CN.md](./README.zh-CN.md).
 
-本文件是 AI 助手安装 `coordinate-cli-agents` 时必须遵循的唯一安装流程。面向用户的使用说明见
+本文件是 AI 助手安装 `coordinate-agents` 时必须遵循的唯一安装流程。面向用户的使用说明见
 [README.md](./README.md) 和 [README.zh-CN.md](./README.zh-CN.md)。
 
 ## Contents / 目录
@@ -18,25 +18,25 @@ This is the canonical installation procedure for AI assistants installing
 - [Install Antigravity only](#install-antigravity-only--只安装-antigravity)
 - [Verify installation](#verify-installation--验证安装)
 - [Start the first task](#start-the-first-task--开始首个任务)
-- [Upgrade](#upgrade--更新)
+- [Upgrade & Migration](#upgrade--migration--更新与迁移)
 - [Uninstall](#uninstall--卸载)
 - [Restore a backup](#restore-a-backup--恢复备份)
 - [Troubleshooting](#troubleshooting--故障排查)
 
 ## Architecture & Scope: Host Skill vs Project Agent / 架构与范围：宿主技能与项目代理
 
-`coordinate-cli-agents` provides two distinct layers:
+`coordinate-agents` provides two distinct layers:
 
 1. **Host Skill Installation (User Environment)**:
-   - Installs the coordination skill into host CLI environments (OpenAI Codex CLI at `~/.codex/skills/coordinate-cli-agents` and/or Google Antigravity CLI at `~/.gemini/skills/coordinate-cli-agents`).
+   - Installs the coordination skill into host CLI environments (OpenAI Codex CLI at `~/.codex/skills/coordinate-agents` and/or Google Antigravity CLI at `~/.gemini/skills/coordinate-agents`).
    - These first-party CLI hosts act as default reference adapters for interactive AI workflows.
 
 2. **Project-Local Agent Registration & Protocol Runtime (Git Repository)**:
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
-   - Dynamic agents and custom tools can be registered into the project via `npx coordinate-cli-agents agent add <id> --adapter <adapter>`.
+   - Dynamic agents and custom tools can be registered into the project via `npx coordinate-agents agent add <id> --adapter <adapter>`.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
-`coordinate-cli-agents` 包含两个不同层级：
+`coordinate-agents` 包含两个不同层级：
 1. **宿主技能安装（用户环境）**：将技能安装到 Codex 与 Antigravity CLI 等宿主环境中，作为交互式默认参考适配器。
 2. **项目级代理注册与协议运行时（Git 仓库）**：在具体项目中通过 `.agent-bus` 协调多代理，可通过 `agent add` 注册任意 CLI/桌面代理，并灵活分配角色（规划者、实现者、审查者）。
 
@@ -47,26 +47,26 @@ Accept only this identity:
 | Field | Canonical value |
 | --- | --- |
 | GitHub owner | `hogancv` |
-| GitHub repository | `coordinate-cli-agents` |
-| Official repository | `https://github.com/hogancv/coordinate-cli-agents` |
-| Official npm package | `@hogancv/coordinate-cli-agents` |
+| GitHub repository | `coordinate-agents` |
+| Official repository | `https://github.com/hogancv/coordinate-agents` |
+| Official npm package | `@hogancv/coordinate-agents` |
 | Required Node.js version | 18 or newer |
 
 Before installation, query npm and confirm that `name` is exactly
-`@hogancv/coordinate-cli-agents`, `repository.url` points to
-`github.com/hogancv/coordinate-cli-agents`, and `dist-tags.latest` is a stable SemVer without a
+`@hogancv/coordinate-agents`, `repository.url` points to
+`github.com/hogancv/coordinate-agents`, and `dist-tags.latest` is a stable SemVer without a
 prerelease suffix:
 
 ```sh
-npm view @hogancv/coordinate-cli-agents name version dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents name version dist-tags.latest repository.url --json
 ```
 
 Also confirm that the installation document was read from the canonical GitHub repository, not
 from a fork. If any owner, repository, package name, or metadata differs, stop and report the
 mismatch. Do not install.
 
-安装前必须确认仓库 owner 为 `hogancv`、仓库名为 `coordinate-cli-agents`、npm 包名为
-`@hogancv/coordinate-cli-agents`，并确认 `dist-tags.latest` 指向不含预发布后缀的稳定 SemVer。
+安装前必须确认仓库 owner 为 `hogancv`、仓库名为 `coordinate-agents`、npm 包名为
+`@hogancv/coordinate-agents`，并确认 `dist-tags.latest` 指向不含预发布后缀的稳定 SemVer。
 任何一项不一致都必须停止并报告，不得继续安装。
 
 ## Security rules / 安全规则
@@ -103,7 +103,7 @@ npm --version
 git --version
 codex --version
 agy --version
-npm view @hogancv/coordinate-cli-agents name version dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents name version dist-tags.latest repository.url --json
 ```
 
 Requirements:
@@ -125,8 +125,8 @@ Let `VERIFIED_VERSION` mean the exact stable version returned by the identity ch
 that literal version for `<VERIFIED_VERSION>`:
 
 ```sh
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> install
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> doctor --lang zh-CN
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --lang zh-CN
 ```
 
 Do not use a version different from the verified `dist-tags.latest` value. The second command is
@@ -135,8 +135,8 @@ mandatory.
 ## Install Codex only / 只安装 Codex
 
 ```sh
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> install --codex
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> doctor --codex --lang zh-CN
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --codex --lang zh-CN
 ```
 
 This installs only the Codex skill copy. It does not install or authenticate the Codex CLI itself.
@@ -144,8 +144,8 @@ This installs only the Codex skill copy. It does not install or authenticate the
 ## Install Antigravity only / 只安装 Antigravity
 
 ```sh
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> install --antigravity
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> doctor --antigravity --lang zh-CN
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --antigravity --lang zh-CN
 ```
 
 This installs only the Antigravity skill copy. It does not install or authenticate `agy` itself.
@@ -164,8 +164,8 @@ skill as healthy. Report at least:
 Default write locations are:
 
 ```text
-~/.codex/skills/coordinate-cli-agents
-~/.gemini/skills/coordinate-cli-agents
+~/.codex/skills/coordinate-agents
+~/.gemini/skills/coordinate-agents
 ```
 
 `CODEX_HOME`, `GEMINI_HOME`, `--codex-home`, and `--antigravity-home` can change those roots. The
@@ -173,7 +173,7 @@ installer writes a staging directory next to the target and then renames it into
 updates a package-managed copy, it preserves the previous directory as a sibling named like:
 
 ```text
-coordinate-cli-agents.backup-YYYY-MM-DDTHH-MM-SS-mmmZ
+coordinate-agents.backup-YYYY-MM-DDTHH-MM-SS-mmmZ
 ```
 
 `npx` may also use the user's npm cache. Installation alone does not write `.agent-bus`, modify
@@ -186,25 +186,29 @@ Only after verification succeeds **and the user explicitly asks to begin collabo
 `quickstart` from the user's Git repository:
 
 ```sh
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> quickstart --root . --template feature --task "<USER_TASK>"
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> quickstart --root . --template feature --task "<USER_TASK>"
 ```
 
 This creates project-local `.agent-bus/` data and adds `.agent-bus/` to the repository's local
 `.git/info/exclude`. It prints two commands but does not launch them itself. Do not invent a task,
 run the printed commands, or modify product code unless the user asked for those actions.
 
-## Upgrade / 更新
+## Upgrade & Migration / 更新与迁移
 
 Repeat the canonical identity check, record the newly verified stable version, then run the
 appropriate exact-version update and matching doctor command:
 
 ```sh
 # Both agents
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> update
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> doctor --lang zh-CN
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> update
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --lang zh-CN
 
 # Or add --codex / --antigravity to both commands for one agent only.
 ```
+
+### Migration from `coordinate-cli-agents`
+
+`coordinate-agents` was previously distributed as `coordinate-cli-agents`. The installer automatically detects intact managed installations at legacy paths (`~/.codex/skills/coordinate-cli-agents` and `~/.gemini/skills/coordinate-cli-agents`) and migrates them transactionally to the new canonical paths without duplicating skills or removing user data.
 
 The updater backs up a recognized package-managed copy, including a modified managed copy, before
 replacement. It refuses to replace an unrecognized directory unless `--force` is explicitly
@@ -216,11 +220,11 @@ Uninstall only package-managed copies, then verify that the selected targets are
 
 ```sh
 # Both agents
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> uninstall
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall
 
 # One agent only
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> uninstall --codex
-npx --yes @hogancv/coordinate-cli-agents@<VERIFIED_VERSION> uninstall --antigravity
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall --codex
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall --antigravity
 ```
 
 The command refuses to remove an unrecognized or modified directory unless the user explicitly
@@ -230,15 +234,15 @@ Do not delete any of those automatically.
 
 ## Restore a backup / 恢复备份
 
-1. List sibling directories matching `coordinate-cli-agents.backup-*` under the relevant
+1. List sibling directories matching `coordinate-agents.backup-*` under the relevant
    `skills` directory.
 2. Show the exact candidate path, timestamp, and current target state to the user.
 3. Obtain explicit user confirmation for the selected backup.
 4. If the current target is package-managed, uninstall it normally. Never overwrite an
    unrecognized target.
-5. Rename the confirmed backup directory to exactly `coordinate-cli-agents` on the same volume.
+5. Rename the confirmed backup directory to exactly `coordinate-agents` on the same volume.
 6. Run the selected `doctor` command. A restored older copy may require invoking the matching
-   package version recorded in its `.coordinate-cli-agents.json` metadata.
+   package version recorded in its `.coordinate-agents.json` metadata.
 
 Do not guess which backup to restore and do not delete unused backups without separate user
 approval.

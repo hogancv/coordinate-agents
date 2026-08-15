@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Troubleshooting
-description: Match real coordinate-cli-agents, Node, Codex, agy, agent-bus, Windows path, and npm metadata errors to safe recovery steps.
+description: Match real coordinate-agents, Node, Codex, agy, agent-bus, Windows path, and npm metadata errors to safe recovery steps.
 ---
 
 # Troubleshooting
@@ -12,21 +12,21 @@ description: Match real coordinate-cli-agents, Node, Codex, agy, agent-bus, Wind
 Start with the same package version and target used for installation:
 
 ```sh
-npx --yes @hogancv/coordinate-cli-agents@<version> doctor --codex
-npx --yes @hogancv/coordinate-cli-agents@<version> doctor --antigravity
+npx --yes @hogancv/coordinate-agents@<version> doctor --codex
+npx --yes @hogancv/coordinate-agents@<version> doctor --antigravity
 ```
 
 Preserve redacted output and the exit status. Do not paste credentials or force a destructive repair.
 
 ## Skill not discovered
 
-**Observed behavior:** mentioning collaboration does not trigger `$coordinate-cli-agents`, or the
+**Observed behavior:** mentioning collaboration does not trigger `$coordinate-agents`, or the
 CLI says the Skill is unavailable.
 
 1. Run selected-target `doctor` and note the exact Skill path.
 2. Confirm the terminal uses the same `CODEX_HOME` or Antigravity home that was installed.
 3. Restart the CLI so it reloads Skill metadata.
-4. Explicitly invoke `$coordinate-cli-agents` once to separate discovery from installation failure.
+4. Explicitly invoke `$coordinate-agents` once to separate discovery from installation failure.
 
 If `doctor` reports a missing or invalid copy, reinstall only the selected target. Do not copy the
 other CLI's credential directory.
@@ -109,7 +109,7 @@ Git worktree root and copy the generated `launch` commands unchanged. They encod
 
 ```powershell
 git rev-parse --show-toplevel
-npx --yes @hogancv/coordinate-cli-agents@<version> doctor
+npx --yes @hogancv/coordinate-agents@<version> doctor
 ```
 
 Do not manually translate `C:\project` to `/mnt/c/project` unless both CLIs execute in WSL. Windows
@@ -119,21 +119,21 @@ and WSL paths that refer to the same files are still different process environme
 
 ```text
 npm ERR! code ETARGET
-npm ERR! notarget No matching version found for @hogancv/coordinate-cli-agents@<version>
+npm ERR! notarget No matching version found for @hogancv/coordinate-agents@<version>
 ```
 
 Compare the public metadata without changing credentials:
 
 ```sh
-npm view @hogancv/coordinate-cli-agents dist-tags.latest version repository.url --json
+npm view @hogancv/coordinate-agents dist-tags.latest version repository.url --json
 npm config get registry
 ```
 
-The repository must be `https://github.com/hogancv/coordinate-cli-agents` and the registry should be
+The repository must be `https://github.com/hogancv/coordinate-agents` and the registry should be
 the intended public npm registry. A stale mirror may lag the release. Do not downgrade silently,
 switch to an untrusted registry, or run a GitHub checkout as an installer. Wait for consistent
 metadata or use an already verified stable exact version.
 
 See the canonical bilingual
-[AI installation guide](https://github.com/hogancv/coordinate-cli-agents/blob/main/AI_INSTALL.md)
+[AI installation guide](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md)
 and the [security boundary](./security.html).

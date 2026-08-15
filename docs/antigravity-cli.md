@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Antigravity CLI role (Default reference workflow)
-description: Google Antigravity CLI serves as the reference implementer in coordinate-cli-agents.
+description: Google Antigravity CLI serves as the reference implementer in coordinate-agents.
 ---
 
 # Antigravity CLI role (Reference implementer)

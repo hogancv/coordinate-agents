@@ -1,8 +1,8 @@
-title: coordinate-cli-agents
-description: Coordinate Codex CLI specifications and reviews with Google Antigravity CLI implementation through a recoverable local agent bus.
+title: coordinate-agents
+description: Local-first coordination protocol and runtime for AI coding agents.
 url: https://hogancv.github.io
-baseurl: /coordinate-cli-agents
-repository: hogancv/coordinate-cli-agents
+baseurl: /coordinate-agents
+repository: hogancv/coordinate-agents
 theme: minima
 plugins:
   - jekyll-seo-tag
@@ -14,4 +14,3 @@ header_pages:
   - security.md
   - troubleshooting.md
   - faq.md
-

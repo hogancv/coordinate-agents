@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Codex CLI role (Default reference workflow)
-description: OpenAI Codex CLI serves as the reference planner and reviewer in coordinate-cli-agents.
+description: OpenAI Codex CLI serves as the reference planner and reviewer in coordinate-agents.
 ---
 
 # Codex CLI role (Reference planner & reviewer)

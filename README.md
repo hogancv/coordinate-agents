@@ -1,8 +1,11 @@
-# coordinate-cli-agents
+# coordinate-agents
 
 [简体中文](./README.zh-CN.md) | English
 
 A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI agents can be registered dynamically and desktop agents are supportable via the adapter extension model.
+
+> **Note on Project Rename / 迁移提示**  
+> `coordinate-agents` was previously known as `coordinate-cli-agents`. The project was renamed as its coordination runtime evolved beyond CLI-specific agents into a broader agent coordination system.
 
 No CAO server, daemon, database, or shared API credential is required.
 
@@ -13,8 +16,8 @@ Prerequisites: Node.js 18+, Git, and authenticated `codex` and `agy` commands (o
 From your Git repository, run:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest install
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "Build a Todo web app with add, complete, delete, and local persistence"
+npx @hogancv/coordinate-agents@latest install
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Build a Todo web app with add, complete, delete, and local persistence"
 ```
 
 `quickstart` initializes the local bus and prints exactly two short, copyable commands:
@@ -40,19 +43,19 @@ and unknown scripts, run `doctor`, and stop before starting a collaboration task
 **Install both agents**
 
 ```text
-Install coordinate-cli-agents from the official repository https://github.com/hogancv/coordinate-cli-agents. First read AI_INSTALL.md at the repository root and verify the repository owner, npm package name, latest stable version, and installation impact. Then follow the document to install it for both Codex CLI and Antigravity CLI. After installation, run doctor --lang en and report the results. Do not use a third-party fork, request credentials, modify my product code, or start a collaboration task before verification succeeds.
+Install coordinate-agents from the official repository https://github.com/hogancv/coordinate-agents. First read AI_INSTALL.md at the repository root and verify the repository owner, npm package name, latest stable version, and installation impact. Then follow the document to install it for both Codex CLI and Antigravity CLI. After installation, run doctor --lang en and report the results. Do not use a third-party fork, request credentials, modify my product code, or start a collaboration task before verification succeeds.
 ```
 
 **Install Codex only**
 
 ```text
-Install the Codex skill from the official hogancv/coordinate-cli-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Codex side. After installation, run doctor --codex --lang en. Do not modify the current project code.
+Install the Codex skill from the official hogancv/coordinate-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Codex side. After installation, run doctor --codex --lang en. Do not modify the current project code.
 ```
 
 **Install Antigravity only**
 
 ```text
-Install the Antigravity skill from the official hogancv/coordinate-cli-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Antigravity side. After installation, run doctor --antigravity --lang en. Do not modify the current project code.
+Install the Antigravity skill from the official hogancv/coordinate-agents repository. First read AI_INSTALL.md and verify the official npm package, then install only the Antigravity side. After installation, run doctor --antigravity --lang en. Do not modify the current project code.
 ```
 
 ## Architecture: Agent Bus, Adapters, and Roles
@@ -114,19 +117,19 @@ Register third-party or custom CLI agents without modifying bus code:
 
 ```sh
 # Register a custom CLI agent
-npx @hogancv/coordinate-cli-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
 
 # List registered agents and workflow configuration
-npx @hogancv/coordinate-cli-agents@latest agent list
+npx @hogancv/coordinate-agents@latest agent list
 
 # Verify all registered agents and their CLI adapters
-npx @hogancv/coordinate-cli-agents@latest agent doctor
+npx @hogancv/coordinate-agents@latest agent doctor
 ```
 
 Run a collaboration with custom role assignments:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "Add search feature"
+npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "Add search feature"
 ```
 
 ## Requirements
@@ -142,22 +145,22 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implement
 Install or update both CLI skills without adding a dependency to your project:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest install
+npx @hogancv/coordinate-agents@latest install
 ```
 
 The installer copies a permanent skill payload to:
 
 ```text
-~/.codex/skills/coordinate-cli-agents
-~/.gemini/skills/coordinate-cli-agents
+~/.codex/skills/coordinate-agents
+~/.gemini/skills/coordinate-agents
 ```
 
-It does **not** link either location to the temporary npm cache. Existing package-managed installations, including modified managed copies, are backed up before replacement. An unrecognized directory is preserved unless you explicitly pass `--force`; uninstall also refuses a modified copy unless explicitly forced.
+It does **not** link either location to the temporary npm cache. Existing package-managed installations, including legacy `coordinate-cli-agents` managed copies, are safely migrated and backed up before replacement. An unrecognized directory is preserved unless you explicitly pass `--force`; uninstall also refuses a modified copy unless explicitly forced.
 
 Verify the installation:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest doctor
+npx @hogancv/coordinate-agents@latest doctor
 ```
 
 `doctor` checks Node.js, Git, `codex`, `agy`, and both installed skill copies. Missing components and package-managed damage receive a suggested repair command based on the detected platform. An unrecognized existing skill directory instead gets a non-destructive instruction to back it up or move it first. On Linux, review the suggestion for your distribution and confirm it supplies Node.js 18+ before running it.
@@ -166,19 +169,19 @@ Useful variants:
 
 ```sh
 # Codex only
-npx @hogancv/coordinate-cli-agents@latest install --codex
+npx @hogancv/coordinate-agents@latest install --codex
 
 # Antigravity only
-npx @hogancv/coordinate-cli-agents@latest install --antigravity
+npx @hogancv/coordinate-agents@latest install --antigravity
 
 # Explicit update
-npx @hogancv/coordinate-cli-agents@latest update
+npx @hogancv/coordinate-agents@latest update
 
 # Chinese output
-npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
+npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
 
 # Remove package-managed installations
-npx @hogancv/coordinate-cli-agents@latest uninstall
+npx @hogancv/coordinate-agents@latest uninstall
 ```
 
 The installer honors `CODEX_HOME` and `GEMINI_HOME`. Custom roots can also be passed with `--codex-home <path>` and `--antigravity-home <path>`.
@@ -188,9 +191,9 @@ Restart both CLIs after installation so they rediscover the skill.
 Alternatively, install the command globally and use it without `npx`:
 
 ```sh
-npm install --global @hogancv/coordinate-cli-agents
-coordinate-cli-agents install
-coordinate-cli-agents doctor
+npm install --global @hogancv/coordinate-agents
+coordinate-agents install
+coordinate-agents doctor
 ```
 
 ## Task templates
@@ -204,9 +207,9 @@ coordinate-cli-agents doctor
 Examples:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "Search crashes on an empty query"
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "Add due dates and an overdue filter"
-npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "Extract persistence without changing UI behavior"
+npx @hogancv/coordinate-agents@latest quickstart --template bug --task "Search crashes on an empty query"
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Add due dates and an overdue filter"
+npx @hogancv/coordinate-agents@latest quickstart --template refactor --task "Extract persistence without changing UI behavior"
 ```
 
 See [`references/task-templates.md`](./references/task-templates.md) for the information checklist for each template.
@@ -231,7 +234,7 @@ RELEASE_APPROVED
 Claims have a four-hour lease by default. Recover a message left behind by an interrupted process only after confirming that no matching work, commit, or reply already exists:
 
 ```sh
-BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
+BUS_TOOL="$HOME/.codex/skills/coordinate-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
 node "$BUS_TOOL" recover --root "$REPO" --agent antigravity --stale-after-seconds 14400
 ```
@@ -261,7 +264,7 @@ This permanently removes specifications, messages, evidence, reviews, releases, 
 Normally the skill calls the bus script automatically. For troubleshooting:
 
 ```sh
-BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
+BUS_TOOL="$HOME/.codex/skills/coordinate-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
 
 node "$BUS_TOOL" init --root "$REPO"
@@ -285,13 +288,13 @@ npm pack --dry-run
 - Publishing is triggered only by a GitHub Release whose `vX.Y.Z` tag exactly matches `package.json`.
 - Stable releases use npm tag `latest`; GitHub prereleases use `next`.
 - `.github/workflows/release.yml` uses npm trusted publishing (OIDC), not a long-lived publish token, and npm provenance is enabled in `publishConfig`.
-- Maintainers must configure npm's trusted publisher for `hogancv/coordinate-cli-agents`, repository `coordinate-cli-agents`, workflow `release.yml`, allowed action `npm publish` before the first automated release.
+- Maintainers must configure npm's trusted publisher for `hogancv/coordinate-agents`, repository `coordinate-agents`, workflow `release.yml`, allowed action `npm publish` before the first automated release.
 
 ## FAQ
 
-### What is coordinate-cli-agents?
+### What is coordinate-agents?
 
-It is the official [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm package and Codex Skill for a multi-agent coding workflow. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests.
+It is the official [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm package and Codex/Antigravity Skill for structured multi-agent coding workflows. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests, while custom CLI and desktop agents can be dynamically attached.
 
 ### How do I coordinate Codex CLI and Antigravity CLI?
 
@@ -307,7 +310,7 @@ The installed role contract makes Antigravity the exclusive product-code writer.
 
 ### How do I install a Codex Skill from npm?
 
-Run `npx @hogancv/coordinate-cli-agents@latest install --codex`, restart Codex CLI, and verify with `npx @hogancv/coordinate-cli-agents@latest doctor --codex`. For an AI-operated installation, use the canonical [`AI_INSTALL.md`](./AI_INSTALL.md).
+Run `npx @hogancv/coordinate-agents@latest install --codex`, restart Codex CLI, and verify with `npx @hogancv/coordinate-agents@latest doctor --codex`. For an AI-operated installation, use the canonical [`AI_INSTALL.md`](./AI_INSTALL.md).
 
 ### What are the Codex CLI vs Antigravity CLI roles?
 
@@ -321,9 +324,9 @@ Invoke the skill again and inspect `status`; durable messages and state survive 
 
 It is local plaintext working data, not encrypted secret storage. `.git/info/exclude` prevents ordinary Git tracking but does not protect against local processes, administrators, backups, or sync tools. Never put credentials in it; read [Security and data boundary](#security-and-data-boundary) and [`SECURITY.md`](./SECURITY.md).
 
-### How do I uninstall coordinate-cli-agents?
+### How do I uninstall coordinate-agents?
 
-Run `npx @hogancv/coordinate-cli-agents@latest uninstall`. The command removes only recognized, unmodified package-managed installations by default and refuses unknown or modified directories unless you explicitly use `--force`.
+Run `npx @hogancv/coordinate-agents@latest uninstall`. The command removes only recognized, unmodified package-managed installations by default and refuses unknown or modified directories unless you explicitly use `--force`.
 
 ## License
 

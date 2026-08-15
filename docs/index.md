@@ -1,13 +1,13 @@
 ---
 layout: home
-title: coordinate-cli-agents
+title: coordinate-agents
 description: A local-first coordination protocol and runtime for AI coding agents.
 permalink: /
 ---
 
 # Local-first coordination protocol and runtime for AI coding agents
 
-`coordinate-cli-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI and desktop coding agents can be registered dynamically.
+`coordinate-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as the first-party reference adapters and default workflow, while custom CLI and desktop coding agents can be registered dynamically.
 
 The agents communicate through a recoverable project-local `.agent-bus`. No CAO server, daemon, database, or shared API key is required.
 
@@ -25,4 +25,4 @@ The agents communicate through a recoverable project-local `.agent-bus`. No CAO 
 - [Machine-readable documentation index](./llms.txt)
 - [简体中文入口](./zh-CN/)
 
-Canonical sources: [GitHub](https://github.com/hogancv/coordinate-cli-agents) · [npm](https://www.npmjs.com/package/@hogancv/coordinate-cli-agents)
+Canonical sources: [GitHub](https://github.com/hogancv/coordinate-agents) · [npm](https://www.npmjs.com/package/@hogancv/coordinate-agents)

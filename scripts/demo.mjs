@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const busTool = join(packageRoot, 'scripts', 'agent-bus.mjs');
 const keep = process.argv.includes('--keep');
-const repo = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-demo-'));
+const repo = mkdtempSync(join(tmpdir(), 'coordinate-agents-demo-'));
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { cwd: repo, encoding: 'utf8', ...options });

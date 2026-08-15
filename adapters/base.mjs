@@ -28,7 +28,7 @@ export class AgentAdapter {
   }
 
   resumePrompt({ agentId }) {
-    return `Invoke the installed coordinate-cli-agents skill and resume the existing collaboration as registered Agent ${agentId}. Inspect the project-local Agent Bus, process pending work, report results through the Bus, and preserve claim/complete semantics.`;
+    return `Invoke the installed coordinate-agents skill and resume the existing collaboration as registered Agent ${agentId}. Inspect the project-local Agent Bus, process pending work, report results through the Bus, and preserve claim/complete semantics.`;
   }
 
   dispatch(_message, _context = {}) {

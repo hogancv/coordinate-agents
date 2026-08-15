@@ -17,7 +17,7 @@ Codex must require Antigravity to reproduce first, identify the root cause, make
 Example:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "Saving an edited Todo crashes when the title contains an emoji"
+npx @hogancv/coordinate-agents@latest quickstart --template bug --task "Saving an edited Todo crashes when the title contains an emoji"
 ```
 
 ## Feature development (`feature`)
@@ -35,7 +35,7 @@ Codex must resolve material ambiguity and produce an implementation-ready specif
 Example:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "Add due dates and an overdue filter to the Todo app"
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Add due dates and an overdue filter to the Todo app"
 ```
 
 ## Refactor (`refactor`)
@@ -53,5 +53,5 @@ Codex must define invariants. Antigravity must capture a baseline, refactor incr
 Example:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "Extract Todo persistence into a repository module without changing UI behavior"
+npx @hogancv/coordinate-agents@latest quickstart --template refactor --task "Extract Todo persistence into a repository module without changing UI behavior"
 ```

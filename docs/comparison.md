@@ -1,20 +1,20 @@
 ---
 layout: page
 title: Compare multi-agent development approaches
-description: Evidence-based comparison of single-agent coding, ad hoc dual terminals, and the structured coordinate-cli-agents protocol and runtime.
+description: Evidence-based comparison of single-agent coding, ad hoc dual terminals, and the structured coordinate-agents protocol and runtime.
 ---
 
 # Compare multi-agent development approaches
 
 This page compares workflow guarantees, not model intelligence. Codex CLI, Antigravity CLI, and other tools can
-each solve many tasks alone; `coordinate-cli-agents` is useful when separation of duties, role-based handoffs, and a
+each solve many tasks alone; `coordinate-agents` is useful when separation of duties, role-based handoffs, and a
 recoverable local bus are worth the structured process.
 
 | Approach | Implementation owner | Review owner | State recovery | Release gate | Shared credentials |
 | --- | --- | --- | --- | --- | --- |
 | Single agent | Same agent | Same agent | Depends on the tool | Usually none | None |
 | Manual dual terminals | Not fixed | Not fixed | Weak or manual notes | Manual | None |
-| `coordinate-cli-agents` (Protocol & Runtime) | Configured Implementer (`antigravity` by default) | Configured Reviewer (`codex` by default) | Local persistent `.agent-bus` | Exact user authorization | Not required |
+| `coordinate-agents` (Protocol & Runtime) | Configured Implementer (`antigravity` by default) | Configured Reviewer (`codex` by default) | Local persistent `.agent-bus` | Exact user authorization | Not required |
 
 ## What the differences mean
 
@@ -27,7 +27,7 @@ Markdown files. This is flexible, but role ownership, message claiming, interrup
 deduplication, and release authorization depend on both prompts being followed perfectly. Two
 processes can accidentally modify the same worktree.
 
-**`coordinate-cli-agents`.** The coordination protocol and runtime decouple agents into configurable workflow roles (`planner`, `implementer`, `reviewer`). In the default reference workflow, Codex clarifies requirements, writes acceptance criteria, reviews the implementation commit and evidence, and controls the release gate, while Antigravity is the exclusive product-code writer. Messages move atomically through `new`, `processing`, and `processed`; leases and recovery preserve work across terminal exits. Neither agent reads or copies the other's authentication files. Dynamic registration allows connecting third-party agents (`generic-cli`) with customized role assignments.
+**`coordinate-agents`.** The coordination protocol and runtime decouple agents into configurable workflow roles (`planner`, `implementer`, `reviewer`). In the default reference workflow, Codex clarifies requirements, writes acceptance criteria, reviews the implementation commit and evidence, and controls the release gate, while Antigravity is the exclusive product-code writer. Messages move atomically through `new`, `processing`, and `processed`; leases and recovery preserve work across terminal exits. Neither agent reads or copies the other's authentication files. Dynamic registration allows connecting third-party agents (`generic-cli`) with customized role assignments.
 
 ## Observable guarantees and limits
 

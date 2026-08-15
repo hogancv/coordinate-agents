@@ -9,7 +9,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-cli-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents.mjs');
 const busTool = join(root, 'scripts', 'agent-bus.mjs');
 const currentVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
@@ -183,8 +183,15 @@ test('documents a 60-second path and three first-use task templates', () => {
   assert.match(chinese, /不再需要手动复制或维护两段角色提示词/);
 });
 
+test('package.json provides canonical bin and backwards compatible alias', () => {
+  const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.equal(packageJson.name, '@hogancv/coordinate-agents');
+  assert.equal(packageJson.bin['coordinate-agents'], 'bin/coordinate-agents.mjs');
+  assert.equal(packageJson.bin['coordinate-cli-agents'], 'bin/coordinate-agents.mjs');
+});
+
 test('installs, verifies, detects modification, updates and uninstalls both targets', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-test-'));
   const codexHome = join(sandbox, 'codex');
   const antigravityHome = join(sandbox, 'antigravity');
   const common = ['--codex-home', codexHome, '--antigravity-home', antigravityHome, '--lang', 'en'];
@@ -193,8 +200,8 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
     const install = invoke(['install', ...common]);
     assert.equal(install.status, 0, install.stderr);
 
-    const codexTarget = join(codexHome, 'skills', 'coordinate-cli-agents');
-    const agyTarget = join(antigravityHome, 'skills', 'coordinate-cli-agents');
+    const codexTarget = join(codexHome, 'skills', 'coordinate-agents');
+    const agyTarget = join(antigravityHome, 'skills', 'coordinate-agents');
     for (const target of [codexTarget, agyTarget]) {
       assert.ok(existsSync(join(target, 'SKILL.md')));
       assert.ok(existsSync(join(target, 'adapters', 'index.mjs')));
@@ -204,8 +211,8 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
       assert.ok(existsSync(join(target, 'scripts', 'agent-bus.ps1')));
       assert.ok(existsSync(join(target, 'scripts', 'agent-bus.mjs')));
       assert.ok(existsSync(join(target, 'references', 'task-templates.md')));
-      const metadata = JSON.parse(readFileSync(join(target, '.coordinate-cli-agents.json'), 'utf8'));
-      assert.equal(metadata.package, '@hogancv/coordinate-cli-agents');
+      const metadata = JSON.parse(readFileSync(join(target, '.coordinate-agents.json'), 'utf8'));
+      assert.equal(metadata.package, '@hogancv/coordinate-agents');
       assert.equal(metadata.version, currentVersion);
     }
 
@@ -235,10 +242,61 @@ test('installs, verifies, detects modification, updates and uninstalls both targ
   }
 });
 
-test('protects an unrecognized existing skill directory', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-protect-'));
+test('transactionally migrates intact legacy coordinate-cli-agents installations', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-legacy-migrate-'));
   const codexHome = join(sandbox, 'codex');
-  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const legacyTarget = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const canonicalTarget = join(codexHome, 'skills', 'coordinate-agents');
+  const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
+  const doctorEnv = fakeCliEnvironment(sandbox);
+
+  try {
+    // 1. Manually scaffold an intact legacy installation
+    mkdirSync(legacyTarget, { recursive: true });
+    const skillContent = readFileSync(join(root, 'SKILL.md'), 'utf8');
+    writeFileSync(join(legacyTarget, 'SKILL.md'), skillContent, 'utf8');
+    const skillHash = createHash('sha256').update(skillContent).digest('hex');
+
+    writeFileSync(join(legacyTarget, '.coordinate-cli-agents.json'), JSON.stringify({
+      package: '@hogancv/coordinate-cli-agents',
+      version: '1.0.0',
+      installedAt: '2026-08-01T00:00:00.000Z',
+      manifest: {
+        'SKILL.md': skillHash,
+      },
+    }, null, 2), 'utf8');
+
+    // 2. Doctor should detect legacy installation and provide migration advice
+    const legacyDoc = invoke(['doctor', ...common], doctorEnv);
+    assert.equal(legacyDoc.status, 1);
+    assert.match(legacyDoc.stderr, /legacy installation found/);
+    assert.match(legacyDoc.stderr, /Fix:.*install.*--codex/);
+
+    // 3. Running install should migrate transactionally to coordinate-agents and remove legacy directory
+    const installResult = invoke(['install', ...common]);
+    assert.equal(installResult.status, 0, installResult.stderr);
+    assert.match(installResult.stdout, /Migrated legacy.*coordinate-cli-agents/);
+
+    // Canonical exists and is healthy
+    assert.equal(existsSync(canonicalTarget), true);
+    assert.equal(existsSync(join(canonicalTarget, 'SKILL.md')), true);
+    assert.equal(existsSync(join(canonicalTarget, '.coordinate-agents.json')), true);
+
+    // Legacy directory was cleaned up to avoid duplicate active skills
+    assert.equal(existsSync(legacyTarget), false);
+
+    // Doctor is now completely healthy
+    const healthy = invoke(['doctor', ...common], doctorEnv);
+    assert.equal(healthy.status, 0, healthy.stderr);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('protects an unrecognized existing skill directory', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-protect-'));
+  const codexHome = join(sandbox, 'codex');
+  const target = join(codexHome, 'skills', 'coordinate-agents');
   try {
     writeFileSync(join(sandbox, 'placeholder'), 'x');
     const setup = spawnSync(process.execPath, ['-e', `require('fs').mkdirSync(${JSON.stringify(target)}, {recursive:true})`]);
@@ -252,13 +310,13 @@ test('protects an unrecognized existing skill directory', () => {
 });
 
 test('does not trust arbitrary JSON as package-managed installation metadata', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-metadata-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-metadata-'));
   const codexHome = join(sandbox, 'codex');
-  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const target = join(codexHome, 'skills', 'coordinate-agents');
   const marker = join(target, 'important-user-file.txt');
   try {
     mkdirSync(target, { recursive: true });
-    writeFileSync(join(target, '.coordinate-cli-agents.json'), '{}\n', 'utf8');
+    writeFileSync(join(target, '.coordinate-agents.json'), '{}\n', 'utf8');
     writeFileSync(marker, 'preserve me\n', 'utf8');
 
     const install = invoke(['install', '--codex', '--codex-home', codexHome, '--lang', 'en']);
@@ -272,8 +330,8 @@ test('does not trust arbitrary JSON as package-managed installation metadata', (
     assert.equal(readFileSync(marker, 'utf8'), 'preserve me\n');
 
     const digest = createHash('sha256').update(readFileSync(marker)).digest('hex');
-    writeFileSync(join(target, '.coordinate-cli-agents.json'), JSON.stringify({
-      package: '@hogancv/coordinate-cli-agents',
+    writeFileSync(join(target, '.coordinate-agents.json'), JSON.stringify({
+      package: '@hogancv/coordinate-agents',
       version: '999.0.0',
       installedAt: new Date().toISOString(),
       manifest: { 'important-user-file.txt': digest },
@@ -287,9 +345,9 @@ test('does not trust arbitrary JSON as package-managed installation metadata', (
 });
 
 test('uninstall preserves extra files inside a package-managed installation', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-extra-uninstall-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-extra-uninstall-'));
   const codexHome = join(sandbox, 'codex');
-  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const target = join(codexHome, 'skills', 'coordinate-agents');
   const extra = join(target, 'personal-notes.txt');
   try {
     const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
@@ -304,9 +362,9 @@ test('uninstall preserves extra files inside a package-managed installation', ()
 });
 
 test('uninstall preserves a modified package-managed installation without force', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-modified-uninstall-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-modified-uninstall-'));
   const codexHome = join(sandbox, 'codex');
-  const target = join(codexHome, 'skills', 'coordinate-cli-agents');
+  const target = join(codexHome, 'skills', 'coordinate-agents');
   try {
     const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
     assert.equal(invoke(['install', ...common]).status, 0);
@@ -321,7 +379,7 @@ test('uninstall preserves a modified package-managed installation without force'
 });
 
 test('quickstart initializes the bus and generates two launch commands from a task template', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-quickstart-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-quickstart-'));
   try {
     const init = spawnSync('git', ['init', sandbox], { encoding: 'utf8' });
     assert.equal(init.status, 0, init.stderr);
@@ -352,7 +410,7 @@ test('quickstart initializes the bus and generates two launch commands from a ta
 });
 
 test('quickstart supports all templates and rejects unknown task types', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-templates-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-templates-'));
   try {
     for (const [template, marker] of [
       ['bug', 'reproduce first'],
@@ -374,7 +432,7 @@ test('quickstart supports all templates and rejects unknown task types', () => {
 });
 
 test('quickstart refuses to overwrite existing prompts or follow a bus symlink', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-safe-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-safe-'));
   try {
     const repository = join(sandbox, 'repo');
     assert.equal(spawnSync('git', ['init', repository]).status, 0);
@@ -402,7 +460,7 @@ test('quickstart refuses to overwrite existing prompts or follow a bus symlink',
 });
 
 test('launch passes the generated prompt and repository to Codex without shell interpolation', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-launch-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-launch-'));
   const capture = join(sandbox, 'capture.json');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -427,7 +485,7 @@ test('launch passes the generated prompt and repository to Codex without shell i
 });
 
 test('bus-supervised launch waits without claiming, resumes on work, and stops cleanly', async () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-supervisor-'));
   const activationCount = join(sandbox, 'activation-count.txt');
   let child = null;
   try {
@@ -485,7 +543,7 @@ test('bus-supervised launch waits without claiming, resumes on work, and stops c
 });
 
 test('bus-supervised launch exits for existing STOPPED state without invoking the Agent', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-stopped-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-supervisor-stopped-'));
   const activationCount = join(sandbox, 'activation-count.txt');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -503,7 +561,7 @@ test('bus-supervised launch exits for existing STOPPED state without invoking th
 });
 
 test('bus-supervised launch propagates a non-zero child exit without retry', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-failure-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-supervisor-failure-'));
   const activationCount = join(sandbox, 'activation-count.txt');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -522,7 +580,7 @@ test('bus-supervised launch propagates a non-zero child exit without retry', () 
 });
 
 test('--once disables Adapter-declared launch supervision', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-once-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-supervisor-once-'));
   const activationCount = join(sandbox, 'activation-count.txt');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -539,7 +597,7 @@ test('--once disables Adapter-declared launch supervision', () => {
 });
 
 test('bus-supervised launch fails safely on a corrupt newest state record', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-supervisor-corrupt-state-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-supervisor-corrupt-state-'));
   const activationCount = join(sandbox, 'activation-count.txt');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -558,7 +616,7 @@ test('bus-supervised launch fails safely on a corrupt newest state record', () =
 });
 
 test('doctor prints a repair command for every missing component and skill', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-doctor-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-doctor-'));
   try {
     const result = invoke([
       'doctor', '--codex', '--codex-home', join(sandbox, 'codex'), '--lang', 'en',
@@ -570,7 +628,7 @@ test('doctor prints a repair command for every missing component and skill', () 
     assert.match(result.stderr, /Codex: not installed[\s\S]*Fix:/);
     assert.match(result.stderr, /@openai\/codex@latest/);
     assert.match(result.stderr, /antigravity\.google\/cli\/install/);
-    assert.ok(result.stderr.includes(`coordinate-cli-agents@${currentVersion}`));
+    assert.ok(result.stderr.includes(`coordinate-agents@${currentVersion}`));
     assert.match(result.stderr, /install.*--codex/s);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });
@@ -578,7 +636,7 @@ test('doctor prints a repair command for every missing component and skill', () 
 });
 
 test('single-agent doctor treats the unselected CLI as informational', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-single-doctor-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-single-doctor-'));
   const codexHome = join(sandbox, 'codex');
   try {
     const common = ['--codex', '--codex-home', codexHome, '--lang', 'en'];
@@ -601,7 +659,7 @@ test('single-agent doctor treats the unselected CLI as informational', () => {
 });
 
 test('agent add, list, and doctor manage registered agents via CLI', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-agent-cmd-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-agent-cmd-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -624,7 +682,7 @@ test('agent add, list, and doctor manage registered agents via CLI', () => {
 });
 
 test('quickstart supports workflow role reassignment', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-custom-workflow-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-custom-workflow-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -653,7 +711,7 @@ test('quickstart supports workflow role reassignment', () => {
 });
 
 test('launch generic-cli adapter executes with configured arguments without shell interpolation', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-generic-launch-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-generic-launch-'));
   const capture = join(sandbox, 'capture.json');
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
@@ -691,7 +749,7 @@ test('launch generic-cli adapter executes with configured arguments without shel
 });
 
 test('quickstart supports --reviewer flag and combines prompts for multi-role agents', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-reviewer-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-reviewer-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -719,7 +777,7 @@ test('quickstart supports --reviewer flag and combines prompts for multi-role ag
 });
 
 test('quickstart rejects path traversal attempts in agent IDs', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-traversal-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-traversal-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -736,7 +794,7 @@ test('quickstart rejects path traversal attempts in agent IDs', () => {
 });
 
 test('quickstart rejects unregistered agents in workflow roles', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-unregistered-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-unregistered-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -753,7 +811,7 @@ test('quickstart rejects unregistered agents in workflow roles', () => {
 });
 
 test('launch rejects conflicting --agent and --role values', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-conflict-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-conflict-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -766,7 +824,7 @@ test('launch rejects conflicting --agent and --role values', () => {
 });
 
 test('quickstart generates merged prompts for multi-role agents and preserves defaults', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-multirole-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-multirole-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 
@@ -800,7 +858,7 @@ test('quickstart generates merged prompts for multi-role agents and preserves de
 });
 
 test('quickstart failure when prompts exist leaves prior workflow unchanged', () => {
-  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-tx-fail-test-'));
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-agents-tx-fail-test-'));
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
 

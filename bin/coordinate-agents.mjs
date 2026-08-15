@@ -35,14 +35,16 @@ import {
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
-const skillName = 'coordinate-cli-agents';
+const skillName = 'coordinate-agents';
+const legacySkillName = 'coordinate-cli-agents';
 const payloadEntries = ['SKILL.md', 'adapters', 'agents', 'references', 'scripts'];
-const metadataFile = '.coordinate-cli-agents.json';
+const metadataFile = '.coordinate-agents.json';
+const legacyMetadataFile = '.coordinate-cli-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
 
 const messages = {
   en: {
-    usage: `coordinate-cli-agents <command> [options]
+    usage: `coordinate-agents <command> [options]
 
 Commands:
   install       Install the skill (default: Codex and Antigravity)
@@ -77,10 +79,10 @@ Options:
   -h, --help              Show this help
 
 Examples:
-  npx @hogancv/coordinate-cli-agents install
-  npx @hogancv/coordinate-cli-agents quickstart --template feature --task "Build a Todo app"
-  npx @hogancv/coordinate-cli-agents agent add claude --adapter generic-cli --command claude
-  npx @hogancv/coordinate-cli-agents doctor`,
+  npx @hogancv/coordinate-agents install
+  npx @hogancv/coordinate-agents quickstart --template feature --task "Build a Todo app"
+  npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude
+  npx @hogancv/coordinate-agents doctor`,
     installed: 'Installed {target}: {path}',
     updated: 'Updated {target}: {path}',
     current: '{target} is already current: {path}',
@@ -114,9 +116,12 @@ Examples:
     unknownCommand: 'Unknown command: {command}',
     missingValue: 'Missing value for {option}',
     badLanguage: 'Unsupported language: {language}',
+    legacyMigrated: 'Migrated legacy installation from {oldPath} to {newPath}',
+    legacyFound: '{target}: legacy installation found at {path}; migrate to {newPath} with: {command}',
+    legacyDuplicate: '{target}: duplicate legacy installation found at {path}',
   },
   zh: {
-    usage: `coordinate-cli-agents <命令> [选项]
+    usage: `coordinate-agents <命令> [选项]
 
 命令：
   install       安装技能（默认同时安装 Codex 和 Antigravity）
@@ -151,10 +156,10 @@ Examples:
   -h, --help              显示帮助
 
 示例：
-  npx @hogancv/coordinate-cli-agents install
-  npx @hogancv/coordinate-cli-agents quickstart --template feature --task "开发 Todo 应用"
-  npx @hogancv/coordinate-cli-agents agent add claude --adapter generic-cli --command claude
-  npx @hogancv/coordinate-cli-agents doctor --lang zh-CN`,
+  npx @hogancv/coordinate-agents install
+  npx @hogancv/coordinate-agents quickstart --template feature --task "开发 Todo 应用"
+  npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude
+  npx @hogancv/coordinate-agents doctor --lang zh-CN`,
     installed: '已安装 {target}：{path}',
     updated: '已更新 {target}：{path}',
     current: '{target} 已是当前版本：{path}',
@@ -188,6 +193,9 @@ Examples:
     unknownCommand: '未知命令：{command}',
     missingValue: '选项缺少参数：{option}',
     badLanguage: '不支持的语言：{language}',
+    legacyMigrated: '已将旧版本安装从 {oldPath} 安全迁移至 {newPath}',
+    legacyFound: '{target}：发现旧版本安装（{path}），请运行以下命令迁移至 {newPath}：{command}',
+    legacyDuplicate: '{target}：发现重复的旧版本安装（{path}）',
   },
 };
 
@@ -335,19 +343,29 @@ function targets(options) {
 }
 
 function readMetadata(targetPath) {
-  const path = join(targetPath, metadataFile);
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
-    return null;
+  const primaryPath = join(targetPath, metadataFile);
+  if (existsSync(primaryPath)) {
+    try {
+      return JSON.parse(readFileSync(primaryPath, 'utf8'));
+    } catch {
+      return null;
+    }
   }
+  const legacyPath = join(targetPath, legacyMetadataFile);
+  if (existsSync(legacyPath)) {
+    try {
+      return JSON.parse(readFileSync(legacyPath, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function hasExpectedManagedIdentity(metadata, expectedManifest) {
   return Boolean(
     metadata
-    && metadata.package === packageJson.name
+    && (metadata.package === packageJson.name || metadata.package === '@hogancv/coordinate-cli-agents')
     && typeof metadata.version === 'string'
     && metadata.version.length > 0
     && typeof metadata.installedAt === 'string'
@@ -365,6 +383,27 @@ function hasExpectedManagedIdentity(metadata, expectedManifest) {
     && Object.keys(metadata.manifest).length === Object.keys(expectedManifest).length
     && Object.entries(expectedManifest).every(([file, hash]) => metadata.manifest[file] === hash)
   );
+}
+
+function isRecognizedManagedInstallation(targetPath) {
+  if (!existsSync(targetPath)) return false;
+  const metadata = readMetadata(targetPath);
+  if (!metadata || (metadata.package !== packageJson.name && metadata.package !== '@hogancv/coordinate-cli-agents')) {
+    return false;
+  }
+  if (!metadata.manifest || typeof metadata.manifest !== 'object' || Array.isArray(metadata.manifest)) {
+    return false;
+  }
+  const manifestEntries = Object.entries(metadata.manifest);
+  if (manifestEntries.length === 0) return false;
+  for (const [file, hash] of manifestEntries) {
+    if (typeof file !== 'string' || typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return false;
+    const filePath = join(targetPath, file);
+    if (!existsSync(filePath) || !statSync(filePath).isFile() || hashFile(filePath) !== hash) return false;
+  }
+  const allowed = new Set([...Object.keys(metadata.manifest), metadataFile, legacyMetadataFile]);
+  const diskFiles = walkFiles(targetPath);
+  return diskFiles.every(file => allowed.has(file));
 }
 
 function verifyTarget(targetPath, expectedManifest) {
@@ -412,14 +451,25 @@ function installTarget(target, expectedManifest, options, t) {
     return;
   }
 
+  const legacyPath = join(dirname(target.path), legacySkillName);
   const prior = verifyTarget(target.path, expectedManifest);
-  if (prior.ok && prior.version === packageJson.version) {
+  const hasLegacy = existsSync(legacyPath) && resolve(legacyPath) !== targetResolved;
+
+  if (prior.ok && prior.version === packageJson.version && !hasLegacy) {
     console.log(format(t.current, { target: target.name, path: target.path }));
     return;
   }
+
   const unmanagedGitCheckout = existsSync(join(target.path, '.git'));
   if (existsSync(target.path) && !hasExpectedManagedIdentity(readMetadata(target.path), expectedManifest) && (unmanagedGitCheckout || !payloadMatches(target.path, expectedManifest)) && !options.force) {
     throw new Error(format(t.skipRemove, { target: target.name, path: target.path }));
+  }
+
+  let shouldMigrateLegacy = false;
+  if (hasLegacy) {
+    if (isRecognizedManagedInstallation(legacyPath) || options.force) {
+      shouldMigrateLegacy = true;
+    }
   }
 
   mkdirSync(dirname(target.path), { recursive: true });
@@ -447,6 +497,12 @@ function installTarget(target, expectedManifest, options, t) {
       if (backup && !existsSync(target.path)) renameSync(backup, target.path);
       throw error;
     }
+
+    if (hasLegacy && shouldMigrateLegacy && existsSync(legacyPath)) {
+      removePath(legacyPath);
+      console.log(format(t.legacyMigrated, { oldPath: legacyPath, newPath: target.path }));
+    }
+
     console.log(format(prior.missing ? t.installed : t.updated, { target: target.name, path: target.path }));
   } finally {
     removePath(staging);
@@ -456,7 +512,7 @@ function installTarget(target, expectedManifest, options, t) {
 function isIntactManagedInstallation(targetPath, expectedManifest) {
   const metadata = readMetadata(targetPath);
   if (!hasExpectedManagedIdentity(metadata, expectedManifest) || !payloadMatches(targetPath, expectedManifest)) return false;
-  const allowed = new Set([...Object.keys(expectedManifest), metadataFile]);
+  const allowed = new Set([...Object.keys(expectedManifest), metadataFile, legacyMetadataFile]);
   return walkFiles(targetPath).every(file => allowed.has(file));
 }
 
@@ -584,48 +640,48 @@ function buildAgentPrompt({ agentId, roles, options, language, planner, implemen
 
   if (language === 'zh') {
     if (isDefaultCodex) {
-      return `调用 $coordinate-cli-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
     if (isDefaultAgy) {
-      return '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
+      return '调用 $coordinate-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
     }
     if (roles.includes('planner') && roles.includes('implementer') && roles.includes('reviewer')) {
-      return `调用 $coordinate-cli-agents 并作为规划、实现与审查者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并作为规划、实现与审查者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
     if (roles.includes('implementer') && roles.includes('reviewer')) {
-      return `调用 $coordinate-cli-agents 并作为实现与审查者（${agentId}）恢复当前仓库的协作。负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE，同时负责审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并作为实现与审查者（${agentId}）恢复当前仓库的协作。负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE，同时负责审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
     if (roles.includes('planner') && roles.includes('implementer')) {
-      return `调用 $coordinate-cli-agents 并作为规划与实现者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并作为规划与实现者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
     if (roles.includes('planner') || roles.includes('reviewer')) {
       const label = roles.includes('planner') && roles.includes('reviewer') ? '规划与审查者' : (roles.includes('planner') ? '规划者' : '审查者');
-      return `调用 $coordinate-cli-agents 并作为${label}（${agentId}）恢复当前仓库的协作。你负责需求澄清、规格编写、提交/证据审查与发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并作为${label}（${agentId}）恢复当前仓库的协作。你负责需求澄清、规格编写、提交/证据审查与发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
     }
-    return `调用 $coordinate-cli-agents 并作为实现者（${agentId}）恢复当前仓库的协作。立即等待任务指令；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待审查；不得发布。`;
+    return `调用 $coordinate-agents 并作为实现者（${agentId}）恢复当前仓库的协作。立即等待任务指令；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待审查；不得发布。`;
   }
 
   // English
   if (isDefaultCodex) {
-    return `Use $coordinate-cli-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
   if (isDefaultAgy) {
-    return 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
+    return 'Use $coordinate-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
   }
   if (roles.includes('planner') && roles.includes('implementer') && roles.includes('reviewer')) {
-    return `Use $coordinate-cli-agents as planner, implementer, and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as planner, implementer, and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
   if (roles.includes('implementer') && roles.includes('reviewer')) {
-    return `Use $coordinate-cli-agents as implementer and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, send IMPLEMENTATION_DONE with evidence, and perform reviews; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as implementer and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, send IMPLEMENTATION_DONE with evidence, and perform reviews; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
   if (roles.includes('planner') && roles.includes('implementer')) {
-    return `Use $coordinate-cli-agents as planner and implementer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as planner and implementer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
   if (roles.includes('planner') || roles.includes('reviewer')) {
     const label = roles.includes('planner') && roles.includes('reviewer') ? 'planner and reviewer' : (roles.includes('planner') ? 'planner' : 'reviewer');
-    return `Use $coordinate-cli-agents as ${label} (${agentId}) and resume collaboration in this repository. Own clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as ${label} (${agentId}) and resume collaboration in this repository. Own clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
   }
-  return `Use $coordinate-cli-agents as implementer (${agentId}) and resume collaboration in this repository. Wait for instructions; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.`;
+  return `Use $coordinate-agents as implementer (${agentId}) and resume collaboration in this repository. Wait for instructions; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.`;
 }
 
 function quickstart(options, t, language) {
@@ -984,15 +1040,35 @@ async function run(argv) {
       }
     }
     for (const target of selectedTargets) {
+      const legacyPath = join(dirname(target.path), legacySkillName);
       const result = verifyTarget(target.path, expectedManifest);
       if (result.missing) {
-        healthy = false;
-        console.error(format(t.missing, { target: target.name, path: target.path }));
-        console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
+        if (existsSync(legacyPath) && isRecognizedManagedInstallation(legacyPath)) {
+          healthy = false;
+          console.error(format(t.legacyFound, {
+            target: target.name,
+            path: legacyPath,
+            newPath: target.path,
+            command: targetRepairCommand('install', target, options),
+          }));
+          console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
+        } else {
+          healthy = false;
+          console.error(format(t.missing, { target: target.name, path: target.path }));
+          console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
+        }
       } else {
         found = true;
-        if (result.ok) console.log(format(t.healthy, { target: target.name, version: result.version, path: target.path }));
-        else {
+        if (result.ok) {
+          console.log(format(t.healthy, { target: target.name, version: result.version, path: target.path }));
+          if (existsSync(legacyPath) && resolve(legacyPath) !== resolve(target.path)) {
+            if (isRecognizedManagedInstallation(legacyPath)) {
+              healthy = false;
+              console.error(format(t.legacyDuplicate, { target: target.name, path: legacyPath }));
+              console.error(format(t.repair, { command: targetRepairCommand('install', target, options) }));
+            }
+          }
+        } else {
           healthy = false;
           console.error(format(t.invalid, { target: target.name, details: result.details, path: target.path }));
           const command = targetRepairCommand(result.managed ? 'update' : 'install', target, options);
@@ -1008,14 +1084,25 @@ async function run(argv) {
 
   if (options.command === 'uninstall') {
     for (const target of selectedTargets) {
-      if (!existsSync(target.path)) continue;
-      if (!isIntactManagedInstallation(target.path, expectedManifest) && !options.force) {
-        console.error(format(t.skipRemove, { target: target.name, path: target.path }));
-        process.exitCode = 1;
-        continue;
+      const legacyPath = join(dirname(target.path), legacySkillName);
+      if (existsSync(target.path)) {
+        if (!isIntactManagedInstallation(target.path, expectedManifest) && !options.force) {
+          console.error(format(t.skipRemove, { target: target.name, path: target.path }));
+          process.exitCode = 1;
+          continue;
+        }
+        removePath(target.path);
+        console.log(format(t.removed, { target: target.name, path: target.path }));
       }
-      removePath(target.path);
-      console.log(format(t.removed, { target: target.name, path: target.path }));
+      if (existsSync(legacyPath) && resolve(legacyPath) !== resolve(target.path)) {
+        if (!isRecognizedManagedInstallation(legacyPath) && !options.force) {
+          console.error(format(t.skipRemove, { target: `${target.name} (legacy)`, path: legacyPath }));
+          process.exitCode = 1;
+          continue;
+        }
+        removePath(legacyPath);
+        console.log(format(t.removed, { target: `${target.name} (legacy)`, path: legacyPath }));
+      }
     }
     return;
   }

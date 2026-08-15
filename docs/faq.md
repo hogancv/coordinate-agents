@@ -6,7 +6,7 @@ description: Answers about multi-agent coordination, Codex and Antigravity refer
 
 # Frequently asked questions
 
-## What is coordinate-cli-agents?
+## What is coordinate-agents?
 
 A local-first coordination protocol, runtime, and CLI skill for multi-agent software engineering in Git repositories. It coordinates arbitrary CLI and desktop agents via adapters, with OpenAI Codex CLI and Google Antigravity CLI as first-party reference adapters and the default workflow.
 
@@ -20,11 +20,11 @@ No. Each agent and CLI maintains its native authentication and environment indep
 
 ## Can custom or third-party CLI agents be added?
 
-Yes. Custom CLI agents can be registered dynamically using `coordinate-cli-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
+Yes. Custom CLI agents can be registered dynamically using `coordinate-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
 
 ## Can interrupted work be resumed?
 
-Yes. Message queues (`new`, `processing`, `processed`) and append-only state logs survive terminal restarts. Use `coordinate-cli-agents doctor` or `scripts/agent-bus.mjs recover` to recover stale claims.
+Yes. Message queues (`new`, `processing`, `processed`) and append-only state logs survive terminal restarts. Use `coordinate-agents doctor` or `scripts/agent-bus.mjs recover` to recover stale claims.
 
 ## Is `.agent-bus` encrypted?
 
@@ -32,6 +32,6 @@ No. It is a local plaintext directory on the filesystem and is excluded from ord
 
 ## How do I uninstall it?
 
-Run `npx @hogancv/coordinate-cli-agents@latest uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
+Run `npx @hogancv/coordinate-agents@latest uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
 
-For detailed answers and exact commands, read the [English README](https://github.com/hogancv/coordinate-cli-agents#faq) or [Simplified Chinese README](https://github.com/hogancv/coordinate-cli-agents/blob/main/README.zh-CN.md#常见问题).
+For detailed answers and exact commands, read the [English README](https://github.com/hogancv/coordinate-agents#faq) or [Simplified Chinese README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md#常见问题).

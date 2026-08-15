@@ -7,14 +7,14 @@ description: Complete Codex and Antigravity installation conversations, safe com
 # Install with AI
 
 The canonical bilingual contract is
-[`AI_INSTALL.md`](https://github.com/hogancv/coordinate-cli-agents/blob/main/AI_INSTALL.md).
+[`AI_INSTALL.md`](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md).
 An AI installer should read that file first, verify identity, execute only the selected installation,
 and prove the result with `doctor`. It must not treat a successful npm command as sufficient proof.
 
 ## Codex installation conversation
 
 ```text
-User: Install coordinate-cli-agents for Codex from the official project. Verify it and do not start
+User: Install coordinate-agents for Codex from the official project. Verify it and do not start
       a collaboration task.
 
 Codex: I will verify the official repository and npm metadata, inspect AI_INSTALL.md, check Node,
@@ -22,12 +22,12 @@ Codex: I will verify the official repository and npm metadata, inspect AI_INSTAL
        credentials and will not run quickstart.
 
 [executes]
-npm view @hogancv/coordinate-cli-agents dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents dist-tags.latest repository.url --json
 node --version
 git --version
 codex --version
-npx --yes @hogancv/coordinate-cli-agents@<verified-version> install --codex
-npx --yes @hogancv/coordinate-cli-agents@<verified-version> doctor --codex
+npx --yes @hogancv/coordinate-agents@<verified-version> install --codex
+npx --yes @hogancv/coordinate-agents@<verified-version> doctor --codex
 
 Codex: Installation verified. Package owner/name and repository matched; Node and Git passed;
        Codex CLI was found; the managed Codex Skill is healthy. Antigravity was not modified.
@@ -39,19 +39,19 @@ switch to a fork.
 ## Antigravity installation conversation
 
 ```text
-User: Install coordinate-cli-agents for Google Antigravity CLI only. Keep my existing login.
+User: Install coordinate-agents for Google Antigravity CLI only. Keep my existing login.
 
 Antigravity: I will verify the official package and AI_INSTALL.md, check prerequisites, install only
              the Antigravity Skill, and run the selected doctor check. I will not read, move, or
              print your agy credentials.
 
 [executes]
-npm view @hogancv/coordinate-cli-agents dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents dist-tags.latest repository.url --json
 node --version
 git --version
 agy --version
-npx --yes @hogancv/coordinate-cli-agents@<verified-version> install --antigravity
-npx --yes @hogancv/coordinate-cli-agents@<verified-version> doctor --antigravity
+npx --yes @hogancv/coordinate-agents@<verified-version> install --antigravity
+npx --yes @hogancv/coordinate-agents@<verified-version> doctor --antigravity
 
 Antigravity: Installation verified. The managed Antigravity Skill is healthy at the reported path;
              Codex was not modified and no collaboration task was started.
@@ -96,8 +96,8 @@ For exact diagnostic examples, see [troubleshooting](./troubleshooting.html).
 ## Installation result report
 
 ```text
-Package: @hogancv/coordinate-cli-agents@<verified-version>
-Repository: https://github.com/hogancv/coordinate-cli-agents
+Package: @hogancv/coordinate-agents@<verified-version>
+Repository: https://github.com/hogancv/coordinate-agents
 Selected target: Codex | Antigravity | both
 Node.js: <version, PASS/FAIL>
 Git: <version, PASS/FAIL>

@@ -25,4 +25,4 @@ Typical workflow:
 
 Messages and state survive terminal restarts. Reinvoke the Skill and inspect `status` to resume. Recover a stale claim only after confirming no matching implementation, commit, or reply exists, because recovery may make the work eligible for delivery again.
 
-The full command and state contract is maintained in [`references/protocol.md`](https://github.com/hogancv/coordinate-cli-agents/blob/main/references/protocol.md).
+The full command and state contract is maintained in [`references/protocol.md`](https://github.com/hogancv/coordinate-agents/blob/main/references/protocol.md).

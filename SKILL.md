@@ -1,10 +1,10 @@
 ---
-name: coordinate-cli-agents
+name: coordinate-agents
 description: >-
   Coordinate OpenAI Codex CLI and Google Antigravity CLI (agy) for multi-agent collaboration in the same Git repository. Use when the user wants Codex to clarify requirements, write a specification, review commits, or enforce a release gate while Antigravity exclusively performs implementation; also use to install, diagnose, resume, recover, update, or uninstall this workflow and its recoverable `.agent-bus`. Do not use for single-agent coding tasks, general Codex-versus-Antigravity comparisons, or workflows where both agents may edit product code.
 ---
 
-# Coordinate CLI Agents
+# Coordinate Agents
 
 A local-first coordination protocol and runtime for AI coding agents in a Git repository. Codex CLI and Antigravity CLI serve as the default first-party reference workflow. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
 
@@ -13,7 +13,7 @@ A local-first coordination protocol and runtime for AI coding agents in a Git re
 When asked to set up collaboration, run the package CLI rather than asking the user to copy long role prompts:
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
+npx @hogancv/coordinate-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
 ```
 
 Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>` and `--implementer <agent>`. Read `references/task-templates.md` for task structure guidelines.

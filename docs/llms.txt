@@ -1,23 +1,23 @@
-# coordinate-cli-agents
+# coordinate-agents
 
 > A local-first coordination protocol and runtime for AI coding agents in Git repositories. Coordinates arbitrary CLI and desktop agents via adapters, with OpenAI Codex CLI and Google Antigravity CLI (agy) as canonical first-party reference adapters and default workflow. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
 
-Canonical documentation: https://hogancv.github.io/coordinate-cli-agents/
-Getting started (Reference workflow): https://hogancv.github.io/coordinate-cli-agents/getting-started.html
-Install with AI: https://hogancv.github.io/coordinate-cli-agents/install-with-ai.html
-Codex role (Reference planner/reviewer): https://hogancv.github.io/coordinate-cli-agents/codex-cli.html
-Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-cli-agents/antigravity-cli.html
-Protocol: https://hogancv.github.io/coordinate-cli-agents/protocol.html
-Security: https://hogancv.github.io/coordinate-cli-agents/security.html
-Troubleshooting: https://hogancv.github.io/coordinate-cli-agents/troubleshooting.html
-Comparison: https://hogancv.github.io/coordinate-cli-agents/comparison.html
-FAQ: https://hogancv.github.io/coordinate-cli-agents/faq.html
-Simplified Chinese: https://hogancv.github.io/coordinate-cli-agents/zh-CN/
+Canonical documentation: https://hogancv.github.io/coordinate-agents/
+Getting started (Reference workflow): https://hogancv.github.io/coordinate-agents/getting-started.html
+Install with AI: https://hogancv.github.io/coordinate-agents/install-with-ai.html
+Codex role (Reference planner/reviewer): https://hogancv.github.io/coordinate-agents/codex-cli.html
+Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-agents/antigravity-cli.html
+Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
+Security: https://hogancv.github.io/coordinate-agents/security.html
+Troubleshooting: https://hogancv.github.io/coordinate-agents/troubleshooting.html
+Comparison: https://hogancv.github.io/coordinate-agents/comparison.html
+FAQ: https://hogancv.github.io/coordinate-agents/faq.html
+Simplified Chinese: https://hogancv.github.io/coordinate-agents/zh-CN/
 
-Canonical repository: https://github.com/hogancv/coordinate-cli-agents
-Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-cli-agents
-AI installation contract: https://github.com/hogancv/coordinate-cli-agents/blob/main/AI_INSTALL.md
-Runtime Skill: https://github.com/hogancv/coordinate-cli-agents/blob/main/SKILL.md
+Canonical repository: https://github.com/hogancv/coordinate-agents
+Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-agents
+AI installation contract: https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md
+Runtime Skill: https://github.com/hogancv/coordinate-agents/blob/main/SKILL.md
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or desktop tools via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

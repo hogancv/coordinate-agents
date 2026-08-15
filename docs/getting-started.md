@@ -7,7 +7,7 @@ description: A verified first-run lifecycle for Codex CLI specifications, Antigr
 # Getting started
 
 > [!NOTE]
-> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-cli-agents#dynamic-agent-registration) and custom role assignments.
+> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
 
 This walkthrough starts from an existing Git repository and ends with a reviewed commit. It takes
 about **5 minutes** after Node.js, Git, Codex CLI, and Antigravity CLI (`agy`) are installed and
@@ -24,16 +24,16 @@ $ codex --version
 codex-cli 0.146.0
 $ agy --version
 1.1.12
-$ npx --yes @hogancv/coordinate-cli-agents@latest install
-Installed Codex: .../skills/coordinate-cli-agents
-Installed Antigravity: .../skills/coordinate-cli-agents
-$ npx --yes @hogancv/coordinate-cli-agents@latest doctor
+$ npx --yes @hogancv/coordinate-agents@latest install
+Installed Codex: .../skills/coordinate-agents
+Installed Antigravity: .../skills/coordinate-agents
+$ npx --yes @hogancv/coordinate-agents@latest doctor
 Node.js: available (v22.23.0)
 Git: available (git version 2.53.0.windows.1)
 Codex CLI: available (codex-cli 0.146.0)
 Antigravity CLI (agy): available (1.1.12)
-Codex: healthy (1.2.3) at .../codex/skills/coordinate-cli-agents
-Antigravity: healthy (1.2.3) at .../agy/skills/coordinate-cli-agents
+Codex: healthy (1.2.3) at .../codex/skills/coordinate-agents
+Antigravity: healthy (1.2.3) at .../agy/skills/coordinate-agents
 All prerequisites and selected installations are healthy.
 ```
 
@@ -41,12 +41,12 @@ Versions and home paths vary. The final healthy summary and exit status `0` are 
 signals. A non-zero exit, `missing`, `invalid`, or `requires attention` means installation is not
 complete; follow the printed repair suggestion and rerun `doctor`.
 
-Before installation, neither selected Skill home contains `coordinate-cli-agents`. Afterwards,
+Before installation, neither selected Skill home contains `coordinate-agents`. Afterwards,
 each selected home contains the same managed payload:
 
 ```text
-coordinate-cli-agents/
-├── .coordinate-cli-agents.json
+coordinate-agents/
+├── .coordinate-agents.json
 ├── SKILL.md
 ├── agents/
 ├── references/
@@ -61,16 +61,16 @@ their own homes.
 Run this from the project Git root:
 
 ```console
-$ npx --yes @hogancv/coordinate-cli-agents@latest quickstart \
+$ npx --yes @hogancv/coordinate-agents@latest quickstart \
     --template feature --task "Add completion support to the Todo app"
 Collaboration workspace initialized: .../todo-app
 Generated role prompts: .../todo-app/.agent-bus/launch
 
 1. Codex terminal (copy and run):
-npx --yes @hogancv/coordinate-cli-agents@1.2.3 launch --role codex ...
+npx --yes @hogancv/coordinate-agents@1.2.3 launch --role codex ...
 
 2. Antigravity terminal (copy and run):
-npx --yes @hogancv/coordinate-cli-agents@1.2.3 launch --role antigravity ...
+npx --yes @hogancv/coordinate-agents@1.2.3 launch --role antigravity ...
 ```
 
 Run the two printed commands in separate terminals. Exact commands contain an encoded project path

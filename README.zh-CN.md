@@ -1,8 +1,11 @@
-# coordinate-cli-agents
+# coordinate-agents
 
 简体中文 | [English](./README.md)
 
 基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认协作工作流，同时支持动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面级编程代理接入。
+
+> **更名与迁移提示 (Project Rename)**  
+> `coordinate-agents` 此前名为 `coordinate-cli-agents`。随着协调运行时演进至更广泛的代理协作生态，项目已正式更名。
 
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
@@ -13,8 +16,8 @@
 在你的 Git 仓库中运行：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest install --lang zh-CN
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "开发 Todo Web 应用，支持新增、完成、删除和本地持久化" --lang zh-CN
+npx @hogancv/coordinate-agents@latest install --lang zh-CN
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo Web 应用，支持新增、完成、删除和本地持久化" --lang zh-CN
 ```
 
 `quickstart` 会初始化本地总线，并准确输出两条简短、可复制的命令：
@@ -40,19 +43,19 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "
 **同时安装两个代理**
 
 ```text
-从官方仓库 https://github.com/hogancv/coordinate-cli-agents 安装 coordinate-cli-agents。先读取仓库根目录的 AI_INSTALL.md，核对仓库所有者、npm 包名、最新稳定版本和安装影响，然后按照文档为 Codex CLI 与 Antigravity CLI 安装。安装完成后运行 doctor --lang zh-CN 验证并向我报告结果。不要使用第三方 Fork，不要索取凭据，不要修改我的产品代码，也不要在验证成功前启动协作任务。
+从官方仓库 https://github.com/hogancv/coordinate-agents 安装 coordinate-agents。先读取仓库根目录的 AI_INSTALL.md，核对仓库所有者、npm 包名、最新稳定版本和安装影响，然后按照文档为 Codex CLI 与 Antigravity CLI 安装。安装完成后运行 doctor --lang zh-CN 验证并向我报告结果。不要使用第三方 Fork，不要索取凭据，不要修改我的产品代码，也不要在验证成功前启动协作任务。
 ```
 
 **只安装 Codex**
 
 ```text
-从官方仓库 hogancv/coordinate-cli-agents 安装 Codex 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Codex 端，完成后运行 doctor --codex --lang zh-CN。不要修改当前项目代码。
+从官方仓库 hogancv/coordinate-agents 安装 Codex 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Codex 端，完成后运行 doctor --codex --lang zh-CN。不要修改当前项目代码。
 ```
 
 **只安装 Antigravity**
 
 ```text
-从官方仓库 hogancv/coordinate-cli-agents 安装 Antigravity 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Antigravity 端，完成后运行 doctor --antigravity --lang zh-CN。不要修改当前项目代码。
+从官方仓库 hogancv/coordinate-agents 安装 Antigravity 端 Skill。先读取 AI_INSTALL.md 并核对官方 npm 包，仅安装 Antigravity 端，完成后运行 doctor --antigravity --lang zh-CN。不要修改当前项目代码。
 ```
 
 ## 架构：代理总线、适配器与工作流角色
@@ -114,19 +117,19 @@ graph TD
 
 ```sh
 # 注册自定义 CLI 代理
-npx @hogancv/coordinate-cli-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
 
 # 列出所有已注册代理及当前工作流角色分配
-npx @hogancv/coordinate-cli-agents@latest agent list
+npx @hogancv/coordinate-agents@latest agent list
 
 # 诊断检查所有已注册代理及其 CLI 适配器可用性
-npx @hogancv/coordinate-cli-agents@latest agent doctor
+npx @hogancv/coordinate-agents@latest agent doctor
 ```
 
 启动包含自定义角色分配的协作：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "开发搜索功能"
+npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer my-agent --template feature --task "开发搜索功能"
 ```
 
 ## 环境要求
@@ -142,22 +145,22 @@ npx @hogancv/coordinate-cli-agents@latest quickstart --planner codex --implement
 无需向业务项目添加依赖，即可安装或更新两个 CLI 的技能：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest install
+npx @hogancv/coordinate-agents@latest install
 ```
 
 安装器会把永久技能副本复制到：
 
 ```text
-~/.codex/skills/coordinate-cli-agents
-~/.gemini/skills/coordinate-cli-agents
+~/.codex/skills/coordinate-agents
+~/.gemini/skills/coordinate-agents
 ```
 
-安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装，包括已修改的受管理副本。来源不明的目录在未明确提供 `--force` 时不会被覆盖；卸载已修改的副本同样必须显式使用 `--force`。
+安装器不会把技能目录链接到可能被清理的 npm 临时缓存。更新前会备份由本包管理的旧安装，包括旧版本 `coordinate-cli-agents` 受管目录。来源不明的目录在未明确提供 `--force` 时不会被覆盖；卸载已修改的副本同样必须显式使用 `--force`。
 
 验证安装：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
+npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
 ```
 
 `doctor` 会检查 Node.js、Git、`codex`、`agy` 以及两份技能安装。缺失组件和由本包管理但损坏的安装会得到根据当前平台生成的建议修复命令；无法识别的现有技能目录则会得到先备份或移动的非破坏性操作说明。Linux 用户必须先确认建议适用于自己的发行版且能提供 Node.js 18+，再执行该命令。
@@ -166,19 +169,19 @@ npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
 
 ```sh
 # 只安装 Codex
-npx @hogancv/coordinate-cli-agents@latest install --codex --lang zh-CN
+npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN
 
 # 只安装 Antigravity
-npx @hogancv/coordinate-cli-agents@latest install --antigravity --lang zh-CN
+npx @hogancv/coordinate-agents@latest install --antigravity --lang zh-CN
 
 # 明确执行更新
-npx @hogancv/coordinate-cli-agents@latest update --lang zh-CN
+npx @hogancv/coordinate-agents@latest update --lang zh-CN
 
 # 中文输出诊断
-npx @hogancv/coordinate-cli-agents@latest doctor --lang zh-CN
+npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
 
 # 移除由本包管理的安装
-npx @hogancv/coordinate-cli-agents@latest uninstall
+npx @hogancv/coordinate-agents@latest uninstall
 ```
 
 安装器遵循 `CODEX_HOME` 与 `GEMINI_HOME`。也可以使用 `--codex-home <路径>` 和 `--antigravity-home <路径>` 自定义目标目录。
@@ -188,9 +191,9 @@ npx @hogancv/coordinate-cli-agents@latest uninstall
 或者全局安装命令以便直接使用：
 
 ```sh
-npm install --global @hogancv/coordinate-cli-agents
-coordinate-cli-agents install
-coordinate-cli-agents doctor
+npm install --global @hogancv/coordinate-agents
+coordinate-agents install
+coordinate-agents doctor
 ```
 
 ## 任务模板
@@ -204,9 +207,9 @@ coordinate-cli-agents doctor
 示例：
 
 ```sh
-npx @hogancv/coordinate-cli-agents@latest quickstart --template bug --task "空查询导致搜索崩溃"
-npx @hogancv/coordinate-cli-agents@latest quickstart --template feature --task "添加截止日期与逾期过滤器"
-npx @hogancv/coordinate-cli-agents@latest quickstart --template refactor --task "抽离持久化层且不改变 UI 行为"
+npx @hogancv/coordinate-agents@latest quickstart --template bug --task "空查询导致搜索崩溃"
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "添加截止日期与逾期过滤器"
+npx @hogancv/coordinate-agents@latest quickstart --template refactor --task "抽离持久化层且不改变 UI 行为"
 ```
 
 各模板的详细信息清单请参见 [`references/task-templates.md`](./references/task-templates.md)。
@@ -231,7 +234,7 @@ RELEASE_APPROVED
 任务认领默认具有 4 小时租赁期。仅当确认未产生对应工作成果、commit 或回复后，才可回收异常中断的认领：
 
 ```sh
-BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
+BUS_TOOL="$HOME/.codex/skills/coordinate-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
 node "$BUS_TOOL" recover --root "$REPO" --agent antigravity --stale-after-seconds 14400
 ```
@@ -245,8 +248,7 @@ node "$BUS_TOOL" recover --root "$REPO" --agent antigravity --stale-after-second
 - 完整的提示词、需求、规格说明、澄清问答与审查评论；
 - commit 哈希、文件路径、验证日志，以及证据中的代码片段或 diff；
 - 角色状态、进程与主机元数据、消息租赁锁、去重记录与历史队列。
-
-请勿在总线消息中放置访问令牌、Cookie、密码、私钥或未经脱敏的生产数据。总线继承当前仓库目录的操作系统权限，本包不对其进行加密。`.git/info/exclude` 仅防止普通的 Git 跟踪，但**不能**阻止本地管理员、备份工具、网盘同步、恶意程序或同权限进程读取。对外提供诊断信息前，请仔细检查并脱敏 `.agent-bus/`。
+- 请勿在总线消息中放置访问令牌、Cookie、密码、私钥或未经脱敏的生产数据。总线继承当前仓库目录的操作系统权限，本包不对其进行加密。`.git/info/exclude` 仅防止普通的 Git 跟踪，但**不能**阻止本地管理员、备份工具、网盘同步、恶意程序或同权限进程读取。对外提供诊断信息前，请仔细检查并脱敏 `.agent-bus/`。
 
 常规恢复操作会保留历史记录。协作和审计完成后，可使用显式确认彻底清除总线数据：
 
@@ -261,7 +263,7 @@ node "$BUS_TOOL" clean --root "$REPO" --confirm DELETE_AGENT_BUS
 通常情况下，Skill 会自动调用总线脚本。如需手动排查：
 
 ```sh
-BUS_TOOL="$HOME/.codex/skills/coordinate-cli-agents/scripts/agent-bus.mjs"
+BUS_TOOL="$HOME/.codex/skills/coordinate-agents/scripts/agent-bus.mjs"
 REPO="$(git rev-parse --show-toplevel)"
 
 node "$BUS_TOOL" init --root "$REPO"
@@ -285,13 +287,13 @@ npm pack --dry-run
 - 仅当 GitHub Release 的 `vX.Y.Z` 标签与 `package.json` 完全一致时才触发发布。
 - 稳定版使用 npm 标签 `latest`；预发布版使用 `next`。
 - `.github/workflows/release.yml` 使用 npm Trusted Publishing (OIDC)，杜绝长期发布 Token，并在 `publishConfig` 中启用 npm Provenance。
-- 维护者必须在首次自动发布前，为 `hogancv/coordinate-cli-agents` 仓库配置 npm Trusted Publisher。
+- 维护者必须在首次自动发布前，为 `hogancv/coordinate-agents` 仓库配置 npm Trusted Publisher。
 
 ## 常见问题 (FAQ)
 
-### 什么是 coordinate-cli-agents？
+### 什么是 coordinate-agents？
 
-它是官方发布的 [`hogancv/coordinate-cli-agents`](https://github.com/hogancv/coordinate-cli-agents) npm 包与 Codex Skill，用于多代理编程协作工作流。Codex 负责需求澄清、规格制定、代码审查与发布门禁控制；Google Antigravity CLI（`agy`）则专注于业务代码与测试的实现。
+它是官方发布的 [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm 包与 Codex/Antigravity Skill，用于结构化多代理编程协作工作流。Codex 负责需求澄清、规格制定、代码审查与发布门禁控制；Google Antigravity CLI（`agy`）则专注于业务代码与测试的实现，同时支持动态接入任意 CLI 及桌面代理。
 
 ### 如何让 Codex CLI 和 Antigravity CLI 协作？
 
@@ -307,7 +309,7 @@ npm pack --dry-run
 
 ### 如何从 npm 安装 Codex Skill？
 
-运行 `npx @hogancv/coordinate-cli-agents@latest install --codex --lang zh-CN`，重启 Codex CLI，并通过 `npx @hogancv/coordinate-cli-agents@latest doctor --codex --lang zh-CN` 进行验证。若由 AI 执行安装，请使用官方标准的 [`AI_INSTALL.md`](./AI_INSTALL.md)。
+运行 `npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN`，重启 Codex CLI，并通过 `npx @hogancv/coordinate-agents@latest doctor --codex --lang zh-CN` 进行验证。若由 AI 执行安装，请使用官方标准的 [`AI_INSTALL.md`](./AI_INSTALL.md)。
 
 ### Codex CLI 与 Antigravity CLI 的分工是什么？
 
@@ -321,9 +323,9 @@ Codex 负责澄清需求、生成规格说明与验收标准、审查 commit 和
 
 它属于本地明文工作数据，而非加密的机密存储。`.git/info/exclude` 仅防止普通 Git 跟踪，无法防御本地其他进程、管理员、备份工具或同步软件。切勿在其中存储凭据；请阅读[安全与数据边界](#安全与数据边界)和 [`SECURITY.md`](./SECURITY.md)。
 
-### 如何卸载 coordinate-cli-agents？
+### 如何卸载 coordinate-agents？
 
-运行 `npx @hogancv/coordinate-cli-agents@latest uninstall`。该命令默认仅清理可识别且未被修改的受管安装，遇到未知目录或已修改内容时会拒绝删除，除非显式指定 `--force`。
+运行 `npx @hogancv/coordinate-agents@latest uninstall`。该命令默认仅清理可识别且未被修改的受管安装，遇到未知目录或已修改内容时会拒绝删除，除非显式指定 `--force`。
 
 ## 许可证
 

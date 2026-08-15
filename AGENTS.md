@@ -5,8 +5,8 @@ is not the installation entry point. For installation, read [`AI_INSTALL.md`](./
 
 ## Canonical identity
 
-- Repository: `https://github.com/hogancv/coordinate-cli-agents`
-- npm package: `@hogancv/coordinate-cli-agents`
+- Repository: `https://github.com/hogancv/coordinate-agents`
+- npm package: `@hogancv/coordinate-agents`
 - Package source of truth: `package.json`
 
 Do not rename, mirror, or substitute these identities. Never add credentials, tokens, cookies,
@@ -15,7 +15,7 @@ fixtures, logs, documentation, or release artifacts.
 
 ## Repository map
 
-- `bin/coordinate-cli-agents.mjs`: installer, updater, doctor, quickstart, launch, agent management, and uninstall CLI.
+- `bin/coordinate-agents.mjs`: installer, updater, doctor, quickstart, launch, agent management, and uninstall CLI.
 - `adapters/`: agent adapter subsystem (`codex-cli`, `antigravity-cli`, `generic-cli`, and registry).
 - `scripts/config.mjs`: shared safe configuration loader, agent ID validator, and path containment checks.
 - `scripts/agent-bus.mjs`: durable project-local message bus protocol engine.

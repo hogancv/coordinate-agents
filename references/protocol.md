@@ -67,7 +67,7 @@ Stored project-locally at `.agent-bus/config.json`:
 ```
 
 - Initialized idempotently by `agent-bus init` or `quickstart`.
-- New agents are registered atomically via `coordinate-cli-agents agent add <id> --adapter <adapter> --command <cmd>` or `agent-bus agent-add`.
+- New agents are registered atomically via `coordinate-agents agent add <id> --adapter <adapter> --command <cmd>` or `agent-bus agent-add`.
 - Registration creates dedicated inbox stages, state, and quarantine directories for that agent without disturbing existing queues.
 
 ## Queues and message routing
