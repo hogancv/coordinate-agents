@@ -22,6 +22,14 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { getAdapter } from '../adapters/index.mjs';
+import {
+  assertContained,
+  assertSafePath as assertSafePathUtil,
+  readConfig,
+  validateAgentId,
+  validateConfig,
+  writeConfig,
+} from '../scripts/config.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
@@ -237,8 +245,14 @@ function parseArgs(argv) {
       if (option === '--antigravity-home-base64') result.antigravityHomeBase64 = value;
       if (option === '--root') result.root = resolve(value);
       if (option === '--root-base64') result.rootBase64 = value;
-      if (option === '--role') result.role = value.toLowerCase();
-      if (option === '--agent') result.agent = value.toLowerCase();
+      if (option === '--role') {
+        const val = value.toLowerCase();
+        result.role = val;
+      }
+      if (option === '--agent') {
+        const val = value.toLowerCase();
+        result.agent = val;
+      }
       if (option === '--planner') result.planner = value.toLowerCase();
       if (option === '--implementer') result.implementer = value.toLowerCase();
       if (option === '--reviewer') result.reviewer = value.toLowerCase();
@@ -251,6 +265,9 @@ function parseArgs(argv) {
     } else {
       throw new Error(`UNKNOWN_OPTION:${option}`);
     }
+  }
+  if (result.agent && result.role && result.agent !== result.role) {
+    throw new Error(`Conflicting options: --agent "${result.agent}" and --role "${result.role}" must match.`);
   }
   if (!result.codex && !result.antigravity) {
     result.codex = true;
@@ -550,24 +567,43 @@ function taskGuidance(template, language) {
   return guidance[language][template];
 }
 
-function rolePrompts(options, language, planner = 'codex', implementer = 'antigravity') {
+function buildAgentPrompt({ agentId, roles, options, language, planner, implementer, reviewer }) {
   const task = options.task.trim() || (language === 'zh' ? '先询问我本轮的具体需求。' : 'Ask me for the concrete task for this round.');
+  const isDefaultCodex = agentId === 'codex' && roles.includes('planner') && !roles.includes('implementer');
+  const isDefaultAgy = agentId === 'antigravity' && roles.includes('implementer') && !roles.includes('planner');
+
   if (language === 'zh') {
-    const plannerPrompt = planner === 'codex'
-      ? `调用 $coordinate-cli-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`
-      : `调用 $coordinate-cli-agents 并作为规划者（${planner}）恢复当前仓库的协作。你负责需求澄清、规格编写、提交/证据审查与发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
-    const implementerPrompt = implementer === 'antigravity'
-      ? '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。'
-      : `调用 $coordinate-cli-agents 并作为实现者（${implementer}）恢复当前仓库的协作。立即等待任务指令；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待审查；不得发布。`;
-    return { [planner]: plannerPrompt, [implementer]: implementerPrompt };
+    if (isDefaultCodex) {
+      return `调用 $coordinate-cli-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    }
+    if (isDefaultAgy) {
+      return '调用 $coordinate-cli-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
+    }
+    if (roles.includes('planner') && roles.includes('implementer')) {
+      return `调用 $coordinate-cli-agents 并作为${roles.join('与')}（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    }
+    if (roles.includes('planner') || roles.includes('reviewer')) {
+      const label = roles.includes('planner') && roles.includes('reviewer') ? '规划与审查者' : (roles.includes('planner') ? '规划者' : '审查者');
+      return `调用 $coordinate-cli-agents 并作为${label}（${agentId}）恢复当前仓库的协作。你负责需求澄清、规格编写、提交/证据审查与发布门禁，不修改产品代码。${taskGuidance(options.template, language)}\n\n本轮任务：${task}`;
+    }
+    return `调用 $coordinate-cli-agents 并作为实现者（${agentId}）恢复当前仓库的协作。立即等待任务指令；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待审查；不得发布。`;
   }
-  const plannerPrompt = planner === 'codex'
-    ? `Use $coordinate-cli-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`
-    : `Use $coordinate-cli-agents as planner (${planner}) and resume collaboration in this repository. Own clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
-  const implementerPrompt = implementer === 'antigravity'
-    ? 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.'
-    : `Use $coordinate-cli-agents as implementer (${implementer}) and resume collaboration in this repository. Wait for instructions; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.`;
-  return { [planner]: plannerPrompt, [implementer]: implementerPrompt };
+
+  // English
+  if (isDefaultCodex) {
+    return `Use $coordinate-cli-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  }
+  if (isDefaultAgy) {
+    return 'Use $coordinate-cli-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
+  }
+  if (roles.includes('planner') && roles.includes('implementer')) {
+    return `Use $coordinate-cli-agents as ${roles.join(' and ')} (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  }
+  if (roles.includes('planner') || roles.includes('reviewer')) {
+    const label = roles.includes('planner') && roles.includes('reviewer') ? 'planner and reviewer' : (roles.includes('planner') ? 'planner' : 'reviewer');
+    return `Use $coordinate-cli-agents as ${label} (${agentId}) and resume collaboration in this repository. Own clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(options.template, language)}\n\nTask: ${task}`;
+  }
+  return `Use $coordinate-cli-agents as implementer (${agentId}) and resume collaboration in this repository. Wait for instructions; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.`;
 }
 
 function quickstart(options, t, language) {
@@ -585,30 +621,62 @@ function quickstart(options, t, language) {
   mkdirSync(launchDir, { recursive: true });
   assertSafePath(root, launchDir, t);
 
-  let busConfig = { agents: [{ id: 'codex' }, { id: 'antigravity' }], workflow: { planner: 'codex', implementer: 'antigravity' } };
-  const cfgPath = join(busPath, 'config.json');
-  if (existsSync(cfgPath)) {
-    try {
-      busConfig = JSON.parse(readFileSync(cfgPath, 'utf8'));
-    } catch { /* use defaults */ }
-  }
+  const busConfig = readConfig(busPath);
+  const registeredIds = new Set(busConfig.agents.map(a => a.id));
 
   const planner = options.planner || busConfig.workflow?.planner || 'codex';
   const implementer = options.implementer || busConfig.workflow?.implementer || 'antigravity';
+  const reviewer = options.reviewer || busConfig.workflow?.reviewer || (planner === 'codex' ? 'codex' : planner);
 
-  const prompts = rolePrompts(options, language, planner, implementer);
-  const promptPaths = [
-    join(launchDir, `${planner}.txt`),
-    join(launchDir, `${implementer}.txt`),
-  ];
-  if (promptPaths.some(existsSync)) throw new Error(format(t.launchExists, { path: launchDir }));
+  validateAgentId(planner);
+  validateAgentId(implementer);
+  validateAgentId(reviewer);
+
+  if (!registeredIds.has(planner)) {
+    throw new Error(format(t.badAgent, { agent: planner }));
+  }
+  if (!registeredIds.has(implementer)) {
+    throw new Error(format(t.badAgent, { agent: implementer }));
+  }
+  if (!registeredIds.has(reviewer)) {
+    throw new Error(format(t.badAgent, { agent: reviewer }));
+  }
+
+  busConfig.workflow = { planner, implementer, reviewer };
+  writeConfig(busPath, busConfig);
+
+  const agentRolesMap = new Map();
+  for (const [role, id] of Object.entries({ planner, implementer, reviewer })) {
+    if (!agentRolesMap.has(id)) agentRolesMap.set(id, new Set());
+    agentRolesMap.get(id).add(role);
+  }
+
+  const promptEntries = [];
+  for (const [agentId, rolesSet] of agentRolesMap.entries()) {
+    const promptText = buildAgentPrompt({
+      agentId,
+      roles: [...rolesSet],
+      options,
+      language,
+      planner,
+      implementer,
+      reviewer,
+    });
+    const promptPath = join(launchDir, `${agentId}.txt`);
+    assertContained(launchDir, promptPath);
+    assertSafePath(launchDir, promptPath, t, false);
+    promptEntries.push({ agentId, promptPath, promptText });
+  }
+
+  if (promptEntries.some(e => existsSync(e.promptPath))) {
+    throw new Error(format(t.launchExists, { path: launchDir }));
+  }
+
   const created = [];
   try {
-    publishNewFile(promptPaths[0], `${prompts[planner]}\n`);
-    created.push(promptPaths[0]);
-    if (planner !== implementer) {
-      publishNewFile(promptPaths[1], `${prompts[implementer]}\n`);
-      created.push(promptPaths[1]);
+    for (const entry of promptEntries) {
+      publishNewFile(entry.promptPath, `${entry.promptText}\n`);
+      created.push(entry.promptPath);
     }
   } catch (error) {
     for (const path of created) removePath(path);
@@ -618,53 +686,54 @@ function quickstart(options, t, language) {
   const base = { root, language: language === 'zh' ? 'zh-CN' : 'en' };
   console.log(format(t.quickstartReady, { root }));
   console.log(format(t.promptsWritten, { path: launchDir }));
-  if (planner === 'codex' && implementer === 'antigravity') {
+
+  if (planner === 'codex' && implementer === 'antigravity' && reviewer === 'codex') {
     console.log(`\n${t.codexCommand}\n${packageCommand('launch', { ...base, role: 'codex' })}`);
     console.log(`\n${t.antigravityCommand}\n${packageCommand('launch', { ...base, role: 'antigravity' })}`);
   } else {
-    console.log(`\n${format(t.plannerCommand, { agent: planner, role: 'planner' })}\n${packageCommand('launch', { ...base, role: planner })}`);
-    console.log(`\n${format(t.implementerCommand, { agent: implementer, role: 'implementer' })}\n${packageCommand('launch', { ...base, role: implementer })}`);
+    for (const [agentId, rolesSet] of agentRolesMap.entries()) {
+      const rolesLabel = [...rolesSet].join(', ');
+      console.log(`\n${format(t.plannerCommand, { agent: agentId, role: rolesLabel })}\n${packageCommand('launch', { ...base, agent: agentId })}`);
+    }
   }
 }
 
 function launchRole(options, t) {
-  const agentId = options.agent || options.role;
+  const agentOption = options.agent;
+  const roleOption = options.role;
+  if (agentOption && roleOption && agentOption !== roleOption) {
+    throw new Error(`Conflicting options: --agent "${agentOption}" and --role "${roleOption}" must match.`);
+  }
+  const agentId = agentOption || roleOption;
   if (!agentId) throw new Error(format(t.badRole, { role: '' }));
+  validateAgentId(agentId);
+
   const root = assertGitRepository(options.root, t);
-  assertSafePath(root, join(root, '.agent-bus'), t);
-  assertSafePath(root, join(root, '.agent-bus', 'launch'), t);
-  const promptPath = join(root, '.agent-bus', 'launch', `${agentId}.txt`);
+  const busPath = join(root, '.agent-bus');
+  assertSafePath(root, busPath, t);
+  const launchDir = join(busPath, 'launch');
+  assertSafePath(root, launchDir, t);
+
+  const promptPath = join(launchDir, `${agentId}.txt`);
+  assertContained(launchDir, promptPath);
   if (!existsSync(promptPath)) {
     throw new Error(format(t.launchMissing, { command: packageCommand('quickstart', { root, language: options.language }) }));
   }
-  assertSafePath(root, promptPath, t, false);
+  assertSafePath(launchDir, promptPath, t, false);
   const prompt = readFileSync(promptPath, 'utf8').trim();
 
-  const cfgPath = join(root, '.agent-bus', 'config.json');
-  let agentConfig = { id: agentId, adapter: agentId === 'codex' ? 'codex-cli' : (agentId === 'antigravity' ? 'antigravity-cli' : 'generic-cli'), command: agentId === 'antigravity' ? 'agy' : agentId };
-  if (existsSync(cfgPath)) {
-    try {
-      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-      const found = cfg.agents?.find(a => a.id === agentId);
-      if (found) agentConfig = found;
-      else if (agentId !== 'codex' && agentId !== 'antigravity') {
-        throw new Error(format(t.badAgent, { agent: agentId }));
-      }
-    } catch (err) {
-      if (err.message.includes('Unknown agent')) throw err;
-    }
-  } else if (agentId !== 'codex' && agentId !== 'antigravity') {
-    throw new Error(format(t.badRole, { role: agentId }));
+  const busConfig = readConfig(busPath);
+  const agentConfig = busConfig.agents.find(a => a.id === agentId);
+  if (!agentConfig) {
+    throw new Error(format(t.badAgent, { agent: agentId }));
   }
 
   const adapter = getAdapter(agentConfig.adapter, agentConfig);
   const resolved = adapter.resolveLaunch({ root, prompt, role: agentId, language: options.language });
-  const isCmdOrBat = process.platform === 'win32' && /\.(cmd|bat)$/i.test(resolved.command) && resolved.prefix.length === 0;
   const result = spawnSync(resolved.command, [...resolved.prefix, ...resolved.args], {
     cwd: root,
     stdio: 'inherit',
     windowsHide: false,
-    shell: isCmdOrBat,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(format(t.launchFailed, { role: agentId, status: result.status }));
@@ -691,15 +760,15 @@ function handleAgentCommand(options, t) {
     return;
   }
   if (options.subcommand === 'doctor') {
-    const cfgPath = join(root, '.agent-bus', 'config.json');
-    if (!existsSync(cfgPath)) {
-      console.log('No .agent-bus/config.json found. Run quickstart or agent-bus init first.');
+    const busPath = join(root, '.agent-bus');
+    if (!existsSync(busPath)) {
+      console.log('No .agent-bus found. Run quickstart or agent-bus init first.');
       return;
     }
-    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-    console.log(`Checking ${cfg.agents.length} registered agents:`);
+    const busConfig = readConfig(busPath);
+    console.log(`Checking ${busConfig.agents.length} registered agents:`);
     let allHealthy = true;
-    for (const agent of cfg.agents) {
+    for (const agent of busConfig.agents) {
       try {
         const adapter = getAdapter(agent.adapter, agent);
         const detection = adapter.detect();

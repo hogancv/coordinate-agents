@@ -401,3 +401,81 @@ test('rejects corrupted or invalid bus configuration gracefully', () => {
   }
 });
 
+test('rejects invalid config schema, version mismatch, or unregistered workflow agents', () => {
+  const repo = repository();
+  try {
+    const cfgPath = join(repo, '.agent-bus', 'config.json');
+
+    // Version mismatch
+    writeFileSync(cfgPath, JSON.stringify({ version: 2, agents: [] }), 'utf8');
+    assert.equal(invoke(repo, ['status']).status, 1);
+
+    // Non-array agents
+    writeFileSync(cfgPath, JSON.stringify({ version: 1, agents: 'invalid' }), 'utf8');
+    assert.equal(invoke(repo, ['status']).status, 1);
+
+    // Duplicate agent IDs
+    writeFileSync(cfgPath, JSON.stringify({
+      version: 1,
+      agents: [
+        { id: 'codex', adapter: 'codex-cli', command: 'codex' },
+        { id: 'codex', adapter: 'generic-cli', command: 'other' },
+      ],
+    }), 'utf8');
+    assert.equal(invoke(repo, ['status']).status, 1);
+
+    // Workflow references unregistered agent
+    writeFileSync(cfgPath, JSON.stringify({
+      version: 1,
+      agents: [
+        { id: 'codex', adapter: 'codex-cli', command: 'codex' },
+      ],
+      workflow: { planner: 'nonexistent', implementer: 'codex', reviewer: 'codex' },
+    }), 'utf8');
+    assert.equal(invoke(repo, ['status']).status, 1);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('rejects symlinked or hardlinked bus configuration', () => {
+  const repo = repository();
+  try {
+    const busDir = join(repo, '.agent-bus');
+    const realCfg = join(repo, 'outside-config.json');
+    writeFileSync(realCfg, JSON.stringify({
+      version: 1,
+      agents: [{ id: 'codex', adapter: 'codex-cli', command: 'codex' }],
+    }), 'utf8');
+
+    const cfgPath = join(busDir, 'config.json');
+    rmSync(cfgPath, { force: true });
+
+    let symlinkCreated = false;
+    try {
+      symlinkSync(realCfg, cfgPath);
+      symlinkCreated = true;
+    } catch {
+      // Symlinks may require elevated privileges on Windows
+    }
+
+    if (symlinkCreated) {
+      const result = invoke(repo, ['status']);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Unsafe or invalid/);
+    }
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('rejects conflicting --agent and --role options', () => {
+  const repo = repository();
+  try {
+    const result = invoke(repo, ['wait', '--agent', 'codex', '--role', 'antigravity']);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Conflicting options: --agent.*and --role.*must match/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
+});

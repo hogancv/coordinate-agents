@@ -33,7 +33,7 @@ The installer writes selected skill copies under `~/.codex/skills/coordinate-cli
 to overwrite or remove unrecognized directories unless the user explicitly chooses `--force`.
 Run `doctor` after installation and treat any non-zero result as a failure.
 
-## Runtime data boundary
+## Runtime data and adapter boundary
 
 `.agent-bus/` is local plaintext working data, not a secret store. It can contain full prompts,
 requirements, review comments, commit hashes, paths, logs, source excerpts, role state, host/process
@@ -44,6 +44,17 @@ The bus inherits the repository's operating-system permissions and is not encryp
 other processes running as the user, backup tools, cloud synchronization, malware, or deliberate
 `git add -f`. Do not put credentials or unnecessary production data in the bus. Inspect and redact
 it before sharing diagnostics.
+
+### Adapter execution safety
+
+- Adapters execute CLI processes passing arguments strictly as arrays without invoking a shell (`shell: false`).
+- On Windows, batch scripts (`.cmd`/`.bat`) without safe executable or Node.js entrypoints are rejected to prevent shell interpolation.
+- Agent IDs are strictly validated (`^[a-z][a-z0-9_-]{0,63}$`, blocking Windows device names and path separators).
+- Paths outside or containing symlinks/junctions/hard-links are rejected.
+
+### Human release gate
+
+`REVIEW_APPROVED` is review sign-off, not release authorization. Only the exact human prompt `RELEASE_APPROVED` authorizes merge, tag, push, deploy, or publish actions.
 
 Use the documented explicit `clean --confirm DELETE_AGENT_BUS` operation only after collaboration
 and audit needs are finished. Cleanup is permanent for bus data but does not remove product files

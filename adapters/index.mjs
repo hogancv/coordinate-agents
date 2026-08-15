@@ -1,3 +1,4 @@
+import { AgentAdapter } from './base.mjs';
 import { CodexCliAdapter } from './codex-cli.mjs';
 import { AntigravityCliAdapter } from './antigravity-cli.mjs';
 import { GenericCliAdapter } from './generic-cli.mjs';
@@ -25,6 +26,7 @@ export function listAdapters() {
 }
 
 export {
+  AgentAdapter,
   CodexCliAdapter,
   AntigravityCliAdapter,
   GenericCliAdapter,

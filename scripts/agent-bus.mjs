@@ -12,38 +12,20 @@ import { spawnSync } from 'node:child_process';
 const states = new Set(['IDLE', 'CLARIFYING', 'SPEC_READY', 'IMPLEMENTING', 'WAITING', 'REVIEWING', 'CHANGES_REQUESTED', 'APPROVED', 'RELEASING', 'STOPPED', 'ERROR']);
 const messageFields = ['id', 'from', 'to', 'type', 'created_at', 'subject'];
 
-const DEFAULT_CONFIG = {
-  version: 1,
-  agents: [
-    { id: 'codex', adapter: 'codex-cli', command: 'codex' },
-    { id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' },
-  ],
-  workflow: {
-    planner: 'codex',
-    implementer: 'antigravity',
-    reviewer: 'codex',
-  },
-};
-
-const RESERVED_DEVICE_NAMES = new Set([
-  'con', 'prn', 'aux', 'nul',
-  'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
-  'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
-]);
-
-function validateAgentId(id) {
-  if (typeof id !== 'string' || id.length === 0) {
-    throw new Error('Agent ID must be a non-empty string.');
-  }
-  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) {
-    throw new Error(`Invalid agent ID "${id}". Agent ID must be 1-64 lowercase alphanumeric characters, underscores, or hyphens, starting with a lowercase letter.`);
-  }
-  const base = id.toLowerCase().split('.')[0];
-  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(id.toLowerCase())) {
-    throw new Error(`Invalid agent ID "${id}". Cannot use reserved device name.`);
-  }
-  return id;
-}
+import {
+  DEFAULT_CONFIG,
+  RESERVED_DEVICE_NAMES,
+  assertContained,
+  assertSafePath,
+  atomicWrite,
+  configPath,
+  readConfig,
+  readInternalFile,
+  safeInternalStat,
+  validateAgentId,
+  validateConfig,
+  writeConfig,
+} from './config.mjs';
 
 function parseArgs(argv) {
   if (!argv.length || ['--help', '-h', 'help'].includes(argv[0])) return { command: 'help' };
@@ -96,66 +78,6 @@ function repoRoot(candidate) {
   return resolve(git(['rev-parse', '--show-toplevel'], cwd));
 }
 
-function assertContained(root, candidate) {
-  const relation = relative(root, candidate);
-  if (relation === '..' || relation.startsWith(`..${sep}`) || isAbsolute(relation)) {
-    throw new Error(`Refusing agent-bus path outside repository: ${candidate}`);
-  }
-}
-
-function assertSafePath(root, candidate) {
-  assertContained(root, candidate);
-  let cursor = candidate;
-  while (cursor !== root) {
-    if (existsSync(cursor)) {
-      const metadata = lstatSync(cursor);
-      if (metadata.isSymbolicLink()) throw new Error(`Refusing symbolic link or junction in agent-bus path: ${cursor}`);
-      const canonical = realpathSync(cursor);
-      assertContained(root, canonical);
-    }
-    cursor = dirname(cursor);
-  }
-  return candidate;
-}
-
-function safeInternalStat(bus, path) {
-  assertContained(bus, path);
-  const metadata = lstatSync(path);
-  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
-    throw new Error(`Refusing linked or non-regular agent-bus file: ${path}`);
-  }
-  assertContained(bus, realpathSync(path));
-  return metadata;
-}
-
-function readInternalFile(bus, path) {
-  safeInternalStat(bus, path);
-  return readFileSync(path, 'utf8');
-}
-
-function syncFile(path) {
-  const fd = openSync(path, 'r');
-  try {
-    try { fsyncSync(fd); } catch (error) {
-      if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(error.code)) throw error;
-    }
-  } finally { closeSync(fd); }
-}
-
-function atomicWrite(destination, content, tempDirectory) {
-  mkdirSync(dirname(destination), { recursive: true });
-  mkdirSync(tempDirectory, { recursive: true });
-  const temp = join(tempDirectory, `.tmp-${process.pid}-${randomUUID().replaceAll('-', '')}`);
-  writeFileSync(temp, content, { encoding: 'utf8', flag: 'wx' });
-  syncFile(temp);
-  try {
-    renameSync(temp, destination);
-  } catch (error) {
-    rmSync(temp, { force: true });
-    throw error;
-  }
-}
-
 function writeLease(messagePath, bus, leaseSeconds) {
   const claimedAt = new Date();
   atomicWrite(`${messagePath}.lease.json`, `${JSON.stringify({
@@ -165,63 +87,6 @@ function writeLease(messagePath, bus, leaseSeconds) {
     host: hostname(),
     claim_token: randomUUID(),
   }, null, 2)}\n`, join(bus, 'tmp'));
-}
-
-function validateConfig(config) {
-  if (!config || typeof config !== 'object' || Array.isArray(config)) {
-    throw new Error('Config must be a JSON object.');
-  }
-  if (config.version !== 1) {
-    throw new Error(`Unsupported config version: ${config.version}. Expected 1.`);
-  }
-  if (!Array.isArray(config.agents) || config.agents.length === 0) {
-    throw new Error('Config must define a non-empty "agents" array.');
-  }
-  const ids = new Set();
-  for (const agent of config.agents) {
-    if (!agent || typeof agent !== 'object' || Array.isArray(agent)) throw new Error('Invalid agent record in config.');
-    validateAgentId(agent.id);
-    if (ids.has(agent.id)) throw new Error(`Duplicate agent ID in config: ${agent.id}`);
-    ids.add(agent.id);
-    if (!agent.adapter || typeof agent.adapter !== 'string') {
-      throw new Error(`Agent "${agent.id}" is missing required "adapter" string.`);
-    }
-  }
-  if (config.workflow) {
-    if (typeof config.workflow !== 'object' || Array.isArray(config.workflow)) {
-      throw new Error('Config workflow must be an object.');
-    }
-    for (const [role, agentId] of Object.entries(config.workflow)) {
-      if (!ids.has(agentId)) {
-        throw new Error(`Workflow role "${role}" references unregistered agent "${agentId}".`);
-      }
-    }
-  }
-  return config;
-}
-
-function configPath(bus) {
-  return join(bus, 'config.json');
-}
-
-function readConfig(bus) {
-  const cfgFile = configPath(bus);
-  if (!existsSync(cfgFile)) {
-    return DEFAULT_CONFIG;
-  }
-  try {
-    const content = readInternalFile(bus, cfgFile);
-    const parsed = JSON.parse(content);
-    return validateConfig(parsed);
-  } catch (err) {
-    throw new Error(`Failed to load valid .agent-bus/config.json: ${err.message}`);
-  }
-}
-
-function writeConfig(bus, config) {
-  validateConfig(config);
-  const destination = configPath(bus);
-  atomicWrite(destination, `${JSON.stringify(config, null, 2)}\n`, join(bus, 'tmp'));
 }
 
 function getRegisteredAgentMap(bus) {
@@ -628,6 +493,7 @@ function agentAdd(options, bus, root) {
   if (options.args) {
     try {
       args = JSON.parse(options.args);
+      if (!Array.isArray(args)) throw new Error('Args must be an array of strings.');
     } catch {
       args = options.args.split(',').map(s => s.trim());
     }
@@ -641,10 +507,37 @@ function agentAdd(options, bus, root) {
     }
     const newAgent = { id, adapter, command };
     if (args) newAgent.args = args;
-    config.agents.push(newAgent);
-    writeConfig(bus, config);
-    ensureAgentDirectories(bus, id, root);
-    console.log(JSON.stringify({ added: id, agent: newAgent, config }, null, 2));
+    const testConfig = {
+      ...config,
+      agents: [...config.agents, newAgent],
+    };
+    validateConfig(testConfig);
+
+    const createdDirs = [];
+    try {
+      const agentDirs = [
+        `inbox/${id}/new`,
+        `inbox/${id}/processing`,
+        `inbox/${id}/processed`,
+        `quarantine/${id}`,
+        `state/${id}`,
+      ];
+      for (const directory of agentDirs) {
+        const fullPath = assertSafePath(root, join(bus, directory));
+        if (!existsSync(fullPath)) {
+          mkdirSync(fullPath, { recursive: true });
+          createdDirs.push(fullPath);
+        }
+        assertSafePath(root, fullPath);
+      }
+      writeConfig(bus, testConfig);
+      console.log(JSON.stringify({ added: id, agent: newAgent, config: testConfig }, null, 2));
+    } catch (err) {
+      for (const dir of createdDirs.reverse()) {
+        try { rmSync(dir, { recursive: true, force: true }); } catch { /* ignore rollback error */ }
+      }
+      throw err;
+    }
   } finally {
     release();
   }

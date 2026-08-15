@@ -426,8 +426,8 @@ test('quickstart supports workflow role reassignment', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /architect \(planner\) terminal/);
     assert.match(result.stdout, /coder \(implementer\) terminal/);
-    assert.match(result.stdout, /launch.*--role.*architect/s);
-    assert.match(result.stdout, /launch.*--role.*coder/s);
+    assert.match(result.stdout, /launch.*--agent.*architect/s);
+    assert.match(result.stdout, /launch.*--agent.*coder/s);
 
     const plannerPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'architect.txt'), 'utf8');
     const coderPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'coder.txt'), 'utf8');
@@ -477,3 +477,77 @@ test('launch generic-cli adapter executes with configured arguments without shel
   }
 });
 
+test('quickstart supports --reviewer flag and combines prompts for multi-role agents', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-reviewer-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    invoke(['agent', 'add', 'reviewer-bot', '--adapter', 'generic-cli', '--command', 'reviewer-bot', '--root', sandbox]);
+
+    const result = invoke([
+      'quickstart', '--root', sandbox, '--template', 'bug',
+      '--planner', 'codex', '--implementer', 'antigravity', '--reviewer', 'reviewer-bot',
+      '--task', 'Fix memory leak', '--lang', 'en',
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+
+    const reviewerPrompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'reviewer-bot.txt'), 'utf8');
+    assert.match(reviewerPrompt, /reviewer \(reviewer-bot\)/);
+
+    const cfg = JSON.parse(readFileSync(join(sandbox, '.agent-bus', 'config.json'), 'utf8'));
+    assert.deepEqual(cfg.workflow, {
+      planner: 'codex',
+      implementer: 'antigravity',
+      reviewer: 'reviewer-bot',
+    });
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('quickstart rejects path traversal attempts in agent IDs', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-traversal-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    const result = invoke([
+      'quickstart', '--root', sandbox, '--template', 'bug',
+      '--planner', '../../outside',
+      '--task', 'Fix bug', '--lang', 'en',
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /invalid agent id|reserved device name/i);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('quickstart rejects unregistered agents in workflow roles', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-unregistered-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    const result = invoke([
+      'quickstart', '--root', sandbox, '--template', 'bug',
+      '--planner', 'nonexistent-agent',
+      '--task', 'Fix bug', '--lang', 'en',
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Unknown agent/i);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
+
+test('launch rejects conflicting --agent and --role values', () => {
+  const sandbox = mkdtempSync(join(tmpdir(), 'coordinate-cli-agents-conflict-test-'));
+  try {
+    assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
+
+    const result = invoke(['launch', '--agent', 'codex', '--role', 'antigravity', '--root', sandbox]);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /Conflicting options: --agent.*and --role.*must match/);
+  } finally {
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+});
