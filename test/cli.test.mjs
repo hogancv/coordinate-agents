@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
-const busTool = join(root, 'scripts', 'agent-bus.mjs');
+const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const currentVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
 function invoke(args, env = {}) {
@@ -171,7 +171,7 @@ test('prints English and Chinese help', () => {
 test('documents a 60-second path and three first-use task templates', () => {
   const english = readFileSync(join(root, 'README.md'), 'utf8');
   const chinese = readFileSync(join(root, 'README.zh-CN.md'), 'utf8');
-  const templates = readFileSync(join(root, 'references', 'task-templates.md'), 'utf8');
+  const templates = readFileSync(join(root, 'skills', 'coordinate-agents', 'references', 'task-templates.md'), 'utf8');
   assert.match(english, /## 60-second quick start/);
   assert.match(chinese, /## 60 秒快速开始/);
   for (const type of ['bug', 'feature', 'refactor']) {

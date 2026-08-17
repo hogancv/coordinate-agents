@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const busTool = join(packageRoot, 'scripts', 'agent-bus.mjs');
+const busTool = join(packageRoot, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const keep = process.argv.includes('--keep');
 const repo = mkdtempSync(join(tmpdir(), 'coordinate-agents-demo-'));
 

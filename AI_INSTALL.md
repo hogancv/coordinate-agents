@@ -11,6 +11,7 @@ This is the canonical installation procedure for AI assistants installing
 
 - [Canonical identity](#canonical-identity--官方身份)
 - [Architecture & Scope: Host Skill vs Project Agent](#architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理)
+- [Installation Strategy by Target Host](#installation-strategy-by-target-host--按目标环境选择安装策略)
 - [Security rules](#security-rules--安全规则)
 - [Preflight checks](#preflight-checks--安装前检查)
 - [Install both agents](#install-both-agents--安装两个代理)
@@ -39,6 +40,27 @@ This is the canonical installation procedure for AI assistants installing
 `coordinate-agents` 包含两个不同层级：
 1. **宿主技能安装（用户环境）**：将技能安装到 Codex 与 Antigravity CLI 等宿主环境中，作为交互式默认参考适配器。
 2. **项目级代理注册与协议运行时（Git 仓库）**：在具体项目中通过 `.agent-bus` 协调多代理，可通过 `agent add` 注册任意 CLI/桌面代理，并灵活分配角色（规划者、实现者、审查者）。
+
+## Installation Strategy by Target Host / 按目标环境选择安装策略
+
+When an AI assistant is asked to install `coordinate-agents`:
+
+- **Target is OpenAI Codex**:
+  - **Recommended**: Prefer the official Codex Plugin from `https://github.com/hogancv/coordinate-agents` (`codex plugin install hogancv/coordinate-agents`).
+  - **Fallback (Standalone / Unsupported Plugin environment)**: Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`.
+- **Target is Google Antigravity**:
+  - Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`.
+- **Target is both CLI hosts via npm**:
+  - Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`.
+
+当 AI 助手需要安装 `coordinate-agents` 时：
+- **目标环境为 OpenAI Codex**：
+  - **推荐**：优先通过官方 GitHub 仓库安装 Codex 插件（`codex plugin install hogancv/coordinate-agents`）。
+  - **回退（不支持插件环境/独立技能）**：使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`。
+- **目标环境为 Google Antigravity**：
+  - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`。
+- **通过 npm 同时为两个 CLI 宿主安装**：
+  - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`。
 
 ## Canonical identity / 官方身份
 

@@ -17,7 +17,7 @@ Simplified Chinese: https://hogancv.github.io/coordinate-agents/zh-CN/
 Canonical repository: https://github.com/hogancv/coordinate-agents
 Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-agents
 AI installation contract: https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md
-Runtime Skill: https://github.com/hogancv/coordinate-agents/blob/main/SKILL.md
+Runtime Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-agents/SKILL.md
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

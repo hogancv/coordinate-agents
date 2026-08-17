@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const busCli = join(root, 'scripts', 'agent-bus.mjs');
+const busCli = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function invoke(repository, args) {
   return spawnSync(process.execPath, [busCli, ...args, '--root', repository], { cwd: repository, encoding: 'utf8' });

@@ -137,7 +137,47 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Authenticated Codex CLI (for Codex reference adapter)
 - Authenticated Antigravity CLI (for Antigravity reference adapter)
 
-## Install from npm
+## Install
+
+### 1. Codex Plugin — Recommended
+
+For OpenAI Codex, install `coordinate-agents` as an official Codex Plugin from GitHub:
+
+```sh
+codex plugin install hogancv/coordinate-agents
+```
+
+Once installed, invoke it directly in Codex via `$coordinate-agents`:
+
+```text
+Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.
+```
+
+### 2. npm CLI and Runtime
+
+The npm package provides the coordination CLI, project initialization, Agent Bus protocol runtime, and dynamic agent management:
+
+```sh
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Build a Todo web app"
+```
+
+### 3. Antigravity Skill
+
+Install the skill for Google Antigravity CLI (`agy`):
+
+```sh
+npx @hogancv/coordinate-agents@latest install --antigravity
+```
+
+### 4. Legacy standalone Codex Skill
+
+If your Codex environment does not support plugins, install the standalone skill copy from npm:
+
+```sh
+npx @hogancv/coordinate-agents@latest install --codex
+```
+
+### Install both CLI skills from npm
 
 Install or update both CLI skills without adding a dependency to your project:
 
@@ -145,7 +185,7 @@ Install or update both CLI skills without adding a dependency to your project:
 npx @hogancv/coordinate-agents@latest install
 ```
 
-The installer copies a permanent skill payload to:
+The installer copies a permanent skill payload from canonical package sources to:
 
 ```text
 ~/.codex/skills/coordinate-agents
@@ -165,7 +205,7 @@ npx @hogancv/coordinate-agents@latest doctor
 Useful variants:
 
 ```sh
-# Codex only
+# Codex only (legacy standalone)
 npx @hogancv/coordinate-agents@latest install --codex
 
 # Antigravity only
@@ -279,13 +319,12 @@ npm run demo
 npm pack --dry-run
 ```
 
-## Release integrity
+## Distribution and release strategy
 
-- CI tests Node.js 18 and 22 on Linux, Windows, and macOS.
-- Publishing is triggered only by a GitHub Release whose `vX.Y.Z` tag exactly matches `package.json`.
-- Stable releases use npm tag `latest`; GitHub prereleases use `next`.
-- `.github/workflows/release.yml` uses npm trusted publishing (OIDC), not a long-lived publish token, and npm provenance is enabled in `publishConfig`.
-- Maintainers must configure npm's trusted publisher for `hogancv/coordinate-agents`, repository `coordinate-agents`, workflow `release.yml`, allowed action `npm publish` before the first automated release.
+- **Primary distribution**: Codex Plugin directly from GitHub repository (`https://github.com/hogancv/coordinate-agents`).
+- **Compatibility distribution**: npm package (`@hogancv/coordinate-agents`) providing CLI tools, runtime engine, Antigravity skill installation, and legacy standalone Codex skill installation.
+- **npm publication**: Strictly manual-only via GitHub Actions `workflow_dispatch` requiring explicit `PUBLISH` confirmation. All automated triggers (push tag, release published, push main) are disabled.
+- **Release integrity**: `.github/workflows/release.yml` uses npm trusted publishing (OIDC), not long-lived tokens, and npm provenance is enabled in `publishConfig`.
 
 ## FAQ
 

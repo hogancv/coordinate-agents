@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { AgentAdapter, getAdapter, listAdapters, registerAdapter } from '../adapters/index.mjs';
+import { AgentAdapter, getAdapter, listAdapters, registerAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
 
 test('AgentAdapter defines normalized statuses and default lifecycle methods', () => {
   assert.deepEqual(AgentAdapter.STATUSES, {

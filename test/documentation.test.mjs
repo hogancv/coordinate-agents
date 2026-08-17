@@ -9,7 +9,7 @@ const thisFile = fileURLToPath(import.meta.url);
 const read = name => readFileSync(join(root, name), 'utf8');
 
 test('skill description carries explicit discovery triggers and exclusions', () => {
-  const skill = read('SKILL.md');
+  const skill = read(join('skills', 'coordinate-agents', 'SKILL.md'));
   const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
   for (const value of [
     'coordinate-agents',
@@ -337,7 +337,7 @@ test('repository-wide invariant: zero {role} placeholder in generic CLI or docs'
     const relPath = relative(root, fullPath);
     // test/adapters.test.mjs and adapters/generic-cli.mjs test and implement rejection of {role}
     if (relPath === join('test', 'adapters.test.mjs')) continue;
-    if (relPath === join('adapters', 'generic-cli.mjs')) continue;
+    if (relPath === join('skills', 'coordinate-agents', 'adapters', 'generic-cli.mjs')) continue;
     if (fullPath === thisFile) continue;
 
     const content = readFileSync(fullPath, 'utf8');
@@ -354,7 +354,7 @@ test('repository-wide invariant: adapter resolveLaunch contracts use agent, not 
   assert.match(binContent, /adapter\.resolveLaunch\(\{\s*root,\s*prompt:\s*activationPrompt,\s*agent:\s*agentId,/);
   assert.doesNotMatch(binContent, /adapter\.resolveLaunch\([^)]*role:\s*agentId/);
 
-  const genericAdapterContent = read('adapters/generic-cli.mjs');
+  const genericAdapterContent = read('skills/coordinate-agents/adapters/generic-cli.mjs');
   assert.match(genericAdapterContent, /resolveLaunch\(\{\s*root,\s*prompt,\s*agent,\s*language\s*\}\)/);
   assert.doesNotMatch(genericAdapterContent, /resolveLaunch\([^)]*\brole\b/);
 });

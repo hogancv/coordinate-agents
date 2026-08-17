@@ -1,18 +1,16 @@
 {
   "name": "@hogancv/coordinate-agents",
   "version": "2.1.1",
-  "description": "A local-first coordination protocol and runtime for AI coding agents.",
+  "description": "A local-first coordination protocol, plugin, and runtime for AI coding agents.",
   "type": "module",
   "bin": {
     "coordinate-agents": "bin/coordinate-agents.mjs"
   },
   "files": [
-    "adapters",
-    "agents",
+    ".codex-plugin",
+    "skills",
     "bin",
-    "references",
     "scripts",
-    "SKILL.md",
     "AI_INSTALL.md",
     "README.md",
     "README.zh-CN.md",

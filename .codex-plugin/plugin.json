@@ -1,0 +1,38 @@
+{
+  "name": "coordinate-agents",
+  "version": "2.1.1",
+  "description": "Local-first multi-agent coordination plugin and runtime based on a recoverable Agent Bus.",
+  "author": {
+    "name": "hogancv",
+    "url": "https://github.com/hogancv"
+  },
+  "homepage": "https://github.com/hogancv/coordinate-agents#readme",
+  "repository": "https://github.com/hogancv/coordinate-agents",
+  "license": "MIT",
+  "keywords": [
+    "multi-agent",
+    "coordination",
+    "agent-bus",
+    "codex",
+    "antigravity",
+    "adapter"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Coordinate Agents",
+    "shortDescription": "Local-first multi-agent coordination with recoverable Agent Bus",
+    "longDescription": "Coordinate Codex as planner and reviewer with Antigravity and custom agents as implementers using a durable, local-first file-backed message bus and human-gated releases.",
+    "developerName": "hogancv",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/hogancv/coordinate-agents",
+    "defaultPrompt": [
+      "Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.",
+      "Check Agent Bus status and review pending agent implementations.",
+      "Initialize coordinate-agents workflow for this repository."
+    ]
+  }
+}

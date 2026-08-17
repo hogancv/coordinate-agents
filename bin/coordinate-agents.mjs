@@ -21,8 +21,8 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { getAdapter } from '../adapters/index.mjs';
-import { observeAgentBus, waitForAgentActivity } from '../scripts/agent-observer.mjs';
+import { getAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
+import { observeAgentBus, waitForAgentActivity } from '../skills/coordinate-agents/scripts/agent-observer.mjs';
 import {
   assertContained,
   assertSafePath as assertSafePathUtil,
@@ -31,12 +31,13 @@ import {
   validateConfig,
   withConfigTransaction,
   writeConfig,
-} from '../scripts/config.mjs';
+} from '../skills/coordinate-agents/scripts/config.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
 const skillName = 'coordinate-agents';
-const payloadEntries = ['SKILL.md', 'adapters', 'agents', 'references', 'scripts'];
+const canonicalSkillSource = join(packageRoot, 'skills', skillName);
+const busToolPath = join(canonicalSkillSource, 'scripts', 'agent-bus.mjs');
 const metadataFile = '.coordinate-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
 
@@ -298,16 +299,11 @@ function walkFiles(root, current = root) {
   return files.sort();
 }
 
-function payloadManifest(root = packageRoot) {
+function payloadManifest(skillSource = canonicalSkillSource) {
   const manifest = {};
-  for (const entry of payloadEntries) {
-    const source = join(root, entry);
-    if (!existsSync(source)) throw new Error(`Package payload is missing: ${entry}`);
-    if (statSync(source).isDirectory()) {
-      for (const file of walkFiles(root, source)) manifest[file] = hashFile(join(root, file));
-    } else {
-      manifest[entry] = hashFile(source);
-    }
+  if (!existsSync(skillSource)) throw new Error(`Canonical skill source is missing: ${skillSource}`);
+  for (const file of walkFiles(skillSource)) {
+    manifest[file] = hashFile(join(skillSource, file));
   }
   return manifest;
 }
@@ -413,7 +409,7 @@ function removePath(path) {
 }
 
 function installTarget(target, expectedManifest, options, t) {
-  const sourceResolved = resolve(packageRoot);
+  const sourceResolved = resolve(canonicalSkillSource);
   const targetResolved = resolve(target.path);
   if (sourceResolved === targetResolved) {
     console.log(format(t.current, { target: target.name, path: target.path }));
@@ -435,9 +431,7 @@ function installTarget(target, expectedManifest, options, t) {
   mkdirSync(dirname(target.path), { recursive: true });
   const staging = mkdtempSync(join(dirname(target.path), `.${skillName}-staging-`));
   try {
-    for (const entry of payloadEntries) {
-      cpSync(join(packageRoot, entry), join(staging, entry), { recursive: true });
-    }
+    cpSync(canonicalSkillSource, staging, { recursive: true });
     writeFileSync(join(staging, metadataFile), JSON.stringify({
       package: packageJson.name,
       version: packageJson.version,
@@ -643,7 +637,7 @@ function quickstart(options, t, language) {
   const root = assertGitRepository(options.root, t);
   const busPath = join(root, '.agent-bus');
   assertSafePath(root, busPath, t);
-  const busTool = join(packageRoot, 'scripts', 'agent-bus.mjs');
+  const busTool = busToolPath;
   const init = spawnSync(process.execPath, [busTool, 'init', '--root', root], { encoding: 'utf8', windowsHide: true });
   if (init.error || init.status !== 0) throw new Error(`${init.stderr || init.error?.message || 'agent-bus init failed'}`.trim());
 
@@ -856,7 +850,7 @@ async function launchAgent(options, t) {
 
 function handleAgentCommand(options, t) {
   const root = assertGitRepository(options.root, t);
-  const busTool = join(packageRoot, 'scripts', 'agent-bus.mjs');
+  const busTool = busToolPath;
   if (options.subcommand === 'add') {
     const agentId = options.targetAgent || options.agent;
     if (!agentId) throw new Error('--agent <id> is required for agent add.');

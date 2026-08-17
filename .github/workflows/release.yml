@@ -1,11 +1,23 @@
-name: Publish to npm
+name: Publish to npm (Manual)
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "PUBLISH" to confirm manual publication to npm'
+        required: true
+        type: string
+      dist_tag:
+        description: 'npm distribution tag (latest or next)'
+        required: true
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - next
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name }}
+  group: npm-publish-manual
   cancel-in-progress: false
 
 permissions:
@@ -15,18 +27,26 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version: '22'
           package-manager-cache: false
-      - name: Verify release tag matches package version
+      - name: Verify explicit human confirmation
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          CONFIRMATION: ${{ github.event.inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "PUBLISH" ]; then
+            echo "Error: Manual confirmation must be exactly 'PUBLISH'"
+            exit 1
+          fi
+      - name: Validate package version format
+        shell: bash
         run: |
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          test "v${PACKAGE_VERSION}" = "$RELEASE_TAG"
+          echo "Publishing package version: $PACKAGE_VERSION"
+          [[ "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]
       - name: Install from lockfile
         run: npm ci
       - name: Test package
@@ -41,32 +61,27 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '24'
+          node-version: '22'
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      - name: Verify explicit human confirmation
+        shell: bash
+        env:
+          CONFIRMATION: ${{ github.event.inputs.confirmation }}
+        run: |
+          if [ "$CONFIRMATION" != "PUBLISH" ]; then
+            echo "Error: Manual confirmation must be exactly 'PUBLISH'"
+            exit 1
+          fi
       - name: Require npm trusted publishing support
         shell: bash
         run: |
           IFS=. read -r major minor patch <<< "$(npm --version)"
           (( major > 11 || (major == 11 && minor >= 5) ))
-      - name: Recheck release tag as data
-        shell: bash
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          test "v${PACKAGE_VERSION}" = "$RELEASE_TAG"
-      - name: Select npm distribution tag
-        id: dist
-        shell: bash
-        run: |
-          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
-            echo "tag=next" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          fi
       - name: Publish with npm trusted publishing and provenance
-        run: npm publish --ignore-scripts --access public --tag "${{ steps.dist.outputs.tag }}"
+        env:
+          DIST_TAG: ${{ github.event.inputs.dist_tag || 'latest' }}
+        run: npm publish --ignore-scripts --access public --tag "$DIST_TAG"

@@ -137,7 +137,47 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - 已完成认证的 Codex CLI（用于 Codex 参考适配器）
 - 已完成认证的 Antigravity CLI（用于 Antigravity 参考适配器）
 
-## 通过 npm 安装
+## 安装方式
+
+### 1. Codex 插件 — 推荐
+
+对于 OpenAI Codex，推荐直接从 GitHub 安装官方 Codex 插件：
+
+```sh
+codex plugin install hogancv/coordinate-agents
+```
+
+安装后即可在 Codex 中通过 `$coordinate-agents` 触发：
+
+```text
+使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
+```
+
+### 2. npm CLI 与运行时
+
+npm 包继续提供命令行工具、项目初始化、Agent Bus 协议运行时及动态代理管理能力：
+
+```sh
+npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo 应用"
+```
+
+### 3. Antigravity 技能
+
+安装 Google Antigravity CLI (`agy`) 技能：
+
+```sh
+npx @hogancv/coordinate-agents@latest install --antigravity --lang zh-CN
+```
+
+### 4. 旧版独立 Codex 技能（回退兼容）
+
+在不支持插件的环境中，可通过 npm 安装独立 Codex 技能副本：
+
+```sh
+npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN
+```
+
+### 通过 npm 安装两个 CLI 技能
 
 无需向业务项目添加依赖，即可安装或更新两个 CLI 的技能：
 
@@ -145,7 +185,7 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 npx @hogancv/coordinate-agents@latest install
 ```
 
-安装器会把永久技能副本复制到：
+安装器会把规范的永久技能副本复制到：
 
 ```text
 ~/.codex/skills/coordinate-agents
@@ -165,7 +205,7 @@ npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
 常用命令：
 
 ```sh
-# 只安装 Codex
+# 只安装 Codex（旧版独立技能）
 npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN
 
 # 只安装 Antigravity
@@ -278,13 +318,12 @@ npm run demo
 npm pack --dry-run
 ```
 
-## 发布完整性
+## 分发与发布策略
 
-- CI 在 Linux、Windows 和 macOS 上对 Node.js 18 与 22 进行测试。
-- 仅当 GitHub Release 的 `vX.Y.Z` 标签与 `package.json` 完全一致时才触发发布。
-- 稳定版使用 npm 标签 `latest`；预发布版使用 `next`。
-- `.github/workflows/release.yml` 使用 npm Trusted Publishing (OIDC)，杜绝长期发布 Token，并在 `publishConfig` 中启用 npm Provenance。
-- 维护者必须在首次自动发布前，为 `hogancv/coordinate-agents` 仓库配置 npm Trusted Publisher。
+- **主要分发渠道**：通过 GitHub 仓库直接分发官方 Codex 插件（`https://github.com/hogancv/coordinate-agents`）。
+- **兼容性分发渠道**：通过 npm 包（`@hogancv/coordinate-agents`）提供 CLI 工具、协议运行时、Antigravity 技能安装器以及旧版独立 Codex 技能安装器。
+- **npm 发布机制**：完全转为人工手动触发（通过 GitHub Actions `workflow_dispatch` 并在输入框显式确认 `PUBLISH` 后执行）。已禁用所有自动触发发布（如 push tag、release published、push main 等）。
+- **发布完整性**：`.github/workflows/release.yml` 使用 npm Trusted Publishing (OIDC) 与 npm Provenance，杜绝长期静态 Token。
 
 ## 常见问题 (FAQ)
 

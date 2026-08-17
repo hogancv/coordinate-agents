@@ -16,12 +16,9 @@ fixtures, logs, documentation, or release artifacts.
 ## Repository map
 
 - `bin/coordinate-agents.mjs`: installer, updater, doctor, quickstart, launch, agent management, and uninstall CLI.
-- `adapters/`: agent adapter subsystem (`codex-cli`, `antigravity-cli`, `generic-cli`, and registry).
-- `scripts/config.mjs`: shared safe configuration loader, agent ID validator, and path containment checks.
-- `scripts/agent-bus.mjs`: durable project-local message bus protocol engine.
-- `scripts/demo.mjs`: isolated end-to-end demonstration.
-- `SKILL.md`: runtime instructions installed into both agents.
-- `references/`: protocol and task-template details loaded by the skill as needed.
+- `.codex-plugin/plugin.json`: Codex Plugin manifest.
+- `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`).
+- `scripts/`: repository development and release tooling (`demo.mjs`, `sync-llms.mjs`).
 - `AI_INSTALL.md`: canonical safe installation procedure for AI assistants.
 - `README.md` and `README.zh-CN.md`: user-facing English and Simplified Chinese documentation.
 - `docs/`: GitHub Pages source for stable, evidence-focused task and FAQ pages. `docs/llms.txt`
@@ -40,10 +37,11 @@ npm run demo
 npm pack --dry-run
 ```
 
-Also validate the skill metadata:
+Also validate the skill and plugin metadata:
 
 ```sh
-uv run --with pyyaml python "$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py" .
+uv run --with pyyaml python "$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py" skills/coordinate-agents
+uv run --with pyyaml python "$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py" .
 ```
 
 When the validator is not at that path, locate the installed `skill-creator` validator and report
@@ -71,13 +69,19 @@ authoritative Windows, macOS, Linux, Node.js 18, and Node.js 22 matrix.
 8. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens
    in project automation.
 
+## Distribution and release strategy
+
+- **Primary distribution**: Codex Plugin directly from GitHub repository (`https://github.com/hogancv/coordinate-agents`).
+- **Compatibility distribution**: npm package (`@hogancv/coordinate-agents`) supporting the CLI/runtime, Antigravity skill installer, and legacy standalone Codex skill installer.
+- **Version independence**: `.codex-plugin/plugin.json` (Codex Plugin version) and `package.json` (npm package version) evolve independently and are synchronized when co-releasing.
+- **npm publishing is strictly manual**: npm publishing is triggered exclusively through manual `workflow_dispatch` with mandatory `PUBLISH` confirmation. All automatic publish triggers (push tag, release published, push main) are forbidden.
+
 ## Release restrictions
 
 - Passing review or CI is not release authorization.
 - Never merge, tag, push, publish, deploy, create a GitHub Release, or run a release workflow
   unless the user has approved the exact described action. The collaboration protocol requires
   the exact text `RELEASE_APPROVED` for a described release plan.
-- A release tag must be `vX.Y.Z` and exactly match `package.json`.
 - Keep GitHub Actions pinned to full commit SHAs.
 - npm publishing must use the existing environment-limited trusted publisher with OIDC and
   provenance; never introduce `NPM_TOKEN` or `NODE_AUTH_TOKEN`.
