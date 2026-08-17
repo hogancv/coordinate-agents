@@ -139,51 +139,83 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 
 ## Install
 
-### 1. Codex Plugin — Recommended
+### 1. Codex Plugin via GitHub Marketplace (Recommended)
 
-For OpenAI Codex, install `coordinate-agents` as an official Codex Plugin from GitHub:
+Add the official repository as a Codex plugin marketplace:
 
 ```sh
-codex plugin install hogancv/coordinate-agents
+codex plugin marketplace add hogancv/coordinate-agents
 ```
 
-Once installed, invoke it directly in Codex via `$coordinate-agents`:
+Install the plugin from the marketplace:
+
+```sh
+codex plugin add coordinate-agents@coordinate-agents
+```
+
+*(You can also browse and enable it via `/plugins` in Codex).*
+
+Once installed, start a new thread in Codex and invoke it directly via `$coordinate-agents`:
 
 ```text
 Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.
 ```
 
-### 2. npm CLI and Runtime
+### 2. Contributor & Local Development (Personal Marketplace)
 
-The npm package provides the coordination CLI, project initialization, Agent Bus protocol runtime, and dynamic agent management:
+For contributors developing the plugin locally from source:
 
-```sh
-npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Build a Todo web app"
-```
+1. Register your local repository in your personal marketplace (`~/.agents/plugins/marketplace.json`):
+   ```json
+   {
+     "name": "personal",
+     "interface": {
+       "displayName": "Personal Plugins"
+     },
+     "plugins": [
+       {
+         "name": "coordinate-agents",
+         "source": {
+           "source": "local",
+           "path": "<path-to-coordinate-agents-repo>"
+         },
+         "policy": {
+           "installation": "AVAILABLE",
+           "authentication": "ON_INSTALL"
+         },
+         "category": "Productivity"
+       }
+     ]
+   }
+   ```
+2. Install from the personal marketplace:
+   ```sh
+   codex plugin add coordinate-agents@personal
+   ```
 
-### 3. Antigravity Skill
+> [!NOTE]
+> `@personal` is for local development only; regular users should install via the GitHub marketplace (`@coordinate-agents`).
 
-Install the skill for Google Antigravity CLI (`agy`):
+### 3. npm Compatibility Layer & Runtime
 
-```sh
-npx @hogancv/coordinate-agents@latest install --antigravity
-```
+The npm package `@hogancv/coordinate-agents` provides the coordination CLI, project initialization, Agent Bus protocol runtime, and Antigravity / legacy Codex skill installation:
 
-### 4. Legacy standalone Codex Skill
-
-If your Codex environment does not support plugins, install the standalone skill copy from npm:
-
-```sh
-npx @hogancv/coordinate-agents@latest install --codex
-```
-
-### Install both CLI skills from npm
-
-Install or update both CLI skills without adding a dependency to your project:
-
-```sh
-npx @hogancv/coordinate-agents@latest install
-```
+- **Quickstart & Runtime**:
+  ```sh
+  npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Build a Todo web app"
+  ```
+- **Antigravity Skill (`agy`)**:
+  ```sh
+  npx @hogancv/coordinate-agents@latest install --antigravity
+  ```
+- **Legacy standalone Codex Skill**:
+  ```sh
+  npx @hogancv/coordinate-agents@latest install --codex
+  ```
+- **Install both CLI skills from npm**:
+  ```sh
+  npx @hogancv/coordinate-agents@latest install
+  ```
 
 The installer copies a permanent skill payload from canonical package sources to:
 
@@ -321,10 +353,10 @@ npm pack --dry-run
 
 ## Distribution and release strategy
 
-- **Primary distribution**: Codex Plugin directly from GitHub repository (`https://github.com/hogancv/coordinate-agents`).
+- **Primary distribution**: Codex Plugin directly from the GitHub repository marketplace (`https://github.com/hogancv/coordinate-agents`).
 - **Compatibility distribution**: npm package (`@hogancv/coordinate-agents`) providing CLI tools, runtime engine, Antigravity skill installation, and legacy standalone Codex skill installation.
-- **npm publication**: Strictly manual-only via GitHub Actions `workflow_dispatch` requiring explicit `PUBLISH` confirmation. All automated triggers (push tag, release published, push main) are disabled.
-- **Release integrity**: `.github/workflows/release.yml` uses npm trusted publishing (OIDC), not long-lived tokens, and npm provenance is enabled in `publishConfig`.
+- **Workflow status**: CI and automated publishing workflows are paused (`.github/workflows/` disabled). Releases are managed explicitly by maintainers.
+- **Documentation site**: GitHub Pages continuously serves the documentation site and `llms.txt` from `/docs`.
 
 ## FAQ
 

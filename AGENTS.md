@@ -71,9 +71,10 @@ authoritative Windows, macOS, Linux, Node.js 18, and Node.js 22 matrix.
 
 ## Distribution and release strategy
 
-- **Primary distribution**: Codex Plugin directly from GitHub repository (`https://github.com/hogancv/coordinate-agents`).
+- **Primary distribution**: Codex Plugin directly from GitHub repository marketplace (`https://github.com/hogancv/coordinate-agents`).
 - **Compatibility distribution**: npm package (`@hogancv/coordinate-agents`) supporting the CLI/runtime, Antigravity skill installer, and legacy standalone Codex skill installer.
 - **Version independence**: `.codex-plugin/plugin.json` (Codex Plugin version) and `package.json` (npm package version) evolve independently and are synchronized when co-releasing.
+- **Workflow status**: CI and automated publishing workflows are paused (`.github/workflows/` disabled). Releases are managed explicitly by maintainers.
 - **npm publishing is strictly manual**: npm publishing is triggered exclusively through manual `workflow_dispatch` with mandatory `PUBLISH` confirmation. All automatic publish triggers (push tag, release published, push main) are forbidden.
 
 ## Release restrictions

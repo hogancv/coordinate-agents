@@ -135,3 +135,28 @@ test('official validator scripts pass if present in the environment', () => {
   }
 });
 
+test('repository marketplace manifest exists and conforms to Codex Marketplace specification', () => {
+  const marketPath = join(root, '.agents', 'plugins', 'marketplace.json');
+  assert.ok(existsSync(marketPath), '.agents/plugins/marketplace.json must exist');
+
+  const content = readFileSync(marketPath, 'utf8');
+  assert.doesNotMatch(content, /\[TODO:/, 'marketplace.json must not contain [TODO: ...] placeholders');
+
+  const market = JSON.parse(content);
+  assert.equal(market.name, 'coordinate-agents');
+  assert.ok(market.interface && typeof market.interface.displayName === 'string');
+  assert.ok(Array.isArray(market.plugins) && market.plugins.length >= 1);
+
+  const entry = market.plugins.find(p => p.name === 'coordinate-agents');
+  assert.ok(entry, 'Marketplace must contain coordinate-agents plugin entry');
+  assert.equal(entry.source.source, 'local');
+  assert.equal(entry.source.path, '.');
+  assert.equal(entry.policy.installation, 'AVAILABLE');
+  assert.equal(entry.policy.authentication, 'ON_INSTALL');
+  assert.equal(entry.category, 'Productivity');
+
+  const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.ok(packageJson.files.includes('.agents'), '.agents must be included in package.json files');
+});
+
+

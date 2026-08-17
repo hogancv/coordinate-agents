@@ -8,6 +8,7 @@
   },
   "files": [
     ".codex-plugin",
+    ".agents",
     "skills",
     "bin",
     "scripts",

@@ -1,0 +1,20 @@
+{
+  "name": "coordinate-agents",
+  "interface": {
+    "displayName": "Coordinate Agents"
+  },
+  "plugins": [
+    {
+      "name": "coordinate-agents",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

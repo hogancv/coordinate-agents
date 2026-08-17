@@ -46,7 +46,11 @@ This is the canonical installation procedure for AI assistants installing
 When an AI assistant is asked to install `coordinate-agents`:
 
 - **Target is OpenAI Codex**:
-  - **Recommended**: Prefer the official Codex Plugin from `https://github.com/hogancv/coordinate-agents` (`codex plugin install hogancv/coordinate-agents`).
+  - **Recommended (GitHub Plugin Marketplace)**:
+    ```sh
+    codex plugin marketplace add hogancv/coordinate-agents
+    codex plugin add coordinate-agents@coordinate-agents
+    ```
   - **Fallback (Standalone / Unsupported Plugin environment)**: Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`.
 - **Target is Google Antigravity**:
   - Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`.
@@ -55,7 +59,11 @@ When an AI assistant is asked to install `coordinate-agents`:
 
 当 AI 助手需要安装 `coordinate-agents` 时：
 - **目标环境为 OpenAI Codex**：
-  - **推荐**：优先通过官方 GitHub 仓库安装 Codex 插件（`codex plugin install hogancv/coordinate-agents`）。
+  - **推荐（GitHub 插件市场）**：
+    ```sh
+    codex plugin marketplace add hogancv/coordinate-agents
+    codex plugin add coordinate-agents@coordinate-agents
+    ```
   - **回退（不支持插件环境/独立技能）**：使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`。
 - **目标环境为 Google Antigravity**：
   - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`。

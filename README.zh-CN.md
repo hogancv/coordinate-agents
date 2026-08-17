@@ -139,51 +139,83 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 
 ## 安装方式
 
-### 1. Codex 插件 — 推荐
+### 1. 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
 
-对于 OpenAI Codex，推荐直接从 GitHub 安装官方 Codex 插件：
+将官方 GitHub 仓库添加为 Codex 插件市场：
 
 ```sh
-codex plugin install hogancv/coordinate-agents
+codex plugin marketplace add hogancv/coordinate-agents
 ```
 
-安装后即可在 Codex 中通过 `$coordinate-agents` 触发：
+然后从该市场安装插件：
+
+```sh
+codex plugin add coordinate-agents@coordinate-agents
+```
+
+*(也可以在 Codex 的 `/plugins` 界面中浏览并启用)*
+
+安装完成后，在 Codex 新建线程中输入 `$coordinate-agents` 即可使用：
 
 ```text
 使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
 ```
 
-### 2. npm CLI 与运行时
+### 2. 贡献者与本地开发（个人插件市场）
 
-npm 包继续提供命令行工具、项目初始化、Agent Bus 协议运行时及动态代理管理能力：
+对于在本地修改和调试插件源码的开发者：
 
-```sh
-npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo 应用"
-```
+1. 在个人插件市场配置文件（`~/.agents/plugins/marketplace.json`）中注册本地仓库路径：
+   ```json
+   {
+     "name": "personal",
+     "interface": {
+       "displayName": "Personal Plugins"
+     },
+     "plugins": [
+       {
+         "name": "coordinate-agents",
+         "source": {
+           "source": "local",
+           "path": "<本地仓库绝对路径>"
+         },
+         "policy": {
+           "installation": "AVAILABLE",
+           "authentication": "ON_INSTALL"
+         },
+         "category": "Productivity"
+       }
+     ]
+   }
+   ```
+2. 通过个人市场安装：
+   ```sh
+   codex plugin add coordinate-agents@personal
+   ```
 
-### 3. Antigravity 技能
+> [!NOTE]
+> `@personal` 仅供本地开发调试使用，普通用户请使用 GitHub 市场（`@coordinate-agents`）。
 
-安装 Google Antigravity CLI (`agy`) 技能：
+### 3. npm 兼容层与运行时
 
-```sh
-npx @hogancv/coordinate-agents@latest install --antigravity --lang zh-CN
-```
+npm 包 `@hogancv/coordinate-agents` 继续提供命令行工具、项目初始化、Agent Bus 协议运行时及 Antigravity / 旧版独立技能安装能力：
 
-### 4. 旧版独立 Codex 技能（回退兼容）
-
-在不支持插件的环境中，可通过 npm 安装独立 Codex 技能副本：
-
-```sh
-npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN
-```
-
-### 通过 npm 安装两个 CLI 技能
-
-无需向业务项目添加依赖，即可安装或更新两个 CLI 的技能：
-
-```sh
-npx @hogancv/coordinate-agents@latest install
-```
+- **快速启动与协作命令**：
+  ```sh
+  npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo 应用"
+  ```
+- **安装 Antigravity 技能 (`agy`)**：
+  ```sh
+  npx @hogancv/coordinate-agents@latest install --antigravity --lang zh-CN
+  ```
+- **安装旧版独立 Codex 技能**：
+  ```sh
+  npx @hogancv/coordinate-agents@latest install --codex --lang zh-CN
+  ```
+- **同时安装两个 CLI 技能**：
+  ```sh
+  npx @hogancv/coordinate-agents@latest install
+  ```
 
 安装器会把规范的永久技能副本复制到：
 
@@ -320,10 +352,10 @@ npm pack --dry-run
 
 ## 分发与发布策略
 
-- **主要分发渠道**：通过 GitHub 仓库直接分发官方 Codex 插件（`https://github.com/hogancv/coordinate-agents`）。
+- **主要分发渠道**：通过 GitHub 仓库插件市场直接分发官方 Codex 插件（`https://github.com/hogancv/coordinate-agents`）。
 - **兼容性分发渠道**：通过 npm 包（`@hogancv/coordinate-agents`）提供 CLI 工具、协议运行时、Antigravity 技能安装器以及旧版独立 Codex 技能安装器。
-- **npm 发布机制**：完全转为人工手动触发（通过 GitHub Actions `workflow_dispatch` 并在输入框显式确认 `PUBLISH` 后执行）。已禁用所有自动触发发布（如 push tag、release published、push main 等）。
-- **发布完整性**：`.github/workflows/release.yml` 使用 npm Trusted Publishing (OIDC) 与 npm Provenance，杜绝长期静态 Token。
+- **Workflow 状态**：GitHub Actions CI 及自动发布流程已停用（`.github/workflows/` 暂停），所有发布由维护者显式操作。
+- **文档网站**：GitHub Pages 持续从 `/docs` 构建托管官方文档站与 `llms.txt`。
 
 ## 常见问题 (FAQ)
 
