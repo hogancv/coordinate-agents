@@ -6,6 +6,28 @@ A local-first coordination protocol and runtime for AI coding agents. Coordinate
 
 No CAO server, daemon, database, or shared API credential is required.
 
+## Codex Plugin via GitHub Marketplace (Recommended)
+
+Add the official repository as a Codex plugin marketplace:
+
+```sh
+codex plugin marketplace add hogancv/coordinate-agents
+```
+
+Install the plugin from the marketplace:
+
+```sh
+codex plugin add coordinate-agents@coordinate-agents
+```
+
+*(You can also browse and enable it via `/plugins` in Codex.)*
+
+Once installed, start a new thread in Codex and invoke it directly via `$coordinate-agents`:
+
+```text
+Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.
+```
+
 ## Use it directly in Codex App (recommended)
 
 If you use Codex App, you do not need to open two CLI windows or manually paste two launch
@@ -229,31 +251,7 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Codex App with the `coordinate-agents` plugin, or installed Codex CLI (for the Codex reference adapter)
 - An installed Implementer CLI such as Antigravity (`agy`), Claude Code (`claude`), or another registered executable
 
-## Install
-
-### 1. Codex Plugin via GitHub Marketplace (Recommended)
-
-Add the official repository as a Codex plugin marketplace:
-
-```sh
-codex plugin marketplace add hogancv/coordinate-agents
-```
-
-Install the plugin from the marketplace:
-
-```sh
-codex plugin add coordinate-agents@coordinate-agents
-```
-
-*(You can also browse and enable it via `/plugins` in Codex).*
-
-Once installed, start a new thread in Codex and invoke it directly via `$coordinate-agents`:
-
-```text
-Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.
-```
-
-### 2. Contributor & Local Development (Personal Marketplace)
+## Contributor & Local Development (Personal Marketplace)
 
 For contributors developing the plugin locally from source:
 
@@ -288,9 +286,10 @@ For contributors developing the plugin locally from source:
 > [!NOTE]
 > `@personal` is for local development only; regular users should install via the GitHub marketplace (`@coordinate-agents`).
 
-### 3. npm Compatibility Layer & Runtime
+## Install from npm
 
-The npm package `@hogancv/coordinate-agents` provides the coordination CLI, project initialization, Agent Bus protocol runtime, and Antigravity / legacy Codex skill installation:
+The npm compatibility layer `@hogancv/coordinate-agents` provides the coordination CLI, project
+initialization, Agent Bus protocol runtime, and Antigravity / legacy Codex skill installation:
 
 - **Quickstart & Runtime**:
   ```sh

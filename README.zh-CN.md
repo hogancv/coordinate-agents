@@ -6,6 +6,28 @@
 
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
+## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
+
+将官方 GitHub 仓库添加为 Codex 插件市场：
+
+```sh
+codex plugin marketplace add hogancv/coordinate-agents
+```
+
+然后从该市场安装插件：
+
+```sh
+codex plugin add coordinate-agents@coordinate-agents
+```
+
+*(也可以在 Codex 的 `/plugins` 界面中浏览并启用)*
+
+安装完成后，在 Codex 新建线程中输入 `$coordinate-agents` 即可使用：
+
+```text
+使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
+```
+
 ## 直接在 Codex App 中使用（推荐）
 
 如果使用 Codex App，不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。安装 Codex 插件后：
@@ -217,31 +239,7 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - 已安装并启用 `coordinate-agents` 插件的 Codex App，或已安装 Codex CLI（用于 Codex 参考适配器）
 - 已安装的 Implementer 执行端，例如 Antigravity（`agy`）、Claude Code（`claude`）或其他已注册的可执行命令
 
-## 安装方式
-
-### 1. 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
-
-将官方 GitHub 仓库添加为 Codex 插件市场：
-
-```sh
-codex plugin marketplace add hogancv/coordinate-agents
-```
-
-然后从该市场安装插件：
-
-```sh
-codex plugin add coordinate-agents@coordinate-agents
-```
-
-*(也可以在 Codex 的 `/plugins` 界面中浏览并启用)*
-
-安装完成后，在 Codex 新建线程中输入 `$coordinate-agents` 即可使用：
-
-```text
-使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
-```
-
-### 2. 贡献者与本地开发（个人插件市场）
+## 贡献者与本地开发（个人插件市场）
 
 对于在本地修改和调试插件源码的开发者：
 
@@ -276,9 +274,10 @@ codex plugin add coordinate-agents@coordinate-agents
 > [!NOTE]
 > `@personal` 仅供本地开发调试使用，普通用户请使用 GitHub 市场（`@coordinate-agents`）。
 
-### 3. npm 兼容层与运行时
+## 通过 npm 安装
 
-npm 包 `@hogancv/coordinate-agents` 继续提供命令行工具、项目初始化、Agent Bus 协议运行时及 Antigravity / 旧版独立技能安装能力：
+npm 兼容层 `@hogancv/coordinate-agents` 继续提供命令行工具、项目初始化、Agent Bus 协议运行时及
+Antigravity / 旧版独立技能安装能力：
 
 - **快速启动与协作命令**：
   ```sh

@@ -14,18 +14,6 @@ description: >-
 
 A local-first coordination protocol and runtime for AI coding agents in a Git repository. Codex CLI and Antigravity CLI serve as the default first-party reference adapters and reference workflow. Use the bundled cross-platform Node.js script for all bus operations; do not hand-edit queue files.
 
-## Quick-start a collaboration
-
-When asked to set up collaboration, run the package CLI rather than asking the user to copy long role prompts:
-
-```sh
-npx @hogancv/coordinate-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
-```
-
-Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>`, `--implementer <agent>`, or `--reviewer <agent>`. Read `references/task-templates.md` for task structure guidelines.
-
-Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
-
 ## Use from Codex App
 
 When this Skill is invoked directly in Codex App, prefer the current App project instead of asking
@@ -44,6 +32,18 @@ The App workflow still requires the Implementer CLI and its dependencies to be i
 The project path must be the Git repository root, and the command must be resolvable from the same
 machine. Use the CLI quickstart and its two printed terminal commands only as a fallback for
 automation or hosts that do not provide direct Codex App Skill execution.
+
+## CLI quick-start a collaboration (fallback)
+
+When asked to set up collaboration, run the package CLI rather than asking the user to copy long role prompts:
+
+```sh
+npx @hogancv/coordinate-agents@latest quickstart --root "<repository-root>" --template feature --task "<task summary>"
+```
+
+Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, writes role prompts under `.agent-bus/launch/`, and prints one copyable launch command for each terminal. To use custom registered agents, pass `--planner <agent>`, `--implementer <agent>`, or `--reviewer <agent>`. Read `references/task-templates.md` for task structure guidelines.
+
+Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
 
 ## Executable configuration and fail-fast behavior
 

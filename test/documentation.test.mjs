@@ -117,6 +117,16 @@ test('documents direct Codex App usage and concrete Implementer commands', () =>
   assert.match(chinese, /使用 \$coordinate-agents，帮我把 Claude Code 配置/);
   assert.match(english, /does \*\*not\*\* automatically append[\s\S]*dangerously-skip-permissions/i);
   assert.match(chinese, /不会[\s\S]*自动[\s\S]*dangerously-skip-permissions/);
+  assert.ok(
+    english.indexOf('## Codex Plugin via GitHub Marketplace (Recommended)')
+      < english.indexOf('## 60-second quick start'),
+    'Codex Plugin installation must precede the CLI quick start'
+  );
+  assert.ok(
+    chinese.indexOf('## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）')
+      < chinese.indexOf('## 60 秒快速开始'),
+    'Chinese Codex Plugin installation must precede the CLI quick start'
+  );
 });
 
 test('documentation site exposes stable task-focused pages and canonical metadata', () => {

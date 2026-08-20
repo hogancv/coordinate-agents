@@ -11,6 +11,17 @@ permalink: /
 
 The agents communicate through a recoverable project-local `.agent-bus`. No CAO server, daemon, database, or shared API key is required.
 
+## Codex Plugin via GitHub Marketplace (Recommended)
+
+```sh
+codex plugin marketplace add hogancv/coordinate-agents
+codex plugin add coordinate-agents@coordinate-agents
+```
+
+After enabling the plugin, start a new Codex App thread and invoke `$coordinate-agents`. The App
+path is the preferred interactive workflow; the npm CLI quickstart below is the fallback for
+automation or hosts without direct Codex App Skill execution.
+
 ## Start here
 
 For the simplest interactive path, install the Codex plugin, add the target Git repository to Codex
