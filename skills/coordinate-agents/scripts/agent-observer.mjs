@@ -55,6 +55,7 @@ export function observeAgentBus(bus, agentId) {
   return {
     state,
     stopped: state?.state === 'STOPPED',
+    failed: state?.state === 'ERROR',
     pendingNew,
     pendingProcessing,
     hasWork: pendingNew + pendingProcessing > 0,
@@ -85,7 +86,7 @@ export async function waitForAgentActivity(bus, agentId, { pollIntervalMs = 500,
   }
   while (true) {
     const observation = observeAgentBus(bus, agentId);
-    if (observation.stopped || observation.hasWork) return observation;
+    if (observation.stopped || observation.failed || observation.hasWork) return observation;
     await delay(pollIntervalMs, signal);
   }
 }

@@ -8,7 +8,7 @@ No CAO server, daemon, database, or shared API credential is required.
 
 ## 60-second quick start
 
-Prerequisites: Node.js 18+, Git, and authenticated `codex` and `agy` commands (or custom registered agents).
+Prerequisites: Node.js 18+, Git, and installed `codex` and `agy` commands (or custom registered agents). Each CLI owns its authentication; Coordinate Agents does not preflight login state.
 
 From your Git repository, run:
 
@@ -25,7 +25,33 @@ npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Buil
 
 No role prompt needs to be copied or maintained manually. Choose `--template bug`, `--template feature`, or `--template refactor` for the initial task; for later work, give Codex a new requirement following the same checklist.
 
-The reference adapters declare their launch lifecycle. Codex is one-shot interactive. Antigravity is bus-supervised: after a clean Agent exit, the same `launch` process waits non-destructively and starts `agy` again when later review feedback or another Bus message arrives. The supervisor never claims messages or creates leases. End it with Ctrl+C, deliver `STOP` so the Agent records `STOPPED`, or use the Agent-agnostic `launch --once` escape hatch for scripts that require one activation.
+The reference adapters declare their launch lifecycle. Codex is one-shot interactive. Antigravity is bus-supervised: after a clean Agent exit, the same `launch` process waits non-destructively and starts the resolved Implementer command again when later review feedback or another Bus message arrives. The supervisor never claims messages or creates leases. End it with Ctrl+C, deliver `STOP` so the Agent records `STOPPED`, or use the Agent-agnostic `launch --once` escape hatch for scripts that require one activation.
+
+### Configure the Implementer executable
+
+Machine-specific executable preferences live outside the installed Skill/Plugin:
+
+```text
+~/.coordinate-agents/config.json
+```
+
+Configure a custom Antigravity command without editing `skills/` or `.codex-plugin/`:
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+npx @hogancv/coordinate-agents config get agent.antigravity.command
+npx @hogancv/coordinate-agents config list
+```
+
+Command resolution is explicit and fail-closed: **project agent command > user command > Adapter
+default** (`agy` for `antigravity-cli`, `codex` for `codex-cli`). An unavailable explicit command
+is never silently replaced by `agy` or another fallback. `launch` checks the final executable before
+starting the Implementer; spawn failures, non-zero exits, and conversation/runtime failures set the
+Agent state to `ERROR`, preserve bounded stdout/stderr tails, stop supervision, and report the
+configured command and error. The Planner must stop waiting and must not automatically retry.
+
+`doctor` reports the final resolved command and executable status. It does not check login state,
+provider health, or model availability; those errors are handled as runtime failures by `launch`.
 
 ![End-to-end terminal demo](./assets/demo.gif)
 
@@ -134,8 +160,8 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Windows, macOS, or Linux
 - Node.js 18 or newer
 - Git
-- Authenticated Codex CLI (for Codex reference adapter)
-- Authenticated Antigravity CLI (for Antigravity reference adapter)
+- Installed Codex CLI (for Codex reference adapter; native authentication remains CLI-owned)
+- Installed Antigravity CLI (for Antigravity reference adapter; native authentication remains CLI-owned)
 
 ## Install
 
@@ -296,6 +322,7 @@ RELEASE_APPROVED
 - `wait` polls every five seconds for up to 120 minutes by default.
 - Waiting continues only while the CLI session and its Node.js process remain alive.
 - A bus-supervised launch also remains alive between clean Agent activations. It observes `new`, Agent-owned `processing`, and `STOPPED` state without claiming work; a non-zero child exit stops supervision and is reported as failure.
+- A Planner or Reviewer `wait` also observes the configured Implementer state. If it becomes `ERROR`, `wait` exits non-zero immediately; stop polling, report the failure, and do not automatically resend or retry.
 - Messages and state survive terminal restarts. Invoke the skill again to inspect and resume `new` or role-owned `processing` messages.
 - `.agent-bus/` is added to the repository's local `.git/info/exclude`, not its tracked `.gitignore`.
 - Never let multiple roles perform Git writes at the same time.

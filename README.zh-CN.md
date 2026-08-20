@@ -8,7 +8,7 @@
 
 ## 60 秒快速开始
 
-前提：已安装 Node.js 18+、Git，并已完成 `codex` 和 `agy` 的账号认证（或使用已注册的自定义代理）。
+前提：已安装 Node.js 18+、Git，以及 `codex` 和 `agy` 命令（或使用已注册的自定义代理）。每个 CLI 自己负责认证；Coordinate Agents 不会预检测登录状态。
 
 在你的 Git 仓库中运行：
 
@@ -25,7 +25,32 @@ npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开�
 
 不再需要手动复制或维护两段角色提示词。首次任务可选择 `--template bug`、`--template feature` 或 `--template refactor`；后续工作直接按同一清单向 Codex 提出新需求。
 
-参考适配器会声明自己的启动生命周期。Codex 采用一次性交互启动；Antigravity 采用总线监督启动：Agent 正常退出后，同一个 `launch` 进程会继续以非破坏方式等待，后续审查反馈或其他总线消息到达时自动再次启动 `agy`。监督器不会认领消息或创建租约。可按 Ctrl+C 终止，发送 `STOP` 让 Agent 写入 `STOPPED`，或在需要单次激活的脚本中使用与 Agent 无关的 `launch --once` 逃生选项。
+参考适配器会声明自己的启动生命周期。Codex 采用一次性交互启动；Antigravity 采用总线监督启动：Agent 正常退出后，同一个 `launch` 进程会继续以非破坏方式等待，后续审查反馈或其他总线消息到达时自动再次启动最终解析出的 Implementer 命令。监督器不会认领消息或创建租约。可按 Ctrl+C 终止，发送 `STOP` 让 Agent 写入 `STOPPED`，或在需要单次激活的脚本中使用与 Agent 无关的 `launch --once` 逃生选项。
+
+### 配置实现者可执行命令
+
+机器相关的可执行文件偏好放在已安装 Skill/Plugin 之外：
+
+```text
+~/.coordinate-agents/config.json
+```
+
+无需修改 `skills/` 或 `.codex-plugin/`，即可配置自定义 Antigravity 命令：
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+npx @hogancv/coordinate-agents config get agent.antigravity.command
+npx @hogancv/coordinate-agents config list
+```
+
+命令解析采用显式且 fail-closed 的优先级：**项目级 Agent 命令 > 用户级命令 > Adapter
+默认值**（`antigravity-cli` 默认 `agy`，`codex-cli` 默认 `codex`）。显式命令不可用时，绝不
+静默替换为 `agy` 或其他回退命令。`launch` 会在启动 Implementer 前检查最终可执行文件；
+spawn 失败、非零退出和对话/运行时失败都会将 Agent 状态设为 `ERROR`，保留有限长度的
+stdout/stderr 尾部，停止监督并报告配置命令与错误。Planner 必须停止等待，不得自动重试。
+
+`doctor` 会报告最终解析出的命令和可执行文件状态，但不会检查登录状态、Provider 健康度或
+模型可用性；这些错误由 `launch` 按运行时失败处理。
 
 ![完整端到端终端演示](./assets/demo.gif)
 
@@ -134,8 +159,8 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Windows、macOS 或 Linux
 - Node.js 18 或更高版本
 - Git
-- 已完成认证的 Codex CLI（用于 Codex 参考适配器）
-- 已完成认证的 Antigravity CLI（用于 Antigravity 参考适配器）
+- 已安装的 Codex CLI（用于 Codex 参考适配器；认证仍由 CLI 自己负责）
+- 已安装的 Antigravity CLI（用于 Antigravity 参考适配器；认证仍由 CLI 自己负责）
 
 ## 安装方式
 
@@ -296,6 +321,7 @@ RELEASE_APPROVED
 - `wait` 默认每 5 秒轮询一次，最长等待 120 分钟。
 - 等待仅在当前 CLI 会话及其 Node.js 进程保持存活时有效。
 - 总线监督型 `launch` 也会在 Agent 正常退出后保持存活；它只观察 `new`、该 Agent 所有的 `processing` 和 `STOPPED` 状态，不会代替 Agent 认领任务。子进程非零退出会停止监督并报告失败。
+- Planner 或 Reviewer 的 `wait` 也会观测配置中的 Implementer 状态。一旦变为 `ERROR`，`wait` 会立即以非零状态退出；应停止轮询、报告失败，不得自动重发或重试。
 - 消息与状态在终端重启后依然保留。再次调用本技能即可检查并继续处理 `new` 或由当前代理认领的 `processing` 消息。
 - `.agent-bus/` 写入当前仓库本地的 `.git/info/exclude`，不会污染版本库跟踪的 `.gitignore`。
 - 严禁多个角色同时进行 Git 写入。

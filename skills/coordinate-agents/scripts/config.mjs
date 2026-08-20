@@ -9,8 +9,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 export const DEFAULT_CONFIG = Object.freeze({
   version: 1,
   agents: [
-    { id: 'codex', adapter: 'codex-cli', command: 'codex' },
-    { id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' },
+    { id: 'codex', adapter: 'codex-cli' },
+    { id: 'antigravity', adapter: 'antigravity-cli' },
   ],
   workflow: {
     planner: 'codex',
@@ -118,8 +118,8 @@ export function validateConfig(config) {
     if (!agent.adapter || typeof agent.adapter !== 'string') {
       throw new Error(`Agent "${agent.id}" is missing required "adapter" string.`);
     }
-    if (!agent.command || typeof agent.command !== 'string') {
-      throw new Error(`Agent "${agent.id}" is missing required "command" string.`);
+    if (agent.command !== undefined && (typeof agent.command !== 'string' || agent.command.trim() === '')) {
+      throw new Error(`Agent "${agent.id}" command must be a non-empty string when provided.`);
     }
     if (agent.args !== undefined) {
       if (!Array.isArray(agent.args) || !agent.args.every(a => typeof a === 'string')) {

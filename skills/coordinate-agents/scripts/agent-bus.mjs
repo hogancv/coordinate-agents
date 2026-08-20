@@ -354,7 +354,8 @@ function sleep(milliseconds) {
 
 async function wait(options, bus) {
   const agent = resolveAgentOption(options, true);
-  const registered = getRegisteredAgentIds(bus);
+  const config = readConfig(bus);
+  const registered = new Set(config.agents.map(item => item.id));
   if (!registered.has(agent)) {
     throw new Error(`--agent must be a registered agent. Given: "${agent}". Registered agents: ${[...registered].join(', ')}.`);
   }
@@ -365,6 +366,12 @@ async function wait(options, bus) {
   const processingDirectory = join(bus, 'inbox', agent, 'processing');
   const deadline = Date.now() + timeoutMinutes * 60_000;
   while (Date.now() < deadline) {
+    const runtimeFailure = workflowRuntimeFailure(bus, config, agent);
+    if (runtimeFailure) {
+      console.error(`ERROR: Agent ${runtimeFailure.agent} is in ERROR state. ${runtimeFailure.details || ''}`.trim());
+      process.exitCode = 1;
+      return;
+    }
     const release = acquireLock(bus, `queue-${agent}`);
     try {
       const candidate = readdirSync(newDirectory).filter(name => name.endsWith('.md')).sort()[0];
@@ -394,6 +401,19 @@ async function wait(options, bus) {
   }
   console.log('TIMEOUT');
   process.exitCode = 2;
+}
+
+function workflowRuntimeFailure(bus, config, waitingAgent) {
+  const watched = new Set([waitingAgent]);
+  const workflow = config.workflow || {};
+  if (workflow.planner === waitingAgent || workflow.reviewer === waitingAgent) {
+    if (workflow.implementer) watched.add(workflow.implementer);
+  }
+  for (const agent of watched) {
+    const latest = latestState(bus, agent).record;
+    if (latest?.state === 'ERROR') return latest;
+  }
+  return null;
 }
 
 function complete(options, bus) {

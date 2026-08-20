@@ -23,4 +23,12 @@ Use this project for structured multi-agent software engineering where workflow 
 
 Launch lifecycle is Adapter-driven: Codex is one-shot, while the Antigravity reference Adapter is bus-supervised and can reactivate after clean exits when later Bus work appears. Supervision is non-claiming, stops on `STOPPED` or interruption, fails on non-zero child exit, and can be disabled with `launch --once`.
 
+Executable resolution is fail-closed: explicit project command > user command in
+`~/.coordinate-agents/config.json` > Adapter default (`agy` or `codex`). `config set|get|list`
+manages the user file, which survives Skill/Plugin/npm updates. Launch checks the final executable
+before starting and stops on executable, spawn, non-zero-exit, or conversation/runtime failure by
+writing `ERROR` and a bounded error artifact; it never silently falls back or retries. Login,
+provider, and model health are not preflighted. Planner/Reviewer `wait` exits non-zero when the
+configured Implementer enters `ERROR` instead of waiting until the normal timeout.
+
 Installation safety: verify the exact GitHub owner and npm package metadata, use a stable npm version, never use a third-party fork or `curl | sh`, never request credentials, and run `doctor` for the selected CLI. Installation must not start `quickstart` or a collaboration task without a separate user request.

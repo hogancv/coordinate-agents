@@ -50,7 +50,24 @@ Antigravity CLI (agy): missing or requires attention
 Run `where codex` / `where agy` on Windows or `command -v codex` / `command -v agy` on POSIX.
 Install the missing native CLI from its official source, authenticate it, and prove a native model
 response before rerunning `doctor`. A selected-target check fails when that target CLI is absent;
-the unselected CLI is informational only.
+the unselected CLI is informational only. If a machine-specific wrapper is used, configure the
+actual command instead of expecting the Adapter to infer it:
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+npx @hogancv/coordinate-agents doctor
+```
+
+The project-level command in `.agent-bus/config.json` takes precedence over this user setting.
+
+## Implementer stops with `ERROR`
+
+`launch` performs an executable check before starting the Implementer. A missing command, unsafe
+Windows entrypoint, spawn failure, non-zero child exit, or conversation/runtime failure is fatal
+for the current activation. Inspect the reported Agent, Adapter, configured command, error code,
+and `.agent-bus/logs/*-ERROR.json` artifact. Do not keep polling or automatically resend
+`IMPLEMENT`; fix the command/runtime and explicitly launch again when ready. Coordinate Agents
+does not perform login-status or provider-health preflight checks.
 
 ## Unknown installation directory
 

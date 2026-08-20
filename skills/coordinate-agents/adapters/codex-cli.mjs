@@ -1,43 +1,9 @@
-import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { AgentAdapter, NORMALIZED_STATUSES } from './base.mjs';
+import { AgentAdapter } from './base.mjs';
+import { checkExecutable, executableError, resolveExecutable } from './executable.mjs';
 
-function runFile(command, args) {
-  try {
-    return {
-      status: 0,
-      stdout: execFileSync(command, args, { encoding: 'utf8', windowsHide: true }),
-      stderr: '',
-    };
-  } catch (error) {
-    return {
-      status: Number.isInteger(error.status) ? error.status : 1,
-      stdout: `${error.stdout || ''}`,
-      stderr: `${error.stderr || ''}`,
-      error,
-    };
-  }
-}
-
-function resolveCodexExecutable(command = 'codex') {
-  if (process.platform !== 'win32') return { command, prefix: [], safe: true };
-  const located = runFile('where.exe', [command]);
-  if (located.status !== 0) return { command, prefix: [], safe: false };
-  for (const path of located.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
-    if (/\.(exe|com)$/i.test(path)) return { command: path, prefix: [], safe: true };
-    if (/\.js$/i.test(path)) return { command: process.execPath, prefix: [path], safe: true };
-    if (/\.(cmd|bat)$/i.test(path)) {
-      const entrypoint = join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
-      if (existsSync(entrypoint)) return { command: process.execPath, prefix: [entrypoint], safe: true };
-      const jsSibling = path.replace(/\.(cmd|bat)$/i, '.js');
-      const cjsSibling = path.replace(/\.(cmd|bat)$/i, '.cjs');
-      if (existsSync(jsSibling)) return { command: process.execPath, prefix: [jsSibling], safe: true };
-      if (existsSync(cjsSibling)) return { command: process.execPath, prefix: [cjsSibling], safe: true };
-      return { command: path, prefix: [], safe: false };
-    }
-  }
-  return { command, prefix: [], safe: false };
+function codexWindowsEntrypoint(path) {
+  return join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
 }
 
 export class CodexCliAdapter extends AgentAdapter {
@@ -46,27 +12,20 @@ export class CodexCliAdapter extends AgentAdapter {
     this.name = 'codex-cli';
   }
 
-  detect() {
+  detect({ version = true } = {}) {
     const command = this.config.command || 'codex';
-    const resolved = resolveCodexExecutable(command);
-    if (process.platform === 'win32' && !resolved.safe) {
-      return { available: false, details: `Codex command '${command}' resolved to a Windows batch script without a safe JS entrypoint` };
-    }
-    const result = runFile(resolved.command, [...resolved.prefix, '--version']);
-    if (result.error || result.status !== 0) {
-      return { available: false, details: result.error?.message || 'Codex CLI not available' };
-    }
-    const version = `${result.stdout || result.stderr}`.trim().split(/\r?\n/)[0] || 'available';
-    return { available: true, version };
+    return checkExecutable(command, {
+      versionArgs: version ? ['--version'] : null,
+      windowsEntrypoint: codexWindowsEntrypoint,
+    });
   }
 
   resolveLaunch({ root, prompt }) {
     const command = this.config.command || 'codex';
-    const resolved = resolveCodexExecutable(command);
-    if (process.platform === 'win32' && !resolved.safe) {
-      throw new Error(`Cannot launch Codex safely: '${command}' resolved to a Windows batch script without a safe JS entrypoint.`);
-    }
-    const args = ['-C', resolve(root), prompt];
+    const resolved = resolveExecutable(command, { windowsEntrypoint: codexWindowsEntrypoint });
+    if (!resolved.available) throw executableError(resolved, 'Cannot launch Codex safely');
+    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
+    const args = [...configuredArgs, '-C', resolve(root), prompt];
     return {
       command: resolved.command,
       prefix: resolved.prefix,

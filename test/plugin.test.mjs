@@ -48,12 +48,14 @@ test('canonical skill directory is complete and self-contained', () => {
     join('adapters', 'codex-cli.mjs'),
     join('adapters', 'antigravity-cli.mjs'),
     join('adapters', 'generic-cli.mjs'),
+    join('adapters', 'executable.mjs'),
     join('references', 'protocol.md'),
     join('references', 'task-templates.md'),
     join('scripts', 'agent-bus.mjs'),
     join('scripts', 'agent-bus.ps1'),
     join('scripts', 'agent-observer.mjs'),
     join('scripts', 'config.mjs'),
+    join('scripts', 'user-config.mjs'),
   ];
 
   for (const relPath of requiredFiles) {
@@ -158,4 +160,3 @@ test('repository marketplace manifest exists and conforms to Codex Marketplace s
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(packageJson.files.includes('.agents'), '.agents must be included in package.json files');
 });
-

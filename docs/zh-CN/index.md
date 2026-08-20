@@ -15,6 +15,16 @@ npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
 npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo Web 应用" --lang zh-CN
 ```
 
+机器相关的 CLI 命令配置在 `~/.coordinate-agents/config.json`，优先级为项目级显式命令 >
+用户级命令 > Adapter 默认值。可使用：
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+```
+
+`launch` 会在启动前检查最终可执行文件；spawn、非零退出或对话运行时失败会写入 `ERROR`
+并停止当前监督，不会自动回退或重试。不会预检测登录状态。
+
 - [完整简体中文 README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)
 - [AI 安装指南](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md)
 - [安全说明](../security.html)

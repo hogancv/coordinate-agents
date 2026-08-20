@@ -26,6 +26,31 @@ Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, wr
 
 Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
 
+## Executable configuration and fail-fast behavior
+
+The final executable is resolved in this order:
+
+1. an explicit `command` in the project agent record in `.agent-bus/config.json`;
+2. the user-level command in `~/.coordinate-agents/config.json`;
+3. the Adapter default (`codex` for `codex-cli`, `agy` for `antigravity-cli`).
+
+User configuration is outside the installed Skill/Plugin and survives Skill, Plugin, and npm
+updates. Configure it without editing the installed Skill:
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+npx @hogancv/coordinate-agents config get agent.antigravity.command
+npx @hogancv/coordinate-agents config list
+```
+
+Before launch, Runtime checks the resolved executable itself. It does not probe login state,
+provider health, or model availability. A missing, non-executable, or unsafe entrypoint sets the
+Implementer to `ERROR`, records a bounded error artifact, and stops before starting the CLI.
+After launch, spawn failures, Adapter launch failures, non-zero child exits, and runtime errors
+also set `ERROR`, preserve only bounded stdout/stderr tails, and terminate the current activation.
+An explicit command is fail-closed: Runtime never silently falls back to `agy` or another Adapter
+default when that command is unavailable.
+
 ## Establish context
 
 1. Resolve the repository root with `git rev-parse --show-toplevel`.
@@ -83,6 +108,9 @@ Wait without busy-spinning; the command claims the oldest message into `processi
 node "<bus-tool>" wait --root "<repository-root>" --agent antigravity --timeout-minutes 120 --poll-seconds 5
 ```
 
+For a Planner or Reviewer wait, the bus also observes the configured Implementer state. If it
+becomes `ERROR`, `wait` exits with an error instead of continuing until its normal timeout.
+
 After processing, archive it:
 
 ```sh
@@ -106,7 +134,8 @@ Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`
 3. For a new user request, clarify only decisions that materially affect implementation.
 4. Save an implementation-ready specification, send `IMPLEMENT`, set `WAITING`, then call `wait`.
 5. On `IMPLEMENTATION_DONE`, verify the commit, clean worktree, diff scope, tests, build, and evidence.
-6. Send `CHANGES_REQUESTED` and wait again, or send `REVIEW_APPROVED`.
+6. If the Implementer state is `ERROR`, or Runtime reports an executable, launch, spawn, non-zero-exit, or conversation failure, stop `wait` immediately. Do not send another `IMPLEMENT`, do not poll indefinitely, and do not automatically retry or recover. Tell the user the Agent, Adapter, configured command, error code, and suggested fix; continue only after the user fixes the environment or explicitly requests a retry.
+7. Send `CHANGES_REQUESTED` and wait again, or send `REVIEW_APPROVED`.
 7. Prepare the release plan and stop at the human release gate.
 
 ### Implementer role (Antigravity by default)
@@ -122,6 +151,7 @@ Allowed states are `IDLE`, `CLARIFYING`, `SPEC_READY`, `IMPLEMENTING`, `WAITING`
 
 - A wait remains active only while the CLI session and its Node.js process remain alive.
 - A bus-supervised launch remains active after a clean Agent exit and wakes for any valid `new` or Agent-owned `processing` work. Non-zero exits terminate supervision instead of restarting.
+- `ERROR` is terminal for the current activation. Never continue polling indefinitely after an Implementer runtime failure. A later launch is an explicit user retry, not an automatic retry.
 - On timeout, preserve all state, report `TIMEOUT`, and resume with another `wait` when asked.
 - After a terminal restart, inspect `status`, then process `new` and agent-owned `processing` messages.
 - Recover an expired claim only after checking for a matching commit, evidence, or reply: `recover --agent <agent_id> --stale-after-seconds 14400`.

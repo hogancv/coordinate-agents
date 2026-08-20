@@ -19,4 +19,18 @@ In the default reference workflow, Google Antigravity CLI (`agy`) fulfills the i
 
 Antigravity does not approve its own work and does not merge, tag, push, deploy, or publish. It retains its native Google account authentication and model subscription.
 
-The `antigravity-cli` reference Adapter declares a bus-supervised launch policy. After a clean `agy` exit, the parent `launch` command waits without claiming messages and starts `agy` again when later work appears. A `STOPPED` state or Ctrl+C ends supervision; a non-zero child exit fails without retry. Use `launch --once` only for an intentional single activation.
+The `antigravity-cli` reference Adapter declares a bus-supervised launch policy. After a clean resolved-command exit, the parent `launch` command waits without claiming messages and starts the resolved command again when later work appears. A `STOPPED` state or Ctrl+C ends supervision; a non-zero child exit fails without retry. Use `launch --once` only for an intentional single activation.
+
+The executable can be overridden per machine without changing the installed Skill or project
+defaults:
+
+```sh
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+```
+
+The project command, if explicitly present, takes precedence over
+`~/.coordinate-agents/config.json`, which takes precedence over the Adapter default `agy`.
+`launch` checks the resolved executable before starting. Spawn failures, non-zero exits, and CLI
+conversation/runtime failures write `ERROR`, stop supervision, and are not automatically retried.
+Login state is not preflighted; a login/provider error reported by `agy` is handled as a runtime
+failure with a bounded stdout/stderr tail.

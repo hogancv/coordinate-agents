@@ -18,6 +18,7 @@ This is the canonical installation procedure for AI assistants installing
 - [Install Codex only](#install-codex-only--只安装-codex)
 - [Install Antigravity only](#install-antigravity-only--只安装-antigravity)
 - [Verify installation](#verify-installation--验证安装)
+- [Configure executable commands](#configure-executable-commands--配置可执行命令)
 - [Start the first task](#start-the-first-task--开始首个任务)
 - [Upgrade](#upgrade--更新)
 - [Uninstall](#uninstall--卸载)
@@ -209,6 +210,50 @@ coordinate-agents.backup-YYYY-MM-DDTHH-MM-SS-mmmZ
 `npx` may also use the user's npm cache. Installation alone does not write `.agent-bus`, modify
 the current product repository, or start an agent. Restart the selected CLI after installation so
 it rediscovers the skill.
+
+## Configure executable commands / 配置可执行命令
+
+Machine-specific CLI commands belong in the user-level file below, not in the installed Skill or
+Plugin tree:
+
+```text
+~/.coordinate-agents/config.json
+```
+
+For example, configure a custom Antigravity wrapper and inspect the result:
+
+```sh
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config get agent.antigravity.command
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+```
+
+Resolution is **explicit project command > user command > Adapter default**. A configured command
+that is missing or fails its executable check is fatal for the current launch; it is never silently
+replaced with `agy` or another default. `doctor` reports the final command. The runtime checks
+executable readiness but does not probe login state, provider health, or model availability; those
+errors are handled as runtime failures after launch. The user file is outside `skills/`,
+`.codex-plugin/`, and npm package update payloads, so installation and updates preserve it.
+
+机器相关的 CLI 命令应写入下面的用户级文件，而不是已安装的 Skill 或 Plugin 目录：
+
+```text
+~/.coordinate-agents/config.json
+```
+
+例如配置自定义 Antigravity 包装命令并查询结果：
+
+```sh
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config get agent.antigravity.command
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+```
+
+解析优先级为**项目级显式命令 > 用户级命令 > Adapter 默认值**。已配置但不存在或未通过可执行
+文件检查的命令会使当前启动失败，绝不会静默替换成 `agy` 或其他默认值。`doctor` 会报告最终
+命令。运行时会检查可执行文件是否就绪，但不会探测登录状态、Provider 健康度或模型可用性；
+这些错误在启动后按运行时失败处理。用户配置位于 `skills/`、`.codex-plugin/` 和 npm 包更新
+载荷之外，因此安装和更新会保留它。
 
 ## Start the first task / 开始首个任务
 

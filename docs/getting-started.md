@@ -10,8 +10,9 @@ description: A verified first-run lifecycle for Codex CLI specifications, Antigr
 > This walkthrough demonstrates the **default reference workflow** using OpenAI Codex CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
 
 This walkthrough starts from an existing Git repository and ends with a reviewed commit. It takes
-about **5 minutes** after Node.js, Git, Codex CLI, and Antigravity CLI (`agy`) are installed and
-authenticated. Model response time is the main variable.
+about **5 minutes** after Node.js, Git, Codex CLI, and Antigravity CLI (`agy`) are installed. Native
+authentication remains owned by each CLI; Coordinate Agents does not preflight login state. Model
+response time is the main variable.
 
 ## 1. Check prerequisites and install both Skills
 
@@ -24,6 +25,8 @@ $ codex --version
 codex-cli 0.146.0
 $ agy --version
 1.1.12
+$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.command agy-proxy
+Updated user configuration: ~/.coordinate-agents/config.json
 $ npx --yes @hogancv/coordinate-agents@latest install
 Installed Codex: .../skills/coordinate-agents
 Installed Antigravity: .../skills/coordinate-agents
@@ -36,6 +39,11 @@ Codex: healthy (1.2.3) at .../codex/skills/coordinate-agents
 Antigravity: healthy (1.2.3) at .../agy/skills/coordinate-agents
 All prerequisites and selected installations are healthy.
 ```
+
+The final Implementer command is resolved as project explicit command, then the user-level
+`~/.coordinate-agents/config.json` command, then the Adapter default. `doctor` reports that command
+and executable status. `launch` fails fast with Agent state `ERROR` on an unavailable executable,
+spawn failure, non-zero exit, or conversation/runtime error; it does not silently fall back or retry.
 
 Versions and home paths vary. The final healthy summary and exit status `0` are the success
 signals. A non-zero exit, `missing`, `invalid`, or `requires attention` means installation is not

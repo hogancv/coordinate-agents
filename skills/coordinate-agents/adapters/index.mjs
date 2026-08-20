@@ -2,6 +2,7 @@ import { AgentAdapter } from './base.mjs';
 import { CodexCliAdapter } from './codex-cli.mjs';
 import { AntigravityCliAdapter } from './antigravity-cli.mjs';
 import { GenericCliAdapter } from './generic-cli.mjs';
+import { EXECUTABLE_CODES, checkExecutable, executableError, resolveExecutable } from './executable.mjs';
 
 const adapterRegistry = new Map([
   ['codex-cli', CodexCliAdapter],
@@ -30,4 +31,8 @@ export {
   CodexCliAdapter,
   AntigravityCliAdapter,
   GenericCliAdapter,
+  EXECUTABLE_CODES,
+  checkExecutable,
+  executableError,
+  resolveExecutable,
 };

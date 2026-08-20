@@ -55,8 +55,8 @@ Stored project-locally at `.agent-bus/config.json`:
 {
   "version": 1,
   "agents": [
-    { "id": "codex", "adapter": "codex-cli", "command": "codex" },
-    { "id": "antigravity", "adapter": "antigravity-cli", "command": "agy" }
+    { "id": "codex", "adapter": "codex-cli" },
+    { "id": "antigravity", "adapter": "antigravity-cli" }
   ],
   "workflow": {
     "planner": "codex",
@@ -69,6 +69,28 @@ Stored project-locally at `.agent-bus/config.json`:
 - Initialized idempotently by `agent-bus init` or `quickstart`.
 - New agents are registered atomically via `coordinate-agents agent add <id> --adapter <adapter> --command <cmd>` or `agent-bus agent-add`.
 - Registration creates dedicated inbox stages, state, and quarantine directories for that agent without disturbing existing queues.
+
+### User-level executable configuration
+
+Machine-specific command preferences are stored outside the installed Skill/Plugin at
+`~/.coordinate-agents/config.json`:
+
+```json
+{
+  "version": 1,
+  "agents": {
+    "antigravity": {
+      "command": "agy-proxy",
+      "args": []
+    }
+  }
+}
+```
+
+Runtime resolution is **explicit project `command` > user-level agent command > Adapter default**.
+The project record remains the repository-specific source of truth; the user record is for
+machine-specific defaults and survives Skill/Plugin/npm updates. An explicit command that fails
+resolution is fail-closed and never falls back to the Adapter default.
 
 ## Queues and message routing
 
@@ -83,6 +105,11 @@ Each registered agent owns an isolated queue hierarchy under `.agent-bus/inbox/<
 2. **Claim/Wait**: Recipient atomically moves the oldest message to `.agent-bus/inbox/<to>/processing/` and creates a lease sidecar.
 3. **Complete**: After successful processing, recipient moves the message to `.agent-bus/inbox/<to>/processed/` and removes the lease sidecar.
 4. **Quarantine**: If message parsing fails, the message is moved to `.agent-bus/quarantine/<to>/` with an `.error.json` diagnostics file.
+
+When `wait` is running for the configured Planner or Reviewer, it also watches the configured
+Implementer's latest state. An Implementer `ERROR` causes `wait` to return a non-zero failure
+immediately rather than waiting for the normal timeout; the caller must stop polling and report the
+runtime failure.
 
 ### Message format
 
@@ -146,6 +173,10 @@ Adapters live under `adapters/` and implement a unified interface:
 
 - `detect()`: checks executable availability and version.
 - `resolveLaunch({ root, prompt, agent, language, activation })`: returns `{ command, prefix, args }` without shell interpolation.
+- executable readiness: the resolved command is checked before launch and returns structured
+  `COMMAND_NOT_FOUND`, `COMMAND_NOT_EXECUTABLE`, `UNSAFE_WINDOWS_ENTRYPOINT`, or
+  `VERSION_CHECK_FAILED` results where applicable. Launch preflight does not probe authentication,
+  provider health, or model availability.
 - `launchPolicy()`: returns normalized `one-shot` or `bus-supervised` lifecycle policy.
 - `resumePrompt({ agentId, root, activation })`: supplies compact context for a later supervised activation.
 - `capabilities()`: reports supported actions (`launch`, `detect`, `dispatch`).
@@ -158,7 +189,7 @@ Adapters live under `adapters/` and implement a unified interface:
 
 ### Durable launch supervision
 
-For `bus-supervised` adapters, Runtime performs the first activation normally. After a zero exit it observes the registered Agent's `new` and `processing` queues plus latest state without moving a message or writing a lease. Work wakes a new activation with the Adapter's resume prompt; `STOPPED` ends successfully. A non-zero child exit ends supervision as a failure. Ctrl+C or termination is forwarded to the active non-detached child. `launch --once` disables supervision without naming a vendor.
+For `bus-supervised` adapters, Runtime performs the first activation normally. After a zero exit it observes the registered Agent's `new` and `processing` queues plus latest state without moving a message or writing a lease. Work wakes a new activation with the Adapter's resume prompt; `STOPPED` ends successfully. A non-zero child exit, spawn failure, launch failure, or reported `ERROR` ends the current activation and stops supervision; no automatic retry or command fallback occurs. Ctrl+C or termination is forwarded to the active non-detached child. `launch --once` disables supervision without naming a vendor.
 
 ### Desktop and external adapter extension model
 
