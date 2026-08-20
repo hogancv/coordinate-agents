@@ -1,6 +1,6 @@
 {
   "name": "coordinate-agents",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Local-first multi-agent coordination plugin and runtime based on a recoverable Agent Bus.",
   "author": {
     "name": "hogancv",
