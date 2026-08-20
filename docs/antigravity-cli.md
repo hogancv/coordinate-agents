@@ -34,3 +34,21 @@ The project command, if explicitly present, takes precedence over
 conversation/runtime failures write `ERROR`, stop supervision, and are not automatically retried.
 Login state is not preflighted; a login/provider error reported by `agy` is handled as a runtime
 failure with a bounded stdout/stderr tail.
+
+## Permission and sandbox arguments
+
+The built-in `antigravity-cli` Adapter does not infer a permission mode. It passes any configured
+`args` and then appends `--prompt-interactive <prompt>`; it does not automatically add
+`--dangerously-skip-permissions` or another sandbox-bypass flag. If `agy` is already configured
+locally for full permissions, that native setting remains in effect.
+
+If the installed `agy --help` confirms the explicit flag and the user intentionally wants to use it,
+configure it outside the installed Skill/Plugin:
+
+```sh
+npx @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx @hogancv/coordinate-agents@latest config list
+```
+
+`doctor` verifies the executable and version, not the effective provider permission state. Never
+copy a permission flag from another CLI or version without checking its own help output.

@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Install with AI
-description: Complete Codex and Antigravity installation conversations, safe command boundaries, error recovery, and a verifiable result template.
+description: Complete Codex App/CLI and Antigravity installation conversations, direct App usage, safe command boundaries, error recovery, and a verifiable result template.
 ---
 
 # Install with AI
@@ -35,6 +35,33 @@ Codex: Installation verified. Package owner/name and repository matched; Node an
 
 The AI should substitute the exact stable version returned by npm, not guess it and not silently
 switch to a fork.
+
+## Use directly in Codex App
+
+After installation is verified and the user asks to start work, Codex App can invoke the Skill
+directly:
+
+1. Add or open the target Git repository as a Codex App project.
+2. Set the thread project/workspace path to the repository root containing `.git`.
+3. Start a new thread and invoke `$coordinate-agents`.
+
+This path does not require manually opening two CLI windows. The runtime starts the Implementer as a
+local child process, so the actual execution command must be installed and configured correctly,
+for example `agy` or `claude`. The App thread and the Implementer command must use the same machine;
+the project path and command are independent checks.
+
+For another CLI, ask the active Codex App thread to inspect the installed executable and its help
+output before saving a `generic-cli` configuration:
+
+```text
+Use $coordinate-agents to configure Claude Code as the Implementer for this project. Inspect the
+installed `claude` executable and `claude --help`, register it with `generic-cli`, choose only flags
+supported by this installed version for the prompt and project root, run `doctor`, and show me the
+resolved configuration. Do not start a collaboration task until I confirm.
+```
+
+The runtime sets the project root as the child process working directory. Do not copy a guessed
+vendor-specific `--dir` or prompt flag; verify the CLI's help output first.
 
 ## Antigravity installation conversation
 
@@ -83,6 +110,13 @@ open a fresh terminal, and verify `node --version` again.
 
 **`codex` or `agy` is missing.** Install the native CLI from its official source, authenticate it,
 and verify its own `--version` and model interaction before installing this Skill.
+
+**Full permissions are unclear.** The built-in Antigravity Adapter does not add a permission bypass
+flag. It passes configured `args` and appends `--prompt-interactive <prompt>`. If the installed
+`agy --help` confirms `--dangerously-skip-permissions` and the user explicitly wants it, configure
+it with `config set agent.antigravity.args '["--dangerously-skip-permissions"]'`; `config list` shows
+the saved user arguments, while `doctor` checks executable/version readiness only. A native `agy`
+configuration that already enables full permissions is not overridden by the Plugin.
 
 **The target directory is unrecognized or modified.** Do not force it. Report the exact path,
 inspect it for user content, and ask the user to choose backup/migration or a different Skill home.

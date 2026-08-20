@@ -1,18 +1,57 @@
 ---
 layout: page
 title: Getting started
-description: A verified first-run lifecycle for Codex CLI specifications, Antigravity implementation, review, recovery, and release gating.
+description: A verified first-run lifecycle for Codex App or Codex CLI specifications, Antigravity implementation, review, recovery, and release gating.
 ---
 
 # Getting started
 
 > [!NOTE]
-> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
+> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex App/CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
 
 This walkthrough starts from an existing Git repository and ends with a reviewed commit. It takes
-about **5 minutes** after Node.js, Git, Codex CLI, and Antigravity CLI (`agy`) are installed. Native
-authentication remains owned by each CLI; Coordinate Agents does not preflight login state. Model
-response time is the main variable.
+about **5 minutes** after Node.js, Git, Codex App or Codex CLI, and an Implementer CLI such as
+Antigravity (`agy`) are installed. Native authentication remains owned by each CLI; Coordinate
+Agents does not preflight login state. Model response time is the main variable.
+
+## Codex App path (recommended)
+
+Codex App can invoke the Skill directly, so users do not need to manually open two CLI windows.
+
+1. Install and enable the `coordinate-agents` Codex plugin from the GitHub marketplace.
+2. Add or open the target Git repository as a Codex App project.
+3. Set the thread's project/workspace path to the repository root—the directory containing `.git`.
+4. Start a new thread, invoke `$coordinate-agents`, and ask Codex to initialize or coordinate the
+   task.
+
+The Codex App thread is the Planner/Reviewer side. The runtime starts the Implementer as a local
+child process, so the execution command must be an installed executable on the same machine. For
+example:
+
+```console
+$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.command agy
+$ npx --yes @hogancv/coordinate-agents@latest agent add claude \
+    --adapter generic-cli --command claude \
+    --args '["--print", "{prompt}"]'
+```
+
+Use the actual command that starts the Implementer (`agy`, `claude`, or a vendor wrapper), and verify
+its arguments with that CLI's own `--help` output. The runtime uses the selected project root as the
+child process working directory, so a `--dir` argument is not universally available or necessary.
+For a convenient setup, ask Codex App: “Use `$coordinate-agents` to configure Claude Code as this
+project's Implementer; inspect `claude --help`, register it with `generic-cli`, run `doctor`, show me
+the resolved configuration, and do not start until I confirm.” Use the CLI path below only for
+automation or hosts without direct Codex App Skill execution.
+
+The built-in Antigravity adapter does not automatically add a full-permission flag. It passes any
+configured `args` and then appends `--prompt-interactive <prompt>`. If `agy --help` confirms
+`--dangerously-skip-permissions` and the user explicitly wants it, configure that argument rather
+than assuming the Plugin added it:
+
+```console
+$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+$ npx --yes @hogancv/coordinate-agents@latest config list
+```
 
 ## 1. Check prerequisites and install both Skills
 

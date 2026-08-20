@@ -25,7 +25,9 @@ durable cross-tool handoff are not provided by this project.
 **Manual dual terminals.** Two CLIs can share a repository and communicate through chat or ad hoc
 Markdown files. This is flexible, but role ownership, message claiming, interruption recovery,
 deduplication, and release authorization depend on both prompts being followed perfectly. Two
-processes can accidentally modify the same worktree.
+processes can accidentally modify the same worktree. Codex App can remove the manual terminal
+overhead when the Skill is invoked from the correct project path, but the configured Implementer
+still runs as a local child process and must use a real executable command such as `agy` or `claude`.
 
 **`coordinate-agents`.** The coordination protocol and runtime decouple agents into configurable workflow roles (`planner`, `implementer`, `reviewer`). In the default reference workflow, Codex clarifies requirements, writes acceptance criteria, reviews the implementation commit and evidence, and controls the release gate, while Antigravity is the exclusive product-code writer. Messages move atomically through `new`, `processing`, and `processed`; leases and recovery preserve work across terminal exits. Neither agent reads or copies the other's authentication files. Dynamic registration allows connecting third-party agents (`generic-cli`) with customized role assignments.
 

@@ -1,6 +1,6 @@
 # coordinate-agents
 
-> A local-first coordination protocol and runtime for AI coding agents in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. OpenAI Codex CLI and Google Antigravity CLI (agy) serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly. Desktop, MCP, HTTP, IPC, IDE, and other execution surfaces integrate through the adapter extension model. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
+> A local-first coordination protocol and runtime for AI coding agents in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI (agy) serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly. Desktop, MCP, HTTP, IPC, IDE, and other execution surfaces integrate through the adapter extension model. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
 
 Canonical documentation: https://hogancv.github.io/coordinate-agents/
 Getting started (Reference workflow): https://hogancv.github.io/coordinate-agents/getting-started.html
@@ -32,3 +32,12 @@ provider, and model health are not preflighted. Planner/Reviewer `wait` exits no
 configured Implementer enters `ERROR` instead of waiting until the normal timeout.
 
 Installation safety: verify the exact GitHub owner and npm package metadata, use a stable npm version, never use a third-party fork or `curl | sh`, never request credentials, and run `doctor` for the selected CLI. Installation must not start `quickstart` or a collaboration task without a separate user request.
+
+Codex App direct usage: add the target Git repository as a project, set the thread project path to
+the repository root containing `.git`, invoke `$coordinate-agents` in a new thread, and configure
+the actual local Implementer executable (`agy`, `claude`, or a wrapper). A second manually opened
+CLI window is not required; the runtime starts the Implementer as a child process. For non-reference
+CLIs, inspect the installed command's `--help` output before registering `generic-cli` arguments.
+The Antigravity Adapter appends only configured args plus `--prompt-interactive <prompt>` and does
+not automatically add a full-permission or sandbox-bypass flag; configure such a vendor-specific
+flag explicitly only after verifying that CLI version supports it.

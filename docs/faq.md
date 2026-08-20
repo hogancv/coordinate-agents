@@ -8,7 +8,19 @@ description: Answers about multi-agent coordination, Codex and Antigravity refer
 
 ## What is coordinate-agents?
 
-A local-first coordination protocol, runtime, and CLI skill for multi-agent software engineering in Git repositories. The core is agent-agnostic with an adapter-based runtime. OpenAI Codex CLI and Google Antigravity CLI serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop/IPC surfaces connect through the adapter extension model.
+A local-first coordination protocol, runtime, and Codex App/CLI skill for multi-agent software engineering in Git repositories. The core is agent-agnostic with an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop/IPC surfaces connect through the adapter extension model.
+
+## Can I use it directly in Codex App?
+
+Yes. Install and enable the Codex plugin, add the target Git repository as a Codex App project, set
+the thread project path to the repository root containing `.git`, and invoke `$coordinate-agents` in
+a new thread. You do not need to manually open two CLI windows. The runtime still launches the
+configured Implementer as a local child process, so configure the actual executable command, such
+as `agy` or `claude`, and keep that CLI installed on the same machine.
+
+For a non-reference CLI, ask Codex App to inspect the installed executable and its `--help` output,
+register it with `generic-cli`, run `doctor`, and show the resolved configuration before starting a
+task. This avoids copying prompt, directory, or permission flags from another CLI version.
 
 ## How do I prevent multiple AI agents from editing code simultaneously?
 
@@ -21,6 +33,11 @@ No. Each agent and CLI maintains its native authentication and environment indep
 ## Can custom or third-party CLI agents be added?
 
 Yes. Custom CLI agents can be registered dynamically using `coordinate-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
+
+The built-in Antigravity Adapter does not automatically add full permissions. It passes configured
+arguments and then appends `--prompt-interactive <prompt>`. If the local `agy --help` confirms
+`--dangerously-skip-permissions` and the user explicitly wants it, set it with
+`config set agent.antigravity.args`; otherwise the local `agy` configuration remains authoritative.
 
 ## Can interrupted work be resumed?
 

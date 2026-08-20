@@ -98,6 +98,27 @@ test('README FAQ answers natural-language discovery questions', () => {
   ]) assert.ok(chinese.includes(phrase), `Chinese README FAQ is missing ${phrase}`);
 });
 
+test('documents direct Codex App usage and concrete Implementer commands', () => {
+  const english = read('README.md');
+  const chinese = read('README.zh-CN.md');
+  const skill = read(join('skills', 'coordinate-agents', 'SKILL.md'));
+  const gettingStarted = read(join('docs', 'getting-started.md'));
+  for (const document of [english, chinese, skill, gettingStarted]) {
+    assert.match(document, /Codex App/);
+    assert.match(document, /coordinate-agents/);
+    assert.match(document, /\.git/);
+    assert.match(document, /agy/);
+    assert.match(document, /claude/);
+  }
+  assert.match(english, /do not need to open two CLI windows/i);
+  assert.match(chinese, /不需要手动打开两个 CLI 窗口/);
+  assert.match(skill, /actual local executable/);
+  assert.match(english, /Use \$coordinate-agents to configure Claude Code/i);
+  assert.match(chinese, /使用 \$coordinate-agents，帮我把 Claude Code 配置/);
+  assert.match(english, /does \*\*not\*\* automatically append[\s\S]*dangerously-skip-permissions/i);
+  assert.match(chinese, /不会[\s\S]*自动[\s\S]*dangerously-skip-permissions/);
+});
+
 test('documentation site exposes stable task-focused pages and canonical metadata', () => {
   const pages = [
     'index.md',
@@ -374,4 +395,3 @@ test('documentation forbids unscoped npx coordinate-agents invocations', () => {
     );
   }
 });
-

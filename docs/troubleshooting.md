@@ -31,6 +31,40 @@ CLI says the Skill is unavailable.
 If `doctor` reports a missing or invalid copy, reinstall only the selected target. Do not copy the
 other CLI's credential directory.
 
+## Codex App selects the wrong project or cannot start the Implementer
+
+In Codex App, add or open the target Git repository and set the thread project/workspace path to the
+repository root—the directory containing `.git`. Start a new thread and invoke `$coordinate-agents`.
+The App path does not require manually opening two CLI windows, but the runtime still launches the
+Implementer locally. Configure the actual executable command, not a role label:
+
+```sh
+# Antigravity
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy
+
+# Claude Code as a registered custom agent
+npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude \
+  --args '["--print", "{prompt}"]'
+```
+
+Use `git rev-parse --show-toplevel` to compare the repository root with the App project path. Use
+`doctor` to inspect the final resolved command and executable status. A project-path error and an
+executable-command error are independent; fix both if necessary. Verify the selected CLI's own
+`--help` output before copying its prompt or directory flags; the runtime already uses the project
+root as the child process working directory. Alternatively, ask the active Codex App thread:
+
+```text
+Use $coordinate-agents to configure Claude Code as the Implementer for this project. Inspect the
+installed `claude` executable and `claude --help`, register it with `generic-cli`, run `doctor`, and
+show me the resolved configuration. Do not start until I confirm.
+```
+
+The built-in Antigravity Adapter does not automatically append a full-permission flag. It passes
+configured `args` and then adds `--prompt-interactive <prompt>`. If `agy --help` confirms
+`--dangerously-skip-permissions` and the user explicitly wants it, set
+`agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
+`doctor` checks the executable/version only.
+
 ## Node version too low
 
 ```text

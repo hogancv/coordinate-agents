@@ -1,13 +1,18 @@
 ---
 layout: page
-title: Codex CLI role (Default reference workflow)
-description: OpenAI Codex CLI serves as the reference planner and reviewer in coordinate-agents.
+title: Codex App/CLI role (Default reference workflow)
+description: OpenAI Codex App or CLI serves as the reference planner and reviewer in coordinate-agents.
 ---
 
-# Codex CLI role (Reference planner & reviewer)
+# Codex App/CLI role (Reference planner & reviewer)
 
 > [!NOTE]
-> This page describes Codex CLI's responsibilities in the **default reference workflow**. The underlying `.agent-bus` runtime is agent-agnostic and allows assigning the `planner` and `reviewer` roles to other registered agents.
+> This page describes Codex App/CLI's responsibilities in the **default reference workflow**. The underlying `.agent-bus` runtime is agent-agnostic and allows assigning the `planner` and `reviewer` roles to other registered agents.
+
+When using Codex App, add the target Git repository as a project and set the thread project path to
+the repository root containing `.git`. Invoke `$coordinate-agents` from a new thread; no second CLI
+window needs to be opened manually. The configured Implementer still runs locally, so its command
+must be an installed executable such as `agy` or `claude`.
 
 In the default reference workflow, Codex fulfills the planning and review roles:
 

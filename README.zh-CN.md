@@ -2,13 +2,65 @@
 
 简体中文 | [English](./README.md)
 
-基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。协议核心与具体代理无关，使用基于适配器的运行时。**OpenAI Codex CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认参考工作流，同时支持通过 `generic-cli` 动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面端、MCP、HTTP、IPC 等外部执行环境接入。
+基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。协议核心与具体代理无关，使用基于适配器的运行时。**OpenAI Codex App/CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认参考工作流，同时支持通过 `generic-cli` 动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面端、MCP、HTTP、IPC 等外部执行环境接入。
 
 无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
 
+## 直接在 Codex App 中使用（推荐）
+
+如果使用 Codex App，不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。安装 Codex 插件后：
+
+1. 在 Codex App 中添加或打开目标 Git 项目。
+2. 将线程的项目/工作区路径指定为项目根目录，也就是包含 `.git` 的目录。
+3. 新建线程并调用 `$coordinate-agents`。
+4. 让 Codex 在这个项目中初始化或协调任务。
+
+Codex App 线程负责 Planner/Reviewer 侧，运行时会在本机以子进程方式启动已配置的 Implementer
+CLI。执行端 CLI 仍必须已经安装，并且配置的可执行命令必须正确。`agy`、`claude` 是执行命令示例，
+不是工作流角色名称：
+
+```sh
+# 默认 Implementer 使用 Antigravity CLI 可执行文件
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy
+
+# 注册 Claude Code 作为自定义 Implementer 执行端。先用
+# `claude --help` 确认本机版本支持的参数；运行时已经把项目根目录作为子进程 cwd。
+npx @hogancv/coordinate-agents@latest agent add claude --adapter generic-cli --command claude \
+  --args '["--print", "{prompt}"]'
+```
+
+请使用本机真正可以启动的执行命令（`agy`、`claude` 或厂商包装命令）。命令配置错误或项目路径错误，
+都会导致 App 线程无法找到项目或启动 Implementer；可以用 `doctor` 查看最终解析出的命令。
+
+对于其他 CLI，推荐直接让当前 Codex App 线程先检查本机 CLI，再完成配置，不要照抄厂商参数：
+
+```text
+使用 $coordinate-agents，帮我把 Claude Code 配置为这个项目的 Implementer 执行端。请先检查本机
+`claude` 可执行文件和 `claude --help`，使用 `generic-cli` 注册，只选择当前版本支持的提示词和项目路径参数，
+运行 `doctor` 并展示最终解析配置。配置完成且我确认之前，不要启动协作任务。
+```
+
+`generic-cli` 支持 `{prompt}`、`{root}`、`{agent}`、`{lang}` 参数占位符；运行时也会把选定项目根目录作为
+子进程工作目录，因此不要假设所有 CLI 都有 `--dir` 参数。保存 `args` 前应以对应 CLI 自己的帮助输出为准。
+
+### 权限参数是显式配置的
+
+内置 `antigravity-cli` Adapter 只会追加已配置的参数，然后追加 `--prompt-interactive <prompt>`，**不会**自动追加
+`--dangerously-skip-permissions`、沙箱绕过参数或其他厂商特有的完全权限参数。如果你本机的 `agy` 已经在自身配置中
+设置为完全权限，该本地配置会继续生效；插件不会覆盖它。若本机 `agy --help` 确认需要显式传入该参数，可主动配置：
+
+```sh
+npx @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx @hogancv/coordinate-agents@latest config list
+```
+
+不要在未检查帮助输出的情况下把该参数复制给其他 CLI 或其他版本。`doctor` 只验证可执行文件和版本，不能证明
+Provider 是否已经开启完全权限。
+
 ## 60 秒快速开始
 
-前提：已安装 Node.js 18+、Git，以及 `codex` 和 `agy` 命令（或使用已注册的自定义代理）。每个 CLI 自己负责认证；Coordinate Agents 不会预检测登录状态。
+下面是适用于自动化或没有 Codex App 环境的 CLI 备用流程。前提：已安装 Node.js 18+、Git，以及
+`codex` 和 `agy` 命令（或使用已注册的自定义代理）。每个 CLI 自己负责认证；Coordinate Agents 不会预检测登录状态。
 
 在你的 Git 仓库中运行：
 
@@ -138,8 +190,8 @@ graph TD
 无需修改总线核心代码即可注册第三方或自定义 CLI 代理：
 
 ```sh
-# 注册自定义 CLI 代理
-npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+# 注册自定义 CLI 代理（默认使用位置参数传递提示词）
+npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent
 
 # 列出所有已注册代理及当前工作流角色分配
 npx @hogancv/coordinate-agents@latest agent list
@@ -147,6 +199,9 @@ npx @hogancv/coordinate-agents@latest agent list
 # 诊断检查所有已注册代理及其 CLI 适配器可用性
 npx @hogancv/coordinate-agents@latest agent doctor
 ```
+
+如果某个 CLI 需要额外参数，应先检查该 CLI 自己的帮助输出，再添加 `--args` JSON 数组。支持的占位符为
+`{prompt}`、`{root}`、`{agent}`、`{lang}`；运行时已经把选定项目根目录作为子进程工作目录。
 
 启动包含自定义角色分配的协作：
 
@@ -159,8 +214,8 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Windows、macOS 或 Linux
 - Node.js 18 或更高版本
 - Git
-- 已安装的 Codex CLI（用于 Codex 参考适配器；认证仍由 CLI 自己负责）
-- 已安装的 Antigravity CLI（用于 Antigravity 参考适配器；认证仍由 CLI 自己负责）
+- 已安装并启用 `coordinate-agents` 插件的 Codex App，或已安装 Codex CLI（用于 Codex 参考适配器）
+- 已安装的 Implementer 执行端，例如 Antigravity（`agy`）、Claude Code（`claude`）或其他已注册的可执行命令
 
 ## 安装方式
 
@@ -389,13 +444,22 @@ npm pack --dry-run
 
 它是官方发布的 [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm 包与 Codex/Antigravity Skill，用于结构化多代理编程协作工作流。协议核心与具体代理无关，Codex 默认作为规划者与审查者参考适配器，Google Antigravity CLI（`agy`）默认作为实现者参考适配器，同时支持通过 `generic-cli` 动态接入自定义 CLI 代理，并通过适配器扩展模型支持桌面端等外部环境接入。
 
+### 如何直接在 Codex App 中使用？
+
+安装并启用 Codex 插件后，在 Codex App 中添加目标 Git 项目，并将线程项目路径指定为包含 `.git` 的项目根目录。
+新建线程后调用 `$coordinate-agents` 即可。不需要手动打开两个 CLI 窗口；运行时会启动配置好的 Implementer
+子进程。请配置真实可执行命令，例如 `agy` 或 `claude`；如果项目路径或命令解析异常，可运行 `doctor` 检查。
+
 ### 如何让 Codex CLI 和 Antigravity CLI 协作？
 
-在目标 Git 仓库中先后运行 [`install`](#通过-npm-安装) 和 [`quickstart`](#60-秒快速开始)。分别在两个独立终端中运行输出的命令，然后继续向 Codex 提出需求即可。
+在 Codex App 中使用上面的直接调用方式。CLI 备用流程则是在目标 Git 仓库中先后运行
+[`install`](#通过-npm-安装) 和 [`quickstart`](#60-秒快速开始)，再分别在两个独立终端中运行输出的命令。
 
 ### 如何在一个 Git 仓库中运行两个编程代理？
 
-在同一个 Git 仓库中打开两个 CLI 会话，但同一时刻仅允许一个角色拥有 Git 写入权限。项目本地的 `.agent-bus` 用于传递规格说明、实现结果、审查结论、租赁状态与恢复信息，无需共享 API 凭据。
+在同一个 Git 仓库中确保同一时刻仅允许一个角色拥有 Git 写入权限。Codex App 中当前线程可以负责协作编排，
+运行时以子进程启动已配置的 Implementer，不需要手动打开第二个 CLI 会话。项目本地的 `.agent-bus` 用于传递
+规格说明、实现结果、审查结论、租赁状态与恢复信息，无需共享 API 凭据。
 
 ### 如何防止两个 AI 代理同时修改代码？
 

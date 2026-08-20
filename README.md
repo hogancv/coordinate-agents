@@ -2,13 +2,75 @@
 
 [简体中文](./README.zh-CN.md) | English
 
-A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC execution surfaces integrate through the adapter extension model.
+A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex App/CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC execution surfaces integrate through the adapter extension model.
 
 No CAO server, daemon, database, or shared API credential is required.
 
+## Use it directly in Codex App (recommended)
+
+If you use Codex App, you do not need to open two CLI windows or manually paste two launch
+commands. After installing the Codex plugin:
+
+1. Add or open the target Git repository as a project in Codex App.
+2. Set the thread's project/workspace path to the repository root—the directory containing `.git`.
+3. Start a new thread and invoke `$coordinate-agents`.
+4. Ask Codex to initialize or coordinate the task in that project.
+
+The Codex App thread handles the Planner/Reviewer side and the runtime starts the configured
+Implementer CLI as a local child process. The Implementer CLI still must be installed and its
+executable command must be correct. `agy` and `claude` are executable command examples, not
+workflow-role names:
+
+```sh
+# Use the Antigravity CLI executable for the default Implementer.
+npx @hogancv/coordinate-agents config set agent.antigravity.command agy
+
+# Register Claude Code as a custom Implementer executable. Verify the flags with
+# `claude --help`; the runtime already uses the project root as the child cwd.
+npx @hogancv/coordinate-agents@latest agent add claude --adapter generic-cli --command claude \
+  --args '["--print", "{prompt}"]'
+```
+
+Use the exact command that starts the executable on the local machine (`agy`, `claude`, or a
+vendor-specific wrapper). A wrong command or wrong project path prevents the App thread from
+finding the project or launching the Implementer; `doctor` can show the final resolved command.
+
+For another CLI, the recommended Codex App setup is to ask the active AI to inspect that CLI first
+instead of copying a vendor-specific argument list:
+
+```text
+Use $coordinate-agents to configure Claude Code as the Implementer for this project. First inspect
+the installed `claude` executable and `claude --help`, register it with `generic-cli`, choose only
+the flags this installed version supports for the prompt and project root, run `doctor`, and show
+me the resolved configuration. Do not start a collaboration task until I confirm.
+```
+
+`generic-cli` supports the `{prompt}`, `{root}`, `{agent}`, and `{lang}` argument placeholders. The
+runtime also starts the child process with the selected project root as its working directory, so
+do not assume a `--dir` flag exists. Verify each CLI's own help output before saving `args`.
+
+### Permission flags are explicit
+
+The built-in `antigravity-cli` Adapter appends only the configured arguments followed by
+`--prompt-interactive <prompt>`. It does **not** automatically append
+`--dangerously-skip-permissions`, a sandbox bypass, or another vendor-specific full-permission flag.
+If `agy` is already configured locally for full permissions, that native configuration remains in
+effect; the Plugin does not override it. If the installed `agy --help` confirms the explicit flag is
+what you want, configure it deliberately:
+
+```sh
+npx @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx @hogancv/coordinate-agents@latest config list
+```
+
+Do not copy this flag to another CLI or version without checking its help output. `doctor` verifies
+the executable and version, not whether a provider has full permissions enabled.
+
 ## 60-second quick start
 
-Prerequisites: Node.js 18+, Git, and installed `codex` and `agy` commands (or custom registered agents). Each CLI owns its authentication; Coordinate Agents does not preflight login state.
+The following is the CLI fallback for automation or environments without Codex App. Prerequisites:
+Node.js 18+, Git, and installed `codex` and `agy` commands (or custom registered agents). Each CLI
+owns its authentication; Coordinate Agents does not preflight login state.
 
 From your Git repository, run:
 
@@ -139,8 +201,8 @@ Any agent or adapter connecting to the Agent Bus must support:
 Register third-party or custom CLI agents without modifying bus code:
 
 ```sh
-# Register a custom CLI agent
-npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent --args '["--prompt", "{prompt}", "--dir", "{root}"]'
+# Register a custom CLI agent (the default is the positional prompt argument)
+npx @hogancv/coordinate-agents@latest agent add my-agent --adapter generic-cli --command my-agent
 
 # List registered agents and workflow configuration
 npx @hogancv/coordinate-agents@latest agent list
@@ -148,6 +210,10 @@ npx @hogancv/coordinate-agents@latest agent list
 # Verify all registered agents and their CLI adapters
 npx @hogancv/coordinate-agents@latest agent doctor
 ```
+
+If a CLI needs flags, add an `--args` JSON array only after checking that CLI's own help output.
+Supported placeholders are `{prompt}`, `{root}`, `{agent}`, and `{lang}`; the runtime already uses
+the selected project root as the child process working directory.
 
 Run a collaboration with custom role assignments:
 
@@ -160,8 +226,8 @@ npx @hogancv/coordinate-agents@latest quickstart --planner codex --implementer m
 - Windows, macOS, or Linux
 - Node.js 18 or newer
 - Git
-- Installed Codex CLI (for Codex reference adapter; native authentication remains CLI-owned)
-- Installed Antigravity CLI (for Antigravity reference adapter; native authentication remains CLI-owned)
+- Codex App with the `coordinate-agents` plugin, or installed Codex CLI (for the Codex reference adapter)
+- An installed Implementer CLI such as Antigravity (`agy`), Claude Code (`claude`), or another registered executable
 
 ## Install
 
@@ -391,13 +457,27 @@ npm pack --dry-run
 
 It is the official [`hogancv/coordinate-agents`](https://github.com/hogancv/coordinate-agents) npm package and Codex/Antigravity Skill for structured multi-agent coding workflows. Codex owns requirements, specifications, reviews, and release control; Google Antigravity CLI (`agy`) exclusively implements product code and tests, while custom CLI and desktop agents can be dynamically attached.
 
+### How do I use it directly in Codex App?
+
+Install and enable the Codex plugin, add the target Git repository as a Codex App project, and set
+the thread project path to the repository root containing `.git`. Start a new thread and invoke
+`$coordinate-agents`. You do not need to open two CLI windows manually; the runtime starts the
+configured Implementer child process. Configure the actual executable command, such as `agy` or
+`claude`, and use `doctor` if the project path or command is not being resolved correctly.
+
 ### How do I coordinate Codex CLI and Antigravity CLI?
 
-Run [`install`](#install-from-npm), then [`quickstart`](#60-second-quick-start) inside the target Git repository. Open the two commands it prints in separate terminals and continue giving requirements to Codex.
+In Codex App, use the direct App path above. For the CLI fallback, run [`install`](#install-from-npm),
+then [`quickstart`](#60-second-quick-start) inside the target Git repository. Open the two commands
+it prints in separate terminals and continue giving requirements to Codex.
 
 ### How do I use two coding agents in one Git repository?
 
-Use one Git repository and two CLI sessions, but assign Git writes to only one role at a time. The project-local `.agent-bus` carries specifications, implementation results, review decisions, leases, and recovery state without requiring shared credentials.
+Use one Git repository and assign Git writes to only one role at a time. In Codex App, the current
+thread can coordinate the workflow while the runtime starts the configured Implementer CLI as a
+child process; a second manually opened CLI session is not required. The project-local `.agent-bus`
+carries specifications, implementation results, review decisions, leases, and recovery state
+without requiring shared credentials.
 
 ### How does it prevent two AI agents from editing code simultaneously?
 

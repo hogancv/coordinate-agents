@@ -26,6 +26,25 @@ Choose `bug`, `feature`, or `refactor`. The command initializes `.agent-bus`, wr
 
 Launch lifecycle is Adapter-driven. The Codex reference adapter is one-shot; the Antigravity reference adapter is bus-supervised and keeps the parent `launch` process waiting between clean `agy` activations. The supervisor only observes queue/state changes and never claims messages. Stop it with Ctrl+C or a processed `STOP` message that records `STOPPED`; use `launch --once` only when one activation is intentionally required.
 
+## Use from Codex App
+
+When this Skill is invoked directly in Codex App, prefer the current App project instead of asking
+the user to open two separate CLI windows or paste two launch commands:
+
+1. Resolve the active project root with `git rev-parse --show-toplevel` and confirm it is the
+   repository the user added to Codex App.
+2. Initialize or inspect `.agent-bus` in that project and keep the current Codex App thread as
+   Planner/Reviewer.
+3. Start the configured Implementer through the runtime as a local child process; do not require a
+   second manually opened Codex or Antigravity window.
+4. Before launching, verify that the configured execution command is the actual local executable,
+   such as `agy` or `claude`, rather than a role label or an unavailable alias.
+
+The App workflow still requires the Implementer CLI and its dependencies to be installed locally.
+The project path must be the Git repository root, and the command must be resolvable from the same
+machine. Use the CLI quickstart and its two printed terminal commands only as a fallback for
+automation or hosts that do not provide direct Codex App Skill execution.
+
 ## Executable configuration and fail-fast behavior
 
 The final executable is resolved in this order:
@@ -42,6 +61,16 @@ npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
 npx @hogancv/coordinate-agents config get agent.antigravity.command
 npx @hogancv/coordinate-agents config list
 ```
+
+For a non-reference CLI such as Claude Code, inspect the installed command's own `--help` output
+first, register it with `generic-cli`, and save only verified argument templates. The supported
+placeholders are `{prompt}`, `{root}`, `{agent}`, and `{lang}`; the runtime already sets the project
+root as the child process working directory, so do not assume a vendor-specific `--dir` flag.
+
+The `antigravity-cli` Adapter passes configured `args` and then appends only
+`--prompt-interactive <prompt>`. It does not infer or add a full-permission/sandbox-bypass flag. If
+the user explicitly requests one and `agy --help` confirms the exact flag, configure it explicitly
+with `config set agent.antigravity.args`; otherwise preserve the local CLI's native configuration.
 
 Before launch, Runtime checks the resolved executable itself. It does not probe login state,
 provider health, or model availability. A missing, non-executable, or unsafe entrypoint sets the

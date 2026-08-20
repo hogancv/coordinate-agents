@@ -69,6 +69,18 @@ test('registered adapters provide capabilities and correct adapter instances', (
   assert.throws(() => getAdapter('unknown-adapter', { id: 'test' }), /Unknown adapter: unknown-adapter/);
 });
 
+test('Antigravity adapter keeps permission flags explicit', () => {
+  const agy = getAdapter('antigravity-cli', {
+    id: 'antigravity',
+    command: process.execPath,
+    args: ['--configured-flag'],
+  });
+
+  const resolved = agy.resolveLaunch({ prompt: 'Implement feature' });
+  assert.deepEqual(resolved.args, ['--configured-flag', '--prompt-interactive', 'Implement feature']);
+  assert.equal(resolved.args.includes('--dangerously-skip-permissions'), false);
+});
+
 test('custom adapter can be registered and used with custom lifecycle', () => {
   class MockHeadlessAdapter extends AgentAdapter {
     constructor(config) {
@@ -167,4 +179,3 @@ test('generic-cli supports {agent} placeholder and rejects {role}', () => {
     /Unsupported template placeholder: \{role\}\. Use \{agent\}\./
   );
 });
-
