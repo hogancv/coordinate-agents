@@ -43,6 +43,27 @@ This is the canonical installation procedure for AI assistants installing
 1. **宿主技能安装（用户环境）**：将技能安装到 Codex App/CLI 与 Antigravity CLI 等宿主环境中，作为交互式默认参考适配器。
 2. **项目级代理注册与协议运行时（Git 仓库）**：在具体项目中通过 `.agent-bus` 协调多代理，可通过 `agent add` 注册任意 CLI/桌面代理，并灵活分配角色（规划者、实现者、审查者）。
 
+## Plugin-first onboarding / 插件优先的首次使用
+
+Codex Plugin is the preferred product entry point. It discovers the local
+Coding CLIs, configures an Implementer, and exposes a durable Task API over the
+existing Agent Bus. The focused Skills are `coordinate-agents`,
+`coordinate-setup`, `coordinate-task`, `coordinate-review`, and
+`coordinate-recover`. The npm CLI remains the Runtime/fallback and advanced
+debugging surface.
+
+The Plugin homepage prompts are deliberately ordered as Discover → Configure →
+Try. The Try prompt uses the ordinary Task workflow for the Todo web app; it
+does not create a special demo path. Runtime state should be read through JSON:
+
+```sh
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> setup --json
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> task status --json
+```
+
+Do not infer a usable Implementer from a role name. Resolve the actual local
+executable and preserve user configuration outside the installed Skill.
+
 ## Installation Strategy by Target Host / 按目标环境选择安装策略
 
 When an AI assistant is asked to install `coordinate-agents`:

@@ -6,6 +6,27 @@ description: Match real coordinate-agents, Node, Codex, agy, agent-bus, Windows 
 
 # Troubleshooting
 
+## Plugin-first diagnosis and structured errors
+
+Start with the Plugin-facing Task and setup surfaces rather than inspecting
+queue files manually:
+
+```sh
+npx @hogancv/coordinate-agents@latest setup --json
+npx @hogancv/coordinate-agents@latest task status --json
+npx @hogancv/coordinate-agents@latest status --json
+npx @hogancv/coordinate-agents@latest agent doctor --json
+```
+
+The JSON contract keeps runtime facts separate from Skill explanations. Common
+codes include `EXECUTABLE_NOT_FOUND`, `EXECUTABLE_NOT_RUNNABLE`,
+`SPAWN_FAILED`, `AGENT_EXIT_NONZERO`, `AGENT_TIMEOUT`, `AUTH_REQUIRED`,
+`TASK_NOT_FOUND`, `TASK_STATE_CONFLICT`, and `STALE_CLAIM`. Authentication is
+classified only when the coding CLI explicitly reports login/authentication
+failure. A non-zero exit or timeout stops the current activation; it is not an
+automatic retry signal. After fixing the reported executable or runtime issue,
+use `task resume` only when the user explicitly asks to continue.
+
 > [!NOTE]
 > This guide covers common issues with host Skill installations, the default Codex and Antigravity reference adapters, `.agent-bus` recovery, and dynamic agent registration via `agent doctor`.
 

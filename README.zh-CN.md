@@ -28,6 +28,31 @@ codex plugin add coordinate-agents@coordinate-agents
 使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
 ```
 
+插件是首选产品入口，并拆分为职责清晰的 Skills：`coordinate-agents` 负责意图路由，
+`coordinate-setup` 负责发现和配置 Implementer，`coordinate-task` 负责持久化 Task 生命周期，
+`coordinate-review` 检查真实 commit 与证据，`coordinate-recover` 负责诊断并在用户明确确认后恢复。
+Codex 继续作为 Planner/Reviewer，任何已配置的本机 Coding CLI 都可以作为 Implementer；Codex 和
+Antigravity 是参考适配器，不再是产品绑定。
+
+三个首次使用提示词形成 onboarding 路径：
+
+1. `Check which coding CLIs are available on this computer and help me configure Coordinate Agents.`
+2. `Help me choose and configure an available CLI as the implementation agent.`
+3. `Use $coordinate-agents to build a simple Todo web app in the current project.`
+
+插件背后的 Runtime 提供机器可读的 Task API：
+
+```sh
+npx @hogancv/coordinate-agents@latest setup --json
+npx @hogancv/coordinate-agents@latest task create --title "开发 Todo Web 应用" --json
+npx @hogancv/coordinate-agents@latest task status --json
+npx @hogancv/coordinate-agents@latest task inspect --id task-... --json
+npx @hogancv/coordinate-agents@latest task resume --id task-... --json
+```
+
+`--json` 始终输出单个稳定 JSON 文档；npm CLI 现在是 Runtime、备用和高级调试入口，而不是首次
+使用的主路径。现有 Agent Bus 命令继续作为 Task 抽象层之下的实现。
+
 ## 直接在 Codex App 中使用（推荐）
 
 如果使用 Codex App，不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。安装 Codex 插件后：

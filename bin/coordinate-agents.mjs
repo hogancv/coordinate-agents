@@ -24,6 +24,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { getAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
 import { redactOutput } from '../skills/coordinate-agents/adapters/executable.mjs';
 import { observeAgentBus, waitForAgentActivity } from '../skills/coordinate-agents/scripts/agent-observer.mjs';
+import { discoverCodingClis, setupSnapshot } from '../skills/coordinate-agents/scripts/discovery.mjs';
 import {
   assertContained,
   atomicWrite,
@@ -40,6 +41,25 @@ import {
   userConfigPath,
   writeUserConfig,
 } from '../skills/coordinate-agents/scripts/user-config.mjs';
+import {
+  createTask,
+  ensureTaskStore,
+  listTasks,
+  markTaskError,
+  readTask,
+  resolveTaskId,
+  resumeTask,
+  setTaskStatus,
+  stopTask,
+} from '../skills/coordinate-agents/scripts/task-runtime.mjs';
+import {
+  canonicalErrorCode,
+  isExplicitAuthFailure,
+  jsonFailure,
+  jsonSuccess,
+  legacyErrorCode,
+  runtimeError,
+} from '../skills/coordinate-agents/scripts/runtime-contract.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
@@ -48,6 +68,7 @@ const canonicalSkillSource = join(packageRoot, 'skills', skillName);
 const busToolPath = join(canonicalSkillSource, 'scripts', 'agent-bus.mjs');
 const metadataFile = '.coordinate-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
+const auxiliarySkillNames = Object.freeze(['coordinate-setup', 'coordinate-task', 'coordinate-review', 'coordinate-recover']);
 
 const messages = {
   en: {
@@ -58,6 +79,9 @@ Commands:
   update        Reinstall the packaged version and back up the old copy
   quickstart    Initialize a project and print two copyable launch commands
   launch        Start one CLI with its generated collaboration prompt
+  setup         Discover coding CLIs and show configuration guidance
+  status        Show the project Agent Bus and Task status
+  task          Manage durable tasks (create, status, list, inspect, resume, stop, error)
   agent         Manage registered agents (add, list, doctor)
   config        Manage user-level executable configuration (set, get, list)
   doctor        Check prerequisites/installations and print repair commands
@@ -82,6 +106,8 @@ Options:
   --lang <en|zh-CN>       Override output language
   --force                 Replace/remove an unrecognized existing directory
   --once                  Disable Adapter-declared durable launch supervision
+  --timeout <ms>          Stop a launch that exceeds the bounded timeout
+  --json                  Emit one machine-readable JSON document on stdout
   --version               Print package version
   -h, --help              Show this help
 
@@ -159,6 +185,9 @@ Examples:
   agent         管理注册的 Agent（add, list, doctor）
   config        管理用户级可执行文件配置（set, get, list）
   doctor        检查依赖和安装，并输出对应修复命令
+  setup         检测 Coding CLI 并展示配置引导
+  status        显示项目 Agent Bus 和 Task 状态
+  task          管理持久化任务（create、status、list、inspect、resume、stop、error）
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
 
@@ -180,6 +209,8 @@ Examples:
   --lang <en|zh-CN>       指定输出语言
   --force                 替换或删除无法识别的现有目录
   --once                  禁用 Adapter 声明的持久启动监督
+  --timeout <毫秒>        超过时限后停止启动进程
+  --json                  在 stdout 输出单个机器可读 JSON 文档
   --version               输出包版本
   -h, --help              显示帮助
 
@@ -259,6 +290,7 @@ function parseArgs(argv) {
     once: false,
     help: false,
     version: false,
+    json: false,
     codexHome: process.env.CODEX_HOME || join(homedir(), '.codex'),
     antigravityHome: process.env.GEMINI_HOME || join(homedir(), '.gemini'),
     codexHomeBase64: null,
@@ -269,6 +301,12 @@ function parseArgs(argv) {
     planner: null,
     implementer: null,
     reviewer: null,
+    title: '',
+    spec: '',
+    taskId: null,
+    reason: '',
+    errorCode: null,
+    timeoutMs: null,
     adapter: 'generic-cli',
     agentCommand: null,
     agentArgs: null,
@@ -287,6 +325,8 @@ function parseArgs(argv) {
       }
     } else if (result.command === 'config' && args[0] && !args[0].startsWith('-')) {
       result.subcommand = args.shift();
+    } else if (result.command === 'task' && args[0] && !args[0].startsWith('-')) {
+      result.subcommand = args.shift();
     }
   }
   while (args.length) {
@@ -301,10 +341,12 @@ function parseArgs(argv) {
     else if (option === '--once') result.once = true;
     else if (option === '--help' || option === '-h') result.help = true;
     else if (option === '--version') result.version = true;
+    else if (option === '--json') result.json = true;
     else if ([
       '--codex-home', '--antigravity-home', '--codex-home-base64', '--antigravity-home-base64',
       '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
-      '--adapter', '--command', '--args', '--template', '--task', '--lang',
+      '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
+      '--id', '--reason', '--error-code', '--timeout', '--timeout-ms', '--lang',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
@@ -325,6 +367,16 @@ function parseArgs(argv) {
       if (option === '--args') result.agentArgs = value;
       if (option === '--template') result.template = value.toLowerCase();
       if (option === '--task') result.task = value;
+      if (option === '--title') result.title = value;
+      if (option === '--spec') result.spec = value;
+      if (option === '--id') result.taskId = value;
+      if (option === '--reason') result.reason = value;
+      if (option === '--error-code') result.errorCode = value;
+      if (option === '--timeout' || option === '--timeout-ms') {
+        const timeoutMs = Number(value);
+        if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error(`INVALID_TIMEOUT:${value}`);
+        result.timeoutMs = Math.floor(timeoutMs);
+      }
       if (option === '--lang') result.language = value;
     } else {
       throw new Error(`UNKNOWN_OPTION:${option}`);
@@ -475,8 +527,8 @@ function removePath(path) {
   rmSync(path, { recursive: true, force: true });
 }
 
-function installTarget(target, expectedManifest, options, t) {
-  const sourceResolved = resolve(canonicalSkillSource);
+function installTarget(target, expectedManifest, options, t, source = canonicalSkillSource) {
+  const sourceResolved = resolve(source);
   const targetResolved = resolve(target.path);
   if (sourceResolved === targetResolved) {
     console.log(format(t.current, { target: target.name, path: target.path }));
@@ -498,7 +550,7 @@ function installTarget(target, expectedManifest, options, t) {
   mkdirSync(dirname(target.path), { recursive: true });
   const staging = mkdtempSync(join(dirname(target.path), `.${skillName}-staging-`));
   try {
-    cpSync(canonicalSkillSource, staging, { recursive: true });
+    cpSync(source, staging, { recursive: true });
     writeFileSync(join(staging, metadataFile), JSON.stringify({
       package: packageJson.name,
       version: packageJson.version,
@@ -522,6 +574,40 @@ function installTarget(target, expectedManifest, options, t) {
     console.log(format(prior.missing ? t.installed : t.updated, { target: target.name, path: target.path }));
   } finally {
     removePath(staging);
+  }
+}
+
+function installAuxiliarySkills(options, t) {
+  for (const hostTarget of targets(options)) {
+    for (const auxiliaryName of auxiliarySkillNames) {
+      const source = join(packageRoot, 'skills', auxiliaryName);
+      const target = {
+        name: `${hostTarget.name} ${auxiliaryName}`,
+        path: join(dirname(hostTarget.path), auxiliaryName),
+      };
+      installTarget(target, payloadManifest(source), options, t, source);
+    }
+  }
+}
+
+function uninstallAuxiliarySkills(options, t) {
+  for (const hostTarget of targets(options)) {
+    for (const auxiliaryName of auxiliarySkillNames) {
+      const source = join(packageRoot, 'skills', auxiliaryName);
+      const target = {
+        name: `${hostTarget.name} ${auxiliaryName}`,
+        path: join(dirname(hostTarget.path), auxiliaryName),
+      };
+      const manifest = payloadManifest(source);
+      if (!existsSync(target.path)) continue;
+      if (!isIntactManagedInstallation(target.path, manifest) && !options.force) {
+        console.error(format(t.skipRemove, { target: target.name, path: target.path }));
+        process.exitCode = 1;
+        continue;
+      }
+      removePath(target.path);
+      console.log(format(t.removed, { target: target.name, path: target.path }));
+    }
   }
 }
 
@@ -649,6 +735,245 @@ function handleConfigCommand(options, t) {
   throw new Error(`${t.configHelp} Unknown config subcommand: ${subcommand}`);
 }
 
+function emitJson(value) {
+  process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+function ensureProjectBus(root) {
+  const result = spawnSync(process.execPath, [busToolPath, 'init', '--root', root], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    throw runtimeError('TASK_STATE_CONFLICT', (result.stderr || result.stdout || result.error?.message || 'Agent Bus initialization failed').trim(), {
+      recoverable: true,
+      details: (result.stderr || result.stdout || result.error?.message || '').trim(),
+    });
+  }
+  return join(root, '.agent-bus');
+}
+
+function jsonConfigCommand(options) {
+  const path = userConfigPath();
+  if (options.subcommand === 'list' || !options.subcommand) {
+    return jsonSuccess('config.list', { path, config: readUserConfig() });
+  }
+  if (options.subcommand === 'get') {
+    const [key, ...extra] = options.positionals;
+    if (!key || extra.length > 0) throw runtimeError('INVALID_AGENT_CONFIG', 'A single configuration key is required.', { recoverable: false });
+    const value = getUserConfigValue(readUserConfig(), key);
+    if (value === undefined) throw runtimeError('INVALID_AGENT_CONFIG', `User configuration value is not set: ${key}`, { recoverable: false, details: key });
+    return jsonSuccess('config.get', { path, key, value });
+  }
+  if (options.subcommand === 'set') {
+    const [key, value, ...extra] = options.positionals;
+    if (!key || value === undefined || extra.length > 0) throw runtimeError('INVALID_AGENT_CONFIG', 'config set requires a key and value.', { recoverable: false });
+    const config = readUserConfig();
+    setUserConfigValue(config, key, parseConfigValue(key, value));
+    const written = writeUserConfig(config);
+    return jsonSuccess('config.set', { path: written, key, value: getUserConfigValue(config, key) });
+  }
+  throw runtimeError('INVALID_AGENT_CONFIG', `Unknown config subcommand: ${options.subcommand}`, { recoverable: false });
+}
+
+function firstDoctorError(checks) {
+  const failed = checks.find(check => check.ok === false);
+  if (!failed) return null;
+  return runtimeError(
+    canonicalErrorCode(failed.code || (failed.kind === 'installation' ? 'TASK_STATE_CONFLICT' : 'EXECUTABLE_NOT_FOUND')),
+    failed.message || `${failed.name || 'Doctor check'} failed.`,
+    { recoverable: true, details: failed.details || null },
+  );
+}
+
+function doctorJson(options, expectedManifest, selectedTargets) {
+  const checks = [];
+  let userConfig = defaultUserConfig();
+  let projectConfig = null;
+  try {
+    userConfig = readUserConfig();
+    projectConfig = projectConfigForRoot(resolve(options.root));
+    checks.push({ name: 'configuration', ok: true, path: userConfigPath(), projectConfig: Boolean(projectConfig) });
+  } catch (error) {
+    checks.push({ name: 'configuration', ok: false, code: 'INVALID_AGENT_CONFIG', message: error.message || String(error) });
+  }
+
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  checks.push({ name: 'Node.js', ok: nodeMajor >= 18, version: process.version, code: nodeMajor >= 18 ? null : 'UNSUPPORTED_CAPABILITY' });
+  const gitVersion = executableVersion('git');
+  checks.push({ name: 'Git', ok: Boolean(gitVersion), version: gitVersion, code: gitVersion ? null : 'EXECUTABLE_NOT_FOUND' });
+
+  for (const component of [
+    { id: 'codex', name: 'Codex CLI', adapter: 'codex-cli', command: 'codex', required: options.codex },
+    { id: 'antigravity', name: 'Antigravity CLI', adapter: 'antigravity-cli', command: 'agy', required: options.antigravity },
+  ]) {
+    const projectAgent = projectConfig?.agents?.find(agent => agent.id === component.id);
+    const resolved = runtimeAgentConfig(projectAgent || { id: component.id, adapter: component.adapter }, userConfig);
+    const command = resolved.command || component.command;
+    let detection = null;
+    try {
+      detection = component.id && resolved.commandSource !== 'adapter-default'
+        ? getAdapter(resolved.adapter, resolved).detect()
+        : getAdapter(component.adapter, { ...resolved, command }).detect();
+    } catch (error) {
+      detection = { available: false, code: 'EXECUTABLE_NOT_RUNNABLE', details: error.message || String(error) };
+    }
+    checks.push({
+      name: component.name,
+      id: component.id,
+      command,
+      commandSource: resolved.commandSource,
+      required: component.required,
+      ok: Boolean(detection?.available) || !component.required,
+      available: Boolean(detection?.available),
+      version: detection?.version || null,
+      resolvedCommand: detection?.resolvedCommand || null,
+      code: detection?.available ? null : canonicalErrorCode(detection?.code || 'EXECUTABLE_NOT_FOUND', 'EXECUTABLE_NOT_FOUND'),
+      details: detection?.available ? null : (detection?.details || null),
+    });
+  }
+
+  let found = false;
+  for (const target of selectedTargets) {
+    const result = verifyTarget(target.path, expectedManifest);
+    if (!result.missing) found = true;
+    checks.push({
+      name: target.name,
+      kind: 'installation',
+      path: target.path,
+      ok: Boolean(result.ok),
+      missing: Boolean(result.missing),
+      managed: Boolean(result.managed),
+      version: result.version || null,
+      details: result.details || null,
+      code: result.missing ? 'TASK_STATE_CONFLICT' : (result.ok ? null : 'TASK_STATE_CONFLICT'),
+    });
+  }
+  if (!found) checks.push({ name: 'installation-summary', kind: 'installation', ok: false, code: 'TASK_STATE_CONFLICT', message: 'No target installation was found.' });
+
+  const error = firstDoctorError(checks.filter(check => check.required !== false || check.kind === 'installation' || check.name === 'Git' || check.name === 'Node.js'));
+  return error
+    ? { ...jsonFailure('doctor', error), checks }
+    : { ...jsonSuccess('doctor', { checks }), checks };
+}
+
+function agentDoctorJson(options) {
+  const root = assertGitRepository(options.root, messages.en);
+  const busPath = join(root, '.agent-bus');
+  if (!existsSync(busPath)) return jsonSuccess('agent.doctor', { root, agents: [], bus: null });
+  const busConfig = readConfig(busPath);
+  const userConfig = readUserConfig();
+  const agents = busConfig.agents.map(agent => {
+    try {
+      const resolvedAgent = runtimeAgentConfig(agent, userConfig);
+      const adapter = getAdapter(resolvedAgent.adapter, resolvedAgent);
+      const detection = adapter.detect();
+      return {
+        id: agent.id,
+        adapter: agent.adapter,
+        command: resolvedAgent.command || null,
+        commandSource: resolvedAgent.commandSource,
+        available: Boolean(detection.available),
+        version: detection.version || null,
+        resolvedCommand: detection.resolvedCommand || null,
+        code: detection.available ? null : canonicalErrorCode(detection.code || 'EXECUTABLE_NOT_FOUND', 'EXECUTABLE_NOT_FOUND'),
+        details: detection.available ? null : (detection.details || null),
+      };
+    } catch (error) {
+      return { id: agent.id, adapter: agent.adapter, available: false, code: canonicalErrorCode(error.code, 'INVALID_AGENT_CONFIG'), details: error.message || String(error) };
+    }
+  });
+  const failed = agents.find(agent => !agent.available);
+  if (failed) {
+    const error = runtimeError(canonicalErrorCode(failed.code, 'AGENT_RUNTIME_ERROR'), `Agent ${failed.id} is unavailable.`, {
+      recoverable: true,
+      agent: failed.id,
+      adapter: failed.adapter,
+      command: failed.command,
+      details: failed.details,
+    });
+    return { ...jsonFailure('agent.doctor', error), root, agents };
+  }
+  return jsonSuccess('agent.doctor', { root, agents });
+}
+
+function statusJson(options) {
+  const root = assertGitRepository(options.root, messages.en);
+  const result = spawnSync(process.execPath, [busToolPath, 'status', '--root', root], { encoding: 'utf8', windowsHide: true });
+  if (result.error || result.status !== 0) throw runtimeError('AGENT_RUNTIME_ERROR', (result.stderr || result.stdout || result.error?.message || 'Unable to read Agent Bus status').trim(), { recoverable: true });
+  let bus;
+  try { bus = JSON.parse(result.stdout); } catch (error) {
+    throw runtimeError('AGENT_RUNTIME_ERROR', `Agent Bus returned invalid JSON: ${error.message}`, { recoverable: true });
+  }
+  let tasks = [];
+  try { tasks = listTasks(root); } catch (error) {
+    if (error.code !== 'TASK_STATE_CONFLICT') tasks = [];
+    else throw error;
+  }
+  return jsonSuccess('status', { root, bus, tasks });
+}
+
+function taskCommand(options, { json = false } = {}) {
+  const root = assertGitRepository(options.root, messages.en);
+  ensureProjectBus(root);
+  ensureTaskStore(root);
+  const subcommand = options.subcommand || 'status';
+  const commandName = `task.${subcommand}`;
+  const busConfig = readConfig(join(root, '.agent-bus'));
+  const workflow = busConfig.workflow || {};
+  let task;
+  let tasks;
+  if (subcommand === 'create') {
+    task = createTask(root, {
+      id: options.taskId,
+      title: options.title || options.task || options.positionals.join(' '),
+      planner: options.planner || workflow.planner,
+      implementer: options.implementer || workflow.implementer,
+      reviewer: options.reviewer || workflow.reviewer,
+      spec: options.spec || '',
+    });
+  } else if (subcommand === 'list') {
+    tasks = listTasks(root);
+  } else {
+    const id = resolveTaskId(root, options.taskId || options.positionals[0] || null);
+    if (subcommand === 'status' || subcommand === 'inspect') task = readTask(root, id);
+    else if (subcommand === 'resume') task = resumeTask(root, id);
+    else if (subcommand === 'stop') task = stopTask(root, id, options.reason || null);
+    else if (subcommand === 'error') task = markTaskError(root, id, runtimeError(options.errorCode || 'AGENT_RUNTIME_ERROR', options.reason || 'Task runtime error.', { recoverable: true, taskId: id }));
+    else throw runtimeError('UNSUPPORTED_CAPABILITY', `Unknown task subcommand: ${subcommand}`, { recoverable: false });
+  }
+  const payload = subcommand === 'list' ? { root, tasks } : { root, task };
+  const result = jsonSuccess(commandName, payload);
+  if (json) return result;
+  if (subcommand === 'list') console.log(JSON.stringify(tasks, null, 2));
+  else console.log(JSON.stringify(task, null, 2));
+  return result;
+}
+
+function setupCommand(options, { json = false } = {}) {
+  let root = resolve(options.root);
+  try { root = assertGitRepository(options.root, messages.en); } catch { /* Discovery is also useful before a project is selected. */ }
+  const userConfig = readUserConfig();
+  const snapshot = setupSnapshot({ root, userConfig });
+  const result = jsonSuccess('setup', {
+    ...snapshot,
+    userConfigPath: userConfigPath(),
+    projectConfigPath: existsSync(join(root, '.agent-bus', 'config.json')) ? join(root, '.agent-bus', 'config.json') : null,
+  });
+  if (json) return result;
+  console.log(`Coding CLIs available on this computer for ${root}:`);
+  for (const agent of snapshot.agents) {
+    const suffix = agent.available
+      ? (agent.configured ? `configured as ${agent.configuredAgent}` : 'detected but not configured')
+      : `unavailable (${agent.code || 'EXECUTABLE_NOT_FOUND'})`;
+    console.log(`  ${agent.command}: ${suffix}`);
+  }
+  console.log(`User configuration: ${userConfigPath()}`);
+  console.log('Use config set agent.<agent-id>.command <executable> to choose an implementation agent.');
+  return result;
+}
+
 function projectConfigForRoot(root) {
   const busPath = join(root, '.agent-bus');
   if (!existsSync(busPath)) return null;
@@ -710,6 +1035,7 @@ function writeLaunchErrorArtifact(root, {
     resolvedCommand: result?.resolvedCommand || null,
     stage,
     code,
+    canonicalCode: canonicalErrorCode(code),
     exitCode: result?.status ?? null,
     signal: result?.signal ?? null,
     timestamp: new Date().toISOString(),
@@ -753,7 +1079,7 @@ function launchFailureReport(error, {
     `${t.launchAgentLabel} ${agentId}`,
     `${t.launchAdapterLabel} ${agentConfig.adapter}`,
     `${t.launchCommandLabel} ${resolution?.command || agentConfig.command || '(none)'}`,
-    `${t.launchErrorLabel} ${error.code || 'LAUNCH_FAILED'}`,
+    `${t.launchErrorLabel} ${canonicalErrorCode(error.code || 'LAUNCH_FAILED')}\n${error.code && error.code !== canonicalErrorCode(error.code) ? `Legacy code: ${error.code}` : ''}`.trimEnd(),
   ];
   if (error.result?.status !== undefined && error.result?.status !== null) lines.push(`${t.launchExitCodeLabel} ${error.result.status}`);
   if (error.details || error.message) lines.push(`${t.launchDetailsLabel} ${redactOutput(error.details || error.message, 2 * 1024)}`);
@@ -980,12 +1306,14 @@ function quickstart(options, t, language) {
   }
 }
 
-function runLaunchChild(resolved, root, setActiveChild) {
+function runLaunchChild(resolved, root, setActiveChild, { json = false, timeoutMs = null } = {}) {
   return new Promise((resolvePromise, reject) => {
     let stdoutTail = '';
     let stderrTail = '';
     let settled = false;
-    const captureOutput = !(process.stdout.isTTY || process.stderr.isTTY);
+    let timedOut = false;
+    let timeoutHandle = null;
+    const captureOutput = json || !(process.stdout.isTTY || process.stderr.isTTY);
     const child = spawn(resolved.command, [...resolved.prefix, ...resolved.args], {
       cwd: root,
       // Preserve a real terminal for interactive CLIs. Non-TTY launches (the
@@ -998,13 +1326,14 @@ function runLaunchChild(resolved, root, setActiveChild) {
     const finish = (callback, value) => {
       if (settled) return;
       settled = true;
+      if (timeoutHandle) clearTimeout(timeoutHandle);
       setActiveChild(null);
       callback(value);
     };
     child.stdout?.on('data', chunk => {
       const text = `${chunk}`;
       stdoutTail = appendTail(stdoutTail, text);
-      process.stdout.write(chunk);
+      if (!json) process.stdout.write(chunk);
     });
     child.stderr?.on('data', chunk => {
       const text = `${chunk}`;
@@ -1016,6 +1345,7 @@ function runLaunchChild(resolved, root, setActiveChild) {
       stdoutTail,
       stderrTail,
       resolvedCommand: resolved.resolvedCommand || resolved.command,
+      timedOut,
     }));
     child.once('exit', (status, signal) => {
       finish(resolvePromise, {
@@ -1024,8 +1354,20 @@ function runLaunchChild(resolved, root, setActiveChild) {
         stdoutTail,
         stderrTail,
         resolvedCommand: resolved.resolvedCommand || resolved.command,
+        timedOut,
       });
     });
+    if (Number.isInteger(timeoutMs) && timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        timedOut = true;
+        try { child.kill('SIGTERM'); } catch { /* child may already be gone */ }
+        setTimeout(() => {
+          if (!settled && !child.killed) {
+            try { child.kill(); } catch { /* child may already be gone */ }
+          }
+        }, Math.min(1000, Math.max(100, Math.floor(timeoutMs / 4))));
+      }, timeoutMs);
+    }
   });
 }
 
@@ -1037,13 +1379,29 @@ async function launchAgent(options, t) {
   const root = assertGitRepository(options.root, t);
   const busPath = join(root, '.agent-bus');
   assertSafePath(root, busPath, t);
+  const associatedTaskId = options.taskId || null;
+  const markAssociatedTaskError = error => {
+    if (!associatedTaskId) return;
+    try { markTaskError(root, associatedTaskId, error); } catch { /* Preserve the primary runtime error. */ }
+  };
+  if (associatedTaskId) {
+    ensureProjectBus(root);
+    ensureTaskStore(root);
+    const associatedTask = readTask(root, associatedTaskId);
+    if (associatedTask.status === 'APPROVED') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Approved task cannot launch: ${associatedTaskId}`, { recoverable: false, taskId: associatedTaskId });
+    }
+    setTaskStatus(root, associatedTaskId, 'IMPLEMENTING');
+  }
   const launchDir = join(busPath, 'launch');
   assertSafePath(root, launchDir, t);
 
   const promptPath = join(launchDir, `${agentId}.txt`);
   assertContained(launchDir, promptPath);
   if (!existsSync(promptPath)) {
-    throw new Error(format(t.launchMissing, { command: packageCommand('quickstart', { root, language: options.language }) }));
+    const error = runtimeError('TASK_STATE_CONFLICT', format(t.launchMissing, { command: packageCommand('quickstart', { root, language: options.language }) }), { recoverable: true, taskId: associatedTaskId });
+    markAssociatedTaskError(error);
+    throw error;
   }
   assertSafePath(launchDir, promptPath, t, false);
   const prompt = readFileSync(promptPath, 'utf8').trim();
@@ -1051,7 +1409,9 @@ async function launchAgent(options, t) {
   const busConfig = readConfig(busPath);
   const projectAgentConfig = busConfig.agents.find(a => a.id === agentId);
   if (!projectAgentConfig) {
-    throw new Error(format(t.badAgent, { agent: agentId }));
+    const error = runtimeError('INVALID_AGENT_CONFIG', format(t.badAgent, { agent: agentId }), { recoverable: false, agent: agentId, taskId: associatedTaskId });
+    markAssociatedTaskError(error);
+    throw error;
   }
 
   const userConfigFile = userConfigPath();
@@ -1066,7 +1426,7 @@ async function launchAgent(options, t) {
   } catch (error) {
     const failure = launchFailure({
       message: compactErrorDetails(error),
-      code: 'CONFIG_RESOLUTION_FAILED',
+      code: /Unknown adapter/i.test(compactErrorDetails(error)) ? 'INVALID_ADAPTER_CONFIG' : 'CONFIG_RESOLUTION_FAILED',
       stage: 'resolve',
       details: compactErrorDetails(error),
       resolution,
@@ -1075,14 +1435,28 @@ async function launchAgent(options, t) {
     try {
       recordBusState(root, agentId, 'ERROR', JSON.stringify({ code: failure.code, details: failure.details }));
     } catch { /* Preserve the primary configuration error. */ }
-    throw new Error(launchFailureReport(failure, {
+    markAssociatedTaskError(failure);
+    const reportError = new Error(launchFailureReport(failure, {
       agentId, agentConfig, resolution, userConfigFile, language: detectLanguage(options.language), t,
     }));
+    Object.assign(reportError, {
+      code: failure.code,
+      legacyCode: legacyErrorCode(failure.code),
+      stage: failure.stage,
+      details: failure.details,
+      result: failure.result,
+      resolution,
+      agentConfig,
+      recoverable: true,
+    });
+    throw reportError;
   }
 
   const policy = adapter.launchPolicy();
   if (!policy || !['one-shot', 'bus-supervised'].includes(policy.mode)) {
-    throw new Error(`Adapter "${agentConfig.adapter}" returned an invalid launch policy.`);
+    const error = runtimeError('INVALID_ADAPTER_CONFIG', `Adapter "${agentConfig.adapter}" returned an invalid launch policy.`, { recoverable: false, adapter: agentConfig.adapter, taskId: associatedTaskId });
+    markAssociatedTaskError(error);
+    throw error;
   }
   const supervised = policy.mode === 'bus-supervised' && !options.once;
   const controller = new AbortController();
@@ -1107,7 +1481,10 @@ async function launchAgent(options, t) {
   try {
     if (supervised) {
       const initialObservation = observeAgentBus(busPath, agentId);
-      if (initialObservation.stopped) return;
+      if (initialObservation.stopped) {
+        if (associatedTaskId) setTaskStatus(root, associatedTaskId, 'STOPPED');
+        return { root, agent: agentId, adapter: agentConfig.adapter, status: 'STOPPED' };
+      }
       if (initialObservation.failed) {
         // A new launch invocation is an explicit user retry, not an
         // automatic supervisor retry. Clear the prior terminal marker before
@@ -1147,12 +1524,12 @@ async function launchAgent(options, t) {
       });
       let result;
       try {
-        result = await runLaunchChild(resolved, root, setActiveChild);
+        result = await runLaunchChild(resolved, root, setActiveChild, { json: options.json, timeoutMs: options.timeoutMs });
       } catch (spawnResult) {
         const spawnError = spawnResult?.error || spawnResult;
         throw launchFailure({
           message: compactErrorDetails(spawnError),
-          code: spawnError?.code === 'ENOENT' ? 'COMMAND_NOT_FOUND' : 'SPAWN_FAILED',
+          code: 'SPAWN_FAILED',
           stage: 'spawn',
           details: compactErrorDetails(spawnError),
           result: {
@@ -1167,11 +1544,23 @@ async function launchAgent(options, t) {
         process.exitCode = interruptedSignal === 'SIGINT' ? 130 : 143;
         return;
       }
+      if (result.timedOut) {
+        throw launchFailure({
+          message: format(t.launchFailed, { agent: agentId, status: 'timeout' }),
+          code: 'AGENT_TIMEOUT',
+          stage: 'runtime',
+          details: `Agent ${agentId} exceeded the configured timeout of ${options.timeoutMs}ms.`,
+          result,
+          resolution,
+          agentConfig,
+        });
+      }
       if (result.status !== 0) {
         const status = result.status ?? result.signal ?? 'unknown';
+        const output = `${result.stdoutTail || ''}\n${result.stderrTail || ''}`;
         throw launchFailure({
           message: format(t.launchFailed, { agent: agentId, status }),
-          code: 'PROCESS_EXIT_NON_ZERO',
+          code: isExplicitAuthFailure(output) ? 'AUTH_REQUIRED' : 'PROCESS_EXIT_NON_ZERO',
           stage: 'runtime',
           details: format(t.launchFailed, { agent: agentId, status }),
           result,
@@ -1179,10 +1568,23 @@ async function launchAgent(options, t) {
           agentConfig,
         });
       }
-      if (!supervised) return;
+      if (!supervised) {
+        if (associatedTaskId) setTaskStatus(root, associatedTaskId, 'WAITING_IMPLEMENTER');
+        return {
+          root,
+          agent: agentId,
+          adapter: agentConfig.adapter,
+          command: resolution.command || null,
+          supervised: false,
+          exitCode: result.status,
+        };
+      }
 
       const observation = observeAgentBus(busPath, agentId);
-      if (observation.stopped) return;
+      if (observation.stopped) {
+        if (associatedTaskId) setTaskStatus(root, associatedTaskId, 'STOPPED');
+        return { root, agent: agentId, adapter: agentConfig.adapter, status: 'STOPPED', supervised: true };
+      }
       if (observation.failed) {
         throw launchFailure({
           message: 'Implementer reported ERROR state.',
@@ -1201,7 +1603,10 @@ async function launchAgent(options, t) {
         });
       }
       const nextObservation = observeAgentBus(busPath, agentId);
-      if (nextObservation.stopped) return;
+      if (nextObservation.stopped) {
+        if (associatedTaskId) setTaskStatus(root, associatedTaskId, 'STOPPED');
+        return { root, agent: agentId, adapter: agentConfig.adapter, status: 'STOPPED', supervised: true };
+      }
       if (nextObservation.failed) {
         throw launchFailure({
           message: 'Implementer reported ERROR state.',
@@ -1261,7 +1666,12 @@ async function launchAgent(options, t) {
         }));
       } catch { /* Preserve the original launch failure. */ }
     }
-    throw new Error(launchFailureReport(failure, {
+    if (associatedTaskId) {
+      try {
+        markAssociatedTaskError(failure);
+      } catch { /* Preserve the primary launch failure and artifact. */ }
+    }
+    const reportError = new Error(launchFailureReport(failure, {
       agentId,
       agentConfig,
       resolution,
@@ -1270,6 +1680,18 @@ async function launchAgent(options, t) {
       language: detectLanguage(options.language),
       t,
     }));
+    Object.assign(reportError, {
+      code: failure.code || 'LAUNCH_FAILED',
+      legacyCode: legacyErrorCode(failure.code || 'LAUNCH_FAILED'),
+      stage: failure.stage || 'runtime',
+      details: failure.details || failure.message,
+      result: failure.result,
+      resolution,
+      agentConfig,
+      artifactPath,
+      recoverable: true,
+    });
+    throw reportError;
   } finally {
     process.off('SIGINT', onSigint);
     process.off('SIGTERM', onSigterm);
@@ -1279,6 +1701,10 @@ async function launchAgent(options, t) {
 function handleAgentCommand(options, t) {
   const root = assertGitRepository(options.root, t);
   const busTool = busToolPath;
+  if (options.subcommand === 'discover') {
+    setupCommand(options, { json: false });
+    return;
+  }
   if (options.subcommand === 'add') {
     const agentId = options.targetAgent || options.agent;
     if (!agentId) throw new Error('--agent <id> is required for agent add.');
@@ -1334,6 +1760,38 @@ function handleAgentCommand(options, t) {
   throw new Error(`Unknown agent subcommand: ${options.subcommand}. Use add, list, or doctor.`);
 }
 
+function agentCommandJson(options) {
+  if (options.subcommand === 'discover') {
+    const result = setupCommand(options, { json: true });
+    return { ...result, command: 'agent.discover' };
+  }
+  if (options.subcommand === 'doctor') return agentDoctorJson(options);
+  const root = assertGitRepository(options.root, messages.en);
+  if (options.subcommand === 'list') {
+    const result = spawnSync(process.execPath, [busToolPath, 'agent-list', '--root', root], { encoding: 'utf8', windowsHide: true });
+    if (result.error || result.status !== 0) throw runtimeError('AGENT_RUNTIME_ERROR', (result.stderr || result.stdout || result.error?.message || 'Agent list failed').trim(), { recoverable: true });
+    let agents;
+    try { agents = JSON.parse(result.stdout).agents || []; } catch (error) {
+      throw runtimeError('AGENT_RUNTIME_ERROR', `Agent list returned invalid JSON: ${error.message}`, { recoverable: true });
+    }
+    return jsonSuccess('agent.list', { root, agents });
+  }
+  if (options.subcommand === 'add') {
+    const agentId = options.targetAgent || options.agent;
+    if (!agentId) throw runtimeError('INVALID_AGENT_CONFIG', '--agent <id> is required for agent add.', { recoverable: false });
+    const args = ['agent-add', '--root', root, '--agent', agentId, '--adapter', options.adapter || 'generic-cli'];
+    if (options.agentCommand) args.push('--command', options.agentCommand);
+    if (options.agentArgs) args.push('--args', options.agentArgs);
+    const result = spawnSync(process.execPath, [busToolPath, ...args], { encoding: 'utf8', windowsHide: true });
+    if (result.error || result.status !== 0) {
+      const details = (result.stderr || result.stdout || result.error?.message || 'Agent add failed').trim();
+      throw runtimeError(/Unknown adapter/i.test(details) ? 'INVALID_ADAPTER_CONFIG' : 'INVALID_AGENT_CONFIG', details, { recoverable: false });
+    }
+    try { return jsonSuccess('agent.add', JSON.parse(result.stdout)); } catch { return jsonSuccess('agent.add', { output: result.stdout.trim() }); }
+  }
+  throw runtimeError('INVALID_AGENT_CONFIG', `Unknown agent subcommand: ${options.subcommand}`, { recoverable: false });
+}
+
 async function run(argv) {
   let options;
   let language = detectLanguage(null);
@@ -1343,7 +1801,9 @@ async function run(argv) {
   } catch (error) {
     const raw = String(error.message || error);
     const t = messages[language];
-    if (raw.startsWith('MISSING_VALUE:')) console.error(format(t.missingValue, { option: raw.split(':')[1] }));
+    if (argv.includes('--json')) {
+      emitJson(jsonFailure('parse', runtimeError('INVALID_AGENT_CONFIG', raw, { recoverable: false })));
+    } else if (raw.startsWith('MISSING_VALUE:')) console.error(format(t.missingValue, { option: raw.split(':')[1] }));
     else if (raw.startsWith('BAD_LANGUAGE:')) console.error(format(t.badLanguage, { language: raw.split(':')[1] }));
     else console.error(raw.replace('UNKNOWN_OPTION:', 'Unknown option: '));
     process.exitCode = 2;
@@ -1352,19 +1812,63 @@ async function run(argv) {
 
   const t = messages[language];
   if (options.version) {
-    console.log(packageJson.version);
+    if (options.json) emitJson(jsonSuccess('version', { version: packageJson.version }));
+    else console.log(packageJson.version);
     return;
   }
   if (options.help || options.command === 'help') {
-    console.log(t.usage);
+    if (options.json) emitJson(jsonSuccess('help', { usage: t.usage }));
+    else console.log(t.usage);
     return;
   }
 
   if (options.command === 'config') {
     try {
-      handleConfigCommand(options, t);
+      if (options.json) emitJson(jsonConfigCommand(options));
+      else handleConfigCommand(options, t);
     } catch (error) {
-      console.error(error.message || String(error));
+      if (options.json) emitJson(jsonFailure(`config.${options.subcommand || 'list'}`, error));
+      else console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (options.command === 'setup' || options.command === 'discover') {
+    try {
+      if (options.json) emitJson(setupCommand(options, { json: true }));
+      else setupCommand(options, { json: false });
+    } catch (error) {
+      if (options.json) emitJson(jsonFailure(options.command === 'discover' ? 'discover' : 'setup', error));
+      else console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (options.command === 'status') {
+    try {
+      if (options.json) emitJson(statusJson(options));
+      else {
+        const result = statusJson(options);
+        console.log(JSON.stringify(result.bus, null, 2));
+        if (result.tasks.length > 0) console.log(JSON.stringify(result.tasks, null, 2));
+      }
+    } catch (error) {
+      if (options.json) emitJson(jsonFailure('status', error));
+      else console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (options.command === 'task') {
+    try {
+      const result = taskCommand(options, { json: options.json });
+      if (options.json) emitJson(result);
+    } catch (error) {
+      if (options.json) emitJson(jsonFailure(`task.${options.subcommand || 'status'}`, error));
+      else console.error(error.message || String(error));
       process.exitCode = 1;
     }
     return;
@@ -1375,9 +1879,11 @@ async function run(argv) {
 
   if (options.command === 'agent') {
     try {
-      handleAgentCommand(options, t);
+      if (options.json) emitJson(agentCommandJson(options));
+      else handleAgentCommand(options, t);
     } catch (error) {
-      console.error(error.message || String(error));
+      if (options.json) emitJson(jsonFailure(`agent.${options.subcommand || 'list'}`, error));
+      else console.error(error.message || String(error));
       process.exitCode = 1;
     }
     return;
@@ -1386,9 +1892,13 @@ async function run(argv) {
   if (options.command === 'quickstart' || options.command === 'launch') {
     try {
       if (options.command === 'quickstart') quickstart(options, t, language);
-      else await launchAgent(options, t);
+      else {
+        const result = await launchAgent(options, t);
+        if (options.json) emitJson(jsonSuccess('launch', result || { agent: options.agent, root: resolve(options.root) }));
+      }
     } catch (error) {
-      console.error(error.message || String(error));
+      if (options.json) emitJson(jsonFailure(options.command, error));
+      else console.error(error.message || String(error));
       process.exitCode = 1;
     }
     return;
@@ -1397,6 +1907,7 @@ async function run(argv) {
   if (options.command === 'install' || options.command === 'update') {
     try {
       for (const target of selectedTargets) installTarget(target, expectedManifest, options, t);
+      installAuxiliarySkills(options, t);
     } catch (error) {
       console.error(error.message || String(error));
       process.exitCode = 1;
@@ -1405,6 +1916,17 @@ async function run(argv) {
   }
 
   if (options.command === 'doctor') {
+    if (options.json) {
+      try {
+        const result = doctorJson(options, expectedManifest, selectedTargets);
+        emitJson(result);
+        if (!result.ok) process.exitCode = 1;
+      } catch (error) {
+        emitJson(jsonFailure('doctor', error));
+        process.exitCode = 1;
+      }
+      return;
+    }
     let healthy = true;
     let found = false;
     const repairs = repairCommands();
@@ -1510,6 +2032,7 @@ async function run(argv) {
         console.log(format(t.removed, { target: target.name, path: target.path }));
       }
     }
+    uninstallAuxiliarySkills(options, t);
     return;
   }
 

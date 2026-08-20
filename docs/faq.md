@@ -6,6 +6,14 @@ description: Answers about multi-agent coordination, Codex and Antigravity refer
 
 # Frequently asked questions
 
+## What is the Plugin-first Task surface?
+
+The Codex Plugin routes first-use intent through focused Skills: setup discovers
+and configures a local Implementer, task owns durable Task records, review checks
+evidence, and recover diagnoses explicit continuation. The Task API is layered on
+the existing `.agent-bus`; it does not create a second transport. The npm CLI is
+the Runtime/fallback surface for automation and advanced inspection.
+
 ## What is coordinate-agents?
 
 A local-first coordination protocol, runtime, and Codex App/CLI skill for multi-agent software engineering in Git repositories. The core is agent-agnostic with an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop/IPC surfaces connect through the adapter extension model.

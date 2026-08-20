@@ -19,6 +19,11 @@ codex plugin add coordinate-agents@coordinate-agents
 启用插件后，在 Codex App 中新建线程并调用 `$coordinate-agents`。这是推荐的交互流程；下面的 npm CLI
 快速启动仅作为自动化或不支持直接调用 Codex App Skill 的环境的备用方式。
 
+插件采用 Multi-Skill 入口：`coordinate-setup` 发现并配置 Implementer，`coordinate-task` 提供持久化
+Task API，`coordinate-review` 验证 commit 与证据，`coordinate-recover` 处理用户明确确认的恢复。
+机器需要读取运行时事实时，可使用 `setup --json` 与 `task status --json`；这些路径都复用同一个项目级
+Agent Bus。
+
 ## 直接在 Codex App 中使用（推荐）
 
 安装插件后，在 Codex App 中添加或打开目标 Git 项目，并将线程项目路径指定为包含 `.git` 的项目根目录。

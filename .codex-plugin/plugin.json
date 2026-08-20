@@ -1,7 +1,7 @@
 {
   "name": "coordinate-agents",
   "version": "2.1.2",
-  "description": "Local-first multi-agent coordination plugin and runtime based on a recoverable Agent Bus.",
+  "description": "Codex-native orchestration plugin for external coding agents, backed by a local-first recoverable Agent Bus and durable Task runtime.",
   "author": {
     "name": "hogancv",
     "url": "https://github.com/hogancv"
@@ -15,13 +15,15 @@
     "agent-bus",
     "codex",
     "antigravity",
+    "claude",
+    "task-runtime",
     "adapter"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Coordinate Agents",
-    "shortDescription": "Local-first multi-agent coordination with recoverable Agent Bus",
-    "longDescription": "Coordinate Codex as planner and reviewer with Antigravity and custom agents as implementers using a durable, local-first file-backed message bus and human-gated releases.",
+    "shortDescription": "Codex-native orchestration for external coding agents",
+    "longDescription": "Use Codex as Planner and Reviewer while Coordinate Agents discovers and configures external coding agents through a local CLI as Implementer. Durable Tasks map to the existing local-first Agent Bus, with focused setup, task, review, and recovery Skills and a human-gated release workflow.",
     "developerName": "hogancv",
     "category": "Productivity",
     "capabilities": [
@@ -30,9 +32,9 @@
     ],
     "websiteURL": "https://github.com/hogancv/coordinate-agents",
     "defaultPrompt": [
-      "Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.",
-      "Check Agent Bus status and review pending agent implementations.",
-      "Initialize coordinate-agents workflow for this repository."
+      "Check which coding CLIs are available on this computer and help me configure Coordinate Agents.",
+      "Help me choose and configure an available CLI as the implementation agent.",
+      "Use $coordinate-agents to build a simple Todo web app in the current project."
     ]
   }
 }

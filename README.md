@@ -28,6 +28,33 @@ Once installed, start a new thread in Codex and invoke it directly via `$coordin
 Use $coordinate-agents to coordinate Codex and Antigravity to implement this feature.
 ```
 
+The Plugin is the preferred product surface and is organized as focused Skills:
+`coordinate-agents` routes intent, `coordinate-setup` discovers and configures an
+Implementer, `coordinate-task` owns the durable Task lifecycle, `coordinate-review`
+checks commits and evidence, and `coordinate-recover` diagnoses explicit recovery.
+Codex remains Planner/Reviewer while any configured local coding CLI can be the
+Implementer; Codex and Antigravity are reference adapters, not a product lock-in.
+
+The three first-use prompts are intentionally an onboarding path:
+
+1. `Check which coding CLIs are available on this computer and help me configure Coordinate Agents.`
+2. `Help me choose and configure an available CLI as the implementation agent.`
+3. `Use $coordinate-agents to build a simple Todo web app in the current project.`
+
+The Runtime exposes a machine-readable Task API behind the Plugin:
+
+```sh
+npx @hogancv/coordinate-agents@latest setup --json
+npx @hogancv/coordinate-agents@latest task create --title "Build a Todo web app" --json
+npx @hogancv/coordinate-agents@latest task status --json
+npx @hogancv/coordinate-agents@latest task inspect --id task-... --json
+npx @hogancv/coordinate-agents@latest task resume --id task-... --json
+```
+
+`--json` emits one stable JSON document; the npm CLI is the Runtime/fallback and
+advanced-debugging surface rather than the primary onboarding path. Existing
+Agent Bus commands remain available underneath the Task abstraction.
+
 ## Use it directly in Codex App (recommended)
 
 If you use Codex App, you do not need to open two CLI windows or manually paste two launch

@@ -44,7 +44,11 @@ function windowsCandidates(command) {
   if (candidates.length > 0 || isPathLike(command)) return candidates;
 
   try {
-    const output = execFileSync('where.exe', [command], { encoding: 'utf8', windowsHide: true });
+    const output = execFileSync('where.exe', [command], {
+      encoding: 'utf8',
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     for (const candidate of output.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
       if (!candidates.includes(candidate)) candidates.push(candidate);
     }

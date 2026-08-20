@@ -1,5 +1,9 @@
 # coordinate-agents
 
+> Codex-native orchestration plugin for external coding agents. The Plugin is
+> the preferred product surface; npm CLI is the Runtime/fallback and advanced
+> debugging surface.
+
 > A local-first coordination protocol and runtime for AI coding agents in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI (agy) serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly. Desktop, MCP, HTTP, IPC, IDE, and other execution surfaces integrate through the adapter extension model. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
 
 Canonical documentation: https://hogancv.github.io/coordinate-agents/
@@ -18,6 +22,17 @@ Canonical repository: https://github.com/hogancv/coordinate-agents
 Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-agents
 AI installation contract: https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md
 Runtime Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-agents/SKILL.md
+Setup Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-setup/SKILL.md
+Task Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-task/SKILL.md
+Review Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-review/SKILL.md
+Recovery Skill: https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-recover/SKILL.md
+
+Plugin-first onboarding: Discover local coding CLIs with `setup --json`,
+configure a user-level Implementer, and use `task create/status/inspect/resume`
+over the same durable `.agent-bus`. The homepage prompts are Discover →
+Configure → Try; the Todo web app goes through the real Planner → Implementer →
+Reviewer Task workflow. Runtime JSON uses stable error codes and stops on a
+failed activation instead of retrying automatically.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

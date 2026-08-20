@@ -1,4 +1,4 @@
 interface:
   display_name: "Coordinate Agents"
-  short_description: "Agent-agnostic local coordination protocol and runtime"
-  default_prompt: "Use $coordinate-agents to coordinate AI coding agents in this Git repository: manage workflow roles (planner, implementer, reviewer), durable .agent-bus messaging, adapters, and human-gated releases, using Codex and Antigravity as default reference adapters."
+  short_description: "Codex-native orchestration for external coding agents"
+  default_prompt: "Check which coding CLIs are available on this computer and help me configure Coordinate Agents."

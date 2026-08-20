@@ -6,6 +6,36 @@ description: A verified first-run lifecycle for Codex App or Codex CLI specifica
 
 # Getting started
 
+## Codex Plugin-first path
+
+The Codex Plugin is the preferred first-use experience. Its Multi-Skill surface
+routes onboarding without exposing Agent Bus folders:
+
+| Intent | Skill | First action |
+| --- | --- | --- |
+| Discover | `coordinate-setup` | `coordinate-agents setup --json` |
+| Configure | `coordinate-setup` | choose an available local executable and use `config set` |
+| Try | `coordinate-task` | `task create`, then the real Planner → Implementer → Reviewer workflow |
+| Review | `coordinate-review` | verify the Task's commit, diff, tests, and evidence |
+| Recover | `coordinate-recover` | inspect `task status`, then resume only after confirmation |
+
+The Plugin's Task API is the product abstraction over the existing durable
+Agent Bus. The npm CLI remains a Runtime/fallback and advanced-debugging path;
+it is not required for normal Plugin onboarding. The three homepage prompts
+are discover, configure, and try, with the Todo web app using the same Task
+workflow as any other request.
+
+```sh
+npx @hogancv/coordinate-agents@latest setup --json
+npx @hogancv/coordinate-agents@latest task create --title "Build a Todo web app" --json
+npx @hogancv/coordinate-agents@latest task status --json
+```
+
+JSON stdout is one parseable document with `{ok, command, ...}` on success or
+`{ok:false, command, error:{code,message,recoverable,...}}` on failure. A failed
+Implementer is terminal for that activation; the Plugin reports the structured
+error and never loops through automatic retries.
+
 > [!NOTE]
 > This walkthrough demonstrates the **default reference workflow** using OpenAI Codex App/CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
 

@@ -22,6 +22,11 @@ After enabling the plugin, start a new Codex App thread and invoke `$coordinate-
 path is the preferred interactive workflow; the npm CLI quickstart below is the fallback for
 automation or hosts without direct Codex App Skill execution.
 
+The Plugin is a Multi-Skill surface: `coordinate-setup` discovers and configures an Implementer,
+`coordinate-task` owns the durable Task API, `coordinate-review` verifies commits and evidence,
+and `coordinate-recover` handles explicit recovery. Use `setup --json` and `task status --json`
+for machine-readable runtime facts; all of these paths use the same project-local Agent Bus.
+
 ## Start here
 
 For the simplest interactive path, install the Codex plugin, add the target Git repository to Codex
