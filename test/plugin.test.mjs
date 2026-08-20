@@ -150,7 +150,7 @@ test('repository marketplace manifest exists and conforms to Codex Marketplace s
   const entry = market.plugins.find(p => p.name === 'coordinate-agents');
   assert.ok(entry, 'Marketplace must contain coordinate-agents plugin entry');
   assert.equal(entry.source.source, 'local');
-  assert.equal(entry.source.path, '.');
+  assert.equal(entry.source.path, './');
   assert.equal(entry.policy.installation, 'AVAILABLE');
   assert.equal(entry.policy.authentication, 'ON_INSTALL');
   assert.equal(entry.category, 'Productivity');
@@ -158,5 +158,4 @@ test('repository marketplace manifest exists and conforms to Codex Marketplace s
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(packageJson.files.includes('.agents'), '.agents must be included in package.json files');
 });
-
 

@@ -1,11 +1,28 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { AgentAdapter, NORMALIZED_STATUSES } from './base.mjs';
+
+function runFile(command, args) {
+  try {
+    return {
+      status: 0,
+      stdout: execFileSync(command, args, { encoding: 'utf8', windowsHide: true }),
+      stderr: '',
+    };
+  } catch (error) {
+    return {
+      status: Number.isInteger(error.status) ? error.status : 1,
+      stdout: `${error.stdout || ''}`,
+      stderr: `${error.stderr || ''}`,
+      error,
+    };
+  }
+}
 
 function resolveCodexExecutable(command = 'codex') {
   if (process.platform !== 'win32') return { command, prefix: [], safe: true };
-  const located = spawnSync('where.exe', [command], { encoding: 'utf8', windowsHide: true });
+  const located = runFile('where.exe', [command]);
   if (located.status !== 0) return { command, prefix: [], safe: false };
   for (const path of located.stdout.split(/\r?\n/).map(value => value.trim()).filter(Boolean)) {
     if (/\.(exe|com)$/i.test(path)) return { command: path, prefix: [], safe: true };
@@ -35,10 +52,7 @@ export class CodexCliAdapter extends AgentAdapter {
     if (process.platform === 'win32' && !resolved.safe) {
       return { available: false, details: `Codex command '${command}' resolved to a Windows batch script without a safe JS entrypoint` };
     }
-    const result = spawnSync(resolved.command, [...resolved.prefix, '--version'], {
-      encoding: 'utf8',
-      windowsHide: true,
-    });
+    const result = runFile(resolved.command, [...resolved.prefix, '--version']);
     if (result.error || result.status !== 0) {
       return { available: false, details: result.error?.message || 'Codex CLI not available' };
     }

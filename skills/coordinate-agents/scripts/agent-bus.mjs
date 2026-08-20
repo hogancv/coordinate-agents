@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { hostname } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 
 const states = new Set(['IDLE', 'CLARIFYING', 'SPEC_READY', 'IMPLEMENTING', 'WAITING', 'REVIEWING', 'CHANGES_REQUESTED', 'APPROVED', 'RELEASING', 'STOPPED', 'ERROR']);
 const messageFields = ['id', 'from', 'to', 'type', 'created_at', 'subject'];
@@ -62,9 +62,11 @@ function positiveNumber(value, name, fallback) {
 }
 
 function git(args, cwd) {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
-  if (result.status !== 0) throw new Error((result.stderr || result.stdout || 'Git command failed.').trim());
-  return result.stdout.trim();
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', windowsHide: true }).trim();
+  } catch (error) {
+    throw new Error(`${error.stderr || error.stdout || error.message || 'Git command failed.'}`.trim());
+  }
 }
 
 function repoRoot(candidate) {
