@@ -13,22 +13,33 @@ routes onboarding without exposing Agent Bus folders:
 
 | Intent | Skill | First action |
 | --- | --- | --- |
-| Discover | `coordinate-setup` | `coordinate-agents setup --json` |
-| Configure | `coordinate-setup` | choose an available local executable and use `config set` |
-| Try | `coordinate-task` | `task create`, then the real Planner → Implementer → Reviewer workflow |
-| Review | `coordinate-review` | verify the Task's commit, diff, tests, and evidence |
-| Recover | `coordinate-recover` | inspect `task status`, then resume only after confirmation |
+| Discover | `coordinate-setup` | resolver-backed `setup --json` with no configuration mutation |
+| Configure | `coordinate-setup` | one `setup configure` transaction for command, Agent, Adapter, and Implementer role |
+| Try | `coordinate-task` | `task create`, then `task dispatch` for the approved specification |
+| Review | `coordinate-review` | verify the Task's commit, diff, tests, evidence, and record the decision |
+| Recover | `coordinate-recover` | inspect `task status`, then explicit `task resume` before another dispatch |
 
 The Plugin's Task API is the product abstraction over the existing durable
-Agent Bus. The npm CLI remains a Runtime/fallback and advanced-debugging path;
-it is not required for normal Plugin onboarding. The three homepage prompts
-are discover, configure, and try, with the Todo web app using the same Task
-workflow as any other request.
+Agent Bus. All five Skills invoke the same bundled Runtime with:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
+```
+
+The active Skill supplies the absolute `<skill-dir>`. This resolves the canonical
+`bin/coordinate-agents.mjs` inside the cached or local Plugin payload; a global
+`coordinate-agents` executable is not required. The npm CLI remains a
+Runtime/fallback and advanced-debugging path, not a prerequisite for Plugin
+onboarding. The three homepage prompts are discover, configure, and try, with
+the Todo web app using the same Task workflow as any other request.
 
 ```sh
-npx @hogancv/coordinate-agents@latest setup --json
-npx @hogancv/coordinate-agents@latest task create --title "Build a Todo web app" --json
-npx @hogancv/coordinate-agents@latest task status --json
+# The following is the Skill's canonical invocation pattern; replace <skill-dir>
+# with the absolute directory containing the active Skill's SKILL.md.
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "Build a Todo web app" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
 ```
 
 JSON stdout is one parseable document with `{ok, command, ...}` on success or
@@ -51,12 +62,15 @@ Codex App can invoke the Skill directly, so users do not need to manually open t
 1. Install and enable the `coordinate-agents` Codex plugin from the GitHub marketplace.
 2. Add or open the target Git repository as a Codex App project.
 3. Set the thread's project/workspace path to the repository root—the directory containing `.git`.
-4. Start a new thread, invoke `$coordinate-agents`, and ask Codex to initialize or coordinate the
-   task.
+4. Start a new thread, invoke `$coordinate-agents`, and ask Codex to run discovery first.
+5. After choosing an executable, let `coordinate-setup` run `setup configure`; do not manually chain
+   `config set`, `agent add`, workflow edits, and `doctor`.
 
 The Codex App thread is the Planner/Reviewer side. The runtime starts the Implementer as a local
-child process, so the execution command must be an installed executable on the same machine. For
-example:
+child process, so the execution command must be an installed executable on the same machine. The
+Plugin itself supplies the Runtime; a global npm install is not required. After discovery, let the
+high-level setup transaction configure the selected executable, project Agent, Adapter, and
+Implementer role. The following commands are only the standalone npm compatibility/debugging path:
 
 ```console
 $ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.command agy
@@ -134,6 +148,11 @@ The installer does not copy account tokens. Codex and Antigravity keep their nat
 their own homes.
 
 ## 2. Initialize the first task
+
+For the Plugin path, do not use `quickstart` as a substitute for Task dispatch. After Codex has a
+complete specification, the Skill calls `task create` and then `task dispatch`; dispatch performs
+Implementer resolution, executable checking, the `IMPLEMENT` Bus handoff, one Implementer launch, and
+failure propagation. A successful `IMPLEMENTATION_DONE` maps the Task to `REVIEWING`.
 
 Run this from the project Git root:
 

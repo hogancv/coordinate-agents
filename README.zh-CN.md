@@ -28,6 +28,11 @@ codex plugin add coordinate-agents@coordinate-agents
 使用 $coordinate-agents 让 Codex 和 Antigravity 协作完成这个功能。
 ```
 
+**只安装 Plugin 就够了：**普通 Codex Plugin 用户**不需要**执行
+`npm install -g @hogancv/coordinate-agents`。每个 Skill 都会从当前 Plugin
+载荷中解析并调用同一个 canonical Runtime，不假设 `coordinate-agents` 已经在
+`PATH` 中；解析器也支持个人插件市场、本地 Git 市场缓存，以及包含空格的 Windows 路径。
+
 插件是首选产品入口，并拆分为职责清晰的 Skills：`coordinate-agents` 负责意图路由，
 `coordinate-setup` 负责发现和配置 Implementer，`coordinate-task` 负责持久化 Task 生命周期，
 `coordinate-review` 检查真实 commit 与证据，`coordinate-recover` 负责诊断并在用户明确确认后恢复。
@@ -40,18 +45,41 @@ Antigravity 是参考适配器，不再是产品绑定。
 2. `Help me choose and configure an available CLI as the implementation agent.`
 3. `Use $coordinate-agents to build a simple Todo web app in the current project.`
 
-插件背后的 Runtime 提供机器可读的 Task API：
+普通 Plugin 路径是 **安装 Plugin → Discover → Configure → Build**：
+
+1. 使用 `coordinate-setup` 发现真实可执行文件事实，不修改配置。
+2. 用户选择执行命令后，让 `coordinate-setup` 执行一次高层 `setup configure` 事务：写入用户级
+   command、注册项目 Agent、分配 Implementer 角色、检查 Adapter contract 和 executable，最后返回 `READY`。
+3. Codex 完成需求澄清、规格和验收标准后，由 `coordinate-task` 创建并 dispatch 已批准的规格；Task API
+   负责 Agent Bus handoff 和 Implementer launch。
+4. `coordinate-review` 检查真实 commit/证据，并记录 `REVIEW_APPROVED` 或 `CHANGES_REQUESTED`，不直接编辑 Task 文件。
+
+五个 Skill 统一使用以下 Runtime 调用约定：
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
+```
+
+其中 `<skill-dir>` 是当前 Skill 的 `SKILL.md` 所在绝对目录，由 Skill 传入具体路径。Resolver 会从
+Plugin 载荷中启动唯一的 `bin/coordinate-agents.mjs`，因此 Plugin 路径没有隐藏的 global npm 前置依赖。
+
+## 高级：standalone npm Runtime 与调试
+
+npm CLI 仍可用于 standalone Runtime、自动化、兼容安装和调试，但不是 Plugin onboarding 的必要条件：
 
 ```sh
 npx @hogancv/coordinate-agents@latest setup --json
 npx @hogancv/coordinate-agents@latest task create --title "开发 Todo Web 应用" --json
+npx @hogancv/coordinate-agents@latest task dispatch --id task-... --spec "<已批准的规格>" --json
 npx @hogancv/coordinate-agents@latest task status --json
 npx @hogancv/coordinate-agents@latest task inspect --id task-... --json
+npx @hogancv/coordinate-agents@latest task review --id task-... --decision REVIEW_APPROVED --json
 npx @hogancv/coordinate-agents@latest task resume --id task-... --json
 ```
 
 `--json` 始终输出单个稳定 JSON 文档；npm CLI 现在是 Runtime、备用和高级调试入口，而不是首次
-使用的主路径。现有 Agent Bus 命令继续作为 Task 抽象层之下的实现。
+使用的主路径。上面的 npm 命令不表示 Plugin 用户必须安装 global npm package；现有 Agent Bus 命令继续
+作为 Task 抽象层之下的实现。
 
 ## 直接在 Codex App 中使用（推荐）
 

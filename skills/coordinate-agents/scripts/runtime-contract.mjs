@@ -6,6 +6,7 @@ import { redactOutput } from '../adapters/executable.mjs';
  */
 
 export const ERROR_CODES = Object.freeze([
+  'PLUGIN_RUNTIME_NOT_FOUND',
   'EXECUTABLE_NOT_FOUND',
   'EXECUTABLE_NOT_RUNNABLE',
   'SPAWN_FAILED',

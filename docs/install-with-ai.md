@@ -11,6 +11,46 @@ The canonical bilingual contract is
 An AI installer should read that file first, verify identity, execute only the selected installation,
 and prove the result with `doctor`. It must not treat a successful npm command as sufficient proof.
 
+## Plugin-only Runtime (the normal Codex path)
+
+For a Codex Plugin installation, **do not require or perform**
+`npm install -g @hogancv/coordinate-agents`. The Plugin payload contains the
+canonical `bin/coordinate-agents.mjs`; each Skill invokes it through the single
+resolver convention below, rather than through a PATH lookup:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
+```
+
+The active Skill supplies the absolute `<skill-dir>`. The resolver searches the
+active Plugin payload first, then the personal local marketplace and the Codex
+cached Git marketplace layout, and starts Node with an argument array so Windows
+paths with spaces and `.cmd`/`.bat` Implementer commands remain safe. The npm
+package is still the standalone/compatibility/debugging surface.
+
+The three Plugin onboarding actions are continuous:
+
+1. `coordinate-setup` discovery reports actual CLI executable facts without mutating configuration.
+2. `setup configure` is one transaction: it stores the user command, registers the project Agent,
+   assigns the Implementer workflow role, validates Adapter compatibility, runs the executable check,
+   and returns `READY`.
+3. After Codex approves a specification, `coordinate-task` creates and dispatches the Task. Dispatch
+   resolves the Implementer, sends `IMPLEMENT` through Agent Bus, launches once, and maps
+   `IMPLEMENTATION_DONE` to `REVIEWING`; `coordinate-review` records the review decision.
+
+Plugin acceptance should therefore run the resolver-backed commands from a new Codex thread, with no
+global `coordinate-agents` executable available:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup configure --agent antigravity --command agy-proxy --adapter antigravity-cli --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<approved task>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
+```
+
+The resolver must produce one JSON document for `--json`, including errors. A missing Plugin payload is
+`PLUGIN_RUNTIME_NOT_FOUND`; it is not evidence that the user should install a global npm CLI.
+
 ## Codex installation conversation
 
 ```text

@@ -288,6 +288,13 @@ test('canonical index, site pages, and demo prose distinguish runtime protocol f
   const gettingStarted = read(join('docs', 'getting-started.md'));
   assert.match(gettingStarted, /default reference workflow/i);
 
+  const pluginE2E = read(join('docs', 'plugin-e2e.md'));
+  for (const evidence of ['Plugin-only Runtime', 'Setup transaction', 'Task dispatch',
+    'IMPLEMENTATION_DONE', 'EXECUTABLE_NOT_FOUND', 'RELEASE_APPROVED']) {
+    assert.ok(pluginE2E.includes(evidence), `plugin-e2e is missing ${evidence}`);
+  }
+  assert.match(read(join('docs', 'index.md')), /plugin-e2e\.html/);
+
   const troubleshooting = read(join('docs', 'troubleshooting.md'));
   assert.match(troubleshooting, /default Codex and Antigravity reference adapters/i);
 
@@ -350,7 +357,13 @@ test('repository-wide invariant: zero deprecated CLI --role alias across reposit
   for (const fullPath of allFiles) {
     const relPath = relative(root, fullPath);
     // test/cli.test.mjs is permitted only for testing unknown option rejection
-    if (relPath === join('test', 'cli.test.mjs')) continue;
+    // setup configure has a scoped workflow-role option; launch/task still
+    // reject the historical role alias.
+    if (
+      relPath === join('test', 'cli.test.mjs')
+      || relPath === join('bin', 'coordinate-agents.mjs')
+      || relPath === join('skills', 'coordinate-setup', 'SKILL.md')
+    ) continue;
     if (fullPath === thisFile) continue;
 
     const content = readFileSync(fullPath, 'utf8');

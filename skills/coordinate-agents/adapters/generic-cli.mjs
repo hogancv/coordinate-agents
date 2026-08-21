@@ -49,6 +49,19 @@ export class GenericCliAdapter extends AgentAdapter {
     };
   }
 
+  validateConfiguration({ setup = false } = {}) {
+    if (!setup) return { compatible: true, code: null, details: null };
+    const args = this.config.args;
+    if (!Array.isArray(args) || !args.some(value => typeof value === 'string' && value.includes('{prompt}'))) {
+      return {
+        compatible: false,
+        code: 'UNSUPPORTED_CAPABILITY',
+        details: 'generic-cli requires an explicit args template containing {prompt}; inspect the CLI --help output before configuring it.',
+      };
+    }
+    return { compatible: true, code: null, details: null };
+  }
+
   capabilities() {
     return {
       ...super.capabilities(),

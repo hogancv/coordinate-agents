@@ -56,6 +56,9 @@ test('canonical skill directory is complete and self-contained', () => {
     join('scripts', 'agent-observer.mjs'),
     join('scripts', 'config.mjs'),
     join('scripts', 'user-config.mjs'),
+    join('scripts', 'task-runtime.mjs'),
+    join('scripts', 'runtime-contract.mjs'),
+    join('scripts', 'runtime-entry.mjs'),
   ];
 
   for (const relPath of requiredFiles) {
@@ -101,6 +104,8 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
       assert.ok(filenames.some(f => f.startsWith('.codex-plugin/')), 'Pack must contain .codex-plugin files');
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/SKILL.md')), 'Pack must contain skills/coordinate-agents/SKILL.md');
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/scripts/agent-bus.mjs')), 'Pack must contain skills/coordinate-agents/scripts/agent-bus.mjs');
+      assert.ok(filenames.some(f => f === 'bin/coordinate-agents.mjs'), 'Pack must contain the canonical Runtime bin');
+      assert.ok(filenames.some(f => f === 'skills/coordinate-agents/scripts/runtime-entry.mjs'), 'Pack must contain the Plugin Runtime resolver');
     } catch {
       // If npm pack json output is wrapped or formatted differently, fallback to checking stdout
       assert.match(result.stdout, /\.codex-plugin/);

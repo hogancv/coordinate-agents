@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "Coordinate Agents",
     "shortDescription": "Codex-native orchestration for external coding agents",
-    "longDescription": "Use Codex as Planner and Reviewer while Coordinate Agents discovers and configures external coding agents through a local CLI as Implementer. Durable Tasks map to the existing local-first Agent Bus, with focused setup, task, review, and recovery Skills and a human-gated release workflow.",
+    "longDescription": "Use Codex as Planner and Reviewer while the bundled canonical Coordinate Agents Runtime discovers and configures an external coding agent CLI as Implementer. Durable Tasks map to the existing local-first Agent Bus, with focused setup, task, review, and recovery Skills, Plugin-safe Runtime resolution without a global npm CLI, and a human-gated release workflow.",
     "developerName": "hogancv",
     "category": "Productivity",
     "capabilities": [

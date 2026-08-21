@@ -16,6 +16,9 @@ export const COMMON_CODING_CLIS = Object.freeze([
 const KNOWN_ADAPTERS = new Map([
   ['codex', 'codex-cli'],
   ['agy', 'antigravity-cli'],
+  ['agy-proxy', 'antigravity-cli'],
+  ['claude', 'generic-cli'],
+  ['gemini', 'generic-cli'],
 ]);
 
 function safeVersion(command) {

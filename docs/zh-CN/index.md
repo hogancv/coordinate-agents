@@ -19,10 +19,20 @@ codex plugin add coordinate-agents@coordinate-agents
 启用插件后，在 Codex App 中新建线程并调用 `$coordinate-agents`。这是推荐的交互流程；下面的 npm CLI
 快速启动仅作为自动化或不支持直接调用 Codex App Skill 的环境的备用方式。
 
+只安装 Codex Plugin 时不需要 `npm install -g @hogancv/coordinate-agents`。五个 Skill 统一通过
+`node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...` 解析当前 Plugin
+载荷中的唯一 canonical Runtime，不依赖 `PATH` 中存在 `coordinate-agents`；同时支持 Git 缓存、个人本地
+插件市场和包含空格的 Windows 路径。
+
 插件采用 Multi-Skill 入口：`coordinate-setup` 发现并配置 Implementer，`coordinate-task` 提供持久化
 Task API，`coordinate-review` 验证 commit 与证据，`coordinate-recover` 处理用户明确确认的恢复。
 机器需要读取运行时事实时，可使用 `setup --json` 与 `task status --json`；这些路径都复用同一个项目级
 Agent Bus。
+
+正常路径是 **安装 Plugin → Discover → Configure → Build**：`coordinate-setup` 只做发现后，由一次
+`setup configure` 事务写入用户 command、注册项目 Agent、配置 Adapter、分配 Implementer 角色并执行
+兼容性/可执行文件检查；规格完整后，`coordinate-task task dispatch` 才发送 `IMPLEMENT` 并启动执行端，
+`IMPLEMENTATION_DONE` 会映射为 `REVIEWING`，最后由 `coordinate-review` 记录审查决策。
 
 ## 直接在 Codex App 中使用（推荐）
 

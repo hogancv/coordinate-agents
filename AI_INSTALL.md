@@ -11,6 +11,7 @@ This is the canonical installation procedure for AI assistants installing
 
 - [Canonical identity](#canonical-identity--官方身份)
 - [Architecture & Scope: Host Skill vs Project Agent](#architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理)
+- [Plugin-first onboarding](#plugin-first-onboarding--插件优先的首次使用)
 - [Installation Strategy by Target Host](#installation-strategy-by-target-host--按目标环境选择安装策略)
 - [Security rules](#security-rules--安全规则)
 - [Preflight checks](#preflight-checks--安装前检查)
@@ -56,10 +57,33 @@ The Plugin homepage prompts are deliberately ordered as Discover → Configure �
 Try. The Try prompt uses the ordinary Task workflow for the Todo web app; it
 does not create a special demo path. Runtime state should be read through JSON:
 
-```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> setup --json
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> task status --json
+**A Codex Plugin user does not need `npm install -g @hogancv/coordinate-agents`.** All five Skills
+invoke the bundled canonical Runtime with one resolver convention, never by assuming a PATH command:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 ```
+
+The active Skill supplies the absolute `<skill-dir>`. The resolver handles the active Plugin payload,
+personal local marketplace sources, cached Git marketplace roots, Node/npm package fallback, and
+Windows paths with spaces. The npm CLI remains a standalone Runtime, compatibility, and debugging
+surface, not a Plugin prerequisite.
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --json
+```
+
+For example, after the user chooses `agy-proxy`:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup configure --agent antigravity --command agy-proxy --adapter antigravity-cli --root "<repository>" --json
+```
+
+After discovery, the Skill must use one high-level `setup configure` transaction. It writes the
+machine command, registers the project Agent with its Adapter, assigns the Implementer workflow role,
+checks Adapter compatibility and the executable, runs the equivalent doctor checks, and only then
+returns `READY`. It must not manually combine lower-level configuration operations.
 
 Do not infer a usable Implementer from a role name. Resolve the actual local
 executable and preserve user configuration outside the installed Skill.
@@ -92,6 +116,10 @@ When an AI assistant is asked to install `coordinate-agents`:
   - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`。
 - **通过 npm 同时为两个 CLI 宿主安装**：
   - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`。
+
+普通 Codex Plugin 用户不需要 `npm install -g @hogancv/coordinate-agents`；五个 Skill 统一通过
+`node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...` 找到 Plugin 载荷中的
+唯一 canonical Runtime。只有 standalone、兼容安装或调试场景才使用 npm CLI。
 
 ## Canonical identity / 官方身份
 
@@ -246,8 +274,10 @@ two CLI windows or copying two launch commands.
 
 The App thread remains the Planner/Reviewer side. The runtime starts the configured Implementer CLI
 as a local child process, so the Implementer command must be installed and correct even though the
-user does not open a second CLI window manually. Use the actual executable command, for example
-`agy` or `claude`, not a role label or a command that exists only on another machine:
+user does not open a second CLI window manually. The Plugin Runtime is already bundled; do not ask the
+user to install a global npm CLI. Use the actual executable command, for example `agy` or `claude`,
+not a role label or a command that exists only on another machine. For advanced npm compatibility or
+debugging, the older lower-level commands remain available:
 
 ```sh
 # Default Antigravity Implementer
@@ -289,7 +319,8 @@ the selected CLI's own help output.
 4. 让 Codex 在这个项目中初始化或协调任务。
 
 App 线程负责 Planner/Reviewer 侧；运行时会在本机以子进程启动已配置的 Implementer CLI。因此，即使用户不需要
-手动打开第二个 CLI 窗口，执行端命令仍必须已安装且正确，例如 `agy` 或 `claude`，不能填写角色名称或另一台机器上才存在的别名：
+手动打开第二个 CLI 窗口，执行端命令仍必须已安装且正确，例如 `agy` 或 `claude`，不能填写角色名称或另一台机器上才存在的别名。Plugin
+Runtime 已经随载荷提供，不应要求用户安装 global npm CLI；下面的低层命令仅用于 npm 兼容或调试：
 
 ```sh
 # 默认使用 Antigravity 作为 Implementer

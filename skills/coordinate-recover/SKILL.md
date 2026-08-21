@@ -8,12 +8,19 @@ description: >-
 
 # Coordinate Recover
 
+The Plugin bundles the Runtime. Let `<skill-dir>` be the absolute directory
+containing this loaded `SKILL.md`; use the same resolver for every operation:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" ...
+```
+
 Start with machine-readable state:
 
 ```text
-coordinate-agents task status --root "<repository>" --json
-coordinate-agents status --root "<repository>" --json
-coordinate-agents agent doctor --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" status --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" agent doctor --root "<repository>" --json
 ```
 
 Inspect the Task's `lastError`, the bounded runtime artifact, Agent Bus state,
@@ -23,9 +30,13 @@ smallest repair. Do not claim a missing capability as a successful result.
 Only after the user explicitly asks to continue, invoke:
 
 ```text
-coordinate-agents task resume --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task resume --root "<repository>" --id task-... --json
 ```
+
+`task resume` only clears the explicit recovery gate; it does not launch an
+Implementer. After the user confirms the repair, use `task dispatch` so the
+Task API performs executable validation, Bus handoff, launch, and state/error
+propagation as one operation.
 
 `TASK_NOT_FOUND`, `STALE_CLAIM`, `AGENT_EXIT_NONZERO`, `AGENT_TIMEOUT`, and
 `AUTH_REQUIRED` remain facts to report; they do not authorize silent retries.
-

@@ -11,6 +11,19 @@ description: Match real coordinate-agents, Node, Codex, agy, agent-bus, Windows 
 Start with the Plugin-facing Task and setup surfaces rather than inspecting
 queue files manually:
 
+The Plugin path does not require a global npm CLI. Every Skill calls the active
+payload through:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
+```
+
+If this resolver reports `PLUGIN_RUNTIME_NOT_FOUND`, verify that the Plugin is
+enabled in the current Codex installation and start a new thread; do not infer
+that `coordinate-agents` must be added to `PATH`. The resolver accepts cached Git
+marketplace installs, personal local marketplace roots, and Windows paths with
+spaces. The npm command examples below are standalone/debugging fallbacks.
+
 ```sh
 npx @hogancv/coordinate-agents@latest setup --json
 npx @hogancv/coordinate-agents@latest task status --json
@@ -26,6 +39,13 @@ classified only when the coding CLI explicitly reports login/authentication
 failure. A non-zero exit or timeout stops the current activation; it is not an
 automatic retry signal. After fixing the reported executable or runtime issue,
 use `task resume` only when the user explicitly asks to continue.
+
+`task dispatch` is the only Plugin-facing action that sends `IMPLEMENT` and
+launches the Implementer. It resolves the workflow Agent and final command,
+checks the Adapter and executable, and fails closed before transport when the
+command is unavailable. A missing command therefore produces Task `ERROR` with
+`EXECUTABLE_NOT_FOUND`, no queued `IMPLEMENT`, and no child process. After the
+user fixes the command, `task resume` is required before another dispatch.
 
 > [!NOTE]
 > This guide covers common issues with host Skill installations, the default Codex and Antigravity reference adapters, `.agent-bus` recovery, and dynamic agent registration via `agent doctor`.

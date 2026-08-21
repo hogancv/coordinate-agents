@@ -25,6 +25,23 @@ Task API is the product surface; the Agent Bus remains the single canonical
 durable transport and persistence layer. The bundled runtime and adapters under
 this directory are the only implementation source; do not create a second Bus.
 
+## Canonical Plugin Runtime invocation
+
+Codex Plugin installation does not promise that the npm bin `coordinate-agents`
+is on `PATH`. Let `<skill-dir>` mean the absolute directory containing this
+loaded `SKILL.md`, then invoke the one bundled Runtime entry point for every
+operation:
+
+```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
+```
+
+The resolver follows the active Plugin payload to its canonical
+`bin/coordinate-agents.mjs`; it also understands the personal marketplace,
+Git marketplace cache, and standalone npm compatibility layout. Do not replace
+this with a per-Skill path guess or a copied Runtime. JSON operations must keep
+`--json` as the machine-facing contract.
+
 ## Codex App workflow
 
 In Codex App, resolve the active project with `git rev-parse --show-toplevel`,
@@ -39,11 +56,11 @@ remains a fallback for hosts without direct App skill execution.
 
 | User intent | Skill | Runtime surface |
 | --- | --- | --- |
-| "Which coding CLIs are installed?" | `coordinate-setup` | `coordinate-agents setup --json` |
-| "Configure the implementation agent." | `coordinate-setup` | `config set`, project precedence, `agent doctor` |
-| "Build this feature with Coordinate Agents." | `coordinate-task` | `task create`, Task workflow, `launch` |
-| "Review the implementation." | `coordinate-review` | commit/diff/evidence checks |
-| "Continue the last task." | `coordinate-recover` | `task status`, `task resume` |
+| "Which coding CLIs are installed?" | `coordinate-setup` | `setup --json` |
+| "Configure the implementation agent." | `coordinate-setup` | `setup configure --json` transaction |
+| "Build this feature with Coordinate Agents." | `coordinate-task` | `task create`, `task dispatch` |
+| "Review the implementation." | `coordinate-review` | inspect evidence, `task review` |
+| "Continue the last task." | `coordinate-recover` | `task status`, explicit `task resume`, `task dispatch` |
 
 Use `--json` for runtime facts. JSON stdout is a single document and errors
 use stable codes; explanatory prose belongs in the Skill layer. Never infer

@@ -18,7 +18,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { getAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
@@ -34,6 +34,7 @@ import {
 } from '../skills/coordinate-agents/scripts/config.mjs';
 import {
   defaultUserConfig,
+  defaultCommandForAdapter,
   getUserConfigValue,
   readUserConfig,
   resolveAgentConfig,
@@ -46,11 +47,14 @@ import {
   ensureTaskStore,
   listTasks,
   markTaskError,
+  prepareTaskForDispatch,
+  recordReviewDecision,
   readTask,
   resolveTaskId,
   resumeTask,
   setTaskStatus,
   stopTask,
+  syncTaskFromAgentBus,
 } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import {
   canonicalErrorCode,
@@ -81,7 +85,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks (create, status, list, inspect, resume, stop, error)
+  task          Manage durable tasks (create, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   config        Manage user-level executable configuration (set, get, list)
   doctor        Check prerequisites/installations and print repair commands
@@ -101,6 +105,9 @@ Options:
   --adapter <adapter>     Adapter for agent registration (default: generic-cli)
   --command <cmd>         Executable command for agent registration
   --args <args>           Command argument template (JSON array or comma-separated)
+  --role <role>           Setup workflow role (setup configure only; default: implementer)
+  --decision <decision>   Task review decision: REVIEW_APPROVED or CHANGES_REQUESTED
+  --feedback <text>       Review feedback preserved for the next implementation round
   --template <type>       Task template: bug, feature, or refactor
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
@@ -187,7 +194,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务（create、status、list、inspect、resume、stop、error）
+  task          管理持久化任务（create、dispatch、status、list、inspect、resume、stop、review、error）
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
 
@@ -204,6 +211,9 @@ Examples:
   --adapter <adapter>     注册 Agent 的适配器（默认：generic-cli）
   --command <cmd>         注册 Agent 的可执行命令
   --args <args>           注册 Agent 的命令行参数模板（JSON 数组或逗号分隔）
+  --role <role>           setup configure 的工作流角色（默认：implementer）
+  --decision <decision>   Task 审查决策：REVIEW_APPROVED 或 CHANGES_REQUESTED
+  --feedback <文本>       保存给下一轮实现的审查反馈
   --template <类型>       任务模板：bug、feature 或 refactor
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
@@ -310,9 +320,14 @@ function parseArgs(argv) {
     adapter: 'generic-cli',
     agentCommand: null,
     agentArgs: null,
+    role: 'implementer',
+    roleExplicit: false,
+    decision: null,
+    feedback: '',
     template: 'feature',
     task: '',
     language: null,
+    adapterExplicit: false,
     positionals: [],
   };
   const args = [...argv];
@@ -326,6 +341,8 @@ function parseArgs(argv) {
     } else if (result.command === 'config' && args[0] && !args[0].startsWith('-')) {
       result.subcommand = args.shift();
     } else if (result.command === 'task' && args[0] && !args[0].startsWith('-')) {
+      result.subcommand = args.shift();
+    } else if (result.command === 'setup' && args[0] && !args[0].startsWith('-')) {
       result.subcommand = args.shift();
     }
   }
@@ -347,6 +364,7 @@ function parseArgs(argv) {
       '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
       '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
       '--id', '--reason', '--error-code', '--timeout', '--timeout-ms', '--lang',
+      '--role', '--decision', '--feedback',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
@@ -362,9 +380,18 @@ function parseArgs(argv) {
       if (option === '--planner') result.planner = value.toLowerCase();
       if (option === '--implementer') result.implementer = value.toLowerCase();
       if (option === '--reviewer') result.reviewer = value.toLowerCase();
-      if (option === '--adapter') result.adapter = value;
+      if (option === '--adapter') {
+        result.adapter = value;
+        result.adapterExplicit = true;
+      }
       if (option === '--command') result.agentCommand = value;
       if (option === '--args') result.agentArgs = value;
+      if (option === '--role') {
+        result.role = value.toLowerCase();
+        result.roleExplicit = true;
+      }
+      if (option === '--decision') result.decision = value.toUpperCase();
+      if (option === '--feedback') result.feedback = value;
       if (option === '--template') result.template = value.toLowerCase();
       if (option === '--task') result.task = value;
       if (option === '--title') result.title = value;
@@ -385,6 +412,9 @@ function parseArgs(argv) {
   if (!result.codex && !result.antigravity) {
     result.codex = true;
     result.antigravity = true;
+  }
+  if (result.roleExplicit && !(result.command === 'setup' && result.subcommand === 'configure')) {
+    throw new Error('UNKNOWN_OPTION:--role');
   }
   if (result.rootBase64) result.root = resolve(Buffer.from(result.rootBase64, 'base64url').toString('utf8'));
   if (result.codexHomeBase64) result.codexHome = resolve(Buffer.from(result.codexHomeBase64, 'base64url').toString('utf8'));
@@ -914,7 +944,257 @@ function statusJson(options) {
   return jsonSuccess('status', { root, bus, tasks });
 }
 
-function taskCommand(options, { json = false } = {}) {
+function sendTaskBusMessage(root, { from, to, type, subject, body, dedupeKey, relatedCommit = '' }) {
+  const busPath = join(root, '.agent-bus');
+  const temporary = join(busPath, 'tmp', `.task-${process.pid}-${randomUUID().replaceAll('-', '')}.md`);
+  assertSafePath(root, temporary, messages.en, false);
+  writeFileSync(temporary, `${body}\n`, { encoding: 'utf8', flag: 'wx' });
+  try {
+    const args = [
+      busToolPath,
+      'send', '--root', root,
+      '--from', from, '--to', to,
+      '--type', type,
+      '--subject', subject,
+      '--body-file', temporary,
+      '--dedupe-key', dedupeKey,
+    ];
+    if (relatedCommit) args.push('--related-commit', relatedCommit);
+    const result = spawnSync(process.execPath, args, {
+      cwd: root,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (result.error || result.status !== 0) {
+      throw runtimeError('AGENT_RUNTIME_ERROR', (result.stderr || result.stdout || result.error?.message || 'Agent Bus send failed').trim(), {
+        recoverable: true,
+        stage: 'transport',
+        details: (result.stderr || result.stdout || result.error?.message || '').trim(),
+      });
+    }
+    return result.stdout.trim();
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+}
+
+function taskImplementationPrompt(task) {
+  const feedback = `${task.reviewFeedback || ''}`.trim();
+  const previousEvidence = Array.isArray(task.evidence) && task.evidence.length > 0
+    ? JSON.stringify(task.evidence.at(-1))
+    : '(none)';
+  return [
+    'Use $coordinate-agents as the external Implementer for this Task.',
+    'Do not create a second planner and do not release, merge, push, tag, deploy, or publish.',
+    `Task ID: ${task.id}`,
+    `Round: ${task.round}`,
+    `Approved specification:\n${task.spec}`,
+    feedback ? `Review feedback from the previous round:\n${feedback}` : '',
+    `Previous implementation commit/evidence reference: ${task.implementationCommit || previousEvidence}`,
+    'Implement only the approved specification, run the required validation, commit the product changes, and send one IMPLEMENTATION_DONE message to the Planner with the commit and bounded evidence.',
+  ].filter(Boolean).join('\n\n');
+}
+
+function taskAgentResolution(root, task) {
+  const busPath = join(root, '.agent-bus');
+  const busConfig = readConfig(busPath);
+  const workflowImplementer = busConfig.workflow?.implementer || task.implementer;
+  const projectAgent = busConfig.agents.find(agent => agent.id === workflowImplementer);
+  if (!projectAgent) {
+    throw runtimeError('INVALID_AGENT_CONFIG', `Workflow implementer is not registered: ${workflowImplementer}`, {
+      recoverable: false,
+      agent: workflowImplementer,
+      taskId: task.id,
+    });
+  }
+  if (!busConfig.agents.some(agent => agent.id === task.planner)) {
+    throw runtimeError('INVALID_AGENT_CONFIG', `Task planner is not registered: ${task.planner}`, {
+      recoverable: false,
+      agent: task.planner,
+      taskId: task.id,
+    });
+  }
+  const resolved = runtimeAgentConfig(projectAgent, readUserConfig());
+  const adapter = getAdapter(resolved.adapter, resolved);
+  const compatibility = adapter.validateConfiguration({ setup: true });
+  if (!compatibility.compatible) {
+    throw runtimeError(compatibility.code || 'UNSUPPORTED_CAPABILITY', compatibility.details || `Adapter ${resolved.adapter} cannot drive the configured Implementer.`, {
+      recoverable: false,
+      taskId: task.id,
+      agent: workflowImplementer,
+      adapter: resolved.adapter,
+      command: resolved.command,
+      stage: 'adapter',
+      details: compatibility.details,
+    });
+  }
+  return { busConfig, workflowImplementer, projectAgent, resolved, adapter };
+}
+
+function markDispatchFailure(root, task, error, agentId = null) {
+  const normalized = error?.code ? error : runtimeError('AGENT_RUNTIME_ERROR', error?.message || String(error), {
+    recoverable: true,
+    taskId: task.id,
+  });
+  if (agentId) {
+    try {
+      recordBusState(root, agentId, 'ERROR', JSON.stringify({
+        code: canonicalErrorCode(normalized.code),
+        stage: normalized.stage || 'dispatch',
+        details: compactErrorDetails(normalized.details || normalized.message),
+      }));
+    } catch { /* Preserve the primary Task error. */ }
+  }
+  try { markTaskError(root, task.id, normalized); } catch { /* Preserve the primary Task error. */ }
+  return normalized;
+}
+
+async function taskDispatch(root, task, options, t) {
+  let resolution;
+  let agentId = null;
+  try {
+    resolution = taskAgentResolution(root, task);
+    agentId = resolution.workflowImplementer;
+    if (task.implementer !== agentId) {
+      task = setTaskStatus(root, task.id, task.status, { implementer: agentId });
+    }
+    const detection = resolution.adapter.detect({ version: false });
+    if (!detection.available) {
+      throw runtimeError(canonicalErrorCode(detection.code, 'EXECUTABLE_NOT_FOUND'), detection.details || `Executable is unavailable: ${resolution.resolved.command}`, {
+        recoverable: true,
+        taskId: task.id,
+        agent: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        stage: 'executable',
+        result: detection,
+      });
+    }
+
+    task = setTaskStatus(root, task.id, 'IMPLEMENTING', {
+      dispatch: {
+        round: task.round,
+        implementer: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        commandSource: resolution.resolved.commandSource,
+        dispatchedAt: new Date().toISOString(),
+      },
+      lastError: null,
+    });
+    try {
+      recordBusState(root, agentId, 'IMPLEMENTING', `Task ${task.id} round ${task.round} dispatched by ${task.planner}.`);
+    } catch (error) {
+      throw runtimeError('AGENT_RUNTIME_ERROR', `Unable to record Implementer state: ${error.message || error}`, {
+        recoverable: true,
+        taskId: task.id,
+        agent: agentId,
+        adapter: resolution.resolved.adapter,
+        stage: 'transport',
+      });
+    }
+
+    const body = taskImplementationPrompt(task);
+    const messagePath = sendTaskBusMessage(root, {
+      from: task.planner,
+      to: agentId,
+      type: 'IMPLEMENT',
+      subject: `Implement ${task.id} round ${task.round}`,
+      body,
+      dedupeKey: `task:${task.id}:round:${task.round}:implement`,
+    });
+
+    const launch = await launchAgent({
+      ...options,
+      agent: agentId,
+      taskId: task.id,
+      once: true,
+      json: true,
+      promptText: body,
+    }, t);
+
+    let finalTask = syncTaskFromAgentBus(root, task.id);
+    const observation = observeAgentBus(join(root, '.agent-bus'), agentId);
+    if (observation.failed && finalTask.status !== 'REVIEWING') {
+      const failure = runtimeError('AGENT_RUNTIME_ERROR', 'Implementer reported ERROR state after dispatch.', {
+        recoverable: true,
+        taskId: task.id,
+        agent: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        stage: 'runtime',
+        details: observation.state?.details || null,
+      });
+      throw failure;
+    }
+    if (finalTask.status === 'REVIEWING') {
+      try { recordBusState(root, agentId, 'REVIEWING', `Task ${task.id} implementation evidence received.`); } catch { /* Task is authoritative for the product surface. */ }
+    } else if (finalTask.status === 'IMPLEMENTING') {
+      finalTask = setTaskStatus(root, task.id, 'WAITING_IMPLEMENTER');
+      try { recordBusState(root, agentId, 'WAITING', `Task ${task.id} is waiting for IMPLEMENTATION_DONE.`); } catch { /* Best-effort Bus state mirror. */ }
+    }
+    return {
+      root,
+      task: finalTask,
+      workflow: { implementer: agentId },
+      agent: {
+        id: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        commandSource: resolution.resolved.commandSource,
+        available: true,
+        resolvedCommand: detection.resolvedCommand || null,
+      },
+      transport: { type: 'IMPLEMENT', messagePath, dedupeKey: `task:${task.id}:round:${task.round}:implement` },
+      launch,
+    };
+  } catch (error) {
+    const normalized = markDispatchFailure(root, task, error, agentId);
+    throw normalized;
+  }
+}
+
+function taskReview(root, task, options) {
+  const decision = `${options.decision || ''}`.trim().toUpperCase();
+  const feedback = `${options.feedback || options.reason || ''}`.trim();
+  if (task.status !== 'REVIEWING') {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task ${task.id} must be REVIEWING before review.`, { recoverable: false, taskId: task.id });
+  }
+  if (!['REVIEW_APPROVED', 'CHANGES_REQUESTED'].includes(decision)) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'task review requires --decision REVIEW_APPROVED or CHANGES_REQUESTED.', { recoverable: false, taskId: task.id });
+  }
+  if (decision === 'CHANGES_REQUESTED' && !feedback) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'CHANGES_REQUESTED requires --feedback.', { recoverable: false, taskId: task.id });
+  }
+  const busConfig = readConfig(join(root, '.agent-bus'));
+  for (const agentId of [task.reviewer, task.implementer]) {
+    if (!busConfig.agents.some(agent => agent.id === agentId)) {
+      throw runtimeError('INVALID_AGENT_CONFIG', `Review Agent is not registered: ${agentId}`, { recoverable: false, taskId: task.id, agent: agentId });
+    }
+  }
+  const body = [
+    `Task ID: ${task.id}`,
+    `Round: ${task.round}`,
+    `Decision: ${decision}`,
+    `Implementation commit: ${task.implementationCommit || '(not supplied)'}`,
+    feedback ? `Review feedback:\n${feedback}` : 'Review feedback: none',
+    'REVIEW_APPROVED is not release authorization. Only the user release gate can authorize release actions.',
+  ].join('\n\n');
+  const messagePath = sendTaskBusMessage(root, {
+    from: task.reviewer,
+    to: task.implementer,
+    type: decision,
+    subject: `${decision} ${task.id} round ${task.round}`,
+    body,
+    dedupeKey: `task:${task.id}:round:${task.round}:review:${decision}`,
+    relatedCommit: task.implementationCommit || '',
+  });
+  const updated = recordReviewDecision(root, task.id, decision, { feedback, evidence: { messagePath } });
+  try { recordBusState(root, task.reviewer, decision === 'REVIEW_APPROVED' ? 'APPROVED' : 'CHANGES_REQUESTED', `Task ${task.id}: ${decision}`); } catch { /* Task decision remains authoritative. */ }
+  return { root, task: updated, review: { decision, feedback, messagePath } };
+}
+
+async function taskCommand(options, { json = false } = {}) {
   const root = assertGitRepository(options.root, messages.en);
   ensureProjectBus(root);
   ensureTaskStore(root);
@@ -937,10 +1217,24 @@ function taskCommand(options, { json = false } = {}) {
     tasks = listTasks(root);
   } else {
     const id = resolveTaskId(root, options.taskId || options.positionals[0] || null);
-    if (subcommand === 'status' || subcommand === 'inspect') task = readTask(root, id);
+    if (subcommand === 'status' || subcommand === 'inspect') task = syncTaskFromAgentBus(root, id);
     else if (subcommand === 'resume') task = resumeTask(root, id);
     else if (subcommand === 'stop') task = stopTask(root, id, options.reason || null);
     else if (subcommand === 'error') task = markTaskError(root, id, runtimeError(options.errorCode || 'AGENT_RUNTIME_ERROR', options.reason || 'Task runtime error.', { recoverable: true, taskId: id }));
+    else if (subcommand === 'dispatch') {
+      task = syncTaskFromAgentBus(root, id);
+      task = prepareTaskForDispatch(root, id, options.spec || undefined);
+      const payload = await taskDispatch(root, task, options, messages[detectLanguage(options.language)]);
+      const result = jsonSuccess(commandName, payload);
+      if (!json) console.log(JSON.stringify(payload, null, 2));
+      return result;
+    } else if (subcommand === 'review') {
+      task = syncTaskFromAgentBus(root, id);
+      const payload = taskReview(root, task, options);
+      const result = jsonSuccess(commandName, payload);
+      if (!json) console.log(JSON.stringify(payload, null, 2));
+      return result;
+    }
     else throw runtimeError('UNSUPPORTED_CAPABILITY', `Unknown task subcommand: ${subcommand}`, { recoverable: false });
   }
   const payload = subcommand === 'list' ? { root, tasks } : { root, task };
@@ -970,8 +1264,249 @@ function setupCommand(options, { json = false } = {}) {
     console.log(`  ${agent.command}: ${suffix}`);
   }
   console.log(`User configuration: ${userConfigPath()}`);
-  console.log('Use config set agent.<agent-id>.command <executable> to choose an implementation agent.');
+  console.log('Use setup configure --agent <id> --command <executable> --root <repository> --json to configure the Implementer transaction.');
   return result;
+}
+
+const SETUP_ADAPTERS = Object.freeze({
+  codex: 'codex-cli',
+  antigravity: 'antigravity-cli',
+  agy: 'antigravity-cli',
+  'agy-proxy': 'antigravity-cli',
+  claude: 'generic-cli',
+  gemini: 'generic-cli',
+});
+
+function inferSetupIdentity(options) {
+  const supplied = `${options.agent || options.positionals[0] || ''}`.trim().toLowerCase();
+  const command = `${options.agentCommand || supplied}`.trim();
+  if (!supplied && !command) {
+    throw runtimeError('INVALID_AGENT_CONFIG', 'setup configure requires --agent or --command.', { recoverable: false });
+  }
+  const commandName = basename(command).replace(/\.(cmd|bat|exe|com|ps1)$/i, '').toLowerCase();
+  const identity = supplied || commandName;
+  const knownIdentity = SETUP_ADAPTERS[identity] ? identity : commandName;
+  const id = ['agy', 'agy-proxy'].includes(knownIdentity) ? 'antigravity' : knownIdentity;
+  validateAgentId(id);
+  const adapter = options.adapterExplicit
+    ? options.adapter
+    : (SETUP_ADAPTERS[id] || SETUP_ADAPTERS[knownIdentity] || 'generic-cli');
+  const executable = options.agentCommand
+    || (['codex', 'antigravity'].includes(supplied)
+      ? defaultCommandForAdapter(adapter)
+      : (SETUP_ADAPTERS[identity] ? identity : command));
+  if (!executable) {
+    throw runtimeError('INVALID_AGENT_CONFIG', `No executable command was resolved for Agent ${id}.`, {
+      recoverable: false,
+      agent: id,
+      adapter,
+    });
+  }
+  return { id, adapter, command: executable };
+}
+
+function parseSetupArgs(agentId, value) {
+  if (value === null || value === undefined) return undefined;
+  return parseConfigValue(`agent.${agentId}.args`, value);
+}
+
+function ensureProjectAgentDirectories(root, busPath, agentId, t) {
+  const directories = [
+    join(busPath, 'inbox', agentId, 'new'),
+    join(busPath, 'inbox', agentId, 'processing'),
+    join(busPath, 'inbox', agentId, 'processed'),
+    join(busPath, 'quarantine', agentId),
+    join(busPath, 'state', agentId),
+  ];
+  const created = [];
+  for (const directory of directories) {
+    const existed = existsSync(directory);
+    assertSafePath(root, directory, t);
+    mkdirSync(directory, { recursive: true });
+    assertSafePath(root, directory, t);
+    if (!existed) created.push(directory);
+  }
+  return created;
+}
+
+function restoreUserConfigSnapshot(path, existed, content) {
+  if (existed) {
+    writeFileSync(path, content, 'utf8');
+  } else if (existsSync(path)) {
+    unlinkSync(path);
+  }
+}
+
+function setupConfigureCommand(options, { json = false } = {}) {
+  const t = messages[detectLanguage(options.language)];
+  const root = assertGitRepository(options.root, t);
+  const identity = inferSetupIdentity(options);
+  const role = `${options.role || 'implementer'}`.toLowerCase();
+  if (!['implementer', 'planner', 'reviewer'].includes(role)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Unsupported workflow role: ${role}`, { recoverable: false, agent: identity.id });
+  }
+  const args = parseSetupArgs(identity.id, options.agentArgs);
+  const configPath = userConfigPath();
+  const hadUserConfig = existsSync(configPath);
+  const previousUserConfig = hadUserConfig ? readFileSync(configPath, 'utf8') : null;
+  const originalUserConfig = readUserConfig();
+  const candidateUserConfig = JSON.parse(JSON.stringify(originalUserConfig));
+  setUserConfigValue(candidateUserConfig, `agent.${identity.id}.command`, identity.command);
+  if (args !== undefined) setUserConfigValue(candidateUserConfig, `agent.${identity.id}.args`, args);
+
+  // Validate the adapter and executable before writing either configuration.
+  // Generic CLI is intentionally conservative: detection alone is not an
+  // adapter compatibility claim.
+  let projectBefore = null;
+  let projectConfigPath = null;
+  let busPath = null;
+  let createdDirectories = [];
+  let projectAgentBefore = null;
+  try {
+    const existingBus = join(root, '.agent-bus');
+    if (existsSync(existingBus)) {
+      projectBefore = JSON.stringify(readConfig(existingBus));
+      projectConfigPath = join(existingBus, 'config.json');
+      projectAgentBefore = readConfig(existingBus).agents.find(agent => agent.id === identity.id) || null;
+    }
+
+    const candidateProjectAgent = projectAgentBefore
+      ? { ...projectAgentBefore, adapter: identity.adapter }
+      : { id: identity.id, adapter: identity.adapter };
+    if (projectAgentBefore?.command !== undefined && projectAgentBefore.command !== identity.command) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Project Agent ${identity.id} has an explicit command override; setup configure will not replace it.`, {
+        recoverable: false,
+        agent: identity.id,
+        adapter: identity.adapter,
+        command: projectAgentBefore.command,
+        details: 'Remove or intentionally update the project-level command before using the machine-level setup transaction.',
+      });
+    }
+    const candidateResolution = resolveAgentConfig(candidateProjectAgent, candidateUserConfig);
+    const adapter = getAdapter(identity.adapter, candidateResolution);
+    const compatibility = adapter.validateConfiguration({ setup: true });
+    if (!compatibility.compatible) {
+      throw runtimeError(compatibility.code || 'UNSUPPORTED_CAPABILITY', compatibility.details || `Adapter ${identity.adapter} cannot drive this executable.`, {
+        recoverable: false,
+        agent: identity.id,
+        adapter: identity.adapter,
+        command: candidateResolution.command,
+        details: compatibility.details,
+      });
+    }
+    const detection = adapter.detect({ version: true });
+    if (!detection.available) {
+      throw runtimeError(canonicalErrorCode(detection.code, 'EXECUTABLE_NOT_FOUND'), detection.details || `Executable is unavailable: ${identity.command}`, {
+        recoverable: true,
+        agent: identity.id,
+        adapter: identity.adapter,
+        command: candidateResolution.command,
+        details: detection.details || null,
+        stage: 'executable',
+        result: detection,
+      });
+    }
+
+    busPath = ensureProjectBus(root);
+    if (!projectBefore) {
+      projectBefore = JSON.stringify(readConfig(busPath));
+      projectConfigPath = join(busPath, 'config.json');
+    }
+    createdDirectories = ensureProjectAgentDirectories(root, busPath, identity.id, t);
+    const projectAgent = withConfigTransaction(busPath, cfg => {
+      const existing = cfg.agents.find(agent => agent.id === identity.id);
+      if (existing) {
+        Object.assign(existing, { adapter: identity.adapter });
+      } else {
+        cfg.agents.push({ id: identity.id, adapter: identity.adapter });
+      }
+      cfg.workflow = { ...(cfg.workflow || {}), [role]: identity.id };
+      return cfg;
+    }).agents.find(agent => agent.id === identity.id);
+
+    // Machine-specific command/args live in the user file.  No absolute
+    // executable path is written to .agent-bus unless it was already an
+    // explicit project override.
+    writeUserConfig(candidateUserConfig);
+
+    const resolved = resolveAgentConfig(projectAgent, readUserConfig());
+    const finalAdapter = getAdapter(resolved.adapter, resolved);
+    const finalCompatibility = finalAdapter.validateConfiguration({ setup: true });
+    if (!finalCompatibility.compatible) {
+      throw runtimeError(finalCompatibility.code || 'UNSUPPORTED_CAPABILITY', finalCompatibility.details || 'Adapter compatibility check failed after configuration.', {
+        recoverable: false,
+        agent: identity.id,
+        adapter: resolved.adapter,
+        command: resolved.command,
+        details: finalCompatibility.details,
+      });
+    }
+    const finalDetection = finalAdapter.detect({ version: true });
+    if (!finalDetection.available) {
+      throw runtimeError(canonicalErrorCode(finalDetection.code, 'EXECUTABLE_NOT_FOUND'), finalDetection.details || `Executable is unavailable: ${resolved.command}`, {
+        recoverable: true,
+        agent: identity.id,
+        adapter: resolved.adapter,
+        command: resolved.command,
+        details: finalDetection.details || null,
+        stage: 'executable',
+        result: finalDetection,
+      });
+    }
+
+    const payload = jsonSuccess('setup.configure', {
+      root,
+      agent: {
+        id: identity.id,
+        adapter: resolved.adapter,
+        command: resolved.command,
+        commandSource: resolved.commandSource,
+        args: resolved.args || [],
+        available: true,
+        version: finalDetection.version || null,
+        resolvedCommand: finalDetection.resolvedCommand || null,
+      },
+      project: {
+        registered: true,
+        configPath: projectConfigPath,
+        commandStoredInProject: Object.prototype.hasOwnProperty.call(projectAgent, 'command'),
+      },
+      workflow: { [role]: identity.id },
+      doctor: {
+        ok: true,
+        checks: [{
+          name: identity.id,
+          adapter: resolved.adapter,
+          command: resolved.command,
+          commandSource: resolved.commandSource,
+          available: true,
+          compatible: true,
+          version: finalDetection.version || null,
+          resolvedCommand: finalDetection.resolvedCommand || null,
+        }],
+      },
+      userConfigPath: configPath,
+    });
+    if (!json) {
+      console.log(`Setup ready: ${identity.id} (${resolved.adapter}) -> ${resolved.command}`);
+      console.log(`Workflow ${role}: ${identity.id}`);
+      console.log(`Doctor: READY (${finalDetection.version || 'available'})`);
+    }
+    return payload;
+  } catch (error) {
+    try {
+      if (projectBefore && busPath) {
+        withConfigTransaction(busPath, () => JSON.parse(projectBefore));
+      }
+      restoreUserConfigSnapshot(configPath, hadUserConfig, previousUserConfig);
+      for (const directory of createdDirectories.sort((a, b) => b.length - a.length)) {
+        if (existsSync(directory)) rmSync(directory, { recursive: true, force: true });
+      }
+    } catch (rollbackError) {
+      error.details = `${error.details || error.message || error}; rollback failed: ${rollbackError.message || rollbackError}`;
+    }
+    throw error;
+  }
 }
 
 function projectConfigForRoot(root) {
@@ -1398,13 +1933,13 @@ async function launchAgent(options, t) {
 
   const promptPath = join(launchDir, `${agentId}.txt`);
   assertContained(launchDir, promptPath);
-  if (!existsSync(promptPath)) {
+  if (!options.promptText && !existsSync(promptPath)) {
     const error = runtimeError('TASK_STATE_CONFLICT', format(t.launchMissing, { command: packageCommand('quickstart', { root, language: options.language }) }), { recoverable: true, taskId: associatedTaskId });
     markAssociatedTaskError(error);
     throw error;
   }
-  assertSafePath(launchDir, promptPath, t, false);
-  const prompt = readFileSync(promptPath, 'utf8').trim();
+  if (!options.promptText) assertSafePath(launchDir, promptPath, t, false);
+  const prompt = options.promptText ? `${options.promptText}`.trim() : readFileSync(promptPath, 'utf8').trim();
 
   const busConfig = readConfig(busPath);
   const projectAgentConfig = busConfig.agents.find(a => a.id === agentId);
@@ -1836,10 +2371,15 @@ async function run(argv) {
 
   if (options.command === 'setup' || options.command === 'discover') {
     try {
-      if (options.json) emitJson(setupCommand(options, { json: true }));
-      else setupCommand(options, { json: false });
+      const setupResult = options.command === 'setup' && options.subcommand === 'configure'
+        ? setupConfigureCommand(options, { json: options.json })
+        : setupCommand(options, { json: options.json });
+      if (options.json) emitJson(setupResult);
     } catch (error) {
-      if (options.json) emitJson(jsonFailure(options.command === 'discover' ? 'discover' : 'setup', error));
+      if (options.json) emitJson(jsonFailure(
+        options.command === 'discover' ? 'discover' : (options.subcommand === 'configure' ? 'setup.configure' : 'setup'),
+        error,
+      ));
       else console.error(error.message || String(error));
       process.exitCode = 1;
     }
@@ -1864,7 +2404,7 @@ async function run(argv) {
 
   if (options.command === 'task') {
     try {
-      const result = taskCommand(options, { json: options.json });
+      const result = await taskCommand(options, { json: options.json });
       if (options.json) emitJson(result);
     } catch (error) {
       if (options.json) emitJson(jsonFailure(`task.${options.subcommand || 'status'}`, error));

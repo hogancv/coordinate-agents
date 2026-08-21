@@ -23,6 +23,15 @@ export class AgentAdapter {
     throw new Error('resolveLaunch() must be implemented by adapter subclass');
   }
 
+  /**
+   * Setup-time compatibility check.  Executable detection alone only proves
+   * that a process can start; this contract lets a setup transaction reject a
+   * configuration that the adapter cannot drive with a prompt.
+   */
+  validateConfiguration(_options = {}) {
+    return { compatible: true, code: null, details: null };
+  }
+
   launchPolicy() {
     return { mode: 'one-shot' };
   }
