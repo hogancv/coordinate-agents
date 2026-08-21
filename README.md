@@ -87,7 +87,8 @@ that concrete path. The resolver starts the one canonical `bin/coordinate-agents
 payload. Do not silently retry between MCP and fallback.
 
 See [MCP tools and integration](./docs/mcp.md) for the stdio lifecycle, schemas,
-error semantics, fallback behavior, and release safety.
+error semantics, fallback behavior, and release safety. If the Plugin loads but
+the tools are not callable, use the [MCP troubleshooting guide](./docs/MCP_TROUBLESHOOTING.md).
 
 ## Advanced: standalone npm Runtime and debugging
 

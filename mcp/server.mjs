@@ -14,6 +14,9 @@ const SERVER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PROTOCOL_VERSION = '2025-06-18';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set(['2025-03-26', '2025-06-18', '2025-11-25']);
 const MAX_LINE_LENGTH = 1024 * 1024;
+const DEBUG_ENABLED = new Set(['1', 'true', 'yes']).has(
+  `${process.env.COORDINATE_AGENTS_MCP_DEBUG || ''}`.trim().toLowerCase(),
+);
 
 function readJson(path) {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
@@ -24,6 +27,11 @@ function serverVersion(root = SERVER_ROOT) {
   if (packageJson?.version) return `${packageJson.version}`;
   const pluginJson = readJson(join(root, '.codex-plugin', 'plugin.json'));
   return `${pluginJson?.version || '0.0.0'}`;
+}
+
+function debugLog(enabled, message) {
+  if (!enabled) return;
+  process.stderr.write(`[coordinate-agents:mcp] ${message}\n`);
 }
 
 const stringProperty = (description, { minLength = 1 } = {}) => ({
@@ -241,7 +249,7 @@ function initializeResult(root, params = {}) {
   const requested = params.protocolVersion;
   return {
     protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.has(requested) ? requested : PROTOCOL_VERSION,
-    capabilities: { tools: {} },
+    capabilities: { tools: { listChanged: false } },
     serverInfo: { name: 'coordinate-agents', version: serverVersion(root) },
     instructions: 'Use Coordinate Agents tools for setup, durable Task operations, review, and recovery facts. Agent Bus transport and release actions remain internal or user-gated.',
   };
@@ -249,14 +257,27 @@ function initializeResult(root, params = {}) {
 
 export function createMcpServer({ root = SERVER_ROOT } = {}) {
   const serverRoot = resolve(root);
+  const debug = DEBUG_ENABLED;
+  const log = message => debugLog(debug, message);
+  log('server starting');
+  log(`server root: ${serverRoot}`);
+  log(`runtime root: operation input (server root is ${serverRoot})`);
+  log(`protocol version: ${PROTOCOL_VERSION}`);
+  log(`tool count: ${TOOL_DEFINITIONS.length}`);
   return {
     async handle(message) {
       if (!isObject(message) || message.jsonrpc !== '2.0') return protocolError(message?.id, -32600, 'Invalid JSON-RPC request.');
       const { id = null, method, params = {} } = message;
       if (method === 'notifications/initialized' || method === 'notifications/cancelled' || method === '$/cancelRequest') return null;
-      if (method === 'initialize') return { jsonrpc: '2.0', id, result: initializeResult(serverRoot, params) };
+      if (method === 'initialize') {
+        log(`initialize received: protocolVersion=${params.protocolVersion || 'missing'}`);
+        return { jsonrpc: '2.0', id, result: initializeResult(serverRoot, params) };
+      }
       if (method === 'ping') return { jsonrpc: '2.0', id, result: {} };
-      if (method === 'tools/list') return { jsonrpc: '2.0', id, result: { tools: TOOL_DEFINITIONS.map(({ operation, command, ...tool }) => tool) } };
+      if (method === 'tools/list') {
+        log('tools/list received');
+        return { jsonrpc: '2.0', id, result: { tools: TOOL_DEFINITIONS.map(({ operation, command, ...tool }) => tool) } };
+      }
       if (method !== 'tools/call') return protocolError(id, -32601, `Method not found: ${method}`);
       if (!isObject(params) || typeof params.name !== 'string') return protocolError(id, -32602, 'tools/call requires a tool name.');
       const tool = TOOL_MAP.get(params.name);

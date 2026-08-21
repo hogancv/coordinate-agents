@@ -81,7 +81,7 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 Plugin 载荷中启动唯一的 `bin/coordinate-agents.mjs`。不要在 MCP 与 fallback 之间静默循环重试。
 
 详见 [MCP 工具与集成文档](./docs/mcp.md)，其中包含 stdio 生命周期、schema、错误语义、fallback
-行为和 release safety。
+行为和 release safety。如果 Plugin 已加载但工具不可调用，请参阅 [MCP 排障指南](./docs/MCP_TROUBLESHOOTING.md)。
 
 ## 高级：standalone npm Runtime 与调试
 

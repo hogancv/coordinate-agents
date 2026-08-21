@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -19,6 +20,7 @@ import { createMcpServer } from '../mcp/server.mjs';
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
 const serverPath = join(root, 'mcp', 'server.mjs');
+const selfTestPath = join(root, 'mcp', 'self-test.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function tempRepository(prefix = 'coordinate-agents-mcp-') {
@@ -74,9 +76,9 @@ process.exit(0);
 }
 
 class StdioMcpClient {
-  constructor(env) {
+  constructor(env, cwd = root) {
     this.child = spawn(process.execPath, [serverPath, '--stdio'], {
-      cwd: root,
+      cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
@@ -156,6 +158,7 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
   const initialized = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
   assert.equal(initialized.result.serverInfo.name, 'coordinate-agents');
   assert.equal(initialized.result.serverInfo.version, '2.1.2');
+  assert.equal(initialized.result.capabilities.tools.listChanged, false);
   const listed = await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
   const names = listed.result.tools.map(tool => tool.name);
   assert.deepEqual(names, [
@@ -171,10 +174,81 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
     'coordinate_agents_recover_inspect',
   ]);
   for (const tool of listed.result.tools) {
+    assert.equal(typeof tool.name, 'string');
+    assert.equal(typeof tool.description, 'string');
     assert.equal(tool.inputSchema.type, 'object');
     assert.equal(tool.inputSchema.additionalProperties, false);
+    assert.ok(Array.isArray(tool.inputSchema.required));
+    assert.ok(tool.inputSchema.properties && typeof tool.inputSchema.properties === 'object');
+    for (const required of tool.inputSchema.required) assert.ok(required in tool.inputSchema.properties);
+    assert.doesNotMatch(JSON.stringify(tool), /undefined/);
   }
   assert.equal((await server.handle({ jsonrpc: '2.0', id: 3, method: 'ping', params: {} })).result !== undefined, true);
+});
+
+test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and path-safe', async () => {
+  const independentCwd = mkdtempSync(join(tmpdir(), 'Coordinate Agents MCP cwd '));
+  const debugClient = new StdioMcpClient(isolatedEnvironment(independentCwd, {
+    COORDINATE_AGENTS_MCP_DEBUG: '1',
+  }), independentCwd);
+  try {
+    const initialized = await debugClient.request('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'debug-test', version: '1' },
+    });
+    assert.equal(initialized.result.protocolVersion, '2025-06-18');
+    const listed = await debugClient.request('tools/list');
+    assert.equal(listed.result.tools.length, 10);
+  } finally {
+    await debugClient.close();
+  }
+  assert.match(debugClient.stderr, /server starting/);
+  assert.match(debugClient.stderr, /server root:/);
+  assert.match(debugClient.stderr, /runtime root:/);
+  assert.match(debugClient.stderr, /protocol version: 2025-06-18/);
+  assert.match(debugClient.stderr, /tool count: 10/);
+  assert.match(debugClient.stderr, /initialize received/);
+  assert.match(debugClient.stderr, /tools\/list received/);
+  const selfTest = spawnSync(process.execPath, [selfTestPath], {
+    cwd: independentCwd,
+    encoding: 'utf8',
+    env: isolatedEnvironment(independentCwd),
+    windowsHide: true,
+  });
+  assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
+  assert.match(selfTest.stdout, /MCP server: OK/);
+  assert.match(selfTest.stdout, /Protocol: 2025-06-18/);
+  assert.match(selfTest.stdout, /Tools: 10/);
+  rmSync(independentCwd, { recursive: true, force: true });
+
+  const pluginRoot = mkdtempSync(join(tmpdir(), 'Coordinate Agents Plugin Fixture '));
+  try {
+    for (const entry of ['mcp', 'skills', 'bin', '.codex-plugin']) {
+      cpSync(join(root, entry), join(pluginRoot, entry), { recursive: true });
+    }
+    cpSync(join(root, 'package.json'), join(pluginRoot, 'package.json'));
+    const handshake = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } },
+      { jsonrpc: '2.0', method: 'notifications/initialized', params: {} },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+    ].map(message => JSON.stringify(message)).join('\n') + '\n';
+    const launched = spawnSync(process.execPath, ['./mcp/server.mjs', '--stdio'], {
+      cwd: pluginRoot,
+      encoding: 'utf8',
+      env: isolatedEnvironment(pluginRoot),
+      input: handshake,
+      windowsHide: true,
+    });
+    assert.equal(launched.status, 0, launched.stderr || launched.stdout);
+    assert.equal(launched.stderr, '');
+    const responses = launched.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line));
+    assert.equal(responses.length, 2);
+    assert.equal(responses[0].result.protocolVersion, '2025-06-18');
+    assert.equal(responses[1].result.tools.length, 10);
+  } finally {
+    rmSync(pluginRoot, { recursive: true, force: true });
+  }
 });
 
 test('MCP stdio workflow uses the same Runtime state and error contract as CLI', async () => {
@@ -456,7 +530,15 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   assert.equal(packageJson.version, '2.1.2');
   assert.equal(pluginJson.version, '2.1.2');
   assert.equal(pluginJson.mcpServers, './.mcp.json');
-  assert.deepEqual(JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8')).mcpServers['coordinate-agents'].args, ['./mcp/server.mjs', '--stdio']);
+  const mcpConfig = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8'));
+  const serverIds = Object.keys(mcpConfig.mcpServers);
+  assert.deepEqual(serverIds, ['coordinate_agents']);
+  assert.equal(serverIds.some(id => id.includes('-')), false);
+  assert.deepEqual(mcpConfig.mcpServers.coordinate_agents.args, ['./mcp/server.mjs', '--stdio']);
+  assert.equal(mcpConfig.mcpServers.coordinate_agents.cwd, '.');
+  assert.equal(existsSync(join(root, 'mcp', 'self-test.mjs')), true);
+  assert.equal(packageJson.scripts['mcp:self-test'], 'node mcp/self-test.mjs');
+  assert.equal(packageJson.files.includes('docs/MCP_TROUBLESHOOTING.md'), true);
   for (const name of ['task.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
     const schema = JSON.parse(readFileSync(join(root, 'schemas', name), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');

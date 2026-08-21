@@ -22,6 +22,7 @@
     "llms.txt",
     "docs/llms.txt",
     "docs/mcp.md",
+    "docs/MCP_TROUBLESHOOTING.md",
     "LICENSE",
     "assets"
   ],
@@ -32,6 +33,7 @@
     "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm test",
     "prepack": "npm run sync:llms && npm run check",
     "demo": "node scripts/demo.mjs",
+    "mcp:self-test": "node mcp/self-test.mjs",
     "release:check": "npm ci && npm run check && npm pack --dry-run"
   },
   "engines": {

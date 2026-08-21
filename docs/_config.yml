@@ -12,6 +12,7 @@ header_pages:
   - install-with-ai.md
   - protocol.md
   - mcp.md
+  - MCP_TROUBLESHOOTING.md
   - security.md
   - troubleshooting.md
   - faq.md

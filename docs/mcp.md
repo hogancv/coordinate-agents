@@ -28,7 +28,7 @@ starts as a local child process:
 ```json
 {
   "mcpServers": {
-    "coordinate-agents": {
+    "coordinate_agents": {
       "command": "node",
       "args": ["./mcp/server.mjs", "--stdio"],
       "cwd": "."
@@ -83,7 +83,8 @@ block. Business failures use MCP `isError: true`; they are not converted to a
 new `MCP_ERROR_*` code. JSON-RPC protocol errors are reserved for malformed
 requests, unknown methods/tools, or invalid tool arguments.
 
-The server reads its name as `coordinate-agents` and its version from the
+The MCP server identifier is `coordinate_agents`; its product/server name remains
+`coordinate-agents`. The version is read from the
 bundled package manifest. Protocol compatibility is not represented as a
 second product version. Task records continue to use `schemaVersion: 1`.
 
