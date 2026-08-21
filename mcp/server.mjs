@@ -259,7 +259,7 @@ export function createMcpServer({ root = SERVER_ROOT } = {}) {
   const serverRoot = resolve(root);
   const debug = DEBUG_ENABLED;
   const log = message => debugLog(debug, message);
-  log('server starting');
+  log('MCP server starting');
   log(`server root: ${serverRoot}`);
   log(`runtime root: operation input (server root is ${serverRoot})`);
   log(`protocol version: ${PROTOCOL_VERSION}`);

@@ -203,7 +203,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   } finally {
     await debugClient.close();
   }
-  assert.match(debugClient.stderr, /server starting/);
+  assert.match(debugClient.stderr, /MCP server starting/);
   assert.match(debugClient.stderr, /server root:/);
   assert.match(debugClient.stderr, /runtime root:/);
   assert.match(debugClient.stderr, /protocol version: 2025-06-18/);
