@@ -9,6 +9,7 @@
   "homepage": "https://github.com/hogancv/coordinate-agents#readme",
   "repository": "https://github.com/hogancv/coordinate-agents",
   "license": "MIT",
+  "mcpServers": "./.mcp.json",
   "keywords": [
     "multi-agent",
     "coordination",

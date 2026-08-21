@@ -944,6 +944,104 @@ function statusJson(options) {
   return jsonSuccess('status', { root, bus, tasks });
 }
 
+function readLatestErrorArtifact(root, agentId) {
+  const logsDirectory = join(root, '.agent-bus', 'logs');
+  if (!existsSync(logsDirectory)) return null;
+  const candidates = readdirSync(logsDirectory)
+    .filter(name => name.endsWith('-ERROR.json') && (!agentId || name.includes(`-${agentId}-ERROR.json`)))
+    .sort()
+    .reverse();
+  for (const name of candidates) {
+    const path = join(logsDirectory, name);
+    try {
+      assertSafePath(root, path, messages.en, false);
+      const record = JSON.parse(readFileSync(path, 'utf8'));
+      return {
+        path: resolve(path),
+        artifact: {
+          ...record,
+          details: redactOutput(record.details || '', 2 * 1024),
+          stdoutTail: redactOutput(record.stdoutTail || '', 8 * 1024),
+          stderrTail: redactOutput(record.stderrTail || '', 8 * 1024),
+        },
+      };
+    } catch {
+      // Ignore malformed or unsafe artifacts; the Task error remains the
+      // authoritative recovery fact.
+    }
+  }
+  return null;
+}
+
+function recoverInspectCommand(options) {
+  const root = assertGitRepository(options.root, messages.en);
+  const id = options.taskId || options.positionals?.[0] || null;
+  const taskId = resolveTaskId(root, id);
+  const task = syncTaskFromAgentBus(root, taskId);
+  const busPath = join(root, '.agent-bus');
+  const busConfig = readConfig(busPath);
+  const agentConfig = busConfig.agents.find(agent => agent.id === task.implementer) || null;
+  let executable = {
+    agent: task.implementer,
+    adapter: agentConfig?.adapter || null,
+    command: null,
+    commandSource: null,
+    available: false,
+    code: 'INVALID_AGENT_CONFIG',
+    details: agentConfig ? null : `Task implementer is not registered: ${task.implementer}`,
+    resolvedCommand: null,
+  };
+  let agentState = null;
+  let artifact = null;
+  if (agentConfig) {
+    try {
+      const resolved = runtimeAgentConfig(agentConfig, readUserConfig());
+      const adapter = getAdapter(resolved.adapter, resolved);
+      const detection = adapter.detect({ version: false });
+      executable = {
+        agent: task.implementer,
+        adapter: resolved.adapter,
+        command: resolved.command || null,
+        commandSource: resolved.commandSource || null,
+        available: Boolean(detection.available),
+        code: detection.available ? null : canonicalErrorCode(detection.code || 'EXECUTABLE_NOT_FOUND', 'EXECUTABLE_NOT_FOUND'),
+        details: detection.available ? null : (detection.details || null),
+        resolvedCommand: detection.resolvedCommand || null,
+      };
+    } catch (error) {
+      executable = {
+        ...executable,
+        code: canonicalErrorCode(error.code, 'INVALID_AGENT_CONFIG'),
+        details: redactOutput(error.message || String(error), 2 * 1024),
+      };
+    }
+    try {
+      agentState = observeAgentBus(busPath, task.implementer);
+    } catch (error) {
+      agentState = { error: redactOutput(error.message || String(error), 2 * 1024) };
+    }
+    artifact = readLatestErrorArtifact(root, task.implementer);
+  }
+  return jsonSuccess('recover.inspect', {
+    root,
+    task,
+    lastError: task.lastError || null,
+    agent: {
+      id: task.implementer,
+      registered: Boolean(agentConfig),
+      state: agentState,
+    },
+    errorArtifact: artifact,
+    executable,
+    recommendedRecovery: {
+      factsOnly: true,
+      resumeRequired: ['ERROR', 'STOPPED'].includes(task.status),
+      dispatchRequiredAfterResume: ['ERROR', 'STOPPED', 'CHANGES_REQUESTED'].includes(task.status),
+      automaticRetry: false,
+    },
+  });
+}
+
 function sendTaskBusMessage(root, { from, to, type, subject, body, dedupeKey, relatedCommit = '' }) {
   const busPath = join(root, '.agent-bus');
   const temporary = join(busPath, 'tmp', `.task-${process.pid}-${randomUUID().replaceAll('-', '')}.md`);
@@ -1189,7 +1287,10 @@ function taskReview(root, task, options) {
     dedupeKey: `task:${task.id}:round:${task.round}:review:${decision}`,
     relatedCommit: task.implementationCommit || '',
   });
-  const updated = recordReviewDecision(root, task.id, decision, { feedback, evidence: { messagePath } });
+  const updated = recordReviewDecision(root, task.id, decision, {
+    feedback,
+    evidence: options.evidence || { messagePath },
+  });
   try { recordBusState(root, task.reviewer, decision === 'REVIEW_APPROVED' ? 'APPROVED' : 'CHANGES_REQUESTED', `Task ${task.id}: ${decision}`); } catch { /* Task decision remains authoritative. */ }
   return { root, task: updated, review: { decision, feedback, messagePath } };
 }
@@ -1247,7 +1348,11 @@ async function taskCommand(options, { json = false } = {}) {
 
 function setupCommand(options, { json = false } = {}) {
   let root = resolve(options.root);
-  try { root = assertGitRepository(options.root, messages.en); } catch { /* Discovery is also useful before a project is selected. */ }
+  if (options.requireRepository) {
+    root = assertGitRepository(options.root, messages.en);
+  } else {
+    try { root = assertGitRepository(options.root, messages.en); } catch { /* Discovery is also useful before a project is selected. */ }
+  }
   const userConfig = readUserConfig();
   const snapshot = setupSnapshot({ root, userConfig });
   const result = jsonSuccess('setup', {
@@ -2581,4 +2686,94 @@ async function run(argv) {
   process.exitCode = 2;
 }
 
-await run(process.argv.slice(2));
+function serviceOptions(input = {}) {
+  return {
+    command: 'help',
+    subcommand: null,
+    root: resolve(`${input.root || process.cwd()}`),
+    language: 'en',
+    json: true,
+    codex: false,
+    antigravity: false,
+    once: false,
+    force: false,
+    role: 'implementer',
+    roleExplicit: false,
+    adapter: 'generic-cli',
+    adapterExplicit: false,
+    agent: null,
+    agentCommand: null,
+    agentArgs: null,
+    planner: null,
+    implementer: null,
+    reviewer: null,
+    title: '',
+    spec: '',
+    taskId: null,
+    reason: '',
+    decision: null,
+    feedback: '',
+    evidence: null,
+    positionals: [],
+    ...input,
+  };
+}
+
+/**
+ * Reusable high-level Runtime operations for non-CLI transports.  The CLI
+ * handlers above remain the canonical implementation; these adapters only
+ * supply their structured options and never spawn the CLI or parse stdout.
+ */
+export function runtimeSetupDiscover(input = {}) {
+  return setupCommand(serviceOptions({ ...input, requireRepository: true }), { json: true });
+}
+
+export function runtimeSetupConfigure(input = {}) {
+  const options = serviceOptions({
+    ...input,
+    agent: `${input.agent || ''}`.trim().toLowerCase(),
+    agentCommand: `${input.command || ''}`.trim(),
+    adapter: input.adapter || 'generic-cli',
+    adapterExplicit: input.adapter !== undefined,
+    role: `${input.role || 'implementer'}`.trim().toLowerCase(),
+    roleExplicit: true,
+    agentArgs: input.args === undefined ? null : JSON.stringify(input.args),
+  });
+  return setupConfigureCommand(options, { json: true });
+}
+
+export async function runtimeTaskCreate(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'create',
+    title: input.title || '',
+    spec: input.spec || '',
+    taskId: input.id || null,
+  }), { json: true });
+}
+
+export async function runtimeTaskOperation(subcommand, input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand,
+    taskId: input.taskId || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export function runtimeRecoverInspect(input = {}) {
+  return recoverInspectCommand(serviceOptions({
+    ...input,
+    command: 'recover',
+    subcommand: 'inspect',
+    taskId: input.taskId || null,
+  }));
+}
+
+export { recoverInspectCommand };
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  await run(process.argv.slice(2));
+}

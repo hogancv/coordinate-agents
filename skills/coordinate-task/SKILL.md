@@ -9,16 +9,31 @@ description: >-
 # Coordinate Task
 
 Use this skill when the user asks Coordinate Agents to implement a feature,
-fix a bug, or build an onboarding Todo web app. The Plugin bundles the Runtime;
-let `<skill-dir>` be the absolute directory containing this `SKILL.md` and use
-the one shared entry point instead of assuming a global npm bin:
+fix a bug, or build an onboarding Todo web app. Use MCP tools for the normal
+workflow and do not make the user construct shell commands:
+
+```text
+coordinate_agents_task_create
+coordinate_agents_task_dispatch
+coordinate_agents_task_status
+coordinate_agents_task_inspect
+coordinate_agents_task_resume
+coordinate_agents_task_stop
+```
+
+Only if MCP is unavailable, or if the user explicitly requests debugging, let
+`<skill-dir>` be the absolute directory containing this `SKILL.md` and use
+the bundled fallback. The following shell syntax is fallback/debug only, not
+the normal Plugin path:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" ...
 ```
 
-Create a Task instead of manually composing Agent Bus `send`, `wait`, and
-`state` calls:
+The normal Plugin call is a structured `coordinate_agents_task_create` followed
+by the other Task tools above. For standalone Runtime compatibility or explicit
+debugging, use the fallback syntax below; never expose Agent Bus `send`, `wait`,
+or `state` operations to the user:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<task>" --json

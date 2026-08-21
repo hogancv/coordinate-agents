@@ -8,8 +8,11 @@
   },
   "files": [
     ".codex-plugin",
+    ".mcp.json",
     ".agents",
     "skills",
+    "mcp",
+    "schemas",
     "bin",
     "scripts",
     "AI_INSTALL.md",
@@ -18,6 +21,7 @@
     "SECURITY.md",
     "llms.txt",
     "docs/llms.txt",
+    "docs/mcp.md",
     "LICENSE",
     "assets"
   ],

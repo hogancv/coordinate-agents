@@ -55,10 +55,14 @@ debugging surface.
 
 The Plugin homepage prompts are deliberately ordered as Discover → Configure →
 Try. The Try prompt uses the ordinary Task workflow for the Todo web app; it
-does not create a special demo path. Runtime state should be read through JSON:
+does not create a special demo path. Normal Plugin machine operations use the
+structured MCP tools and return the existing JSON Runtime contract:
 
 **A Codex Plugin user does not need `npm install -g @hogancv/coordinate-agents`.** All five Skills
-invoke the bundled canonical Runtime with one resolver convention, never by assuming a PATH command:
+use the bundled Coordinate Agents MCP server first, never by assuming a PATH command. If MCP is
+unavailable, or the user explicitly requests debugging, use the fallback resolver.
+The following shell syntax is fallback/debug/standalone only, not the normal
+Plugin machine path:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
@@ -67,7 +71,9 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 The active Skill supplies the absolute `<skill-dir>`. The resolver handles the active Plugin payload,
 personal local marketplace sources, cached Git marketplace roots, Node/npm package fallback, and
 Windows paths with spaces. The npm CLI remains a standalone Runtime, compatibility, and debugging
-surface, not a Plugin prerequisite.
+surface, not a Plugin prerequisite. Do not silently retry between MCP and fallback.
+
+Fallback/debug examples only:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
@@ -117,9 +123,9 @@ When an AI assistant is asked to install `coordinate-agents`:
 - **通过 npm 同时为两个 CLI 宿主安装**：
   - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`。
 
-普通 Codex Plugin 用户不需要 `npm install -g @hogancv/coordinate-agents`；五个 Skill 统一通过
-`node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...` 找到 Plugin 载荷中的
-唯一 canonical Runtime。只有 standalone、兼容安装或调试场景才使用 npm CLI。
+普通 Codex Plugin 用户不需要 `npm install -g @hogancv/coordinate-agents`；五个 Skill 优先使用
+Plugin 自带的 Coordinate Agents MCP tools。只有 MCP 不可用、standalone、兼容安装或调试场景，才通过
+`node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...` 使用 fallback Runtime。
 
 ## Canonical identity / 官方身份
 
