@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "coordinate-agents": {
+    "coordinate_agents": {
       "command": "node",
       "args": ["./mcp/server.mjs", "--stdio"],
       "cwd": "."
