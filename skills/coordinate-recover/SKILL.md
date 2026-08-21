@@ -8,14 +8,21 @@ description: >-
 
 # Coordinate Recover
 
-The Plugin bundles the Runtime. Let `<skill-dir>` be the absolute directory
-containing this loaded `SKILL.md`; use the same resolver for every operation:
+Use `coordinate_agents_recover_inspect`,
+`coordinate_agents_task_status`, and `coordinate_agents_task_resume` for
+normal Plugin recovery. Recovery is facts-first and never an automatic retry.
+If MCP is unavailable, or the user explicitly requests debugging, let
+`<skill-dir>` be the absolute directory containing this loaded `SKILL.md` and
+use the bundled fallback:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" ...
 ```
 
-Start with machine-readable state:
+The normal Plugin path starts with `coordinate_agents_recover_inspect`, followed
+by `coordinate_agents_task_status` or `coordinate_agents_task_resume` only when
+the recovery decision requires them. The following commands are fallback/debug
+syntax only:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --json

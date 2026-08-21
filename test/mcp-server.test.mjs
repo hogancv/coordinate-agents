@@ -1,0 +1,464 @@
+import assert from 'node:assert/strict';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { createInterface } from 'node:readline';
+import { spawn, spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { createMcpServer } from '../mcp/server.mjs';
+
+const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const serverPath = join(root, 'mcp', 'server.mjs');
+const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
+
+function tempRepository(prefix = 'coordinate-agents-mcp-') {
+  const repository = mkdtempSync(join(tmpdir(), prefix));
+  const init = spawnSync('git', ['init', repository], { encoding: 'utf8', windowsHide: true });
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+  return repository;
+}
+
+function isolatedEnvironment(home, extra = {}) {
+  return {
+    ...process.env,
+    COORDINATE_AGENTS_HOME: home,
+    HOME: home,
+    USERPROFILE: home,
+    ...extra,
+  };
+}
+
+function fixtureCommand(repository, name, mode = 'success') {
+  const bin = join(repository, 'fixture bin');
+  mkdirSync(bin, { recursive: true });
+  const source = `const fs = require('node:fs');
+const cp = require('node:child_process');
+const args = process.argv.slice(2);
+if (args[0] === '--version') { console.log('fixture-implementer 1.0.0'); process.exit(0); }
+if (process.env.FIXTURE_COUNT) fs.appendFileSync(process.env.FIXTURE_COUNT, '1');
+if (process.env.FIXTURE_MODE === 'failure') { process.stderr.write('fixture runtime failure\\n'); process.exit(7); }
+const prompt = args.join(' ');
+const task = prompt.match(/Task ID:\\s*(task-[A-Za-z0-9_-]+)/)?.[1];
+if (!task) { process.stderr.write('missing Task ID\\n'); process.exit(8); }
+const result = cp.spawnSync(process.execPath, [
+  process.env.BUS_TOOL, 'send', '--root', process.env.FIXTURE_ROOT,
+  '--from', process.env.FIXTURE_AGENT, '--to', 'codex',
+  '--type', 'IMPLEMENTATION_DONE', '--subject', 'fixture implementation done',
+  '--related-commit', process.env.FIXTURE_COMMIT || 'abc1234',
+  '--body', 'Task ID: ' + task + '\\nimplementationCommit: ' + (process.env.FIXTURE_COMMIT || 'abc1234') + '\\nEvidence: fixture tests passed',
+], { encoding: 'utf8', windowsHide: true });
+if (result.status !== 0) { process.stderr.write(result.stderr || result.stdout || 'fixture send failed'); process.exit(result.status || 9); }
+process.exit(0);
+`;
+  if (process.platform === 'win32') {
+    const script = join(bin, `${name}.cjs`);
+    writeFileSync(script, source, 'utf8');
+    const command = join(bin, `${name}.cmd`);
+    writeFileSync(command, `@"${process.execPath}" "${script}" %*\r\n`, 'utf8');
+    return command;
+  }
+  const command = join(bin, name);
+  writeFileSync(command, `#!${process.execPath}\n${source}`, 'utf8');
+  chmodSync(command, 0o755);
+  return command;
+}
+
+class StdioMcpClient {
+  constructor(env) {
+    this.child = spawn(process.execPath, [serverPath, '--stdio'], {
+      cwd: root,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    this.lines = createInterface({ input: this.child.stdout, crlfDelay: Infinity, terminal: false });
+    this.responses = [];
+    this.waiters = [];
+    this.stderr = '';
+    this.child.stderr.on('data', chunk => { this.stderr += `${chunk}`; });
+    this.lines.on('line', line => {
+      if (!line) return;
+      const response = JSON.parse(line);
+      const waiter = this.waiters.shift();
+      if (waiter) waiter(response);
+      else this.responses.push(response);
+    });
+  }
+
+  request(method, params = {}) {
+    const id = (this._id = (this._id || 0) + 1);
+    const message = { jsonrpc: '2.0', id, method, params };
+    return new Promise((resolveResponse, reject) => {
+      const timer = setTimeout(() => reject(new Error(`MCP response timeout for ${method}: ${this.stderr}`)), 15_000);
+      const resolveOnce = response => {
+        clearTimeout(timer);
+        resolveResponse(response);
+      };
+      const queued = this.responses.shift();
+      if (queued) resolveOnce(queued);
+      else this.waiters.push(resolveOnce);
+      this.child.stdin.write(`${JSON.stringify(message)}\n`);
+    });
+  }
+
+  async close() {
+    this.child.stdin.end();
+    await new Promise(resolveClose => {
+      const timer = setTimeout(() => {
+        if (!this.child.killed) this.child.kill();
+        resolveClose();
+      }, 2_000);
+      this.child.once('exit', () => {
+        clearTimeout(timer);
+        resolveClose();
+      });
+    });
+  }
+}
+
+function invokeCli(args, env) {
+  return spawnSync(process.execPath, [cli, ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env,
+    windowsHide: true,
+  });
+}
+
+function taskParityFields(task) {
+  return {
+    status: task.status,
+    round: task.round,
+    planner: task.planner,
+    implementer: task.implementer,
+    reviewer: task.reviewer,
+    spec: task.spec,
+    implementationCommit: task.implementationCommit,
+    evidence: task.evidence,
+    lastError: task.lastError,
+    reviewDecision: task.reviewDecision,
+    reviewFeedback: task.reviewFeedback,
+  };
+}
+
+test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', async () => {
+  const server = createMcpServer({ root });
+  const initialized = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
+  assert.equal(initialized.result.serverInfo.name, 'coordinate-agents');
+  assert.equal(initialized.result.serverInfo.version, '2.1.2');
+  const listed = await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+  const names = listed.result.tools.map(tool => tool.name);
+  assert.deepEqual(names, [
+    'coordinate_agents_setup_discover',
+    'coordinate_agents_setup_configure',
+    'coordinate_agents_task_create',
+    'coordinate_agents_task_dispatch',
+    'coordinate_agents_task_status',
+    'coordinate_agents_task_inspect',
+    'coordinate_agents_task_review',
+    'coordinate_agents_task_resume',
+    'coordinate_agents_task_stop',
+    'coordinate_agents_recover_inspect',
+  ]);
+  for (const tool of listed.result.tools) {
+    assert.equal(tool.inputSchema.type, 'object');
+    assert.equal(tool.inputSchema.additionalProperties, false);
+  }
+  assert.equal((await server.handle({ jsonrpc: '2.0', id: 3, method: 'ping', params: {} })).result !== undefined, true);
+});
+
+test('MCP stdio workflow uses the same Runtime state and error contract as CLI', async () => {
+  const repository = tempRepository();
+  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-home-'));
+  const count = join(repository, 'fixture-count.txt');
+  const command = fixtureCommand(repository, 'fixture-implementer');
+  const env = isolatedEnvironment(home, {
+    FIXTURE_ROOT: repository,
+    FIXTURE_AGENT: 'fixture-implementer',
+    BUS_TOOL: busTool,
+    FIXTURE_COMMIT: 'mcp1234',
+    FIXTURE_COUNT: count,
+  });
+  const client = new StdioMcpClient(env);
+  try {
+    const init = await client.request('initialize', { protocolVersion: '2025-06-18', clientInfo: { name: 'test', version: '1' }, capabilities: {} });
+    assert.equal(init.result.protocolVersion, '2025-06-18');
+
+    const cliDiscovered = invokeCli(['setup', '--root', repository, '--json'], env);
+    assert.equal(cliDiscovered.status, 0, cliDiscovered.stderr);
+    const discovered = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_discover',
+      arguments: { root: repository },
+    });
+    assert.equal(discovered.result.structuredContent.ok, true);
+    assert.equal(discovered.result.structuredContent.command, 'setup');
+    assert.deepEqual(discovered.result.structuredContent, JSON.parse(cliDiscovered.stdout));
+    assert.deepEqual(Object.keys(discovered.result.structuredContent).sort(), ['agents', 'availableCommands', 'command', 'configuredAgents', 'detectedButNotConfigured', 'ok', 'projectConfigPath', 'root', 'userConfigPath'].sort());
+
+    const setupArgs = JSON.stringify(['{prompt}']);
+    const cliConfigured = invokeCli([
+      'setup', 'configure', '--root', repository, '--agent', 'fixture-implementer',
+      '--command', command, '--adapter', 'generic-cli', '--args', setupArgs,
+      '--json',
+    ], env);
+    assert.equal(cliConfigured.status, 0, cliConfigured.stderr);
+    const configured = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_configure',
+      arguments: {
+        root: repository,
+        agent: 'fixture-implementer',
+        command,
+        adapter: 'generic-cli',
+        args: ['{prompt}'],
+        role: 'implementer',
+      },
+    });
+    assert.equal(configured.result.structuredContent.ok, true);
+    assert.equal(configured.result.structuredContent.command, 'setup.configure');
+    assert.equal(configured.result.structuredContent.workflow.implementer, 'fixture-implementer');
+    assert.deepEqual(configured.result.structuredContent, JSON.parse(cliConfigured.stdout));
+
+    const cliCreatedParity = invokeCli([
+      'task', 'create', '--root', repository, '--id', 'task-cli-create-parity',
+      '--title', 'Parity create task', '--json',
+    ], env);
+    assert.equal(cliCreatedParity.status, 0, cliCreatedParity.stderr);
+    const mcpCreatedParity = await client.request('tools/call', {
+      name: 'coordinate_agents_task_create',
+      arguments: { root: repository, id: 'task-mcp-create-parity', title: 'Parity create task' },
+    });
+    assert.deepEqual(
+      taskParityFields(mcpCreatedParity.result.structuredContent.task),
+      taskParityFields(JSON.parse(cliCreatedParity.stdout).task),
+    );
+
+    const created = await client.request('tools/call', {
+      name: 'coordinate_agents_task_create',
+      arguments: { root: repository, id: 'task-mcp-e2e', title: 'MCP fixture task' },
+    });
+    assert.equal(created.result.structuredContent.ok, true);
+    assert.equal(created.result.structuredContent.task.status, 'CREATED');
+
+    const inspected = await client.request('tools/call', {
+      name: 'coordinate_agents_task_inspect',
+      arguments: { root: repository, taskId: 'task-mcp-e2e' },
+    });
+    const cliInspect = invokeCli(['task', 'inspect', '--root', repository, '--id', 'task-mcp-e2e', '--json'], env);
+    assert.equal(cliInspect.status, 0, cliInspect.stderr);
+    assert.deepEqual(inspected.result.structuredContent.task, JSON.parse(cliInspect.stdout).task);
+
+    const dispatched = await client.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-e2e', spec: 'Implement the fixture workflow.' },
+    });
+    assert.equal(dispatched.result.structuredContent.ok, true);
+    assert.equal(dispatched.result.structuredContent.command, 'task.dispatch');
+    assert.equal(dispatched.result.structuredContent.task.status, 'REVIEWING');
+    assert.equal(dispatched.result.structuredContent.task.implementationCommit, 'mcp1234');
+    assert.equal(readFileSync(count, 'utf8'), '1');
+
+    const changes = await client.request('tools/call', {
+      name: 'coordinate_agents_task_review',
+      arguments: { root: repository, taskId: 'task-mcp-e2e', decision: 'CHANGES_REQUESTED', feedback: 'Add one fixture assertion.' },
+    });
+    assert.equal(changes.result.structuredContent.ok, true);
+    assert.equal(changes.result.structuredContent.task.status, 'CHANGES_REQUESTED');
+    assert.equal(changes.result.structuredContent.task.round, 2);
+
+    const cliReviewCreated = invokeCli([
+      'task', 'create', '--root', repository, '--id', 'task-cli-review-parity',
+      '--title', 'Parity review task', '--json',
+    ], env);
+    assert.equal(cliReviewCreated.status, 0, cliReviewCreated.stderr);
+    const cliReviewDispatched = invokeCli([
+      'task', 'dispatch', '--root', repository, '--id', 'task-cli-review-parity',
+      '--spec', 'Implement the fixture workflow.', '--json',
+    ], env);
+    assert.equal(cliReviewDispatched.status, 0, cliReviewDispatched.stderr);
+    const cliChanges = invokeCli([
+      'task', 'review', '--root', repository, '--id', 'task-cli-review-parity',
+      '--decision', 'CHANGES_REQUESTED', '--feedback', 'Add one fixture assertion.', '--json',
+    ], env);
+    assert.equal(cliChanges.status, 0, cliChanges.stderr);
+    assert.deepEqual(
+      {
+        status: JSON.parse(cliChanges.stdout).task.status,
+        round: JSON.parse(cliChanges.stdout).task.round,
+        reviewDecision: JSON.parse(cliChanges.stdout).task.reviewDecision,
+        reviewFeedback: JSON.parse(cliChanges.stdout).task.reviewFeedback,
+      },
+      {
+        status: changes.result.structuredContent.task.status,
+        round: changes.result.structuredContent.task.round,
+        reviewDecision: changes.result.structuredContent.task.reviewDecision,
+        reviewFeedback: changes.result.structuredContent.task.reviewFeedback,
+      },
+    );
+
+    const redispatched = await client.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-e2e' },
+    });
+    assert.equal(redispatched.result.structuredContent.task.status, 'REVIEWING');
+    assert.equal(redispatched.result.structuredContent.task.round, 2);
+    assert.equal(readFileSync(count, 'utf8'), '111');
+
+    const approved = await client.request('tools/call', {
+      name: 'coordinate_agents_task_review',
+      arguments: { root: repository, taskId: 'task-mcp-e2e', decision: 'REVIEW_APPROVED' },
+    });
+    assert.equal(approved.result.structuredContent.task.status, 'APPROVED');
+    assert.match(approved.result.structuredContent.review.messagePath, /IMPLEMENT|REVIEW/i);
+
+    const recovery = await client.request('tools/call', {
+      name: 'coordinate_agents_recover_inspect',
+      arguments: { root: repository, taskId: 'task-mcp-e2e' },
+    });
+    assert.equal(recovery.result.structuredContent.ok, true);
+    assert.equal(recovery.result.structuredContent.recommendedRecovery.automaticRetry, false);
+  } finally {
+    await client.close();
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('MCP preserves runtime failure semantics, recovery facts, and explicit resume', async () => {
+  const repository = tempRepository('coordinate-agents-mcp-recovery-');
+  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-recovery-home-'));
+  const count = join(repository, 'fixture-count.txt');
+  const command = fixtureCommand(repository, 'fixture-recoverable');
+  const failureEnv = isolatedEnvironment(home, {
+    FIXTURE_ROOT: repository,
+    FIXTURE_AGENT: 'fixture-recoverable',
+    BUS_TOOL: busTool,
+    FIXTURE_COMMIT: 'recover123',
+    FIXTURE_COUNT: count,
+    FIXTURE_MODE: 'failure',
+  });
+  const successEnv = { ...failureEnv, FIXTURE_MODE: 'success' };
+  const clients = [];
+  try {
+    const failingClient = new StdioMcpClient(failureEnv);
+    clients.push(failingClient);
+    await failingClient.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
+    const configured = await failingClient.request('tools/call', {
+      name: 'coordinate_agents_setup_configure',
+      arguments: {
+        root: repository,
+        agent: 'fixture-recoverable',
+        command,
+        adapter: 'generic-cli',
+        args: ['{prompt}'],
+        role: 'implementer',
+      },
+    });
+    assert.equal(configured.result.structuredContent.ok, true);
+    await failingClient.request('tools/call', {
+      name: 'coordinate_agents_task_create',
+      arguments: { root: repository, id: 'task-mcp-recovery', title: 'MCP recovery task', spec: 'Recover the fixture workflow.' },
+    });
+
+    const failed = await failingClient.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-recovery' },
+    });
+    assert.equal(failed.result.isError, true);
+    assert.equal(failed.result.structuredContent.ok, false);
+    assert.equal(failed.result.structuredContent.error.code, 'AGENT_EXIT_NONZERO');
+    assert.equal(readFileSync(count, 'utf8'), '1');
+
+    const recovery = await failingClient.request('tools/call', {
+      name: 'coordinate_agents_recover_inspect',
+      arguments: { root: repository, taskId: 'task-mcp-recovery' },
+    });
+    assert.equal(recovery.result.structuredContent.task.status, 'ERROR');
+    assert.equal(recovery.result.structuredContent.recommendedRecovery.automaticRetry, false);
+    assert.equal(recovery.result.structuredContent.recommendedRecovery.resumeRequired, true);
+
+    const blockedRetry = await failingClient.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-recovery' },
+    });
+    assert.equal(blockedRetry.result.isError, true);
+    assert.equal(blockedRetry.result.structuredContent.error.code, 'TASK_STATE_CONFLICT');
+    assert.equal(readFileSync(count, 'utf8'), '1');
+
+    const resumed = await failingClient.request('tools/call', {
+      name: 'coordinate_agents_task_resume',
+      arguments: { root: repository, taskId: 'task-mcp-recovery' },
+    });
+    assert.equal(resumed.result.structuredContent.task.status, 'SPEC_READY');
+    await failingClient.close();
+    clients.splice(clients.indexOf(failingClient), 1);
+
+    const retryClient = new StdioMcpClient(successEnv);
+    clients.push(retryClient);
+    await retryClient.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
+    const retried = await retryClient.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-recovery' },
+    });
+    assert.equal(retried.result.structuredContent.task.status, 'REVIEWING');
+    assert.equal(readFileSync(count, 'utf8'), '11');
+  } finally {
+    for (const client of clients) await client.close();
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('MCP domain failures are structured and do not become protocol errors', async () => {
+  const repository = tempRepository('coordinate-agents-mcp-error-');
+  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-error-home-'));
+  const server = createMcpServer({ root });
+  try {
+    const created = await server.handle({
+      jsonrpc: '2.0', id: 10, method: 'tools/call',
+      params: { name: 'coordinate_agents_task_create', arguments: { root: repository, id: 'task-error', title: 'Error task', spec: 'approved' } },
+    });
+    assert.equal(created.result.structuredContent.ok, true);
+    const configPath = join(repository, '.agent-bus', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.agents.find(agent => agent.id === 'antigravity').command = 'missing-coordinate-agents-mcp-executable';
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+    const missing = await server.handle({
+      jsonrpc: '2.0', id: 11, method: 'tools/call',
+      params: { name: 'coordinate_agents_task_dispatch', arguments: { root: repository, taskId: 'task-error' } },
+    });
+    assert.equal(missing.result.isError, true);
+    assert.equal(missing.result.structuredContent.ok, false);
+    assert.equal(missing.result.structuredContent.command, 'task.dispatch');
+    assert.equal(missing.result.structuredContent.error.code, 'EXECUTABLE_NOT_FOUND');
+    assert.equal(missing.error, undefined);
+    const invalidTool = await server.handle({ jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'no_such_tool', arguments: {} } });
+    assert.equal(invalidTool.error.code, -32601);
+    assert.equal(existsSync(join(repository, '.agent-bus', 'tasks', 'task-error.json')), true);
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
+  const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
+  assert.equal(packageJson.version, '2.1.2');
+  assert.equal(pluginJson.version, '2.1.2');
+  assert.equal(pluginJson.mcpServers, './.mcp.json');
+  assert.deepEqual(JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8')).mcpServers['coordinate-agents'].args, ['./mcp/server.mjs', '--stdio']);
+  for (const name of ['task.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
+    const schema = JSON.parse(readFileSync(join(root, 'schemas', name), 'utf8'));
+    assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+  }
+});

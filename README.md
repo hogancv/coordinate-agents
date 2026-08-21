@@ -59,7 +59,24 @@ The normal Plugin path is **Install Plugin → Discover → Configure → Build*
 4. Let `coordinate-review` inspect the commit/evidence and record `REVIEW_APPROVED` or
    `CHANGES_REQUESTED` without editing the Task file directly.
 
-The Runtime invocation convention used by all five Skills is:
+The normal machine path is structured MCP, not generated shell commands:
+
+```text
+User <-> Codex
+  -> Skills
+  -> Coordinate Agents MCP Tools
+  -> Canonical Runtime
+  -> Task API
+  -> Agent Bus
+  -> External Implementer
+```
+
+The Plugin exposes `coordinate_agents_setup_discover`,
+`coordinate_agents_setup_configure`, the Task create/dispatch/status/inspect/
+review/resume/stop tools, and `coordinate_agents_recover_inspect`. MCP and CLI
+call the same Runtime operations and return the same canonical error contract.
+
+Only when MCP is unavailable, or for explicit debugging, use the fallback:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
@@ -67,7 +84,10 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 
 `<skill-dir>` is the absolute directory containing the active Skill's `SKILL.md`; the Skill supplies
 that concrete path. The resolver starts the one canonical `bin/coordinate-agents.mjs` from the Plugin
-payload, so the Plugin path has no hidden global npm prerequisite.
+payload. Do not silently retry between MCP and fallback.
+
+See [MCP tools and integration](./docs/mcp.md) for the stdio lifecycle, schemas,
+error semantics, fallback behavior, and release safety.
 
 ## Advanced: standalone npm Runtime and debugging
 

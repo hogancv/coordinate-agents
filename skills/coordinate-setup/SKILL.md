@@ -8,16 +8,30 @@ description: >-
 
 # Coordinate Setup
 
-Use this skill for first-run onboarding. The Plugin bundles the Runtime; do not
-assume `coordinate-agents` is on `PATH`. Let `<skill-dir>` be the absolute
-directory containing this loaded `SKILL.md` and use this same invocation for
-all setup operations:
+Use this skill for first-run onboarding. Use the Coordinate Agents MCP tools
+for normal setup operations; do not generate a shell command for the user.
+The Plugin bundles the Runtime, but `coordinate-agents` is not guaranteed to be
+on `PATH`.
+
+Normal MCP operations:
+
+```text
+coordinate_agents_setup_discover
+coordinate_agents_setup_configure
+```
+
+Only if MCP is unavailable, or if the user explicitly requests debugging, let
+`<skill-dir>` be the absolute directory containing this loaded `SKILL.md` and
+use the bundled fallback. The following shell syntax is not the normal Plugin
+path:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" ...
 ```
 
-Run the read-only discovery operation before changing configuration:
+For the normal Plugin path, call `coordinate_agents_setup_discover` with
+`{ "root": "<repository>" }` before changing configuration. The equivalent
+fallback/debug invocation is:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
@@ -28,11 +42,14 @@ actual executable. It reports unavailable commands and distinguishes
 `detected-but-not-configured` agents. Detection never writes configuration.
 
 When the user chooses an agent, inspect its native help and perform one
-high-level setup transaction. It writes the machine-specific executable to
+high-level setup transaction through `coordinate_agents_setup_configure`. It
+writes the machine-specific executable to
 `~/.coordinate-agents/config.json`, registers/updates the project Agent,
 assigns the workflow role, checks executable availability, and returns READY
 facts. Do not manually compose `config set`, `agent add`, workflow editing,
 and doctor calls:
+
+Fallback/debug syntax only:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup configure \

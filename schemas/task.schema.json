@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task.schema.json",
+  "title": "Coordinate Agents Task",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "status",
+    "round",
+    "planner",
+    "implementer",
+    "reviewer",
+    "createdAt",
+    "updatedAt",
+    "spec",
+    "evidence",
+    "lastError"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": [
+        "CREATED",
+        "PLANNING",
+        "SPEC_READY",
+        "IMPLEMENTING",
+        "WAITING_IMPLEMENTER",
+        "REVIEWING",
+        "CHANGES_REQUESTED",
+        "APPROVED",
+        "ERROR",
+        "STOPPED"
+      ]
+    },
+    "round": { "type": "integer", "minimum": 1 },
+    "planner": { "type": "string", "minLength": 1 },
+    "implementer": { "type": "string", "minLength": 1 },
+    "reviewer": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "spec": { "type": "string" },
+    "implementationCommit": { "type": ["string", "null"] },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "evidence.schema.json" }
+    },
+    "lastError": {
+      "anyOf": [
+        { "$ref": "runtime-error.schema.json" },
+        { "type": "null" }
+      ]
+    },
+    "reviewDecision": { "type": ["string", "null"] },
+    "reviewFeedback": { "type": ["string", "null"] },
+    "reviewHistory": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+    "dispatch": { "type": ["object", "null"], "additionalProperties": true },
+    "implementationMessage": { "type": ["object", "null"], "additionalProperties": true },
+    "stopReason": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}

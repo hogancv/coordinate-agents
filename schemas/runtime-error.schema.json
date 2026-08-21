@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/runtime-error.schema.json",
+  "title": "Coordinate Agents Runtime Error",
+  "type": "object",
+  "required": ["code", "message", "recoverable"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "PLUGIN_RUNTIME_NOT_FOUND",
+        "EXECUTABLE_NOT_FOUND",
+        "EXECUTABLE_NOT_RUNNABLE",
+        "SPAWN_FAILED",
+        "AGENT_EXIT_NONZERO",
+        "AGENT_TIMEOUT",
+        "AGENT_RUNTIME_ERROR",
+        "AUTH_REQUIRED",
+        "INVALID_AGENT_CONFIG",
+        "INVALID_ADAPTER_CONFIG",
+        "TASK_NOT_FOUND",
+        "TASK_ALREADY_RUNNING",
+        "TASK_STATE_CONFLICT",
+        "STALE_CLAIM",
+        "DIRTY_WORKTREE",
+        "WORKTREE_CONFLICT",
+        "UNSUPPORTED_CAPABILITY"
+      ]
+    },
+    "message": { "type": "string" },
+    "recoverable": { "type": "boolean" },
+    "details": { "type": ["string", "null"] },
+    "command": { "type": ["string", "null"] },
+    "agent": { "type": ["string", "null"] },
+    "adapter": { "type": ["string", "null"] },
+    "taskId": { "type": ["string", "null"] },
+    "stage": { "type": ["string", "null"] },
+    "exitCode": { "type": ["integer", "null"] },
+    "signal": { "type": ["string", "null"] },
+    "resolvedCommand": { "type": ["string", "null"] },
+    "legacyCode": { "type": ["string", "null"] }
+  },
+  "additionalProperties": true
+}

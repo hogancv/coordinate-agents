@@ -54,14 +54,34 @@ Antigravity 是参考适配器，不再是产品绑定。
    负责 Agent Bus handoff 和 Implementer launch。
 4. `coordinate-review` 检查真实 commit/证据，并记录 `REVIEW_APPROVED` 或 `CHANGES_REQUESTED`，不直接编辑 Task 文件。
 
-五个 Skill 统一使用以下 Runtime 调用约定：
+普通 Plugin 的机器调用路径优先使用结构化 MCP，而不是让 Skill 生成 shell command：
+
+```text
+用户 <-> Codex
+  -> Skills
+  -> Coordinate Agents MCP Tools
+  -> Canonical Runtime
+  -> Task API
+  -> Agent Bus
+  -> External Implementer
+```
+
+Plugin 提供 `coordinate_agents_setup_discover`、
+`coordinate_agents_setup_configure`、Task create/dispatch/status/inspect/
+review/resume/stop，以及 `coordinate_agents_recover_inspect`。MCP 与 CLI
+调用同一套 Runtime operation，并返回相同的 canonical error contract。
+
+只有在 MCP 不可用，或用户明确要求调试时，才使用以下 fallback：
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 ```
 
 其中 `<skill-dir>` 是当前 Skill 的 `SKILL.md` 所在绝对目录，由 Skill 传入具体路径。Resolver 会从
-Plugin 载荷中启动唯一的 `bin/coordinate-agents.mjs`，因此 Plugin 路径没有隐藏的 global npm 前置依赖。
+Plugin 载荷中启动唯一的 `bin/coordinate-agents.mjs`。不要在 MCP 与 fallback 之间静默循环重试。
+
+详见 [MCP 工具与集成文档](./docs/mcp.md)，其中包含 stdio 生命周期、schema、错误语义、fallback
+行为和 release safety。
 
 ## 高级：standalone npm Runtime 与调试
 
