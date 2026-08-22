@@ -18,7 +18,7 @@ function ensureUnixSpawnHelper() {
     const packageRoot = dirname(dirname(require.resolve('node-pty')));
     const candidates = [
       join(packageRoot, 'build', 'Release', 'spawn-helper'),
-      join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper'),
+      join(packageRoot, 'prebuilds', [process.platform, process.arch].join('-'), 'spawn-helper'),
     ];
     for (const candidate of candidates) {
       if (!existsSync(candidate)) continue;
