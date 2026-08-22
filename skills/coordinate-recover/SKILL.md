@@ -31,8 +31,11 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" agent doctor -
 ```
 
 Inspect the Task's `lastError`, the bounded runtime artifact, Agent Bus state,
-and any matching commit or evidence. Explain the concrete error code and the
-smallest repair. Do not claim a missing capability as a successful result.
+the `sessionId` Session status/inspect facts, and any matching commit or
+evidence. Explain the concrete error code and the smallest repair. Session
+inspection is read-only: do not restart, replay input, attach to a different
+PID, or resume the Task while collecting facts. Do not claim a missing
+capability as a successful result.
 
 Only after the user explicitly asks to continue, invoke:
 

@@ -19,6 +19,12 @@ const expectedTools = [
   'coordinate_agents_task_resume',
   'coordinate_agents_task_stop',
   'coordinate_agents_recover_inspect',
+  'coordinate_agents_session_open',
+  'coordinate_agents_session_status',
+  'coordinate_agents_session_inspect',
+  'coordinate_agents_session_write',
+  'coordinate_agents_session_read',
+  'coordinate_agents_session_close',
 ];
 
 function assert(condition, message) {

@@ -21,6 +21,17 @@ coordinate_agents_task_resume
 coordinate_agents_task_stop
 ```
 
+For explicit Session diagnostics, use the bounded Session tools:
+
+```text
+coordinate_agents_session_open
+coordinate_agents_session_status
+coordinate_agents_session_inspect
+coordinate_agents_session_write
+coordinate_agents_session_read
+coordinate_agents_session_close
+```
+
 Only if MCP is unavailable, or if the user explicitly requests debugging, let
 `<skill-dir>` be the absolute directory containing this `SKILL.md` and use
 the bundled fallback. The following shell syntax is fallback/debug only, not
@@ -46,7 +57,8 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task stop --ro
 
 Task records are persisted under the project-local Agent Bus and contain the
 Planner, Implementer, Reviewer, round, specification, commit, evidence,
-timestamps, status, and last error. The normal path is:
+timestamps, status, last error, and a non-owning `sessionId` reference. The
+normal path is:
 
 ```text
 CREATED/PLANNING -> SPEC_READY -> IMPLEMENTING -> WAITING_IMPLEMENTER
@@ -55,15 +67,20 @@ CREATED/PLANNING -> SPEC_READY -> IMPLEMENTING -> WAITING_IMPLEMENTER
 
 `task dispatch` is the Plugin-facing workflow operation. It validates the
 state and approved specification, resolves the workflow Implementer and its
-effective command, checks the executable, sends `IMPLEMENT`, starts exactly
-one activation, and maps failure to Task/Agent `ERROR`. It never creates a
-second Planner or silently retries. A durable `IMPLEMENTATION_DONE` message
-maps the Task to `REVIEWING`, including `implementationCommit` and evidence.
+effective command, checks the executable, sends `IMPLEMENT`, then opens or
+reuses one healthy persistent Execution Session. The Task stores the returned
+`sessionId` but does not own the process. If the adapter did not consume the
+initial prompt as launch arguments, dispatch writes it to the Session. A
+durable `IMPLEMENTATION_DONE` message maps the Task to `REVIEWING`, including
+`implementationCommit` and evidence; otherwise a bounded activation remains
+observable as `WAITING_IMPLEMENTER`.
 
 Review feedback may enter `CHANGES_REQUESTED`. A failed activation enters
 `ERROR`; an explicit user `task resume` is required before another dispatch.
 `CHANGES_REQUESTED` is dispatched explicitly with the preserved feedback,
-current round, and previous commit/evidence reference. Use `task review` for
+current round, and previous commit/evidence reference. A healthy matching
+Session is reused for this rework; an exited/failed Session is replaced only
+by that explicit dispatch. Use `task review` for
 the Runtime decision operation:
 
 ```text

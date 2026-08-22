@@ -24,6 +24,16 @@ export class AgentAdapter {
   }
 
   /**
+   * Resolve the long-lived PTY command.  Interactive adapters may override
+   * this to omit one-shot prompt arguments; stdin is delivered through the
+   * Execution Session after the PTY is open.
+   */
+  resolveSessionLaunch(context = {}) {
+    const launch = this.resolveLaunch({ ...context, prompt: context.initialPrompt || '' });
+    return { ...launch, initialInputConsumed: Boolean(context.initialPrompt) };
+  }
+
+  /**
    * Setup-time compatibility check.  Executable detection alone only proves
    * that a process can start; this contract lets a setup transaction reject a
    * configuration that the adapter cannot drive with a prompt.

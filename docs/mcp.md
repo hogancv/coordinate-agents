@@ -39,8 +39,11 @@ starts as a local child process:
 
 The server reads newline-delimited JSON-RPC from stdin and writes only valid
 JSON-RPC messages to stdout. It does not open an HTTP server, listen on a
-network port, create a daemon, initialize the Agent Bus, scan repositories, or
-start an Implementer until a tool is called.
+network port, create an external daemon, initialize the Agent Bus, scan
+repositories, or start an Implementer until a tool is called. A Task or
+Session operation may then create a detached, Runtime-owned local Session Host
+for the persistent PTY; that host is scoped to the selected repository and
+Agent and is not Codex App Terminal UI automation.
 
 ## Tools
 
@@ -56,11 +59,19 @@ start an Implementer until a tool is called.
 | `coordinate_agents_task_resume` | `root`, `taskId` | — | `task.resume` |
 | `coordinate_agents_task_stop` | `root`, `taskId` | `reason` | `task.stop` |
 | `coordinate_agents_recover_inspect` | `root`, `taskId` | — | `recover.inspect` |
+| `coordinate_agents_session_open` | `root`, `agent` | `language`, `initialPrompt` | `session.open` |
+| `coordinate_agents_session_status` | `root`, `sessionId` | — | `session.status` |
+| `coordinate_agents_session_inspect` | `root`, `sessionId` | `maxLines`, `maxBytes` | `session.inspect` |
+| `coordinate_agents_session_write` | `root`, `sessionId`, `input` | `submit` | `session.write` |
+| `coordinate_agents_session_read` | `root`, `sessionId` | `cursor`, `maxLines`, `maxBytes` | `session.read` |
+| `coordinate_agents_session_close` | `root`, `sessionId` | `graceful`, `timeoutMs` | `session.close` |
 
 Tool schemas are advertised by `tools/list` and reject unknown top-level
 arguments. `root` is validated as a Git repository by the canonical Runtime.
 The setup tool keeps Agent identity, Adapter, and executable command separate;
-for example, `antigravity` may use `agy-proxy`.
+for example, `antigravity` may use `agy-proxy`. Session output and input are
+bounded, and `session_write` is structured text rather than a general shell
+execution surface.
 
 ## Output and errors
 
@@ -97,8 +108,10 @@ approved specifications, evidence review, and the human release gate.
 publish, deploy, or release.
 
 `coordinate_agents_recover_inspect` is facts-only. It reports Task state,
-`lastError`, Agent state, executable facts, and bounded error artifacts. It does
-not resume or dispatch. Recovery is an explicit follow-up operation.
+`lastError`, Agent state, executable facts, and bounded error artifacts. When a
+Task has `sessionId`, it also reports read-only Session status/inspect facts. It
+does not resume, dispatch, restart a Session, replay input, or attach to an
+arbitrary PID. Recovery is an explicit follow-up operation.
 
 ## Fallback and security
 
@@ -110,8 +123,9 @@ Plugin machine path. Skills must not silently loop between MCP and fallback.
 The server is local-only and uses existing repository validation, safe-path and
 symlink protections, bounded/redacted error output, user/project executable
 precedence, argument-array child-process spawning, and the existing release
-gate. It exposes no general shell, command execution, or Agent Bus mutation
-tool and persists no credentials.
+gate. It exposes no general shell, command execution, Codex Terminal UI, or
+arbitrary-PID control tool and persists no credentials. The Session Host sends
+interrupt/termination only to the process it created.
 
 ## Protocol schemas
 

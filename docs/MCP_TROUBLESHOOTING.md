@@ -73,7 +73,7 @@ codex mcp get coordinate-agents --json
 ```
 
 The bundled server identifier is `coordinate_agents`. The Plugin name remains
-`coordinate-agents`, and the ten tool names remain unchanged. A missing entry
+`coordinate-agents`, and the sixteen tool names remain unchanged. A missing entry
 means the failure is before MCP process startup; do not change Task Runtime or
 Agent Bus code to fix that layer.
 
@@ -109,7 +109,7 @@ Expected output:
 ```text
 MCP server: OK
 Protocol: 2025-06-18
-Tools: 10
+Tools: 16
 ```
 
 The self-test launches the real stdio subprocess, sends `initialize`, sends
@@ -191,6 +191,12 @@ coordinate_agents_task_review
 coordinate_agents_task_resume
 coordinate_agents_task_stop
 coordinate_agents_recover_inspect
+coordinate_agents_session_open
+coordinate_agents_session_status
+coordinate_agents_session_inspect
+coordinate_agents_session_write
+coordinate_agents_session_read
+coordinate_agents_session_close
 ```
 
 The CLI fallback through `runtime-entry.mjs` remains available for standalone,

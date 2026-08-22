@@ -77,3 +77,8 @@ project config unless a project override already exists; it refuses to replace
 an existing explicit project command. Agent identity, Adapter, and executable
 remain separate, so `antigravity` may use `agy-proxy` without falling back to
 `agy`.
+
+The selected command is also the persistent Session executable. The Runtime
+uses structured argument arrays, bounded PTY I/O, and only the configured
+project root; it does not control a Codex App terminal panel or another
+desktop window.

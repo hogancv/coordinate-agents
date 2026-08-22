@@ -56,7 +56,9 @@ debugging surface.
 The Plugin homepage prompts are deliberately ordered as Discover → Configure →
 Try. The Try prompt uses the ordinary Task workflow for the Todo web app; it
 does not create a special demo path. Normal Plugin machine operations use the
-structured MCP tools and return the existing JSON Runtime contract:
+structured MCP tools and return the existing JSON Runtime contract. Task
+dispatch opens or reuses a persistent Execution Session and stores a non-owning
+`sessionId`; it does not automate the Codex App Terminal UI:
 
 **A Codex Plugin user does not need `npm install -g @hogancv/coordinate-agents`.** All five Skills
 use the bundled Coordinate Agents MCP server first, never by assuming a PATH command. If MCP is
@@ -278,9 +280,10 @@ two CLI windows or copying two launch commands.
 3. Start a new thread and invoke `$coordinate-agents`.
 4. Ask Codex to initialize or coordinate the task in that project.
 
-The App thread remains the Planner/Reviewer side. The runtime starts the configured Implementer CLI
-as a local child process, so the Implementer command must be installed and correct even though the
-user does not open a second CLI window manually. The Plugin Runtime is already bundled; do not ask the
+The App thread remains the Planner/Reviewer side. The Runtime opens or reuses a project/Agent-scoped
+persistent PTY Execution Session for the configured Implementer CLI, so the Implementer command must
+be installed and correct even though the user does not open a second CLI window manually. The Session
+is independent of the Codex App Terminal UI. The Plugin Runtime is already bundled; do not ask the
 user to install a global npm CLI. Use the actual executable command, for example `agy` or `claude`,
 not a role label or a command that exists only on another machine. For advanced npm compatibility or
 debugging, the older lower-level commands remain available:
@@ -377,8 +380,10 @@ executable readiness but does not probe login state, provider health, or model a
 errors are handled as runtime failures after launch. The user file is outside `skills/`,
 `.codex-plugin/`, and npm package update payloads, so installation and updates preserve it.
 
-Permission and sandbox flags are vendor-specific and explicit. The built-in `antigravity-cli` Adapter
-only passes configured `args` and then appends `--prompt-interactive <prompt>`; it does not add
+Permission and sandbox flags are vendor-specific and explicit. The legacy one-shot
+`antigravity-cli` launch passes configured `args` and then appends `--prompt-interactive <prompt>`.
+For a persistent Session, the first instruction is written through the PTY unless configured args
+explicitly include `{prompt}`. The Adapter does not add
 `--dangerously-skip-permissions` or another full-permission flag automatically. If the local `agy`
 configuration already enables full permissions, it remains in effect. If the installed `agy --help`
 confirms the explicit flag is required and the user asks to use it, configure it in the user file:
@@ -412,8 +417,9 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
 这些错误在启动后按运行时失败处理。用户配置位于 `skills/`、`.codex-plugin/` 和 npm 包更新
 载荷之外，因此安装和更新会保留它。
 
-权限和沙箱参数由各厂商决定，并且必须显式配置。内置 `antigravity-cli` Adapter 只会传递已配置的 `args`，然后追加
-`--prompt-interactive <prompt>`，不会自动添加 `--dangerously-skip-permissions` 或其他完全权限参数。如果本机 `agy`
+权限和沙箱参数由各厂商决定，并且必须显式配置。旧版一次性 `antigravity-cli` 启动只会传递已配置的 `args`，然后追加
+`--prompt-interactive <prompt>`；持久 Session 除非参数中显式包含 `{prompt}`，否则会通过 PTY 写入第一条指令。
+该 Adapter 不会自动添加 `--dangerously-skip-permissions` 或其他完全权限参数。如果本机 `agy`
 自身配置已经开启完全权限，该配置会继续生效。如果 `agy --help` 确认必须显式传入该参数，且用户明确要求使用，才写入
 用户级配置：
 
@@ -428,12 +434,14 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
 ## Start the first task / 开始首个任务
 
 Only after verification succeeds **and the user explicitly asks to begin collaboration**, use the
-following path from the user's Git repository.
+following path from the user's Git repository. Codex remains Planner/Reviewer; it must not bypass the
+configured Implementer or automate a Codex App Terminal panel. Persistent Session status, output,
+input, and close are Runtime operations with bounded I/O; they are not UI automation.
 
 For Codex App, add or open the repository as a project, set the thread project/workspace path to
 the repository root containing `.git`, start a new thread, and invoke `$coordinate-agents`. Do not
-manually open a second CLI window. The runtime still starts the configured Implementer executable
-as a local child process, so verify the command is the real local command such as `agy` or `claude`.
+manually open a second CLI window. The Runtime opens or reuses the configured Implementer Session,
+so verify the command is the real local command such as `agy` or `claude`.
 
 For CLI-only hosts, run `quickstart`:
 

@@ -66,10 +66,11 @@ Codex App can invoke the Skill directly, so users do not need to manually open t
 5. After choosing an executable, let `coordinate-setup` run `setup configure`; do not manually chain
    `config set`, `agent add`, workflow edits, and `doctor`.
 
-The Codex App thread is the Planner/Reviewer side. The runtime starts the Implementer as a local
-child process, so the execution command must be an installed executable on the same machine. The
-Plugin itself supplies the Runtime; a global npm install is not required. After discovery, let the
-high-level setup transaction configure the selected executable, project Agent, Adapter, and
+The Codex App thread is the Planner/Reviewer side. The Runtime opens or reuses a project/Agent-scoped
+Execution Session with a persistent PTY for the Implementer, so the execution command must be an
+installed executable on the same machine. The Session is independent of the Codex App Terminal UI;
+the Plugin itself supplies the Runtime and a global npm install is not required. After discovery,
+let the high-level setup transaction configure the selected executable, project Agent, Adapter, and
 Implementer role. The following commands are only the standalone npm compatibility/debugging path:
 
 ```console
@@ -87,8 +88,9 @@ project's Implementer; inspect `claude --help`, register it with `generic-cli`, 
 the resolved configuration, and do not start until I confirm.” Use the CLI path below only for
 automation or hosts without direct Codex App Skill execution.
 
-The built-in Antigravity adapter does not automatically add a full-permission flag. It passes any
-configured `args` and then appends `--prompt-interactive <prompt>`. If `agy --help` confirms
+The built-in Antigravity adapter does not automatically add a full-permission flag. The legacy
+one-shot path passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent
+Session writes its first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, configure that argument rather
 than assuming the Plugin added it:
 
@@ -151,8 +153,14 @@ their own homes.
 
 For the Plugin path, do not use `quickstart` as a substitute for Task dispatch. After Codex has a
 complete specification, the Skill calls `task create` and then `task dispatch`; dispatch performs
-Implementer resolution, executable checking, the `IMPLEMENT` Bus handoff, one Implementer launch, and
-failure propagation. A successful `IMPLEMENTATION_DONE` maps the Task to `REVIEWING`.
+Implementer resolution, executable checking, the `IMPLEMENT` Bus handoff, Session open/reuse,
+persistent PTY input, and failure propagation. The Task stores a non-owning `sessionId`. A successful
+`IMPLEMENTATION_DONE` maps the Task to `REVIEWING`; if the Implementer remains active, the Task is
+`WAITING_IMPLEMENTER` and the Session remains inspectable.
+
+When review returns `CHANGES_REQUESTED`, the next explicit dispatch reuses the same healthy Session
+and writes the new feedback into it. An exited or failed Session is not automatically restarted;
+recovery inspection is read-only, and an explicit resume/dispatch is required.
 
 Run this from the project Git root:
 

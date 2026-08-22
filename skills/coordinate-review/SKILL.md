@@ -35,7 +35,10 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task review \
 ```
 
 For changes, include concrete feedback. The Runtime preserves it and the next
-explicit `task dispatch` includes it in the new `IMPLEMENT` activation.
+explicit `task dispatch` includes it in the new `IMPLEMENT` activation. When
+the recorded Session is healthy, that activation reuses the same
+`ExecutionSession`; review feedback is written into the existing PTY context.
+Do not use Codex App Terminal UI automation to reach the Implementer.
 
 The Reviewer does not edit product source, tests, or build configuration. It
 does not merge, tag, push, publish, or pass the human release gate.

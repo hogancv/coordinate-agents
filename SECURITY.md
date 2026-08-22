@@ -37,7 +37,7 @@ Run `doctor` after installation and treat any non-zero result as a failure.
 
 `.agent-bus/` is local plaintext working data, not a secret store. It can contain full prompts,
 requirements, review comments, commit hashes, paths, logs, source excerpts, role state, host/process
-metadata, leases, deduplication records, and message history.
+metadata, leases, deduplication records, message history, and bounded Execution Session facts.
 
 The bus inherits the repository's operating-system permissions and is not encrypted. Local
 `.git/info/exclude` reduces accidental Git tracking but does not protect against administrators,
@@ -51,6 +51,10 @@ it before sharing diagnostics.
 - On Windows, batch scripts (`.cmd`/`.bat`) without safe executable or Node.js entrypoints are rejected to prevent shell interpolation.
 - Agent IDs are strictly validated (`^[a-z][a-z0-9_-]{0,63}$`, blocking Windows device names and path separators).
 - Paths outside or containing symlinks/junctions/hard-links are rejected.
+- Execution Session input is structured text, never a shell string; output is bounded and redacted;
+  Session metadata excludes environment variables.
+- A Session Host may interrupt or terminate only the process it created. The Runtime never attaches to
+  arbitrary PIDs or automates the Codex App Terminal UI.
 
 ### Human release gate
 

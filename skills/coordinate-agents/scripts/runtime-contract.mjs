@@ -23,6 +23,14 @@ export const ERROR_CODES = Object.freeze([
   'DIRTY_WORKTREE',
   'WORKTREE_CONFLICT',
   'UNSUPPORTED_CAPABILITY',
+  'SESSION_NOT_FOUND',
+  'SESSION_NOT_ATTACHED',
+  'SESSION_NOT_HEALTHY',
+  'SESSION_START_FAILED',
+  'SESSION_WRITE_FAILED',
+  'SESSION_CLOSE_FAILED',
+  'SESSION_RUNTIME_ERROR',
+  'SESSION_STATE_CONFLICT',
 ]);
 
 const ERROR_CODE_SET = new Set(ERROR_CODES);
@@ -71,6 +79,8 @@ export function runtimeError(code, message, options = {}) {
   error.adapter = options.adapter ?? null;
   error.taskId = options.taskId ?? null;
   error.stage = options.stage ?? null;
+  error.sessionId = options.sessionId ?? null;
+  error.root = options.root ?? null;
   error.result = options.result;
   return error;
 }
@@ -91,6 +101,8 @@ export function normalizeRuntimeError(error, fallback = 'AGENT_RUNTIME_ERROR') {
     adapter: error?.adapter,
     taskId: error?.taskId,
     stage: error?.stage,
+    sessionId: error?.sessionId,
+    root: error?.root,
     result: error?.result,
     legacyCode: error?.legacyCode || legacyErrorCode(error?.code),
   });
@@ -103,9 +115,14 @@ export function serializeRuntimeError(error, options = {}) {
     message: redactOutput(`${normalized.message || 'Runtime operation failed'}`, 2 * 1024),
     recoverable: Boolean(normalized.recoverable),
   };
-  for (const key of ['details', 'command', 'agent', 'adapter', 'taskId', 'stage']) {
+  for (const key of ['details', 'command', 'agent', 'adapter', 'taskId', 'stage', 'sessionId', 'root']) {
     if (normalized[key] !== undefined && normalized[key] !== null && normalized[key] !== '') {
-      output[key] = key === 'details' ? redactOutput(`${normalized[key]}`, 2 * 1024) : normalized[key];
+      if (key === 'details') {
+        const details = typeof normalized[key] === 'string'
+          ? normalized[key]
+          : JSON.stringify(normalized[key]);
+        output[key] = redactOutput(details || '', 2 * 1024);
+      } else output[key] = normalized[key];
     }
   }
   if (options.includeLegacy && normalized.legacyCode && normalized.legacyCode !== output.code) {

@@ -4,7 +4,10 @@
 
 A local-first coordination protocol and runtime for AI coding agents. Coordinate multi-agent development in the same Git repository through a recoverable, project-local `.agent-bus`. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex App/CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC execution surfaces integrate through the adapter extension model.
 
-No CAO server, daemon, database, or shared API credential is required.
+No external CAO server, daemon, database, or shared API credential is required.
+While a task is active, the canonical Runtime may create a short-lived,
+Runtime-owned local Session host for the Implementer's persistent PTY; this is
+not a Codex App Terminal panel and is not an external service.
 
 ## Codex Plugin via GitHub Marketplace (Recommended)
 
@@ -73,8 +76,10 @@ User <-> Codex
 
 The Plugin exposes `coordinate_agents_setup_discover`,
 `coordinate_agents_setup_configure`, the Task create/dispatch/status/inspect/
-review/resume/stop tools, and `coordinate_agents_recover_inspect`. MCP and CLI
-call the same Runtime operations and return the same canonical error contract.
+review/resume/stop tools, `coordinate_agents_recover_inspect`, and the bounded
+Session tools `coordinate_agents_session_open/status/inspect/write/read/close`.
+MCP and CLI call the same Runtime operations and return the same canonical
+error contract.
 
 Only when MCP is unavailable, or for explicit debugging, use the fallback:
 
@@ -121,10 +126,11 @@ commands. After installing the Codex plugin:
 3. Start a new thread and invoke `$coordinate-agents`.
 4. Ask Codex to initialize or coordinate the task in that project.
 
-The Codex App thread handles the Planner/Reviewer side and the runtime starts the configured
-Implementer CLI as a local child process. The Implementer CLI still must be installed and its
-executable command must be correct. `agy` and `claude` are executable command examples, not
-workflow-role names:
+The Codex App thread handles the Planner/Reviewer side and the Runtime opens or reuses a persistent
+Execution Session for the configured Implementer CLI. The Session owns its local PTY process and
+bounded input/output; it is independent of the Codex App Terminal UI. The Implementer CLI still
+must be installed and its executable command must be correct. `agy` and `claude` are executable
+command examples, not workflow-role names:
 
 ```sh
 # Use the Antigravity CLI executable for the default Implementer.
@@ -153,11 +159,15 @@ me the resolved configuration. Do not start a collaboration task until I confirm
 `generic-cli` supports the `{prompt}`, `{root}`, `{agent}`, and `{lang}` argument placeholders. The
 runtime also starts the child process with the selected project root as its working directory, so
 do not assume a `--dir` flag exists. Verify each CLI's own help output before saving `args`.
+For a persistent Session, configure an interactive argument contract; a one-shot `{prompt}`
+template is not silently converted into a conversation.
 
 ### Permission flags are explicit
 
-The built-in `antigravity-cli` Adapter appends only the configured arguments followed by
-`--prompt-interactive <prompt>`. It does **not** automatically append
+The legacy one-shot `antigravity-cli` launch appends only the configured arguments followed by
+`--prompt-interactive <prompt>`. A persistent Execution Session starts with the configured
+arguments and `--prompt-interactive`, then writes the first instruction through the PTY unless
+the configured arguments explicitly include `{prompt}`. It does **not** automatically append
 `--dangerously-skip-permissions`, a sandbox bypass, or another vendor-specific full-permission flag.
 If `agy` is already configured locally for full permissions, that native configuration remains in
 effect; the Plugin does not override it. If the installed `agy --help` confirms the explicit flag is
@@ -192,7 +202,11 @@ npx @hogancv/coordinate-agents@latest quickstart --template feature --task "Buil
 
 No role prompt needs to be copied or maintained manually. Choose `--template bug`, `--template feature`, or `--template refactor` for the initial task; for later work, give Codex a new requirement following the same checklist.
 
-The reference adapters declare their launch lifecycle. Codex is one-shot interactive. Antigravity is bus-supervised: after a clean Agent exit, the same `launch` process waits non-destructively and starts the resolved Implementer command again when later review feedback or another Bus message arrives. The supervisor never claims messages or creates leases. End it with Ctrl+C, deliver `STOP` so the Agent records `STOPPED`, or use the Agent-agnostic `launch --once` escape hatch for scripts that require one activation.
+The CLI `quickstart` path remains a compatibility workflow with its two explicit terminals. The
+Plugin Task path uses a persistent Execution Session: dispatch opens one PTY, reuses it for later
+`CHANGES_REQUESTED` rework, and closes it only through explicit Session/Task lifecycle operations.
+The older `launch` command remains Adapter-driven and may use its legacy bus-supervised behavior;
+that compatibility supervisor is separate from the canonical Plugin Session Manager.
 
 ### Configure the Implementer executable
 
@@ -212,10 +226,14 @@ npx @hogancv/coordinate-agents config list
 
 Command resolution is explicit and fail-closed: **project agent command > user command > Adapter
 default** (`agy` for `antigravity-cli`, `codex` for `codex-cli`). An unavailable explicit command
-is never silently replaced by `agy` or another fallback. `launch` checks the final executable before
-starting the Implementer; spawn failures, non-zero exits, and conversation/runtime failures set the
-Agent state to `ERROR`, preserve bounded stdout/stderr tails, stop supervision, and report the
-configured command and error. The Planner must stop waiting and must not automatically retry.
+is never silently replaced by `agy` or another fallback. Both `task dispatch` and `session open`
+check the final executable before starting the Implementer; spawn failures, non-zero exits, and
+conversation/runtime failures set the Task/Session to an observable error, preserve bounded
+stdout/stderr tails, and stop. The Planner must stop waiting and must not automatically retry.
+
+Agent identity is not executable identity: `antigravity` configured with `agy-proxy` launches
+`agy-proxy` exactly. Project configuration wins over user configuration, and user configuration
+wins over the adapter default.
 
 `doctor` reports the final resolved command and executable status. It does not check login state,
 provider health, or model availability; those errors are handled as runtime failures by `launch`.
@@ -263,6 +281,12 @@ graph TD
         DEDUPE[Deduplication & Leases]
         STATE[Append-Only State Logs]
     end
+    subgraph Execution Layer
+        TASK[Task Orchestrator]
+        SM[Execution Session Manager]
+        PTY[Persistent PTY Runtime]
+        HOST[Owned Session Host]
+    end
     subgraph Adapters & Runtime Layer
         A1[codex-cli Adapter]
         A2[antigravity-cli Adapter]
@@ -277,20 +301,34 @@ graph TD
     Q --> A2
     Q --> A3
     Q --> A4
+    TASK --> REG
+    TASK --> SM
+    SM --> PTY
+    PTY --> HOST
+    HOST --> A1
+    HOST --> A2
+    HOST --> A3
 ```
 
 ### Three architectural layers
 
 1. **Coordination Layer**: Maps workflow roles (`planner`, `implementer`, `reviewer`) to registered agents and manages human release authorization.
 2. **Agent Bus Protocol Layer**: Core message bus, queue lifecycle, lease sidecars, append-only states, and crash recovery. Independent of vendor-specific transports.
-3. **Adapter & Runtime Layer**: Bridges concrete execution surfaces (built-in `codex-cli`, `antigravity-cli`, dynamic `generic-cli`, and desktop adapter extension model) with structured tasks.
+3. **Execution Layer**: Keeps Task state separate from a project/Agent-scoped `Execution Session`. The Session Manager reuses healthy Sessions, the PTY Runtime owns bounded interactive I/O, and the Session Host owns only the process it created.
+4. **Adapter & Runtime Layer**: Bridges concrete execution surfaces (built-in `codex-cli`, `antigravity-cli`, dynamic `generic-cli`, and desktop adapter extension model) with structured tasks. It never automates the Codex App Terminal UI.
 
 ### Agent Identity vs Workflow Role
 
 - **Agent Identity**: Identifies a specific engine and transport (e.g. `codex`, `antigravity`, `claude`, `my-bot`). Configured under `.agent-bus/config.json`.
 - **Workflow Role**: Defines functional responsibility in a development loop:
   - **Planner / Reviewer** (Default: `codex`): Clarifies user intent, drafts specifications under `.agent-bus/specs/`, verifies test/build evidence, and controls release gates. Never touches implementation files.
-  - **Implementer** (Default: `antigravity`): Exclusive product-code and test writer. Implements features, runs validation, commits changes, and submits evidence under `.agent-bus/evidence/`. Never performs releases.
+- **Implementer** (Default: `antigravity`): Exclusive product-code and test writer. Implements features, runs validation, commits changes, and submits evidence under `.agent-bus/evidence/`. Never performs releases.
+
+An `Execution Session` is independent of those roles. A Task stores a `sessionId` reference; the
+Session Manager keys reuse by repository root, Agent identity, and effective executable. Healthy
+Sessions survive Task review rounds, so `CHANGES_REQUESTED` rework is written to the same PTY
+context. A failed or exited Session is reported as a fact and is replaced only by an explicit
+dispatch path.
 
 ### Compatibility criteria
 
@@ -457,6 +495,28 @@ npx @hogancv/coordinate-agents@latest quickstart --template refactor --task "Ext
 
 See [`references/task-templates.md`](./references/task-templates.md) for the information checklist for each template.
 
+## Persistent Execution Sessions
+
+The Plugin Task API treats the coding CLI as a long-lived `Execution Session`, not as a disposable
+command invocation. `task dispatch` validates the configured executable, sends the durable
+`IMPLEMENT` handoff, and opens or reuses a healthy PTY Session. The Task records `sessionId` but
+does not own the Session. A short bounded grace period captures immediate completion evidence;
+otherwise the Task remains observable as `WAITING_IMPLEMENTER` while the Session continues.
+
+The normal review loop is:
+
+```text
+dispatch -> one PTY Session -> implementation -> REVIEWING
+                              ^                    |
+                              | CHANGES_REQUESTED |
+                              +---- same Session --+
+```
+
+Use the MCP Session tools for bounded status, inspection, input, output, and explicit close. They
+operate on the Runtime-owned process and structured text only. They do not type into, click, or
+otherwise control the Codex App Terminal UI. See the [Session Runtime reference](./skills/coordinate-agents/references/session-runtime.md)
+for lifecycle and platform behavior.
+
 ## Release gate
 
 `REVIEW_APPROVED` is not release authorization. The planner/reviewer may merge, tag, push, deploy, or publish only after the user enters this exact authorization for the described release plan:
@@ -474,6 +534,10 @@ RELEASE_APPROVED
 - Messages and state survive terminal restarts. Invoke the skill again to inspect and resume `new` or role-owned `processing` messages.
 - `.agent-bus/` is added to the repository's local `.git/info/exclude`, not its tracked `.gitignore`.
 - Never let multiple roles perform Git writes at the same time.
+- `recover inspect` includes the Task's `sessionId` and bounded Session facts when available. It is
+  read-only: it does not restart, replay input, resume a Task, or attach to an arbitrary process.
+- Session output is bounded and redacted. The Runtime sends Ctrl+C/termination only to the process
+  created by that Session and never controls a Codex App Terminal panel or another desktop window.
 
 Claims have a four-hour lease by default. Recover a message left behind by an interrupted process only after confirming that no matching work, commit, or reply already exists:
 
@@ -491,7 +555,8 @@ Use `--dedupe-key <stable-round-id>` when retrying a send. Concurrent sends with
 
 - complete prompts, requirements, specifications, questions, and review comments;
 - commit hashes, file paths, validation logs, diffs or source excerpts placed in evidence;
-- role state, process/host metadata, message leases, deduplication records, and queue history.
+- role state, process/host metadata, message leases, deduplication records, queue history, and
+  bounded Session command/exit facts. Session metadata does not persist environment variables.
 
 Do not place access tokens, cookies, passwords, private keys, or unnecessary production data in a bus message. The bus inherits the repository directory's operating-system permissions and is not encrypted by this package. `.git/info/exclude` prevents ordinary Git tracking, but does **not** prevent local administrators, backup tools, cloud-sync clients, malware, or other processes running as your user from reading it. Before sharing diagnostics, inspect and redact `.agent-bus/`.
 
@@ -543,9 +608,13 @@ It is the official [`hogancv/coordinate-agents`](https://github.com/hogancv/coor
 
 Install and enable the Codex plugin, add the target Git repository as a Codex App project, and set
 the thread project path to the repository root containing `.git`. Start a new thread and invoke
-`$coordinate-agents`. You do not need to open two CLI windows manually; the runtime starts the
-configured Implementer child process. Configure the actual executable command, such as `agy` or
-`claude`, and use `doctor` if the project path or command is not being resolved correctly.
+`$coordinate-agents`. You do not need to open two CLI windows manually; the Runtime opens a
+project-scoped persistent Execution Session for the configured Implementer. Configure the actual
+executable command, such as `agy` or `claude`, and use `doctor` if the project path or command is
+not being resolved correctly.
+
+The Session is an independent Runtime-owned PTY host, not the Codex App Terminal UI. Codex remains
+Planner/Reviewer; the configured Implementer remains the only product-code writer.
 
 ### How do I coordinate Codex CLI and Antigravity CLI?
 
@@ -556,10 +625,10 @@ it prints in separate terminals and continue giving requirements to Codex.
 ### How do I use two coding agents in one Git repository?
 
 Use one Git repository and assign Git writes to only one role at a time. In Codex App, the current
-thread can coordinate the workflow while the runtime starts the configured Implementer CLI as a
-child process; a second manually opened CLI session is not required. The project-local `.agent-bus`
-carries specifications, implementation results, review decisions, leases, and recovery state
-without requiring shared credentials.
+thread can coordinate the workflow while the Runtime starts or reuses the configured Implementer
+Execution Session; a second manually opened CLI session is not required. The project-local
+`.agent-bus` carries specifications, implementation results, review decisions, leases, Session
+references, and recovery state without requiring shared credentials.
 
 ### How does it prevent two AI agents from editing code simultaneously?
 
@@ -575,7 +644,18 @@ Codex clarifies requirements, produces the specification and acceptance criteria
 
 ### How do I recover interrupted multi-agent coding work?
 
-Invoke the skill again and inspect `status`; durable messages and state survive terminal restarts. Recover a stale claimed message only after confirming that no corresponding work, commit, or reply exists. See [Recovery and waiting](#recovery-and-waiting).
+Invoke the skill again and inspect `status` plus the recorded Session facts; durable messages, Task
+references, and Session metadata survive terminal restarts. Recovery inspection is read-only. Recover
+a stale claimed message only after confirming that no corresponding work, commit, or reply exists.
+After a terminal Session failure, resume and dispatch explicitly; the Runtime never loops through
+automatic retries. See [Recovery and waiting](#recovery-and-waiting).
+
+### What is an Execution Session, and does it control the Codex terminal UI?
+
+An Execution Session is a project/Agent-scoped persistent PTY owned by the Coordinate Agents
+Runtime. Task records keep a non-owning `sessionId`, so review rework can reuse the same healthy
+coding-agent context. Session tools provide bounded read/write/status/close operations, but they do
+not click, type into, or inspect the Codex App Terminal panel or another desktop window.
 
 ### Is `.agent-bus` secure?
 

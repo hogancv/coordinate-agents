@@ -9,7 +9,9 @@ permalink: /
 
 `coordinate-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex App/CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC surfaces can integrate via the adapter extension model.
 
-The agents communicate through a recoverable project-local `.agent-bus`. No CAO server, daemon, database, or shared API key is required.
+The agents communicate through a recoverable project-local `.agent-bus`. No external CAO server, daemon,
+database, or shared API key is required. During an explicit Task/Session operation, the Runtime may
+create a local Runtime-owned Session Host for a persistent PTY; it is not Codex Terminal UI control.
 
 ## Codex Plugin via GitHub Marketplace (Recommended)
 
@@ -38,7 +40,8 @@ for machine-readable runtime facts; all of these paths use the same project-loca
 For the simplest interactive path, install the Codex plugin, add the target Git repository to Codex
 App, set the thread project path to the repository root containing `.git`, and invoke
 `$coordinate-agents`. A second manually opened CLI window is not required; configure the actual
-Implementer executable (`agy`, `claude`, or a wrapper) for the local runtime.
+Implementer executable (`agy`, `claude`, or a wrapper) for the local runtime. The Task records a
+non-owning `sessionId`; a healthy Session is reused through review rework.
 
 Use `coordinate-setup` for discovery and the single high-level `setup configure` transaction. It
 persists the machine command, registers the project Agent, assigns the Implementer workflow role,
@@ -49,8 +52,9 @@ acceptance gates](./plugin-e2e.html) for the exact state and error mapping.
 
 For a custom CLI, ask the active Codex App thread to inspect the installed executable and its
 `--help` output, register it with `generic-cli`, run `doctor`, and show the resolved configuration
-before starting a task. The built-in Antigravity Adapter passes configured arguments and appends
-only `--prompt-interactive <prompt>`; it does not automatically add a full-permission or
+before starting a task. The legacy Antigravity launch passes configured arguments and appends
+only `--prompt-interactive <prompt>`; a persistent Session writes its first instruction through the
+PTY unless `{prompt}` is explicitly configured. The Adapter does not automatically add a full-permission or
 sandbox-bypass flag.
 
 - [Getting started](./getting-started.html)
@@ -58,6 +62,7 @@ sandbox-bypass flag.
 - [Codex CLI role](./codex-cli.html)
 - [Antigravity CLI role](./antigravity-cli.html)
 - [Protocol and recovery](./protocol.html)
+- [Execution Session and PTY Runtime](./session-runtime.html)
 - [Security boundary](./security.html)
 - [Troubleshooting](./troubleshooting.html)
 - [Role comparison](./comparison.html)

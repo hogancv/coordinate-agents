@@ -63,7 +63,12 @@ import {
   jsonSuccess,
   legacyErrorCode,
   runtimeError,
+  serializeRuntimeError,
 } from '../skills/coordinate-agents/scripts/runtime-contract.mjs';
+import {
+  getExecutionSessionManager,
+} from '../skills/coordinate-agents/scripts/session-manager.mjs';
+import { runtimeSessionFacts } from '../skills/coordinate-agents/scripts/session-service.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
@@ -973,7 +978,7 @@ function readLatestErrorArtifact(root, agentId) {
   return null;
 }
 
-function recoverInspectCommand(options) {
+async function recoverInspectCommand(options) {
   const root = assertGitRepository(options.root, messages.en);
   const id = options.taskId || options.positionals?.[0] || null;
   const taskId = resolveTaskId(root, id);
@@ -993,6 +998,7 @@ function recoverInspectCommand(options) {
   };
   let agentState = null;
   let artifact = null;
+  let session = null;
   if (agentConfig) {
     try {
       const resolved = runtimeAgentConfig(agentConfig, readUserConfig());
@@ -1022,6 +1028,18 @@ function recoverInspectCommand(options) {
     }
     artifact = readLatestErrorArtifact(root, task.implementer);
   }
+  if (task.sessionId) {
+    try {
+      session = await runtimeSessionFacts(root, task.sessionId);
+    } catch (error) {
+      session = {
+        id: task.sessionId,
+        state: 'failed',
+        pid: null,
+        error: serializeRuntimeError(error, { includeLegacy: true }),
+      };
+    }
+  }
   return jsonSuccess('recover.inspect', {
     root,
     task,
@@ -1033,6 +1051,7 @@ function recoverInspectCommand(options) {
     },
     errorArtifact: artifact,
     executable,
+    session,
     recommendedRecovery: {
       factsOnly: true,
       resumeRequired: ['ERROR', 'STOPPED'].includes(task.status),
@@ -1202,28 +1221,54 @@ async function taskDispatch(root, task, options, t) {
       dedupeKey: `task:${task.id}:round:${task.round}:implement`,
     });
 
-    const launch = await launchAgent({
-      ...options,
+    const sessionManager = getExecutionSessionManager();
+    const opened = await sessionManager.open({
+      root,
       agent: agentId,
-      taskId: task.id,
-      once: true,
-      json: true,
-      promptText: body,
-    }, t);
+      sessionId: task.sessionId,
+      resolved: resolution.resolved,
+      adapter: resolution.adapter,
+      initialPrompt: body,
+      language: options.language || 'en',
+    });
+    let session = opened.session;
+    if (!opened.initialInputConsumed) {
+      session = await sessionManager.write(root, session.id, body);
+    }
+    task = setTaskStatus(root, task.id, 'IMPLEMENTING', {
+      sessionId: session.id,
+      dispatch: {
+        ...(task.dispatch || {}),
+        sessionId: session.id,
+        reusedSession: Boolean(opened.reused),
+      },
+    });
 
     let finalTask = syncTaskFromAgentBus(root, task.id);
-    const observation = observeAgentBus(join(root, '.agent-bus'), agentId);
-    if (observation.failed && finalTask.status !== 'REVIEWING') {
-      const failure = runtimeError('AGENT_RUNTIME_ERROR', 'Implementer reported ERROR state after dispatch.', {
+    const graceMs = Number.isInteger(options.sessionWaitMs) && options.sessionWaitMs >= 0
+      ? Math.min(options.sessionWaitMs, 10_000)
+      : 10_000;
+    const deadline = Date.now() + graceMs;
+    let sessionState = session;
+    while (finalTask.status !== 'REVIEWING' && Date.now() < deadline) {
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 50));
+      finalTask = syncTaskFromAgentBus(root, task.id);
+      try { sessionState = await sessionManager.status(root, session.id); } catch { /* Task facts remain authoritative. */ }
+      if (['failed', 'exited'].includes(sessionState.state)) break;
+    }
+    if (finalTask.status !== 'REVIEWING' && ['failed'].includes(sessionState.state)) {
+      throw runtimeError(sessionState.exitCode ? 'AGENT_EXIT_NONZERO' : 'AGENT_RUNTIME_ERROR', `Execution session ${session.id} failed after dispatch.`, {
         recoverable: true,
         taskId: task.id,
         agent: agentId,
         adapter: resolution.resolved.adapter,
         command: resolution.resolved.command,
+        sessionId: session.id,
+        root,
         stage: 'runtime',
-        details: observation.state?.details || null,
+        details: sessionState.error || null,
+        result: { status: sessionState.exitCode, signal: sessionState.signal, resolvedCommand: sessionState.resolvedCommand },
       });
-      throw failure;
     }
     if (finalTask.status === 'REVIEWING') {
       try { recordBusState(root, agentId, 'REVIEWING', `Task ${task.id} implementation evidence received.`); } catch { /* Task is authoritative for the product surface. */ }
@@ -1234,6 +1279,10 @@ async function taskDispatch(root, task, options, t) {
     return {
       root,
       task: finalTask,
+      session: {
+        ...sessionState,
+        reused: Boolean(opened.reused),
+      },
       workflow: { implementer: agentId },
       agent: {
         id: agentId,
@@ -1244,7 +1293,11 @@ async function taskDispatch(root, task, options, t) {
         resolvedCommand: detection.resolvedCommand || null,
       },
       transport: { type: 'IMPLEMENT', messagePath, dedupeKey: `task:${task.id}:round:${task.round}:implement` },
-      launch,
+      launch: {
+        type: 'persistent-pty-session',
+        reused: Boolean(opened.reused),
+        sessionId: session.id,
+      },
     };
   } catch (error) {
     const normalized = markDispatchFailure(root, task, error, agentId);
@@ -2763,7 +2816,7 @@ export async function runtimeTaskOperation(subcommand, input = {}) {
   }), { json: true });
 }
 
-export function runtimeRecoverInspect(input = {}) {
+export async function runtimeRecoverInspect(input = {}) {
   return recoverInspectCommand(serviceOptions({
     ...input,
     command: 'recover',
@@ -2774,6 +2827,11 @@ export function runtimeRecoverInspect(input = {}) {
 
 export { recoverInspectCommand };
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+function isInvokedDirectly() {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { return resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url)); }
+}
+
+if (isInvokedDirectly()) {
   await run(process.argv.slice(2));
 }

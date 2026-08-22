@@ -220,7 +220,7 @@ test('agy-proxy override is the command actually launched by Task dispatch', () 
   try {
     const configured = invoke([
       'setup', 'configure', '--agent', 'antigravity', '--command', command,
-      '--adapter', 'antigravity-cli', '--root', repository, '--json',
+      '--adapter', 'antigravity-cli', '--args', '["{prompt}"]', '--root', repository, '--json',
     ], env);
     assert.equal(configured.status, 0, configured.stderr || configured.stdout);
     const created = invoke([

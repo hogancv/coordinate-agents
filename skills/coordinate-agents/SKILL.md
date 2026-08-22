@@ -20,10 +20,18 @@ to the smallest focused skill:
 - `coordinate-recover` - diagnose a failed or stale Task and propose a safe,
   user-confirmed recovery.
 
-Do not make the user reason about inbox directories or message files. The
-Task API is the product surface; the Agent Bus remains the single canonical
-durable transport and persistence layer. The bundled runtime and adapters under
-this directory are the only implementation source; do not create a second Bus.
+Do not make the user reason about inbox directories, message files, PTY
+endpoints, or child-process IDs. The Task API is the product surface; the
+Agent Bus remains the single canonical durable transport and persistence layer.
+The bundled runtime and adapters under this directory are the only
+implementation source; do not create a second Bus.
+
+The canonical execution primitive is an `Execution Session`: a project- and
+Agent-scoped, Runtime-owned persistent PTY. A Task records `sessionId` as a
+reference but never owns, restarts, or destroys the Session. Dispatch reuses a
+healthy matching Session, writes the next specification into it, and creates a
+new Session only when the old one is exited or failed. See
+`references/session-runtime.md` for lifecycle, security, and platform details.
 
 ## Canonical Plugin tool invocation
 
@@ -69,6 +77,7 @@ remains a fallback for hosts without direct App skill execution.
 | "Build this feature with Coordinate Agents." | `coordinate-task` | `coordinate_agents_task_create`, `coordinate_agents_task_dispatch` |
 | "Review the implementation." | `coordinate-review` | `coordinate_agents_task_inspect`, `coordinate_agents_task_review` |
 | "Continue the last task." | `coordinate-recover` | `coordinate_agents_recover_inspect`, `coordinate_agents_task_resume`, `coordinate_agents_task_dispatch` |
+| "Inspect or control the Implementer session." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_session_open`, `coordinate_agents_session_status`, `coordinate_agents_session_inspect`, `coordinate_agents_session_write`, `coordinate_agents_session_read`, `coordinate_agents_session_close` |
 
 MCP tool results carry the same structured Runtime contract as CLI JSON:
 `{ ok, command, ... }`, with canonical error codes inside `error`. Keep
@@ -76,6 +85,13 @@ explanatory prose in the Skill layer. Never infer authentication from absence
 of a version; classify `AUTH_REQUIRED` only when the agent explicitly reports
 login or authentication failure. Preserve fail-fast behavior: a runtime error
 stops the current activation and never starts an automatic retry loop.
+
+Session operations are explicit and bounded: `session_open` resolves the
+configured executable and starts or reuses one Session; `status` and `inspect`
+are read-only; `write` sends input to that Session; `read` returns bounded
+buffered output; and `close` ends only the Runtime-owned process. These tools
+never automate the Codex App Terminal panel or another desktop UI. Codex stays
+Planner/Reviewer, while the configured Implementer owns product-code changes.
 
 For protocol details and task templates, read the relative resources
 `references/protocol.md` and `references/task-templates.md`. For direct Bus

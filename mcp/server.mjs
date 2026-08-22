@@ -40,6 +40,12 @@ const stringProperty = (description, { minLength = 1 } = {}) => ({
   description,
 });
 
+const integerProperty = (description, { minimum = 0 } = {}) => ({
+  type: 'integer',
+  minimum,
+  description,
+});
+
 const rootProperty = {
   type: 'string',
   minLength: 1,
@@ -186,6 +192,104 @@ const TOOL_DEFINITIONS = Object.freeze([
       additionalProperties: false,
     },
   },
+  {
+    name: 'coordinate_agents_session_open',
+    description: 'Open or reuse a persistent PTY Execution Session for a configured Agent.',
+    operation: 'sessionOpen',
+    command: 'session.open',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        agent: stringProperty('Registered Agent identity, independent from its executable command.'),
+        initialPrompt: { type: 'string', maxLength: 262144, description: 'Optional bounded first input delivered through the adapter launch contract or PTY.' },
+        language: { type: 'string', enum: ['en', 'zh-CN'], description: 'Optional Runtime response language.' },
+      },
+      required: ['root', 'agent'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_session_status',
+    description: 'Return the lightweight state of an existing persistent Execution Session.',
+    operation: 'sessionStatus',
+    command: 'session.status',
+    inputSchema: {
+      type: 'object',
+      properties: { root: rootProperty, sessionId: stringProperty('Execution Session identifier.') },
+      required: ['root', 'sessionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_session_inspect',
+    description: 'Inspect an Execution Session with bounded recent PTY output and no environment secrets.',
+    operation: 'sessionInspect',
+    command: 'session.inspect',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        sessionId: stringProperty('Execution Session identifier.'),
+        maxLines: integerProperty('Maximum recent output lines.', { minimum: 1 }),
+        maxBytes: integerProperty('Maximum recent output bytes.', { minimum: 1 }),
+      },
+      required: ['root', 'sessionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_session_write',
+    description: 'Write bounded input to an existing persistent PTY Execution Session.',
+    operation: 'sessionWrite',
+    command: 'session.write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        sessionId: stringProperty('Execution Session identifier.'),
+        input: stringProperty('Input delivered to the owned PTY.'),
+        submit: { type: 'boolean', description: 'Append a terminal Enter when input has no line ending.' },
+      },
+      required: ['root', 'sessionId', 'input'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_session_read',
+    description: 'Read bounded recent or cursor-based output from an Execution Session.',
+    operation: 'sessionRead',
+    command: 'session.read',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        sessionId: stringProperty('Execution Session identifier.'),
+        cursor: integerProperty('Return output after this output cursor.', { minimum: 0 }),
+        maxLines: integerProperty('Maximum output lines.', { minimum: 1 }),
+        maxBytes: integerProperty('Maximum output bytes.', { minimum: 1 }),
+      },
+      required: ['root', 'sessionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_session_close',
+    description: 'Gracefully close an owned Execution Session and kill it after a bounded timeout.',
+    operation: 'sessionClose',
+    command: 'session.close',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        sessionId: stringProperty('Execution Session identifier.'),
+        graceful: { type: 'boolean', description: 'Attempt Ctrl+C before the bounded termination timeout.' },
+        timeoutMs: integerProperty('Graceful close timeout in milliseconds.', { minimum: 100 }),
+      },
+      required: ['root', 'sessionId'],
+      additionalProperties: false,
+    },
+  },
 ]);
 
 const TOOL_MAP = new Map(TOOL_DEFINITIONS.map(tool => [tool.name, tool]));
@@ -214,9 +318,16 @@ function validateArguments(tool, args) {
     if (property.type === 'string' && (typeof value !== 'string' || value.length < (property.minLength || 0))) {
       return `Argument ${key} must be a non-empty string.`;
     }
+    if (property.maxLength !== undefined && typeof value === 'string' && value.length > property.maxLength) {
+      return `Argument ${key} exceeds the supported size limit.`;
+    }
     if (property.type === 'array' && (!Array.isArray(value) || value.some(item => typeof item !== 'string'))) {
       return `Argument ${key} must be an array of strings.`;
     }
+    if (property.type === 'integer' && (!Number.isInteger(value) || value < (property.minimum ?? 0))) {
+      return `Argument ${key} must be an integer within the supported range.`;
+    }
+    if (property.type === 'boolean' && typeof value !== 'boolean') return `Argument ${key} must be a boolean.`;
     if (property.type === 'object' && !isObject(value)) return `Argument ${key} must be an object.`;
     if (property.enum && !property.enum.includes(value)) return `Argument ${key} has an unsupported value.`;
   }

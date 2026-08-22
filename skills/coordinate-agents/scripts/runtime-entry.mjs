@@ -21,6 +21,7 @@ import {
   lstatSync,
   readdirSync,
   readFileSync,
+  realpathSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -289,6 +290,11 @@ export async function launchCanonicalRuntime(args = process.argv.slice(2), optio
   });
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+function isInvokedDirectly() {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); } catch { return resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url)); }
+}
+
+if (isInvokedDirectly()) {
   await launchCanonicalRuntime();
 }

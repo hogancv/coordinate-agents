@@ -76,8 +76,9 @@ other CLI's credential directory.
 
 In Codex App, add or open the target Git repository and set the thread project/workspace path to the
 repository root—the directory containing `.git`. Start a new thread and invoke `$coordinate-agents`.
-The App path does not require manually opening two CLI windows, but the runtime still launches the
-Implementer locally. Configure the actual executable command, not a role label:
+The App path does not require manually opening two CLI windows, but the Runtime still opens a
+project-scoped persistent Session for the Implementer locally. Configure the actual executable
+command, not a role label:
 
 ```sh
 # Antigravity
@@ -100,8 +101,9 @@ installed `claude` executable and `claude --help`, register it with `generic-cli
 show me the resolved configuration. Do not start until I confirm.
 ```
 
-The built-in Antigravity Adapter does not automatically append a full-permission flag. It passes
-configured `args` and then adds `--prompt-interactive <prompt>`. If `agy --help` confirms
+The built-in Antigravity Adapter does not automatically append a full-permission flag. The legacy
+one-shot path passes configured `args` and then adds `--prompt-interactive <prompt>`; a persistent
+Session writes its first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, set
 `agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
 `doctor` checks the executable/version only.

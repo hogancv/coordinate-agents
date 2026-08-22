@@ -1,6 +1,6 @@
-import { accessSync, existsSync, lstatSync } from 'node:fs';
+import { accessSync, closeSync, existsSync, lstatSync, openSync, readSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { delimiter, extname, isAbsolute, join } from 'node:path';
+import { basename, delimiter, extname, isAbsolute, join } from 'node:path';
 import { X_OK } from 'node:constants';
 
 export const EXECUTABLE_CODES = Object.freeze({
@@ -93,6 +93,29 @@ function windowsEntrypoint(candidate, { windowsEntrypoint } = {}) {
       { resolvedCommand: candidate, prefix: [], safe: false },
     );
   }
+  if (extension === '.ps1') {
+    const hosts = [];
+    if (process.env.SystemRoot) hosts.push(join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'));
+    try {
+      const output = execFileSync('where.exe', ['pwsh.exe'], { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      hosts.push(...output.split(/\r?\n/).map(value => value.trim()).filter(Boolean));
+    } catch { /* Try the inbox Windows PowerShell path below. */ }
+    try {
+      const output = execFileSync('where.exe', ['powershell.exe'], { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      hosts.push(...output.split(/\r?\n/).map(value => value.trim()).filter(Boolean));
+    } catch { /* The configured script will fail closed if no host is available. */ }
+    const host = hosts.find(value => existsSync(value));
+    if (host) {
+      return {
+        available: true,
+        command: host,
+        prefix: ['-NoProfile', '-File', candidate],
+        resolvedCommand: candidate,
+        safe: true,
+      };
+    }
+    return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_FOUND, `PowerShell host is unavailable for: ${candidate}`, { resolvedCommand: candidate, prefix: [], safe: false });
+  }
   return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Unsupported Windows executable entrypoint: ${candidate}`);
 }
 
@@ -110,6 +133,51 @@ function posixCandidate(command) {
   return null;
 }
 
+function readShebang(candidate) {
+  let descriptor = null;
+  try {
+    descriptor = openSync(candidate, 'r');
+    const buffer = Buffer.alloc(256);
+    const bytes = readSync(descriptor, buffer, 0, buffer.length, 0);
+    const firstLine = buffer.subarray(0, bytes).toString('utf8').split(/\r?\n/, 1)[0].trim();
+    if (!firstLine.startsWith('#!')) return null;
+    const tokens = firstLine.slice(2).trim().match(/\S+/g) || [];
+    return tokens.length > 0 ? tokens : { invalid: true };
+  } catch {
+    return null;
+  } finally {
+    if (descriptor !== null) {
+      try { closeSync(descriptor); } catch { /* The descriptor is best effort after a read failure. */ }
+    }
+  }
+}
+
+function resolveShebangInterpreter(interpreter, args, candidate) {
+  let interpreterName = interpreter;
+  let interpreterArgs = [...args];
+  if (basename(interpreter) === 'env') {
+    if (interpreterArgs[0] === '-S') interpreterArgs = interpreterArgs.slice(1);
+    if (!interpreterArgs[0] || interpreterArgs[0].startsWith('-')) {
+      return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Unsupported shebang interpreter: ${interpreter} ${args.join(' ')}`, { resolvedCommand: candidate });
+    }
+    [interpreterName, ...interpreterArgs] = interpreterArgs;
+  }
+  const interpreterCandidate = isPathLike(interpreterName)
+    ? interpreterName
+    : posixCandidate(interpreterName);
+  const resolved = posixEntrypoint(interpreterName, interpreterCandidate);
+  if (!resolved.available) {
+    return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Shebang interpreter is unavailable: ${interpreterName}`, { resolvedCommand: candidate });
+  }
+  return {
+    available: true,
+    command: resolved.command,
+    prefix: [...resolved.prefix, ...interpreterArgs, candidate],
+    resolvedCommand: candidate,
+    safe: true,
+  };
+}
+
 function posixEntrypoint(command, candidate) {
   if (!candidate) return resultFailure(command, EXECUTABLE_CODES.COMMAND_NOT_FOUND, `Command not found: ${command}`);
   const metadata = lstatSync(candidate);
@@ -124,6 +192,13 @@ function posixEntrypoint(command, candidate) {
     accessSync(candidate, X_OK);
   } catch {
     return resultFailure(command, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Command is not executable: ${candidate}`, { resolvedCommand: candidate });
+  }
+  const shebang = readShebang(candidate);
+  if (shebang) {
+    if (shebang.invalid) {
+      return resultFailure(command, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Command has an invalid shebang: ${candidate}`, { resolvedCommand: candidate });
+    }
+    return resolveShebangInterpreter(shebang[0], shebang.slice(1), candidate);
   }
   return { available: true, command: candidate, prefix: [], resolvedCommand: candidate, safe: true };
 }

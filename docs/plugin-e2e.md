@@ -21,11 +21,13 @@ The current implementation has one canonical Runtime source:
 | Canonical executable | `bin/coordinate-agents.mjs` |
 | Plugin Skill resolver | `skills/coordinate-agents/scripts/runtime-entry.mjs` |
 | Task persistence | `skills/coordinate-agents/scripts/task-runtime.mjs` under `.agent-bus/tasks/` |
+| Execution Session | `skills/coordinate-agents/scripts/session-manager.mjs`, `session-service.mjs`, and `session-host.mjs` under `.agent-bus/sessions/` |
+| PTY backend | `skills/coordinate-agents/scripts/pty-runtime.mjs`, preferring `node-pty` with bounded owned-stdio compatibility fallback |
 | JSON contract | `skills/coordinate-agents/scripts/runtime-contract.mjs` |
 | Machine configuration | `skills/coordinate-agents/scripts/user-config.mjs` at `~/.coordinate-agents/config.json` |
 | Project orchestration | `.agent-bus/config.json`, inboxes, state, leases, and the existing Agent Bus scripts |
 | Adapter registry | `skills/coordinate-agents/adapters/index.mjs` and the existing adapter contract |
-| Launch/supervision | `bin/coordinate-agents.mjs` `launch` path; `task dispatch` calls one bounded activation with `--once` |
+| Task execution | `task dispatch` uses the Session Manager to validate, open/reuse, write, observe, and persist `sessionId`; legacy `launch` remains a compatibility path |
 | npm payload | `package.json.files` includes `.codex-plugin`, `skills`, and `bin` |
 
 The resolver is intentionally not a second Runtime. It starts the same
@@ -96,7 +98,8 @@ Task
   → resolve Adapter and final command
   → executable check
   → Agent Bus IMPLEMENT message
-  → one Implementer launch
+  → Execution Session Manager open/reuse
+  → one persistent PTY activation and bounded input/output
   → Task WAITING_IMPLEMENTER or REVIEWING
 ```
 
@@ -111,6 +114,15 @@ An `IMPLEMENTATION_DONE` Bus message addressed to the Task Planner is promoted
 by the Task Runtime into `implementationCommit`, bounded `evidence`,
 `updatedAt`, and `REVIEWING`. The Bus remains durable transport; the Task is
 the product-facing state source.
+
+The Task stores the returned `sessionId` but does not own the process. A healthy
+Session is keyed by repository root, Agent identity, and effective executable.
+When review records `CHANGES_REQUESTED`, the next explicit dispatch writes the
+new specification and feedback into the same healthy PTY context. An exited or
+failed Session is a recovery fact; replacement happens only on an explicit
+dispatch and never through an infinite retry loop. `recover inspect` reports
+Session facts without restarting, replaying input, or controlling the Codex App
+Terminal UI.
 
 ## Task state mapping
 
@@ -155,8 +167,10 @@ a path containing spaces and runs with an empty executable `PATH`. It verifies:
 - `REVIEW_APPROVED` → `APPROVED` and release-gate separation;
 - missing executable failure without Bus handoff or launch;
 - non-zero fixture exit as `AGENT_EXIT_NONZERO`, Task/Agent `ERROR`, and explicit resume.
+- Session open/status/inspect/write/read/close, bounded output, root/Agent isolation, and same-Session review rework.
 
 The same fixture covers Windows `.cmd` wrappers and POSIX executable wrappers
 according to the host platform. No MCP server, lifecycle Hook, Autopilot,
-parallel Implementer, worktree, daemon, database, or external Adapter SDK is
-needed for this closure.
+parallel Implementer, external daemon, database, Codex Terminal UI automation,
+or external Adapter SDK is needed for this closure. The Runtime-owned Session
+Host exists only after an explicit Task/Session operation.

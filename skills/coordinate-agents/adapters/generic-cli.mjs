@@ -49,14 +49,46 @@ export class GenericCliAdapter extends AgentAdapter {
     };
   }
 
+  resolveSessionLaunch({ root, initialPrompt = '', agent, language }) {
+    const command = this.config.command;
+    if (!command) throw new Error('Cannot open generic CLI session without configured command');
+    const resolved = resolveExecutable(command);
+    if (!resolved.available) throw executableError(resolved, 'Cannot open generic CLI session safely');
+    const templateArgs = Array.isArray(this.config.args) && this.config.args.length > 0
+      ? this.config.args
+      : [];
+    for (const arg of templateArgs) {
+      if (typeof arg === 'string' && arg.includes('{role}')) {
+        throw new Error('Unsupported template placeholder: {role}. Use {agent}.');
+      }
+    }
+    const resolvedArgs = templateArgs.flatMap(arg => {
+      if (typeof arg !== 'string') return [String(arg)];
+      if (arg.includes('{prompt}') && !initialPrompt) return [];
+      return [arg
+        .replaceAll('{prompt}', initialPrompt)
+        .replaceAll('{root}', resolve(root || process.cwd()))
+        .replaceAll('{agent}', agent || '')
+        .replaceAll('{lang}', language || '')];
+    });
+    const promptInArguments = Boolean(initialPrompt && templateArgs.some(arg => `${arg}`.includes('{prompt}')));
+    return {
+      command: resolved.command,
+      prefix: resolved.prefix,
+      args: resolvedArgs,
+      initialInputConsumed: promptInArguments,
+      resolvedCommand: resolved.resolvedCommand,
+    };
+  }
+
   validateConfiguration({ setup = false } = {}) {
     if (!setup) return { compatible: true, code: null, details: null };
     const args = this.config.args;
-    if (!Array.isArray(args) || !args.some(value => typeof value === 'string' && value.includes('{prompt}'))) {
+    if (!Array.isArray(args) || args.length === 0) {
       return {
         compatible: false,
         code: 'UNSUPPORTED_CAPABILITY',
-        details: 'generic-cli requires an explicit args template containing {prompt}; inspect the CLI --help output before configuring it.',
+        details: 'generic-cli requires a non-empty args template; include {prompt} for one-shot mode or interactive flags for a persistent PTY session.',
       };
     }
     return { compatible: true, code: null, details: null };

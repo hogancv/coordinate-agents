@@ -19,7 +19,16 @@ In the default reference workflow, Google Antigravity CLI (`agy`) fulfills the i
 
 Antigravity does not approve its own work and does not merge, tag, push, deploy, or publish. It retains its native Google account authentication and model subscription.
 
-The `antigravity-cli` reference Adapter declares a bus-supervised launch policy. After a clean resolved-command exit, the parent `launch` command waits without claiming messages and starts the resolved command again when later work appears. A `STOPPED` state or Ctrl+C ends supervision; a non-zero child exit fails without retry. Use `launch --once` only for an intentional single activation.
+The Plugin Task path uses the canonical Execution Session Runtime. `task dispatch` validates the
+resolved command, opens or reuses one Runtime-owned persistent PTY, and records the Task's
+non-owning `sessionId`. After `CHANGES_REQUESTED`, the next explicit dispatch reuses the same healthy
+Session and writes the feedback into that PTY context. A Session in `exited` or `failed` is reported
+as a fact and is never retried in a loop. The separate CLI `launch` command retains its legacy
+bus-supervised compatibility policy; it is not the Plugin Session Manager.
+
+Session status, bounded output, input, and close are available through the Coordinate Agents MCP
+Session tools. They operate on the Runtime-owned process only and never type into or control the
+Codex App Terminal UI.
 
 The executable can be overridden per machine without changing the installed Skill or project
 defaults:
@@ -30,15 +39,17 @@ npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
 
 The project command, if explicitly present, takes precedence over
 `~/.coordinate-agents/config.json`, which takes precedence over the Adapter default `agy`.
-`launch` checks the resolved executable before starting. Spawn failures, non-zero exits, and CLI
-conversation/runtime failures write `ERROR`, stop supervision, and are not automatically retried.
+`launch` and Session dispatch check the resolved executable before starting. Spawn failures,
+non-zero exits, and CLI conversation/runtime failures write structured `ERROR`/Session facts,
+preserve bounded output, and stop. They are not automatically retried.
 Login state is not preflighted; a login/provider error reported by `agy` is handled as a runtime
 failure with a bounded stdout/stderr tail.
 
 ## Permission and sandbox arguments
 
-The built-in `antigravity-cli` Adapter does not infer a permission mode. It passes any configured
-`args` and then appends `--prompt-interactive <prompt>`; it does not automatically add
+The built-in `antigravity-cli` Adapter does not infer a permission mode. Its legacy one-shot path
+passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent Session
+writes its first instruction through the PTY unless `{prompt}` is explicitly configured. It does not automatically add
 `--dangerously-skip-permissions` or another sandbox-bypass flag. If `agy` is already configured
 locally for full permissions, that native setting remains in effect.
 

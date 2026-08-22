@@ -35,8 +35,9 @@ The three Plugin onboarding actions are continuous:
    assigns the Implementer workflow role, validates Adapter compatibility, runs the executable check,
    and returns `READY`.
 3. After Codex approves a specification, `coordinate-task` creates and dispatches the Task. Dispatch
-   resolves the Implementer, sends `IMPLEMENT` through Agent Bus, launches once, and maps
-   `IMPLEMENTATION_DONE` to `REVIEWING`; `coordinate-review` records the review decision.
+   resolves the Implementer, sends `IMPLEMENT` through Agent Bus, opens or reuses one persistent
+   Execution Session, and maps `IMPLEMENTATION_DONE` to `REVIEWING`; `coordinate-review` records the
+   review decision. The Task stores a non-owning `sessionId`.
 
 Plugin acceptance should therefore run the resolver-backed commands from a new Codex thread, with no
 global `coordinate-agents` executable available:
@@ -85,10 +86,11 @@ directly:
 2. Set the thread project/workspace path to the repository root containing `.git`.
 3. Start a new thread and invoke `$coordinate-agents`.
 
-This path does not require manually opening two CLI windows. The runtime starts the Implementer as a
-local child process, so the actual execution command must be installed and configured correctly,
-for example `agy` or `claude`. The App thread and the Implementer command must use the same machine;
-the project path and command are independent checks.
+This path does not require manually opening two CLI windows. The Runtime opens or reuses a
+project/Agent-scoped persistent PTY Session for the Implementer, so the actual execution command must
+be installed and configured correctly, for example `agy` or `claude`. The Session is independent of
+the Codex App Terminal UI. The App thread and the Implementer command must use the same machine; the
+project path and command are independent checks.
 
 For another CLI, ask the active Codex App thread to inspect the installed executable and its help
 output before saving a `generic-cli` configuration:
@@ -152,7 +154,9 @@ open a fresh terminal, and verify `node --version` again.
 and verify its own `--version` and model interaction before installing this Skill.
 
 **Full permissions are unclear.** The built-in Antigravity Adapter does not add a permission bypass
-flag. It passes configured `args` and appends `--prompt-interactive <prompt>`. If the installed
+flag. The legacy one-shot path passes configured `args` and appends `--prompt-interactive <prompt>`;
+the persistent Session writes its first instruction through the PTY unless `{prompt}` is explicitly
+configured. If the installed
 `agy --help` confirms `--dangerously-skip-permissions` and the user explicitly wants it, configure
 it with `config set agent.antigravity.args '["--dangerously-skip-permissions"]'`; `config list` shows
 the saved user arguments, while `doctor` checks executable/version readiness only. A native `agy`

@@ -17,7 +17,7 @@ fixtures, logs, documentation, or release artifacts.
 
 - `bin/coordinate-agents.mjs`: installer, updater, doctor, quickstart, launch, agent management, and uninstall CLI.
 - `.codex-plugin/plugin.json`: Codex Plugin manifest.
-- `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`).
+- `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`). The Session implementation is `scripts/pty-runtime.mjs`, `scripts/session-host.mjs`, `scripts/session-manager.mjs`, and `scripts/session-service.mjs`; `references/session-runtime.md` is the detailed protocol reference.
 - `scripts/`: repository development and release tooling (`demo.mjs`, `sync-llms.mjs`).
 - `AI_INSTALL.md`: canonical safe installation procedure for AI assistants.
 - `README.md` and `README.zh-CN.md`: user-facing English and Simplified Chinese documentation.
@@ -52,21 +52,29 @@ authoritative Windows, macOS, Linux, Node.js 18, and Node.js 22 matrix.
 
 1. Preserve the role boundary: Codex clarifies, specifies, reviews, and performs separately
    authorized releases; Antigravity writes product code and tests.
-2. Keep filesystem operations cross-platform and safe for paths containing spaces and shell
+2. Keep the Execution Session boundary explicit: Task records may reference `sessionId`, but
+   Session Manager owns persistent PTY lifecycle, reuse, bounded I/O, recovery facts, and cleanup.
+   Never automate the Codex App Terminal UI or attach to an arbitrary process. A healthy Session is
+   reused across review rework; exited/failed Sessions require an explicit dispatch path and never
+   trigger an infinite retry loop.
+3. Keep configured executable identity exact. Project command > user command > Adapter default;
+   `antigravity` configured as `agy-proxy` must launch `agy-proxy`, not guessed `agy`. Fail fast when
+   the final executable is missing, incompatible, or unrunnable, and include root/Agent/Session facts.
+4. Keep filesystem operations cross-platform and safe for paths containing spaces and shell
    metacharacters. Do not introduce shell-string interpolation when argument arrays are possible.
-3. Refuse symlinks, junctions, path escapes, unrecognized installs, and destructive recovery by
+5. Refuse symlinks, junctions, path escapes, unrecognized installs, and destructive recovery by
    default. Preserve atomic publication, deduplication, leases, quarantine, and explicit cleanup.
-4. Add or update focused tests for every behavior change. Tests must use isolated temporary
+6. Add or update focused tests for every behavior change. Tests must use isolated temporary
    repositories and must not invoke live model accounts or modify a user's real project.
-5. Keep `SKILL.md` concise. Put detailed protocol or template material one level down in
+7. Keep `SKILL.md` concise. Put detailed protocol or template material one level down in
    `references/` and link it directly from `SKILL.md`.
-6. Keep English and Simplified Chinese user flows semantically synchronized. If commands,
+8. Keep English and Simplified Chinese user flows semantically synchronized. If commands,
    prerequisites, paths, role behavior, or security rules change, review all of:
    `README.md`, `README.zh-CN.md`, `docs/`, `AI_INSTALL.md`, `SKILL.md`, `SECURITY.md`, and
    `docs/llms.txt`. Never edit the generated root `llms.txt` directly.
-7. If installation payload contents change, update `package.json` `files`, package tests, and the
+9. If installation payload contents change, update `package.json` `files`, package tests, and the
    package version as appropriate. Keep `package-lock.json` synchronized.
-8. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens
+10. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens
    in project automation.
 
 ## Distribution and release strategy

@@ -172,6 +172,12 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
     'coordinate_agents_task_resume',
     'coordinate_agents_task_stop',
     'coordinate_agents_recover_inspect',
+    'coordinate_agents_session_open',
+    'coordinate_agents_session_status',
+    'coordinate_agents_session_inspect',
+    'coordinate_agents_session_write',
+    'coordinate_agents_session_read',
+    'coordinate_agents_session_close',
   ]);
   for (const tool of listed.result.tools) {
     assert.equal(typeof tool.name, 'string');
@@ -199,7 +205,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     });
     assert.equal(initialized.result.protocolVersion, '2025-06-18');
     const listed = await debugClient.request('tools/list');
-    assert.equal(listed.result.tools.length, 10);
+    assert.equal(listed.result.tools.length, 16);
   } finally {
     await debugClient.close();
   }
@@ -207,7 +213,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.match(debugClient.stderr, /server root:/);
   assert.match(debugClient.stderr, /runtime root:/);
   assert.match(debugClient.stderr, /protocol version: 2025-06-18/);
-  assert.match(debugClient.stderr, /tool count: 10/);
+  assert.match(debugClient.stderr, /tool count: 16/);
   assert.match(debugClient.stderr, /initialize received/);
   assert.match(debugClient.stderr, /tools\/list received/);
   const selfTest = spawnSync(process.execPath, [selfTestPath], {
@@ -219,7 +225,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
   assert.match(selfTest.stdout, /MCP server: OK/);
   assert.match(selfTest.stdout, /Protocol: 2025-06-18/);
-  assert.match(selfTest.stdout, /Tools: 10/);
+  assert.match(selfTest.stdout, /Tools: 16/);
   rmSync(independentCwd, { recursive: true, force: true });
 
   const pluginRoot = mkdtempSync(join(tmpdir(), 'Coordinate Agents Plugin Fixture '));
@@ -245,7 +251,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     const responses = launched.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line));
     assert.equal(responses.length, 2);
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
-    assert.equal(responses[1].result.tools.length, 10);
+    assert.equal(responses[1].result.tools.length, 16);
   } finally {
     rmSync(pluginRoot, { recursive: true, force: true });
   }
@@ -400,6 +406,85 @@ test('MCP stdio workflow uses the same Runtime state and error contract as CLI',
     });
     assert.equal(recovery.result.structuredContent.ok, true);
     assert.equal(recovery.result.structuredContent.recommendedRecovery.automaticRetry, false);
+  } finally {
+    await client.close();
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('MCP exposes the bounded persistent Session lifecycle through the canonical service', async () => {
+  const repository = tempRepository('coordinate-agents-mcp-session-');
+  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-session-home-'));
+  const client = new StdioMcpClient(isolatedEnvironment(home));
+  const source = "console.log('session-ready'); process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => console.log('received:' + chunk)); setInterval(() => {}, 10000);";
+  try {
+    await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
+    const configured = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_configure',
+      arguments: {
+        root: repository,
+        agent: 'node',
+        command: process.execPath,
+        adapter: 'generic-cli',
+        args: ['-e', source],
+        role: 'implementer',
+      },
+    });
+    assert.equal(configured.result.structuredContent.ok, true);
+
+    const opened = await client.request('tools/call', {
+      name: 'coordinate_agents_session_open',
+      arguments: { root: repository, agent: 'node', initialPrompt: 'first session input' },
+    });
+    assert.equal(opened.result.structuredContent.ok, true);
+    const sessionId = opened.result.structuredContent.session.id;
+    assert.equal(opened.result.structuredContent.session.agent, 'node');
+    assert.equal(opened.result.structuredContent.session.command, process.execPath);
+
+    const reused = await client.request('tools/call', {
+      name: 'coordinate_agents_session_open',
+      arguments: { root: repository, agent: 'node' },
+    });
+    assert.equal(reused.result.structuredContent.reused, true);
+    assert.equal(reused.result.structuredContent.session.id, sessionId);
+
+    const status = await client.request('tools/call', {
+      name: 'coordinate_agents_session_status',
+      arguments: { root: repository, sessionId },
+    });
+    assert.ok(['running', 'idle', 'busy'].includes(status.result.structuredContent.session.state));
+
+    const written = await client.request('tools/call', {
+      name: 'coordinate_agents_session_write',
+      arguments: { root: repository, sessionId, input: 'second session input' },
+    });
+    assert.equal(written.result.structuredContent.ok, true);
+
+    let inspected;
+    // A PTY-backed CLI may need a few seconds to initialize under the full
+    // cross-platform test matrix before it starts echoing application output.
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      inspected = await client.request('tools/call', {
+        name: 'coordinate_agents_session_inspect',
+        arguments: { root: repository, sessionId, maxLines: 20, maxBytes: 4096 },
+      });
+      if (inspected.result.structuredContent.output.output.includes('received:')) break;
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 50));
+    }
+    assert.match(inspected.result.structuredContent.output.output, /received:/);
+
+    const read = await client.request('tools/call', {
+      name: 'coordinate_agents_session_read',
+      arguments: { root: repository, sessionId, maxLines: 20, maxBytes: 4096 },
+    });
+    assert.match(read.result.structuredContent.output, /session-ready/);
+
+    const closed = await client.request('tools/call', {
+      name: 'coordinate_agents_session_close',
+      arguments: { root: repository, sessionId, timeoutMs: 500 },
+    });
+    assert.ok(['exited', 'failed'].includes(closed.result.structuredContent.session.state));
   } finally {
     await client.close();
     rmSync(repository, { recursive: true, force: true });

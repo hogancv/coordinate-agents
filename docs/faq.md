@@ -22,13 +22,24 @@ A local-first coordination protocol, runtime, and Codex App/CLI skill for multi-
 
 Yes. Install and enable the Codex plugin, add the target Git repository as a Codex App project, set
 the thread project path to the repository root containing `.git`, and invoke `$coordinate-agents` in
-a new thread. You do not need to manually open two CLI windows. The runtime still launches the
-configured Implementer as a local child process, so configure the actual executable command, such
-as `agy` or `claude`, and keep that CLI installed on the same machine.
+a new thread. You do not need to manually open two CLI windows. The Runtime opens or reuses a
+project/Agent-scoped persistent Execution Session for the configured Implementer, so configure the
+actual executable command, such as `agy` or `claude`, and keep that CLI installed on the same machine.
+
+The Session is a Runtime-owned PTY host, not the Codex App Terminal UI. Session tools are bounded and
+operate only on the process created by that host.
 
 For a non-reference CLI, ask Codex App to inspect the installed executable and its `--help` output,
 register it with `generic-cli`, run `doctor`, and show the resolved configuration before starting a
 task. This avoids copying prompt, directory, or permission flags from another CLI version.
+
+## What is an Execution Session?
+
+An Execution Session is independent process state for a configured Agent in one repository. A Task
+stores a non-owning `sessionId`; a healthy Session can therefore survive a review round and receive
+`CHANGES_REQUESTED` rework through the same PTY. `status`, `inspect`, `write`, `read`, and `close`
+are explicit bounded operations. Recovery inspection does not restart, replay, or attach to an
+arbitrary process, and no Session operation automates the Codex App Terminal UI.
 
 ## How do I prevent multiple AI agents from editing code simultaneously?
 
@@ -42,8 +53,9 @@ No. Each agent and CLI maintains its native authentication and environment indep
 
 Yes. Custom CLI agents can be registered dynamically using `coordinate-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
 
-The built-in Antigravity Adapter does not automatically add full permissions. It passes configured
-arguments and then appends `--prompt-interactive <prompt>`. If the local `agy --help` confirms
+The built-in Antigravity Adapter does not automatically add full permissions. Its legacy one-shot
+path passes configured arguments and then appends `--prompt-interactive <prompt>`; a persistent
+Session writes its first instruction through the PTY unless `{prompt}` is explicitly configured. If the local `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, set it with
 `config set agent.antigravity.args`; otherwise the local `agy` configuration remains authoritative.
 

@@ -33,6 +33,25 @@ export class CodexCliAdapter extends AgentAdapter {
     };
   }
 
+  resolveSessionLaunch({ root, initialPrompt = '' }) {
+    const command = this.config.command || 'codex';
+    const resolved = resolveExecutable(command, { windowsEntrypoint: codexWindowsEntrypoint });
+    if (!resolved.available) throw executableError(resolved, 'Cannot open Codex session safely');
+    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
+    const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
+    const args = configuredArgs
+      .filter(arg => initialPrompt || !`${arg}`.includes('{prompt}'))
+      .map(arg => `${arg}`.replaceAll('{prompt}', initialPrompt));
+    args.push('-C', resolve(root));
+    return {
+      command: resolved.command,
+      prefix: resolved.prefix,
+      args,
+      initialInputConsumed: promptInArguments,
+      resolvedCommand: resolved.resolvedCommand,
+    };
+  }
+
   capabilities() {
     return {
       ...super.capabilities(),

@@ -7,7 +7,7 @@ permalink: /zh-CN/
 
 # coordinate-agents
 
-`coordinate-agents` 是面向 AI 编码代理的本地优先协调协议与运行时。在同一个 Git 仓库中通过可恢复的本地 `.agent-bus` 协调多代理协作。**OpenAI Codex App/CLI** 与 **Google Antigravity CLI (`agy`)** 作为首发官方参考适配器与默认工作流（Codex 负责需求澄清、规格说明、提交审查与发布门禁；Antigravity 独占代码与测试实现），同时支持通过适配器动态注册与配置任意 CLI 代理。
+`coordinate-agents` 是面向 AI 编码代理的本地优先协调协议与运行时。在同一个 Git 仓库中通过可恢复的本地 `.agent-bus` 协调多代理协作。**OpenAI Codex App/CLI** 与 **Google Antigravity CLI (`agy`)** 作为首发官方参考适配器与默认工作流（Codex 负责需求澄清、规格说明、提交审查与发布门禁；Antigravity 独占代码与测试实现），同时支持通过适配器动态注册与配置任意 CLI 代理。任务运行期间，Runtime 可能创建由自己拥有的本地持久 PTY Session Host，但不会控制 Codex App Terminal UI。
 
 ## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
 
@@ -31,14 +31,16 @@ Agent Bus。
 
 正常路径是 **安装 Plugin → Discover → Configure → Build**：`coordinate-setup` 只做发现后，由一次
 `setup configure` 事务写入用户 command、注册项目 Agent、配置 Adapter、分配 Implementer 角色并执行
-兼容性/可执行文件检查；规格完整后，`coordinate-task task dispatch` 才发送 `IMPLEMENT` 并启动执行端，
-`IMPLEMENTATION_DONE` 会映射为 `REVIEWING`，最后由 `coordinate-review` 记录审查决策。
+兼容性/可执行文件检查；规格完整后，`coordinate-task task dispatch` 才发送 `IMPLEMENT` 并打开或复用执行端的持久 Session；Task
+只保存不拥有 Session 的 `sessionId`。`IMPLEMENTATION_DONE` 会映射为 `REVIEWING`，最后由
+`coordinate-review` 记录审查决策；`CHANGES_REQUESTED` 会在健康 Session 中复用同一 PTY 上下文。
 
 ## 直接在 Codex App 中使用（推荐）
 
 安装插件后，在 Codex App 中添加或打开目标 Git 项目，并将线程项目路径指定为包含 `.git` 的项目根目录。
-新建线程后调用 `$coordinate-agents` 即可，不需要手动打开两个 CLI 窗口。运行时会在本机启动配置好的
-Implementer 子进程；请确认执行命令是真实存在的可执行文件，例如 `agy` 或 `claude`，而不是角色名称。
+新建线程后调用 `$coordinate-agents` 即可，不需要手动打开两个 CLI 窗口。Runtime 会在本机打开或复用配置好的
+Implementer 持久 Execution Session；请确认执行命令是真实存在的可执行文件，例如 `agy` 或 `claude`，而不是角色名称。
+Session 工具只提供有界的状态、读写、输出和关闭操作，不会控制 Codex App Terminal UI。
 
 配置其他 CLI 时，推荐直接告诉当前 Codex App 线程先检查本机可执行文件和对应的 `--help`，再使用 `generic-cli`
 注册、运行 `doctor` 并展示最终配置，确认后再启动任务。内置 Antigravity Adapter 只传递已配置参数并追加

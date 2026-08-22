@@ -112,6 +112,8 @@ function validateTaskRecord(task) {
   if (task.implementationCommit !== null && typeof task.implementationCommit !== 'string') task.implementationCommit = null;
   if (!Array.isArray(task.evidence)) task.evidence = [];
   if (task.lastError !== null && typeof task.lastError !== 'object') task.lastError = null;
+  if (task.sessionId !== null && typeof task.sessionId !== 'string') task.sessionId = null;
+  if (!Object.prototype.hasOwnProperty.call(task, 'sessionId')) task.sessionId = null;
   return task;
 }
 
@@ -181,6 +183,7 @@ export function createTask(root, input = {}) {
     implementationCommit: input.implementationCommit || null,
     evidence: Array.isArray(input.evidence) ? input.evidence : [],
     lastError: input.lastError || null,
+    sessionId: input.sessionId || null,
   };
   if (existsSync(join(tasks, `${task.id}.json`))) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task already exists: ${task.id}`, { recoverable: true, taskId: task.id });

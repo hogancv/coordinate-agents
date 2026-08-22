@@ -13,6 +13,7 @@ Install with AI: https://hogancv.github.io/coordinate-agents/install-with-ai.htm
 Codex role (Reference planner/reviewer): https://hogancv.github.io/coordinate-agents/codex-cli.html
 Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-agents/antigravity-cli.html
 Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
+Execution Session and PTY Runtime: https://hogancv.github.io/coordinate-agents/session-runtime.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
 MCP troubleshooting: https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html
 Security: https://hogancv.github.io/coordinate-agents/security.html
@@ -36,13 +37,21 @@ Plugin-first onboarding: Install the Plugin, Discover local coding CLIs with
 tools over the same durable `.agent-bus`. MCP is the normal Plugin machine path;
 `runtime-entry.mjs` and the npm CLI remain compatibility/fallback/debugging
 surfaces. Dispatch owns executable validation, `IMPLEMENT` transport,
-Implementer launch, `IMPLEMENTATION_DONE` synchronization, and failure
-propagation. Runtime JSON uses stable error codes and stops on a failed
-activation instead of retrying automatically.
+Execution Session open/reuse, bounded PTY input/output,
+`IMPLEMENTATION_DONE` synchronization, and failure propagation. Runtime JSON
+uses stable error codes and stops on a failed activation instead of retrying
+automatically. Session tools are
+`coordinate_agents_session_open/status/inspect/write/read/close`.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 
-Launch lifecycle is Adapter-driven: Codex is one-shot, while the Antigravity reference Adapter is bus-supervised and can reactivate after clean exits when later Bus work appears. Supervision is non-claiming, stops on `STOPPED` or interruption, fails on non-zero child exit, and can be disabled with `launch --once`.
+The canonical Plugin Task lifecycle is Session-driven: Task records a non-owning
+`sessionId`, and a healthy project/Agent/executable match is reused across
+`CHANGES_REQUESTED` rework. `starting`, `running`, `idle`, `busy`, `exited`,
+and `failed` are observable Session states; output is bounded and redacted.
+The legacy CLI `launch` path remains Adapter-driven and may be one-shot or
+bus-supervised, but it is separate from the Session Manager and never retries a
+failed activation automatically.
 
 Executable resolution is fail-closed: explicit project command > user command in
 `~/.coordinate-agents/config.json` > Adapter default (`agy` or `codex`). `config set|get|list`
@@ -57,8 +66,10 @@ Installation safety: verify the exact GitHub owner and npm package metadata, use
 Codex App direct usage: add the target Git repository as a project, set the thread project path to
 the repository root containing `.git`, invoke `$coordinate-agents` in a new thread, and configure
 the actual local Implementer executable (`agy`, `claude`, or a wrapper). A second manually opened
-CLI window is not required; the runtime starts the Implementer as a child process. For non-reference
-CLIs, inspect the installed command's `--help` output before registering `generic-cli` arguments.
-The Antigravity Adapter appends only configured args plus `--prompt-interactive <prompt>` and does
-not automatically add a full-permission or sandbox-bypass flag; configure such a vendor-specific
-flag explicitly only after verifying that CLI version supports it.
+CLI window is not required; the Runtime opens or reuses a persistent Session. Session operations
+never control the Codex App Terminal UI or attach to arbitrary PIDs. For non-reference CLIs, inspect
+the installed command's `--help` output before registering `generic-cli` arguments.
+The legacy Antigravity launch appends only configured args plus `--prompt-interactive <prompt>`.
+A persistent Session writes its first instruction through the PTY unless configured args explicitly
+include `{prompt}`. The Adapter does not automatically add a full-permission or sandbox-bypass flag;
+configure such a vendor-specific flag explicitly only after verifying that CLI version supports it.

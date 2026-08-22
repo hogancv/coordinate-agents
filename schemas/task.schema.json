@@ -41,6 +41,7 @@
     "planner": { "type": "string", "minLength": 1 },
     "implementer": { "type": "string", "minLength": 1 },
     "reviewer": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": ["string", "null"], "pattern": "^session_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$" },
     "createdAt": { "type": "string", "format": "date-time" },
     "updatedAt": { "type": "string", "format": "date-time" },
     "spec": { "type": "string" },

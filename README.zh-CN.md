@@ -4,7 +4,9 @@
 
 基于本地优先架构的 AI 编程代理协作协议与运行时（Local-first Coordination Protocol & Runtime）。在同一个 Git 仓库内，通过可恢复的项目级 `.agent-bus` 协调多代理开发协作。协议核心与具体代理无关，使用基于适配器的运行时。**OpenAI Codex App/CLI** 与 **Google Antigravity CLI（`agy`）** 作为官方第一方参考适配器与默认参考工作流，同时支持通过 `generic-cli` 动态注册自定义 CLI 代理，并通过适配器扩展模型支持桌面端、MCP、HTTP、IPC 等外部执行环境接入。
 
-无需 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。
+无需外部 CAO Server、常驻后台守护进程、外部数据库或共享 API 凭据。任务运行期间，canonical
+Runtime 可能会为 Implementer 创建一个短生命周期、由 Runtime 自己拥有的本地持久 PTY Session
+Host；它不是 Codex App Terminal 界面，也不是外部服务。
 
 ## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
 
@@ -68,7 +70,8 @@ Antigravity 是参考适配器，不再是产品绑定。
 
 Plugin 提供 `coordinate_agents_setup_discover`、
 `coordinate_agents_setup_configure`、Task create/dispatch/status/inspect/
-review/resume/stop，以及 `coordinate_agents_recover_inspect`。MCP 与 CLI
+review/resume/stop、`coordinate_agents_recover_inspect`，以及有界的
+`coordinate_agents_session_open/status/inspect/write/read/close` Session 工具。MCP 与 CLI
 调用同一套 Runtime operation，并返回相同的 canonical error contract。
 
 只有在 MCP 不可用，或用户明确要求调试时，才使用以下 fallback：
@@ -110,8 +113,9 @@ npx @hogancv/coordinate-agents@latest task resume --id task-... --json
 3. 新建线程并调用 `$coordinate-agents`。
 4. 让 Codex 在这个项目中初始化或协调任务。
 
-Codex App 线程负责 Planner/Reviewer 侧，运行时会在本机以子进程方式启动已配置的 Implementer
-CLI。执行端 CLI 仍必须已经安装，并且配置的可执行命令必须正确。`agy`、`claude` 是执行命令示例，
+Codex App 线程负责 Planner/Reviewer 侧，Runtime 会为已配置的 Implementer CLI 打开或复用持久
+Execution Session。Session 拥有本机 PTY 进程及有界输入/输出，但独立于 Codex App Terminal 界面。
+执行端 CLI 仍必须已经安装，并且配置的可执行命令必须正确。`agy`、`claude` 是执行命令示例，
 不是工作流角色名称：
 
 ```sh
@@ -137,10 +141,13 @@ npx @hogancv/coordinate-agents@latest agent add claude --adapter generic-cli --c
 
 `generic-cli` 支持 `{prompt}`、`{root}`、`{agent}`、`{lang}` 参数占位符；运行时也会把选定项目根目录作为
 子进程工作目录，因此不要假设所有 CLI 都有 `--dir` 参数。保存 `args` 前应以对应 CLI 自己的帮助输出为准。
+持久 Session 必须配置交互式参数契约；一次性 `{prompt}` 模板不会被静默转换成持久对话。
 
 ### 权限参数是显式配置的
 
-内置 `antigravity-cli` Adapter 只会追加已配置的参数，然后追加 `--prompt-interactive <prompt>`，**不会**自动追加
+旧版一次性 `antigravity-cli` 启动只会追加已配置的参数，然后追加 `--prompt-interactive <prompt>`。持久 Execution
+Session 会使用已配置参数和 `--prompt-interactive` 启动；除非参数中显式包含 `{prompt}`，否则第一条指令通过 PTY 写入。
+它**不会**自动追加
 `--dangerously-skip-permissions`、沙箱绕过参数或其他厂商特有的完全权限参数。如果你本机的 `agy` 已经在自身配置中
 设置为完全权限，该本地配置会继续生效；插件不会覆盖它。若本机 `agy --help` 确认需要显式传入该参数，可主动配置：
 
@@ -172,7 +179,10 @@ npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开�
 
 不再需要手动复制或维护两段角色提示词。首次任务可选择 `--template bug`、`--template feature` 或 `--template refactor`；后续工作直接按同一清单向 Codex 提出新需求。
 
-参考适配器会声明自己的启动生命周期。Codex 采用一次性交互启动；Antigravity 采用总线监督启动：Agent 正常退出后，同一个 `launch` 进程会继续以非破坏方式等待，后续审查反馈或其他总线消息到达时自动再次启动最终解析出的 Implementer 命令。监督器不会认领消息或创建租约。可按 Ctrl+C 终止，发送 `STOP` 让 Agent 写入 `STOPPED`，或在需要单次激活的脚本中使用与 Agent 无关的 `launch --once` 逃生选项。
+CLI `quickstart` 仍是兼容路径，会输出两条明确的终端命令。Plugin Task 路径使用持久
+Execution Session：dispatch 打开一个 PTY，`CHANGES_REQUESTED` 时复用同一 Session，只有通过明确的
+Session/Task 生命周期操作才会关闭它。旧版 `launch` 命令仍可按 Adapter 使用总线监督行为；该兼容监督器
+与 canonical Plugin Session Manager 相互独立。
 
 ### 配置实现者可执行命令
 
@@ -192,9 +202,12 @@ npx @hogancv/coordinate-agents config list
 
 命令解析采用显式且 fail-closed 的优先级：**项目级 Agent 命令 > 用户级命令 > Adapter
 默认值**（`antigravity-cli` 默认 `agy`，`codex-cli` 默认 `codex`）。显式命令不可用时，绝不
-静默替换为 `agy` 或其他回退命令。`launch` 会在启动 Implementer 前检查最终可执行文件；
-spawn 失败、非零退出和对话/运行时失败都会将 Agent 状态设为 `ERROR`，保留有限长度的
-stdout/stderr 尾部，停止监督并报告配置命令与错误。Planner 必须停止等待，不得自动重试。
+静默替换为 `agy` 或其他回退命令。`task dispatch` 和 `session open` 都会在启动 Implementer 前检查最终
+可执行文件；spawn 失败、非零退出和对话/运行时失败会将 Task/Session 置为可观测错误，保留有限长度的
+stdout/stderr 尾部并停止。Planner 必须停止等待，不得自动重试。
+
+代理身份不等于 executable 身份：Agent `antigravity` 配置为 `agy-proxy` 时必须精确启动 `agy-proxy`。
+项目配置优先于用户配置，用户配置优先于 Adapter 默认值。
 
 `doctor` 会报告最终解析出的命令和可执行文件状态，但不会检查登录状态、Provider 健康度或
 模型可用性；这些错误由 `launch` 按运行时失败处理。
@@ -242,6 +255,12 @@ graph TD
         DEDUPE[幂等去重与租赁锁]
         STATE[仅追加状态日志]
     end
+    subgraph 执行层 Execution Layer
+        TASK[Task 编排器]
+        SM[Execution Session Manager]
+        PTY[持久 PTY Runtime]
+        HOST[Runtime-owned Session Host]
+    end
     subgraph 适配器与运行时层 Adapters & Runtime Layer
         A1[codex-cli 适配器]
         A2[antigravity-cli 适配器]
@@ -256,13 +275,21 @@ graph TD
     Q --> A2
     Q --> A3
     Q --> A4
+    TASK --> REG
+    TASK --> SM
+    SM --> PTY
+    PTY --> HOST
+    HOST --> A1
+    HOST --> A2
+    HOST --> A3
 ```
 
 ### 三层架构体系
 
 1. **协作编排层 (Coordination Layer)**：将工作流角色（`planner`、`implementer`、`reviewer`）映射到具体代理，并严格管理人类发布审批门禁。
 2. **代理总线协议层 (Agent Bus Protocol Layer)**：管理代理注册表、消息生命周期、租赁锁、仅追加状态及崩溃恢复机制，与具体厂商和传输介质解耦。
-3. **适配器与运行时层 (Adapters & Runtime Layer)**：桥接具体执行界面（内置 `codex-cli`、`antigravity-cli` 适配器、动态 `generic-cli` 适配器及桌面适配器扩展模型），完成任务输入与执行。
+3. **执行层 (Execution Layer)**：将 Task 状态与按项目根目录/Agent 作用域管理的 `Execution Session` 解耦。Session Manager 复用健康 Session，PTY Runtime 管理有界交互 I/O，Session Host 只拥有自己创建的进程。
+4. **适配器与运行时层 (Adapters & Runtime Layer)**：桥接具体执行界面（内置 `codex-cli`、`antigravity-cli` 适配器、动态 `generic-cli` 适配器及桌面适配器扩展模型），完成任务输入与执行；不会自动化 Codex App Terminal UI。
 
 ### 代理身份 vs 工作流角色
 
@@ -270,6 +297,10 @@ graph TD
 - **工作流角色 (Workflow Role)**：定义开发闭环中的职责：
   - **规划与审查者 (Planner / Reviewer)**（默认：`codex`）：明确用户需求，在 `.agent-bus/specs/` 编写规格说明，审查 commit 与测试构建证据，管控发布门禁。严禁修改业务实现代码。
   - **实现者 (Implementer)**（默认：`antigravity`）：业务代码与测试的唯一编写者。实现功能、执行验证、提交 commit，并在 `.agent-bus/evidence/` 输出证据。严禁执行发布。
+
+`Execution Session` 独立于上述工作流角色。Task 只保存不拥有 Session 的 `sessionId` 引用；Session Manager
+按项目根目录、Agent 身份和最终 executable 作为复用键。健康 Session 会跨越审查轮次，因此
+`CHANGES_REQUESTED` 会写入同一个 PTY 上下文。Session 失败或退出后只记录事实，由显式 dispatch 路径创建替代 Session。
 
 ### 兼容性五维准则
 
@@ -435,6 +466,25 @@ npx @hogancv/coordinate-agents@latest quickstart --template refactor --task "抽
 
 各模板的详细信息清单请参见 [`references/task-templates.md`](./references/task-templates.md)。
 
+## 持久 Execution Session
+
+Plugin Task API 将 Coding CLI 视为长生命周期的 `Execution Session`，而不是一次性命令调用。
+`task dispatch` 会验证最终 executable，发送持久化的 `IMPLEMENT` handoff，并打开或复用健康的 PTY
+Session。Task 只保存 `sessionId` 引用，不拥有进程；短暂且有界的 grace period 用于捕获立即完成的证据，
+否则 Task 保持 `WAITING_IMPLEMENTER`，Session 继续可观测。
+
+正常审查闭环如下：
+
+```text
+dispatch -> 一个 PTY Session -> 实现 -> REVIEWING
+                                  ^          |
+                                  | CHANGES_REQUESTED
+                                  +-- 同一 Session --+
+```
+
+MCP Session 工具提供有界的 status、inspect、write、read、close 操作，只处理 Runtime 自己拥有的进程和
+结构化文本；不会点击、输入或读取 Codex App Terminal UI。详见 [Session Runtime 参考](./skills/coordinate-agents/references/session-runtime.md)。
+
 ## 发布门禁
 
 `REVIEW_APPROVED` 并不是发布授权。只有当用户针对明确说明的发布方案输入完全一致的授权文本时，规划/审查者才可执行分支合并、打标签、推送、部署或发布：
@@ -452,6 +502,9 @@ RELEASE_APPROVED
 - 消息与状态在终端重启后依然保留。再次调用本技能即可检查并继续处理 `new` 或由当前代理认领的 `processing` 消息。
 - `.agent-bus/` 写入当前仓库本地的 `.git/info/exclude`，不会污染版本库跟踪的 `.gitignore`。
 - 严禁多个角色同时进行 Git 写入。
+- `recover inspect` 在存在 `sessionId` 时会返回有界的 Session 事实；它只读，不会重启、重放输入、恢复 Task，
+  也不会附着到任意进程。
+- Session 输出有界且会脱敏；Ctrl+C/终止信号只会发送给该 Session Host 创建的进程，不会控制 Codex App Terminal UI。
 
 任务认领默认具有 4 小时租赁期。仅当确认未产生对应工作成果、commit 或回复后，才可回收异常中断的认领：
 
@@ -519,8 +572,9 @@ npm pack --dry-run
 ### 如何直接在 Codex App 中使用？
 
 安装并启用 Codex 插件后，在 Codex App 中添加目标 Git 项目，并将线程项目路径指定为包含 `.git` 的项目根目录。
-新建线程后调用 `$coordinate-agents` 即可。不需要手动打开两个 CLI 窗口；运行时会启动配置好的 Implementer
-子进程。请配置真实可执行命令，例如 `agy` 或 `claude`；如果项目路径或命令解析异常，可运行 `doctor` 检查。
+新建线程后调用 `$coordinate-agents` 即可。不需要手动打开两个 CLI 窗口；Runtime 会为配置好的 Implementer
+打开或复用项目级持久 Execution Session。请配置真实可执行命令，例如 `agy` 或 `claude`；如果项目路径或命令解析异常，可运行 `doctor` 检查。
+Session 是独立的 Runtime-owned PTY Host，不是 Codex App Terminal UI；Codex 继续负责 Planner/Reviewer，配置的 Implementer 继续是唯一业务代码编写者。
 
 ### 如何让 Codex CLI 和 Antigravity CLI 协作？
 
@@ -530,8 +584,8 @@ npm pack --dry-run
 ### 如何在一个 Git 仓库中运行两个编程代理？
 
 在同一个 Git 仓库中确保同一时刻仅允许一个角色拥有 Git 写入权限。Codex App 中当前线程可以负责协作编排，
-运行时以子进程启动已配置的 Implementer，不需要手动打开第二个 CLI 会话。项目本地的 `.agent-bus` 用于传递
-规格说明、实现结果、审查结论、租赁状态与恢复信息，无需共享 API 凭据。
+Runtime 会启动或复用已配置的 Implementer Execution Session，不需要手动打开第二个 CLI 会话。项目本地的
+`.agent-bus` 用于传递规格说明、实现结果、审查结论、租赁状态、Session 引用与恢复信息，无需共享 API 凭据。
 
 ### 如何防止两个 AI 代理同时修改代码？
 
@@ -547,7 +601,14 @@ Codex 负责澄清需求、生成规格说明与验收标准、审查 commit 和
 
 ### 如何恢复被中断的多代理开发工作？
 
-重新调用本技能并检查 `status`；持久化消息与状态在终端重启后依然保留。仅在确认未产生对应工作成果、commit 或回复后，才可回收过期的认领消息。详见[故障恢复与等待机制](#故障恢复与等待机制)。
+重新调用本技能并检查 `status` 与记录的 Session 事实；持久化消息、Task 引用与 Session 元数据在终端重启后依然保留。
+Recovery inspect 是只读操作。Session 终止失败后必须显式 resume 再 dispatch，Runtime 不会自动循环重试。仅在确认未产生对应工作成果、commit 或回复后，才可回收过期的认领消息。详见[故障恢复与等待机制](#故障恢复与等待机制)。
+
+### 什么是 Execution Session？会控制 Codex Terminal UI 吗？
+
+Execution Session 是 Coordinate Agents Runtime 按项目/Agent 作用域管理的持久 PTY。Task 只保存不拥有的
+`sessionId`，因此审查返工可以复用健康的 Coding Agent 上下文。Session 工具提供有界的读写、状态、输出和关闭
+操作，但不会点击、输入或读取 Codex App Terminal 面板或其他桌面窗口。
 
 ### `.agent-bus` 安全吗？
 

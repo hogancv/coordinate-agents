@@ -13,8 +13,28 @@ import {
   runtimeTaskCreate,
   runtimeTaskOperation,
 } from '../../../bin/coordinate-agents.mjs';
+import {
+  runtimeSessionClose,
+  runtimeSessionInspect,
+  runtimeSessionInterrupt,
+  runtimeSessionOpen,
+  runtimeSessionRead,
+  runtimeSessionResize,
+  runtimeSessionStatus,
+  runtimeSessionWrite,
+} from './session-service.mjs';
 
 export { runtimeSetupDiscover, runtimeSetupConfigure, runtimeTaskCreate, runtimeTaskOperation, runtimeRecoverInspect };
+export {
+  runtimeSessionOpen,
+  runtimeSessionStatus,
+  runtimeSessionInspect,
+  runtimeSessionWrite,
+  runtimeSessionRead,
+  runtimeSessionClose,
+  runtimeSessionResize,
+  runtimeSessionInterrupt,
+};
 
 export const RUNTIME_OPERATIONS = Object.freeze({
   setupDiscover: runtimeSetupDiscover,
@@ -27,6 +47,14 @@ export const RUNTIME_OPERATIONS = Object.freeze({
   taskResume: input => runtimeTaskOperation('resume', input),
   taskStop: input => runtimeTaskOperation('stop', input),
   recoverInspect: runtimeRecoverInspect,
+  sessionOpen: runtimeSessionOpen,
+  sessionStatus: runtimeSessionStatus,
+  sessionInspect: runtimeSessionInspect,
+  sessionWrite: runtimeSessionWrite,
+  sessionRead: runtimeSessionRead,
+  sessionClose: runtimeSessionClose,
+  sessionResize: runtimeSessionResize,
+  sessionInterrupt: runtimeSessionInterrupt,
 });
 
 export async function invokeRuntimeOperation(operation, input = {}) {
