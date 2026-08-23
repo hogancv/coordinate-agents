@@ -155,8 +155,8 @@ and verify its own `--version` and model interaction before installing this Skil
 
 **Full permissions are unclear.** The built-in Antigravity Adapter does not add a permission bypass
 flag. The legacy one-shot path passes configured `args` and appends `--prompt-interactive <prompt>`;
-the persistent Session writes its first instruction through the PTY unless `{prompt}` is explicitly
-configured. If the installed
+the persistent Session starts with `--prompt-interactive ""` for current `agy`/`agy-proxy` parsers,
+then writes its first instruction through the PTY unless `{prompt}` is explicitly configured. If the installed
 `agy --help` confirms `--dangerously-skip-permissions` and the user explicitly wants it, configure
 it with `config set agent.antigravity.args '["--dangerously-skip-permissions"]'`; `config list` shows
 the saved user arguments, while `doctor` checks executable/version readiness only. A native `agy`

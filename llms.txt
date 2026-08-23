@@ -14,6 +14,7 @@ Codex role (Reference planner/reviewer): https://hogancv.github.io/coordinate-ag
 Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-agents/antigravity-cli.html
 Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
 Execution Session and PTY Runtime: https://hogancv.github.io/coordinate-agents/session-runtime.html
+Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
 MCP troubleshooting: https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html
 Security: https://hogancv.github.io/coordinate-agents/security.html
@@ -70,6 +71,7 @@ CLI window is not required; the Runtime opens or reuses a persistent Session. Se
 never control the Codex App Terminal UI or attach to arbitrary PIDs. For non-reference CLIs, inspect
 the installed command's `--help` output before registering `generic-cli` arguments.
 The legacy Antigravity launch appends only configured args plus `--prompt-interactive <prompt>`.
-A persistent Session writes its first instruction through the PTY unless configured args explicitly
-include `{prompt}`. The Adapter does not automatically add a full-permission or sandbox-bypass flag;
+A persistent Session starts with `--prompt-interactive ""` for current `agy`/`agy-proxy` parsers, then
+writes its first instruction through the PTY unless configured args explicitly include `{prompt}`.
+The Adapter does not automatically add a full-permission or sandbox-bypass flag;
 configure such a vendor-specific flag explicitly only after verifying that CLI version supports it.

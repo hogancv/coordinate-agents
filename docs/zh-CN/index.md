@@ -43,12 +43,14 @@ Implementer 持久 Execution Session；请确认执行命令是真实存在的�
 Session 工具只提供有界的状态、读写、输出和关闭操作，不会控制 Codex App Terminal UI。
 
 配置其他 CLI 时，推荐直接告诉当前 Codex App 线程先检查本机可执行文件和对应的 `--help`，再使用 `generic-cli`
-注册、运行 `doctor` 并展示最终配置，确认后再启动任务。内置 Antigravity Adapter 只传递已配置参数并追加
-`--prompt-interactive <prompt>`，不会自动添加完全权限或沙箱绕过参数。
+注册、运行 `doctor` 并展示最终配置，确认后再启动任务。内置 Antigravity Adapter 的一次性启动追加
+`--prompt-interactive <prompt>`；持久 Session 会为当前 `agy`/`agy-proxy` 先传入 `--prompt-interactive ""`，再通过 PTY 写入真正的第一条指令。
+它不会自动添加完全权限或沙箱绕过参数。
 
 - [完整简体中文 README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)
 - [AI 安装指南](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md)
 - [安全说明](../security.html)
+- [本地 Inspector Web UI（英文）](../inspector.html)
 - [常见问题](../faq.html)
 
 ## CLI 备用安装与快速开始

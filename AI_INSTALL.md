@@ -382,8 +382,9 @@ errors are handled as runtime failures after launch. The user file is outside `s
 
 Permission and sandbox flags are vendor-specific and explicit. The legacy one-shot
 `antigravity-cli` launch passes configured `args` and then appends `--prompt-interactive <prompt>`.
-For a persistent Session, the first instruction is written through the PTY unless configured args
-explicitly include `{prompt}`. The Adapter does not add
+For a persistent Session, the adapter starts `--prompt-interactive ""` so current `agy`/`agy-proxy`
+parsers receive the required empty initial prompt value, then writes the first instruction through
+the PTY unless configured args explicitly include `{prompt}`. The Adapter does not add
 `--dangerously-skip-permissions` or another full-permission flag automatically. If the local `agy`
 configuration already enables full permissions, it remains in effect. If the installed `agy --help`
 confirms the explicit flag is required and the user asks to use it, configure it in the user file:
@@ -418,7 +419,8 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
 载荷之外，因此安装和更新会保留它。
 
 权限和沙箱参数由各厂商决定，并且必须显式配置。旧版一次性 `antigravity-cli` 启动只会传递已配置的 `args`，然后追加
-`--prompt-interactive <prompt>`；持久 Session 除非参数中显式包含 `{prompt}`，否则会通过 PTY 写入第一条指令。
+`--prompt-interactive <prompt>`；持久 Session 会先使用 `--prompt-interactive ""` 提供当前 `agy`/`agy-proxy` 所需的空初始提示值，
+再通过 PTY 写入第一条真正的指令，除非参数中显式包含 `{prompt}`。
 该 Adapter 不会自动添加 `--dangerously-skip-permissions` 或其他完全权限参数。如果本机 `agy`
 自身配置已经开启完全权限，该配置会继续生效。如果 `agy --help` 确认必须显式传入该参数，且用户明确要求使用，才写入
 用户级配置：

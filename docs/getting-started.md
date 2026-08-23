@@ -90,7 +90,8 @@ automation or hosts without direct Codex App Skill execution.
 
 The built-in Antigravity adapter does not automatically add a full-permission flag. The legacy
 one-shot path passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent
-Session writes its first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
+Session starts with `--prompt-interactive ""` for current `agy`/`agy-proxy` parsers, then writes its
+first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, configure that argument rather
 than assuming the Plugin added it:
 

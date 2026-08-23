@@ -116,6 +116,21 @@ Agent Bus commands remain available underneath the Task abstraction. Do not use
 the npm commands above as evidence that a Plugin user must install a global npm
 package.
 
+## Local Inspector Web UI
+
+For local observability, start the read-only Inspector from the repository root:
+
+```sh
+npx @hogancv/coordinate-agents inspector --port 3000
+```
+
+It opens a localhost-only dashboard for Task timelines, Planner → Implementer →
+Reviewer topology, Session state and bounded output, evidence/review facts, and
+recent Agent Bus events. It reads the existing `.agent-bus` Runtime state; it
+does not create a database, accept Task input, send messages, control Sessions,
+replace Codex, or change the Task workflow. See the [Inspector guide](./docs/inspector.md)
+for the data sources and limitations.
+
 ## Use it directly in Codex App (recommended)
 
 If you use Codex App, you do not need to open two CLI windows or manually paste two launch
@@ -166,8 +181,9 @@ template is not silently converted into a conversation.
 
 The legacy one-shot `antigravity-cli` launch appends only the configured arguments followed by
 `--prompt-interactive <prompt>`. A persistent Execution Session starts with the configured
-arguments and `--prompt-interactive`, then writes the first instruction through the PTY unless
-the configured arguments explicitly include `{prompt}`. It does **not** automatically append
+arguments and `--prompt-interactive ""` (an empty initial prompt value accepted by current
+`agy`/`agy-proxy` parsers), then writes the first instruction through the PTY unless the configured
+arguments explicitly include `{prompt}`. It does **not** automatically append
 `--dangerously-skip-permissions`, a sandbox bypass, or another vendor-specific full-permission flag.
 If `agy` is already configured locally for full permissions, that native configuration remains in
 effect; the Plugin does not override it. If the installed `agy --help` confirms the explicit flag is

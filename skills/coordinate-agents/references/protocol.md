@@ -184,7 +184,9 @@ Adapters live under `adapters/` and implement a unified interface:
 ### Reference adapters
 
 1. `codex-cli`: Codex CLI detection and one-shot `-C <root> <prompt>` execution.
-2. `antigravity-cli`: Antigravity CLI (`agy`) detection and bus-supervised `--prompt-interactive <prompt>` execution.
+2. `antigravity-cli`: Antigravity CLI (`agy`/`agy-proxy`) detection and bus-supervised execution. The
+   one-shot path uses `--prompt-interactive <prompt>`; persistent Sessions use
+   `--prompt-interactive ""` and deliver the first instruction through the PTY.
 3. `generic-cli`: Configurable third-party CLI execution with template arguments (e.g. `["--dir", "{root}", "--message", "{prompt}", "--agent", "{agent}"]`). Supports `{prompt}`, `{root}`, `{agent}`, and `{lang}`; rejects deprecated role placeholders.
 
 ### Durable launch supervision

@@ -104,6 +104,19 @@ npx @hogancv/coordinate-agents@latest task resume --id task-... --json
 使用的主路径。上面的 npm 命令不表示 Plugin 用户必须安装 global npm package；现有 Agent Bus 命令继续
 作为 Task 抽象层之下的实现。
 
+## 本地 Inspector Web UI
+
+如果需要本地观测，可以在项目根目录启动只读 Inspector：
+
+```sh
+npx @hogancv/coordinate-agents inspector --port 3000
+```
+
+它提供 localhost-only 控制台，用于查看 Task 时间线、Planner → Implementer → Reviewer
+拓扑、Session 状态与有界输出、证据/审查事实，以及最近的 Agent Bus 事件。它直接读取现有
+`.agent-bus` Runtime 状态，不创建数据库、不接收 Task 输入、不发送消息、不控制 Session、不替代
+Codex，也不修改 Task workflow。数据来源和限制请参阅[Inspector 指南](./docs/inspector.md)。
+
 ## 直接在 Codex App 中使用（推荐）
 
 如果使用 Codex App，不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。安装 Codex 插件后：
@@ -146,7 +159,8 @@ npx @hogancv/coordinate-agents@latest agent add claude --adapter generic-cli --c
 ### 权限参数是显式配置的
 
 旧版一次性 `antigravity-cli` 启动只会追加已配置的参数，然后追加 `--prompt-interactive <prompt>`。持久 Execution
-Session 会使用已配置参数和 `--prompt-interactive` 启动；除非参数中显式包含 `{prompt}`，否则第一条指令通过 PTY 写入。
+Session 会使用已配置参数和 `--prompt-interactive ""`（当前 `agy`/`agy-proxy` 接受的空初始提示值）启动；除非参数中显式包含
+`{prompt}`，否则真正的第一条指令通过 PTY 写入。
 它**不会**自动追加
 `--dangerously-skip-permissions`、沙箱绕过参数或其他厂商特有的完全权限参数。如果你本机的 `agy` 已经在自身配置中
 设置为完全权限，该本地配置会继续生效；插件不会覆盖它。若本机 `agy --help` 确认需要显式传入该参数，可主动配置：

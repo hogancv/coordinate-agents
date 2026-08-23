@@ -49,7 +49,9 @@ failure with a bounded stdout/stderr tail.
 
 The built-in `antigravity-cli` Adapter does not infer a permission mode. Its legacy one-shot path
 passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent Session
-writes its first instruction through the PTY unless `{prompt}` is explicitly configured. It does not automatically add
+starts with `--prompt-interactive ""` so current `agy`/`agy-proxy` parsers receive the required
+empty initial prompt value, then writes its first instruction through the PTY unless `{prompt}` is
+explicitly configured. It does not automatically add
 `--dangerously-skip-permissions` or another sandbox-bypass flag. If `agy` is already configured
 locally for full permissions, that native setting remains in effect.
 

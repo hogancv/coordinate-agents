@@ -37,7 +37,16 @@ export class AntigravityCliAdapter extends AgentAdapter {
         .replaceAll('{prompt}', initialPrompt)
         .replaceAll('{agent}', agent || '')
         .replaceAll('{lang}', language || ''));
-    if (!args.some(arg => arg === '--prompt-interactive')) args.push('--prompt-interactive');
+    const promptFlagIndex = args.findIndex(arg => arg === '--prompt-interactive' || arg === '-i');
+    if (promptFlagIndex === -1) {
+      // Current agy/agy-proxy builds parse --prompt-interactive as an option
+      // that requires a value. An empty value starts the interactive session
+      // without consuming the first instruction; the PTY receives that
+      // instruction immediately after startup.
+      args.push('--prompt-interactive', '');
+    } else if (args[promptFlagIndex + 1] === undefined || `${args[promptFlagIndex + 1]}`.startsWith('-')) {
+      args.splice(promptFlagIndex + 1, 0, '');
+    }
     // Persistent sessions deliver the first instruction through the PTY unless
     // the configured argument template explicitly consumes {prompt}. The
     // legacy one-shot resolveLaunch contract below still passes the prompt as

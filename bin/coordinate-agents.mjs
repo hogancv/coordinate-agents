@@ -92,6 +92,7 @@ Commands:
   status        Show the project Agent Bus and Task status
   task          Manage durable tasks (create, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
+  inspector     Start the local read-only Web UI Inspector
   config        Manage user-level executable configuration (set, get, list)
   doctor        Check prerequisites/installations and print repair commands
   uninstall     Remove installations created by this package
@@ -119,6 +120,7 @@ Options:
   --force                 Replace/remove an unrecognized existing directory
   --once                  Disable Adapter-declared durable launch supervision
   --timeout <ms>          Stop a launch that exceeds the bounded timeout
+  --port <port>           Inspector port (default: 3000)
   --json                  Emit one machine-readable JSON document on stdout
   --version               Print package version
   -h, --help              Show this help
@@ -200,6 +202,7 @@ Examples:
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
   task          管理持久化任务（create、dispatch、status、list、inspect、resume、stop、review、error）
+  inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
 
@@ -225,6 +228,7 @@ Examples:
   --force                 替换或删除无法识别的现有目录
   --once                  禁用 Adapter 声明的持久启动监督
   --timeout <毫秒>        超过时限后停止启动进程
+  --port <端口>           Inspector 端口（默认：3000）
   --json                  在 stdout 输出单个机器可读 JSON 文档
   --version               输出包版本
   -h, --help              显示帮助
@@ -322,6 +326,7 @@ function parseArgs(argv) {
     reason: '',
     errorCode: null,
     timeoutMs: null,
+    port: 3000,
     adapter: 'generic-cli',
     agentCommand: null,
     agentArgs: null,
@@ -369,7 +374,7 @@ function parseArgs(argv) {
       '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
       '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
       '--id', '--reason', '--error-code', '--timeout', '--timeout-ms', '--lang',
-      '--role', '--decision', '--feedback',
+      '--role', '--decision', '--feedback', '--port',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
@@ -408,6 +413,11 @@ function parseArgs(argv) {
         const timeoutMs = Number(value);
         if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error(`INVALID_TIMEOUT:${value}`);
         result.timeoutMs = Math.floor(timeoutMs);
+      }
+      if (option === '--port') {
+        const port = Number(value);
+        if (!Number.isInteger(port) || port <= 0 || port > 65_535) throw new Error(`INVALID_PORT:${value}`);
+        result.port = port;
       }
       if (option === '--lang') result.language = value;
     } else {
@@ -947,6 +957,35 @@ function statusJson(options) {
     else throw error;
   }
   return jsonSuccess('status', { root, bus, tasks });
+}
+
+async function inspectorCommand(options) {
+  const { startInspector } = await import('../inspector/server/server.mjs');
+  const root = assertGitRepository(options.root, messages.en);
+  const started = await startInspector({ root, port: options.port || 3000 });
+  if (options.json) emitJson(jsonSuccess('inspector.start', {
+    root: started.root,
+    host: started.host,
+    port: started.port,
+    url: started.url,
+  }));
+  else console.log(`Inspector running:\n\n${started.url}`);
+
+  await new Promise(resolvePromise => {
+    let closed = false;
+    const finish = () => {
+      if (closed) return;
+      closed = true;
+      process.removeListener('SIGINT', onSignal);
+      process.removeListener('SIGTERM', onSignal);
+      resolvePromise();
+    };
+    const onSignal = () => {
+      started.server.close(finish);
+    };
+    process.once('SIGINT', onSignal);
+    process.once('SIGTERM', onSignal);
+  });
 }
 
 function readLatestErrorArtifact(root, agentId) {
@@ -2566,6 +2605,17 @@ async function run(argv) {
       if (options.json) emitJson(result);
     } catch (error) {
       if (options.json) emitJson(jsonFailure(`task.${options.subcommand || 'status'}`, error));
+      else console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (options.command === 'inspector') {
+    try {
+      await inspectorCommand(options);
+    } catch (error) {
+      if (options.json) emitJson(jsonFailure('inspector.start', error));
       else console.error(error.message || String(error));
       process.exitCode = 1;
     }

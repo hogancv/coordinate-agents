@@ -81,6 +81,44 @@ test('Antigravity adapter keeps permission flags explicit', () => {
   assert.equal(resolved.args.includes('--dangerously-skip-permissions'), false);
 });
 
+test('Antigravity persistent sessions provide the required empty prompt value', () => {
+  const agy = getAdapter('antigravity-cli', {
+    id: 'antigravity',
+    command: process.execPath,
+  });
+
+  const resolved = agy.resolveSessionLaunch({
+    root: '.',
+    initialPrompt: 'Implement feature',
+    agent: 'antigravity',
+    language: 'en',
+  });
+
+  assert.deepEqual(resolved.args, ['--prompt-interactive', '']);
+  assert.equal(resolved.initialInputConsumed, false);
+});
+
+test('Antigravity preserves configured prompt templates and fills a missing flag value', () => {
+  const withPrompt = getAdapter('antigravity-cli', {
+    id: 'antigravity',
+    command: process.execPath,
+    args: ['--prompt-interactive', '{prompt}'],
+  });
+  assert.deepEqual(withPrompt.resolveSessionLaunch({ initialPrompt: 'Implement feature' }).args, [
+    '--prompt-interactive', 'Implement feature',
+  ]);
+  assert.equal(withPrompt.resolveSessionLaunch({ initialPrompt: 'Implement feature' }).initialInputConsumed, true);
+
+  const missingValue = getAdapter('antigravity-cli', {
+    id: 'antigravity',
+    command: process.execPath,
+    args: ['--prompt-interactive'],
+  });
+  assert.deepEqual(missingValue.resolveSessionLaunch({ initialPrompt: 'Implement feature' }).args, [
+    '--prompt-interactive', '',
+  ]);
+});
+
 test('custom adapter can be registered and used with custom lifecycle', () => {
   class MockHeadlessAdapter extends AgentAdapter {
     constructor(config) {

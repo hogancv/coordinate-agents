@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Coordinate Agents Inspector</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LOCAL OBSERVABILITY</p>
+        <h1>Coordinate Agents Inspector</h1>
+        <p class="subtitle">Chrome DevTools for AI Agent Collaboration</p>
+      </div>
+      <div class="topbar-meta">
+        <span class="live-dot"></span>
+        <span>localhost · read-only</span>
+        <button id="refresh-button" class="button" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero-grid">
+        <div class="hero-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">COORDINATION OVERVIEW</p>
+              <h2>Tasks</h2>
+            </div>
+            <span id="task-count" class="count-badge">0</span>
+          </div>
+          <div id="tasks" class="task-grid" aria-live="polite"></div>
+        </div>
+        <div class="hero-card topology-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ROLE TOPOLOGY</p>
+              <h2>Agent flow</h2>
+            </div>
+            <span class="muted-label">Planner → Implementer → Reviewer</span>
+          </div>
+          <div id="agent-flow" class="agent-flow" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section id="task-detail" class="panel task-detail-panel" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">TASK DETAIL</p>
+            <h2 id="detail-title">Select a task</h2>
+          </div>
+          <button id="close-detail" class="button ghost" type="button">Close</button>
+        </div>
+        <div id="detail-summary" class="detail-summary"></div>
+        <div class="detail-grid">
+          <div>
+            <h3>Status timeline</h3>
+            <div id="timeline" class="timeline"></div>
+          </div>
+          <div>
+            <h3>Agent flow</h3>
+            <div id="detail-agent-flow" class="detail-agent-flow"></div>
+          </div>
+        </div>
+        <div class="detail-grid lower-grid">
+          <div>
+            <h3>Evidence & review</h3>
+            <div id="evidence" class="evidence-list"></div>
+          </div>
+          <div>
+            <h3>Specification</h3>
+            <pre id="spec" class="code-block"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel sessions-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">EXECUTION RUNTIME</p>
+            <h2>Sessions</h2>
+          </div>
+          <span id="session-count" class="count-badge">0</span>
+        </div>
+        <div id="sessions" class="session-list" aria-live="polite"></div>
+      </section>
+
+      <section class="panel events-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">AGENT BUS</p>
+            <h2>Recent events</h2>
+          </div>
+          <span class="muted-label">filesystem adapter</span>
+        </div>
+        <div id="events" class="event-list" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Coordinate Agents Inspector MVP</span>
+      <span>Task state, Agent Bus, Session Runtime</span>
+    </footer>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -14,6 +14,7 @@
     "mcp",
     "schemas",
     "bin",
+    "inspector",
     "scripts",
     "AI_INSTALL.md",
     "README.md",
@@ -23,6 +24,7 @@
     "docs/llms.txt",
     "docs/mcp.md",
     "docs/MCP_TROUBLESHOOTING.md",
+    "docs/inspector.md",
     "docs/session-runtime.md",
     "LICENSE",
     "assets"
