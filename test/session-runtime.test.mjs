@@ -57,7 +57,7 @@ const cp = require('node:child_process');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('persistent-fixture 1.0.0'); process.exit(0); }
 if (process.env.FIXTURE_STARTS) fs.appendFileSync(process.env.FIXTURE_STARTS, 'S');
-${crash ? "setTimeout(() => process.exit(9), 100);" : ''}
+${crash ? "process.exit(9);" : ''}
 console.log('persistent-fixture-ready');
 let buffer = '';
 const completed = new Set();
@@ -150,6 +150,10 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.ok(eventTypes.includes('SESSION_STARTING'));
     assert.ok(eventTypes.includes('SESSION_STARTED'));
     assert.ok(eventTypes.includes('SESSION_CLOSED'));
+    assert.ok(eventTypes.indexOf('SESSION_STARTING') < eventTypes.indexOf('SESSION_STARTED'));
+    assert.ok(eventTypes.indexOf('SESSION_STARTED') < eventTypes.indexOf('SESSION_CLOSED'));
+    assert.equal(eventTypes.filter(type => type === 'SESSION_STARTED').length, 1);
+    assert.equal(eventTypes.filter(type => type === 'SESSION_CLOSED').length, 1);
     assert.equal((readFileSync(starts, 'utf8') || '').length, 1);
   } finally {
     await removeTree(root);
@@ -182,7 +186,10 @@ test('Task dispatch reuses the same healthy session after CHANGES_REQUESTED', as
     assert.equal(second.session.reused, true);
     assert.equal(readFileSync(starts, 'utf8'), 'S');
     assert.equal(readFileSync(done, 'utf8'), 'DD');
-    assert.ok(readRuntimeEvents(root, { taskId: 'task-session-reuse', limit: 100 }).some(event => event.type === 'SESSION_REUSED'));
+    const sessionEventTypes = readRuntimeEvents(root, { sessionId: firstSessionId, limit: 100 }).map(event => event.type);
+    assert.ok(sessionEventTypes.includes('SESSION_REUSED'));
+    assert.equal(sessionEventTypes.filter(type => type === 'SESSION_STARTED').length, 1);
+    assert.equal(sessionEventTypes.filter(type => type === 'SESSION_REUSED').length, 1);
 
     const otherManager = new ExecutionSessionManager();
     const attached = await otherManager.status(root, firstSessionId);
@@ -250,7 +257,7 @@ test('missing executable fails fast and a crashed session becomes inspectable wi
     await configure(root, crashCommand);
     const opened = await runtimeSessionOpen({ root, agent: 'antigravity' });
     let status = opened.session;
-    for (let attempt = 0; attempt < 30 && ['starting', 'running', 'idle', 'busy'].includes(status.state); attempt += 1) {
+    for (let attempt = 0; attempt < 100 && ['starting', 'running', 'idle', 'busy'].includes(status.state); attempt += 1) {
       await new Promise(resolve => setTimeout(resolve, 50));
       status = (await runtimeSessionStatus({ root, sessionId: opened.session.id })).session;
     }
@@ -259,7 +266,11 @@ test('missing executable fails fast and a crashed session becomes inspectable wi
     const inspected = await runtimeSessionInspect({ root, sessionId: opened.session.id });
     assert.equal(inspected.session.state, 'failed');
     assert.equal(inspected.session.exitCode, 9);
-    assert.ok(readRuntimeEvents(root, { sessionId: opened.session.id, limit: 50 }).some(event => event.type === 'SESSION_FAILED'));
+    const eventTypes = readRuntimeEvents(root, { sessionId: opened.session.id, limit: 50 }).map(event => event.type);
+    assert.ok(eventTypes.includes('SESSION_STARTING'));
+    assert.ok(eventTypes.includes('SESSION_FAILED'));
+    assert.equal(eventTypes.includes('SESSION_STARTED'), false);
+    assert.equal(eventTypes.filter(type => type === 'SESSION_FAILED').length, 1);
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });

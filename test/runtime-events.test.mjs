@@ -6,6 +6,8 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -31,6 +33,17 @@ function repository() {
   return realpathSync(root);
 }
 
+function storedEvent(sequence, type = 'TASK_STATUS_CHANGED') {
+  return JSON.stringify({
+    schemaVersion: EVENT_SCHEMA_VERSION,
+    eventId: `evt_fixture_${sequence}`,
+    sequence,
+    timestamp: '2026-08-23T00:00:00.000Z',
+    type,
+    data: {},
+  });
+}
+
 test('Event Journal appends durable schema-v1 JSONL with monotonic sequence and unique IDs', () => {
   const root = repository();
   try {
@@ -45,6 +58,81 @@ test('Event Journal appends durable schema-v1 JSONL with monotonic sequence and 
     assert.equal(existsSync(runtimeEventJournalPath(root)), true);
     const lines = readFileSync(runtimeEventJournalPath(root), 'utf8').trim().split('\n').map(JSON.parse);
     assert.deepEqual(lines.map(event => event.sequence), [1, 2]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Event Journal writer rejects a symlink without modifying its external target', t => {
+  const root = repository();
+  const externalRoot = mkdtempSync(join(tmpdir(), 'coordinate-agents-events-external-'));
+  const external = join(externalRoot, 'external.txt');
+  const journal = runtimeEventJournalPath(root);
+  try {
+    mkdirSync(join(root, '.agent-bus', 'events'), { recursive: true });
+    writeFileSync(external, 'ORIGINAL\n', 'utf8');
+    try {
+      symlinkSync(external, journal, 'file');
+    } catch (error) {
+      if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
+        t.skip(`symlinks are unavailable on this platform: ${error.code}`);
+        return;
+      }
+      throw error;
+    }
+    assert.throws(
+      () => appendRuntimeEvent(root, { type: 'TASK_CREATED', data: {} }),
+      error => error.code === 'RUNTIME_EVENT_WRITE_FAILED',
+    );
+    assert.equal(readFileSync(external, 'utf8'), 'ORIGINAL\n');
+
+    unlinkSync(journal);
+    writeFileSync(journal, '', 'utf8');
+    assert.equal(appendRuntimeEvent(root, { type: 'TASK_CREATED', data: {} }).sequence, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(externalRoot, { recursive: true, force: true });
+  }
+});
+
+test('Event sequence survives oversized and partial corrupted tails', () => {
+  const oversized = repository();
+  const partial = repository();
+  const malformed = repository();
+  try {
+    for (const root of [oversized, partial, malformed]) mkdirSync(join(root, '.agent-bus', 'events'), { recursive: true });
+
+    writeFileSync(runtimeEventJournalPath(oversized), `${storedEvent(1)}\n${storedEvent(2)}\n${'x'.repeat(300 * 1024)}`, 'utf8');
+    assert.equal(appendRuntimeEvent(oversized, { type: 'TASK_CREATED', data: {} }).sequence, 3);
+    assert.deepEqual(readRuntimeEvents(oversized, { limit: 10 }).map(event => event.sequence), [1, 2, 3]);
+    assert.deepEqual(readRuntimeEvents(oversized, { after: 2, limit: 10 }).map(event => event.sequence), [3]);
+
+    writeFileSync(runtimeEventJournalPath(partial), `${storedEvent(100)}\n{"partial":"${'y'.repeat(200 * 1024)}`, 'utf8');
+    assert.equal(appendRuntimeEvent(partial, { type: 'TASK_CREATED', data: {} }).sequence, 101);
+    assert.deepEqual(readRuntimeEvents(partial, { after: 100, limit: 10 }).map(event => event.sequence), [101]);
+
+    writeFileSync(runtimeEventJournalPath(malformed), `${storedEvent(10)}\nnot-json\n${'z'.repeat(80 * 1024)}\n{"partial":`, 'utf8');
+    assert.equal(appendRuntimeEvent(malformed, { type: 'TASK_CREATED', data: {} }).sequence, 11);
+    assert.deepEqual(readRuntimeEvents(malformed, { limit: 10 }).map(event => event.sequence), [10, 11]);
+  } finally {
+    rmSync(oversized, { recursive: true, force: true });
+    rmSync(partial, { recursive: true, force: true });
+    rmSync(malformed, { recursive: true, force: true });
+  }
+});
+
+test('Event writer fails closed when a non-empty journal has no valid event', () => {
+  const root = repository();
+  const journal = runtimeEventJournalPath(root);
+  try {
+    mkdirSync(join(root, '.agent-bus', 'events'), { recursive: true });
+    const corrupted = `corrupted-only\n${'q'.repeat(160 * 1024)}`;
+    writeFileSync(journal, corrupted, 'utf8');
+    assert.throws(
+      () => appendRuntimeEvent(root, { type: 'TASK_CREATED', data: {} }),
+      error => error.code === 'RUNTIME_EVENT_WRITE_FAILED' && /last valid Event Journal sequence/.test(error.message),
+    );
+    assert.equal(readFileSync(journal, 'utf8'), corrupted);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

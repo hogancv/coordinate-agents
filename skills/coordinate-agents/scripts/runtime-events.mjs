@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
+  constants as fsConstants,
   existsSync,
+  fstatSync,
   fsyncSync,
   lstatSync,
   mkdirSync,
@@ -9,7 +11,6 @@ import {
   readSync,
   realpathSync,
   rmSync,
-  statSync,
   writeSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -88,6 +89,61 @@ function sleepSync(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
+function validStoredEvent(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    && value.schemaVersion === EVENT_SCHEMA_VERSION
+    && typeof value.eventId === 'string'
+    && Number.isInteger(value.sequence) && value.sequence > 0
+    && typeof value.timestamp === 'string' && !Number.isNaN(Date.parse(value.timestamp))
+    && typeof value.type === 'string';
+}
+
+function validateJournalMetadata(metadata, journal) {
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
+    throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Unsafe Event Journal file: ${journal}`, { recoverable: true });
+  }
+}
+
+function sameFile(left, right) {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function openJournalForAppend(paths) {
+  let before = null;
+  try {
+    before = lstatSync(paths.journal);
+    validateJournalMetadata(before, paths.journal);
+    assertSafePath(paths.repository, paths.journal);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  // O_NOFOLLOW closes the lstat/open replacement window on platforms that
+  // support it. The post-open lstat and descriptor identity checks retain a
+  // fail-closed fallback and occur before any bytes are written.
+  const descriptor = openSync(
+    paths.journal,
+    fsConstants.O_RDWR
+      | fsConstants.O_APPEND
+      | (fsConstants.O_NOFOLLOW || 0)
+      | (before ? 0 : fsConstants.O_CREAT | fsConstants.O_EXCL),
+    0o600,
+  );
+  try {
+    const opened = fstatSync(descriptor);
+    const current = lstatSync(paths.journal);
+    validateJournalMetadata(opened, paths.journal);
+    validateJournalMetadata(current, paths.journal);
+    assertSafePath(paths.repository, paths.journal);
+    if (!sameFile(opened, current) || (before && !sameFile(before, opened))) {
+      throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Event Journal changed while opening: ${paths.journal}`, { recoverable: true });
+    }
+    return { descriptor, size: opened.size };
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
 function acquireAppendLock(paths) {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
   while (Date.now() <= deadline) {
@@ -116,67 +172,88 @@ function acquireAppendLock(paths) {
   throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', 'Timed out acquiring the Event Journal append lock.', { recoverable: true });
 }
 
-function lastSequence(journal) {
-  if (!existsSync(journal)) return 0;
-  const size = statSync(journal).size;
-  if (size === 0) return 0;
-  const descriptor = openSync(journal, 'r');
+function parseSequenceLine(descriptor, start, length) {
+  if (length <= 0 || length > MAX_EVENT_LINE_BYTES) return null;
+  const buffer = Buffer.alloc(length);
+  const bytesRead = readSync(descriptor, buffer, 0, length, start);
+  if (bytesRead !== length) return null;
+  let line = buffer.toString('utf8');
+  if (line.endsWith('\r')) line = line.slice(0, -1);
   try {
-    let position = size;
-    let suffix = '';
-    while (position > 0 && Buffer.byteLength(suffix, 'utf8') <= MAX_EVENT_LINE_BYTES * 2) {
-      const length = Math.min(READ_CHUNK_BYTES, position);
-      position -= length;
-      const buffer = Buffer.alloc(length);
-      readSync(descriptor, buffer, 0, length, position);
-      suffix = buffer.toString('utf8') + suffix;
-      const lines = suffix.trimEnd().split(/\r?\n/);
-      for (let index = lines.length - 1; index >= (position > 0 ? 1 : 0); index -= 1) {
-        try {
-          const parsed = JSON.parse(lines[index]);
-          if (Number.isInteger(parsed.sequence) && parsed.sequence >= 0) return parsed.sequence;
-        } catch { /* A malformed tail line must not make the journal unreadable. */ }
-      }
-    }
-    return 0;
-  } finally {
-    closeSync(descriptor);
+    const event = JSON.parse(line);
+    return validStoredEvent(event) ? event.sequence : null;
+  } catch {
+    return null;
   }
+}
+
+function lastSequence(descriptor, size) {
+  if (size === 0) return 0;
+  // Scan all the way toward byte zero with bounded buffers. A crash may leave
+  // an arbitrarily large malformed tail, but it must never reset sequence.
+  let position = size;
+  let lineEnd = size;
+  const buffer = Buffer.alloc(READ_CHUNK_BYTES);
+  while (position > 0) {
+    const length = Math.min(buffer.length, position);
+    position -= length;
+    const bytesRead = readSync(descriptor, buffer, 0, length, position);
+    for (let index = bytesRead - 1; index >= 0; index -= 1) {
+      if (buffer[index] !== 0x0a) continue;
+      const newline = position + index;
+      const sequence = parseSequenceLine(descriptor, newline + 1, lineEnd - newline - 1);
+      if (sequence !== null) return sequence;
+      lineEnd = newline;
+    }
+  }
+  const sequence = parseSequenceLine(descriptor, 0, lineEnd);
+  if (sequence !== null) return sequence;
+  throw runtimeError(
+    'RUNTIME_EVENT_WRITE_FAILED',
+    'Unable to determine the last valid Event Journal sequence because the existing journal is corrupted.',
+    { recoverable: true },
+  );
+}
+
+function journalNeedsSeparator(descriptor, size) {
+  if (size === 0) return false;
+  const byte = Buffer.alloc(1);
+  return readSync(descriptor, byte, 0, 1, size - 1) !== 1 || byte[0] !== 0x0a;
 }
 
 export function appendRuntimeEvent(root, input = {}) {
   let paths;
   let release = () => {};
+  let descriptor = null;
   try {
+    const type = validateType(input.type);
     paths = eventPaths(root, { create: true });
     release = acquireAppendLock(paths);
+    const opened = openJournalForAppend(paths);
+    descriptor = opened.descriptor;
     const event = {
       schemaVersion: EVENT_SCHEMA_VERSION,
       eventId: `evt_${randomUUID()}`,
-      sequence: lastSequence(paths.journal) + 1,
+      sequence: lastSequence(descriptor, opened.size) + 1,
       timestamp: new Date().toISOString(),
-      type: validateType(input.type),
+      type,
     };
     for (const field of ASSOCIATION_FIELDS) {
       if (typeof input[field] === 'string' && input[field].trim()) event[field] = redactOutput(input[field].trim(), 512);
     }
     event.data = sanitizeRuntimeEventData(input.data);
-    const line = `${JSON.stringify(event)}\n`;
+    const line = `${journalNeedsSeparator(descriptor, opened.size) ? '\n' : ''}${JSON.stringify(event)}\n`;
     if (Buffer.byteLength(line, 'utf8') > MAX_EVENT_LINE_BYTES) {
       throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Runtime event exceeds ${MAX_EVENT_LINE_BYTES} bytes.`, { recoverable: false });
     }
-    const descriptor = openSync(paths.journal, 'a', 0o600);
-    try {
-      writeSync(descriptor, line, null, 'utf8');
-      fsyncSync(descriptor);
-    } finally {
-      closeSync(descriptor);
-    }
+    writeSync(descriptor, line, null, 'utf8');
+    fsyncSync(descriptor);
     return event;
   } catch (error) {
     if (error?.code === 'RUNTIME_EVENT_WRITE_FAILED') throw error;
     throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Unable to append Runtime Event: ${redactOutput(error.message || String(error), 2 * 1024)}`, { recoverable: true });
   } finally {
+    if (descriptor !== null) closeSync(descriptor);
     release();
   }
 }
@@ -194,15 +271,6 @@ function normalizedReadOptions(options = {}) {
     ? null
     : new Set((Array.isArray(options.type) ? options.type : [options.type]).map(validateType));
   return { limit, after, types, taskId: options.taskId || null, sessionId: options.sessionId || null };
-}
-
-function validStoredEvent(value) {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    && value.schemaVersion === EVENT_SCHEMA_VERSION
-    && typeof value.eventId === 'string'
-    && Number.isInteger(value.sequence) && value.sequence > 0
-    && typeof value.timestamp === 'string' && !Number.isNaN(Date.parse(value.timestamp))
-    && typeof value.type === 'string';
 }
 
 function matches(event, options) {

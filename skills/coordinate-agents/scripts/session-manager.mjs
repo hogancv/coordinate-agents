@@ -209,13 +209,13 @@ function appendSessionEvent(root, record, type, data = {}, associations = {}) {
   });
 }
 
-function ensureSessionStateEvent(root, record) {
+function ensureSessionStateEvent(root, record, associations = {}) {
   const type = sessionStateEventType(record?.state);
   if (!type) return;
   const latest = readRuntimeEvents(root, { sessionId: record.id, limit: 1 }).at(-1);
   if (record.state === 'exited' && latest?.type === 'SESSION_CLOSED') return;
   if (latest?.type === type && latest?.data?.state === record.state) return;
-  appendSessionEvent(root, record, type);
+  appendSessionEvent(root, record, type, {}, associations);
 }
 
 function parseRecord(root, path) {
@@ -516,18 +516,48 @@ export class ExecutionSessionManager {
     }
 
     const deadline = Date.now() + 5_000;
+    const healthyStabilityMs = 200;
+    let healthySince = null;
+    let startupActivityObserved = false;
     let current = record;
     while (Date.now() < deadline) {
       try {
         const runtime = await requestHost(current, { op: 'status' }, { timeoutMs: 500 });
-        current = mergeRuntimeRecord(current, runtime);
+        let base = current;
+        try {
+          const latest = readRecord(repository, id);
+          if (!ACTIVE_STATES.has(latest.state)) {
+            current = latest;
+            break;
+          }
+          base = latest;
+        } catch { /* Keep the current validated startup record. */ }
+        current = mergeRuntimeRecord(base, runtime);
+        startupActivityObserved ||= Number(runtime?.bufferedBytes || 0) > 0
+          || Number(runtime?.outputCursor || 0) > 0
+          || ['idle', 'busy'].includes(current.state);
         writeRecord(repository, current);
-        break;
       } catch {
-        await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
+        // A short-lived Implementer may close its host before the next probe,
+        // but the host persists the terminal state first. Prefer that durable
+        // fact instead of mistaking the last healthy probe for a successful
+        // startup.
+        try {
+          const latest = readRecord(repository, id);
+          if (!ACTIVE_STATES.has(latest.state)) {
+            current = latest;
+            break;
+          }
+        } catch { /* Keep probing until the bounded startup deadline. */ }
       }
+      if (!ACTIVE_STATES.has(current.state)) break;
+      if (current.state !== 'starting' && startupActivityObserved) {
+        healthySince ??= Date.now();
+        if (Date.now() - healthySince >= healthyStabilityMs) break;
+      } else healthySince = null;
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
-    if (current.state !== 'starting') appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId });
+    if (current.state !== 'starting') ensureSessionStateEvent(repository, current, { taskId });
     return { session: publicRecord(current), reused: false, initialInputConsumed: Boolean(launch.initialInputConsumed) };
   }
 
