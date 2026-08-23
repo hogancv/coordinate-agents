@@ -117,23 +117,28 @@ function renderSessions() {
       <div class="session-meta"><span>Created ${formatDate(session.createdAt)}</span><span>Last activity ${formatDate(session.lastActivity)}</span></div>
       <pre class="session-output">${escapeHtml(session.recentOutput || 'No recent output available.')}</pre>
       ${session.taskIds?.length ? `<div class="session-tasks">Tasks: ${session.taskIds.map(escapeHtml).join(', ')}</div>` : ''}
+      <div class="session-history">
+        <span class="history-label">${session.historySource === 'recorded' ? 'Recorded Events' : 'Derived / Legacy History'}</span>
+        ${(session.events || []).slice(-8).map(event => `<div><code>${event.sequence ? `#${escapeHtml(event.sequence)}` : '—'}</code><strong>${escapeHtml(event.event)}</strong><time>${formatDate(event.timestamp)}</time></div>`).join('')}
+      </div>
     </article>
   `).join('');
 }
 
 function renderEvents() {
   if (state.events.length === 0) {
-    elements.events.innerHTML = '<div class="empty-state">No Agent Bus events found.</div>';
+    elements.events.innerHTML = '<div class="empty-state">No Runtime events found.</div>';
     return;
   }
   elements.events.innerHTML = state.events.map(event => `
     <article class="event-row">
-      <time>${formatDate(event.timestamp)}</time>
+      <time>${event.sequence ? `#${escapeHtml(event.sequence)} · ` : ''}${formatDate(event.timestamp)}</time>
       <span class="event-marker ${statusClass(event.event)}"></span>
       <div class="event-body">
-        <div class="event-title"><strong>${escapeHtml(event.event)}</strong><span>${escapeHtml(event.agent || event.from || 'runtime')}</span></div>
+        <div class="event-title"><strong>${escapeHtml(event.event)}</strong><span>${escapeHtml([event.agent || event.from || 'runtime', event.sessionId ? shortId(event.sessionId) : null].filter(Boolean).join(' · '))}</span></div>
         <div class="event-details">${escapeHtml(event.details || '—')}</div>
         ${event.taskId ? `<button class="event-task" data-task-id="${escapeHtml(event.taskId)}" type="button">${escapeHtml(event.taskId)}</button>` : ''}
+        <span class="history-label">${event.recorded ? 'Recorded Event' : 'Derived / Legacy History'}</span>
       </div>
     </article>
   `).join('');
@@ -151,8 +156,8 @@ function renderTimeline(timeline = []) {
     <div class="timeline-item ${event.status ? 'has-status' : ''}">
       <div class="timeline-rail"><span class="timeline-dot ${event.status ? statusClass(event.status) : ''}"></span>${index < timeline.length - 1 ? '<span class="timeline-line"></span>' : ''}</div>
       <div class="timeline-content">
-        <div class="timeline-title"><strong>${escapeHtml(event.status ? statusLabel(event.status) : event.event)}</strong><time>${formatDate(event.timestamp)}</time></div>
-        <div class="timeline-meta">${escapeHtml(event.agent || event.source || 'runtime')}</div>
+        <div class="timeline-title"><strong>${event.sequence ? `#${escapeHtml(event.sequence)} ` : ''}${escapeHtml(event.status ? statusLabel(event.status) : event.event)}</strong><time>${formatDate(event.timestamp)}</time></div>
+        <div class="timeline-meta">${escapeHtml(event.agent || 'runtime')} · ${event.recorded ? 'Recorded Event' : 'Derived / Legacy History'}${event.sessionId ? ` · ${escapeHtml(shortId(event.sessionId))}` : ''}</div>
         ${event.details ? `<p>${escapeHtml(event.details)}</p>` : ''}
       </div>
     </div>
@@ -246,3 +251,17 @@ const initialTask = decodeURIComponent(window.location.hash.slice(1));
 if (initialTask) state.selectedTask = initialTask;
 refresh();
 setInterval(refresh, 5_000);
+
+let refreshTimer = null;
+function scheduleRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    refresh();
+  }, 150);
+}
+
+if ('EventSource' in window) {
+  const stream = new EventSource('/api/events/stream');
+  stream.addEventListener('runtime-event', scheduleRefresh);
+}

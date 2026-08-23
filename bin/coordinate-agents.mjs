@@ -69,6 +69,7 @@ import {
   getExecutionSessionManager,
 } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { runtimeSessionFacts } from '../skills/coordinate-agents/scripts/session-service.mjs';
+import { appendRuntimeEvent, readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
@@ -1079,6 +1080,14 @@ async function recoverInspectCommand(options) {
       };
     }
   }
+  const recentEventsBySequence = new Map();
+  for (const event of readRuntimeEvents(root, { taskId: task.id, limit: 50 })) recentEventsBySequence.set(event.sequence, event);
+  if (task.sessionId) {
+    for (const event of readRuntimeEvents(root, { sessionId: task.sessionId, limit: 50 })) recentEventsBySequence.set(event.sequence, event);
+  }
+  const recentEvents = [...recentEventsBySequence.values()]
+    .sort((a, b) => a.sequence - b.sequence)
+    .slice(-50);
   return jsonSuccess('recover.inspect', {
     root,
     task,
@@ -1091,6 +1100,7 @@ async function recoverInspectCommand(options) {
     errorArtifact: artifact,
     executable,
     session,
+    recentEvents,
     recommendedRecovery: {
       factsOnly: true,
       resumeRequired: ['ERROR', 'STOPPED'].includes(task.status),
@@ -1238,6 +1248,18 @@ async function taskDispatch(root, task, options, t) {
       },
       lastError: null,
     });
+    appendRuntimeEvent(root, {
+      type: 'TASK_DISPATCHED',
+      taskId: task.id,
+      sessionId: task.sessionId || undefined,
+      agentId,
+      role: 'implementer',
+      data: {
+        round: task.round,
+        adapter: resolution.resolved.adapter,
+        commandSource: resolution.resolved.commandSource,
+      },
+    });
     try {
       recordBusState(root, agentId, 'IMPLEMENTING', `Task ${task.id} round ${task.round} dispatched by ${task.planner}.`);
     } catch (error) {
@@ -1269,10 +1291,11 @@ async function taskDispatch(root, task, options, t) {
       adapter: resolution.adapter,
       initialPrompt: body,
       language: options.language || 'en',
+      taskId: task.id,
     });
     let session = opened.session;
     if (!opened.initialInputConsumed) {
-      session = await sessionManager.write(root, session.id, body);
+      session = await sessionManager.write(root, session.id, body, { taskId: task.id });
     }
     task = setTaskStatus(root, task.id, 'IMPLEMENTING', {
       sessionId: session.id,

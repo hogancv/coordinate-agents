@@ -130,6 +130,10 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .session-meta { justify-content: space-between; gap: .7rem; margin: .9rem 0 .7rem; }
 .session-output { min-height: 7rem; max-height: 12rem; }
 .session-tasks { margin-top: .65rem; overflow-wrap: anywhere; }
+.session-history { display: grid; gap: .35rem; margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.session-history > div { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; gap: .5rem; color: var(--muted); font-size: .68rem; }
+.session-history strong { color: var(--text); font-size: .68rem; overflow-wrap: anywhere; }
+.history-label { display: inline-block; margin-top: .3rem; color: var(--accent); font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 
 .event-list { display: grid; }
 .event-row { display: grid; grid-template-columns: 9rem .8rem minmax(0, 1fr); gap: .75rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }

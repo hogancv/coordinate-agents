@@ -23,9 +23,10 @@ Browser
    v
 Inspector Server
    |
-   | read-only filesystem adapter
+   | read-only journal/state adapter
    v
 Existing Coordinate Agents Runtime State
+   ├── .agent-bus/events/runtime.jsonl
    ├── .agent-bus/tasks/*.json
    ├── .agent-bus/config.json
    ├── .agent-bus/state/<agent>/*.json
@@ -34,9 +35,11 @@ Existing Coordinate Agents Runtime State
 ```
 
 The Inspector does not create a database or duplicate the Task, Agent, Session,
-or Event models. There is no unified Event Store in the current Runtime, so the
-filesystem adapter derives recent events from existing append-only Agent state,
-Bus messages, Task evidence/review records, and bounded error artifacts.
+or Event models. Recent events and Task/Session timelines prefer the Runtime's
+real [Durable Event Journal](./event-journal.md). Repositories or individual
+records that predate the journal continue to work through an explicitly labeled
+**Derived / Legacy History** fallback; the Inspector never writes fabricated
+events back to disk.
 
 ## Start it
 
@@ -60,14 +63,16 @@ The CLI prints a URL such as `http://localhost:3000`. The server binds to
 - **Tasks** — current Task title, status, round, and update time.
 - **Agent flow** — the configured Planner → Implementer → Reviewer topology,
   including each Agent’s current Agent Bus state.
-- **Task detail** — observed status timeline, role assignments, specification,
+- **Task detail** — sequence-ordered recorded event timeline, role assignments, specification,
   implementation commit, evidence, review history, and last error.
-- **Sessions** — Session state, timestamps, linked Tasks, and bounded recent
-  output from the existing Session Runtime.
-- **Recent events** — append-only Agent state changes, Bus messages, Task
-  evidence/reviews, and bounded error records.
+- **Sessions** — Session state, timestamps, linked Tasks, bounded recent output,
+  and recorded Session event history.
+- **Recent events** — timestamp, sequence, event type, Task, Session, Agent, and
+  a bounded summary from the append-only journal.
 
-The dashboard refreshes periodically and has a manual Refresh button. It is
+The dashboard receives new records through the localhost-only read-only
+`GET /api/events/stream` SSE endpoint, resumes from `Last-Event-ID`, refreshes
+periodically as a fallback, and has a manual Refresh button. It is
 read-only by design; use the Plugin or the existing CLI/Runtime operations to
 create, dispatch, review, resume, or stop Tasks.
 
@@ -84,11 +89,11 @@ boundary first.
 passwords, private keys, or unnecessary production data in Bus messages or
 evidence. The Inspector is an observability view, not a secret store.
 
-## MVP limitations
+## Compatibility and limitations
 
-- Task history is reconstructed from the state and evidence that already exist;
-  the Inspector does not add transition logging to the Task Runtime.
-- Event ordering is based on recorded timestamps and can be incomplete when a
-  prior Runtime operation did not leave a durable record.
+- History created before Event Journal support remains derived and may be
+  incomplete; old history is never fabricated or backfilled.
+- Recorded ordering uses repository-monotonic sequence values rather than
+  timestamps.
 - There is no authentication, remote access, mutation, chat, Task input form,
   multi-tenant mode, cloud sync, or benchmark/evaluation dashboard yet.

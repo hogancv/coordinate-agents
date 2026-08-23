@@ -25,6 +25,7 @@
     "docs/mcp.md",
     "docs/MCP_TROUBLESHOOTING.md",
     "docs/inspector.md",
+    "docs/event-journal.md",
     "docs/session-runtime.md",
     "LICENSE",
     "assets"

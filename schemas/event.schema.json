@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/event.schema.json",
+  "title": "Coordinate Agents Runtime Event",
+  "type": "object",
+  "required": ["schemaVersion", "eventId", "sequence", "timestamp", "type", "data"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "pattern": "^evt_[0-9a-f-]{36}$" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "type": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
+    "taskId": { "type": "string" },
+    "sessionId": { "type": "string" },
+    "agentId": { "type": "string" },
+    "role": { "type": "string" },
+    "messageId": { "type": "string" },
+    "data": { "type": "object" }
+  },
+  "additionalProperties": false
+}

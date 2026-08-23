@@ -20,6 +20,7 @@ import {
   setTaskStatus,
 } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { startInspector } from '../inspector/server/server.mjs';
+import { appendRuntimeEvent } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
@@ -185,13 +186,15 @@ test('Inspector API reads fixture Tasks, Sessions, Agent topology, events, and d
     assert.deepEqual(sessions[0].taskIds, ['task-inspector']);
 
     const events = await (await fetch(`${started.url}/api/events?taskId=task-inspector&limit=50`)).json();
-    assert.ok(events.some(event => event.event === 'IMPLEMENTATION_DONE'));
+    assert.ok(events.some(event => event.event === 'TASK_CREATED'));
     assert.ok(events.some(event => event.event === 'REVIEW_APPROVED'));
     assert.ok(events.every(event => event.taskId === 'task-inspector'));
+    assert.ok(events.every(event => event.recorded === true));
+    assert.deepEqual(events.map(event => event.sequence), [...events.map(event => event.sequence)].sort((a, b) => b - a));
 
     const page = await (await fetch(started.url)).text();
     assert.match(page, /Coordinate Agents Inspector/);
-    assert.match(page, /Status timeline/);
+    assert.match(page, /Event timeline/);
     assert.match(page, /Sessions/);
 
     const mutation = await fetch(`${started.url}/api/tasks`, { method: 'POST' });
@@ -236,6 +239,65 @@ test('coordinate-agents inspector starts the localhost server on a selected port
   } finally {
     child.kill('SIGTERM');
     await once(child, 'exit');
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector uses explicit legacy history only when a Task has no recorded events', async () => {
+  const repositoryRoot = fixture();
+  rmSync(join(repositoryRoot, '.agent-bus', 'events'), { recursive: true, force: true });
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const legacy = await (await fetch(`${started.url}/api/tasks/task-inspector`)).json();
+    assert.equal(legacy.historySource, 'derived-legacy');
+    assert.ok(legacy.events.length > 0);
+    assert.ok(legacy.events.every(event => event.recorded === false));
+    assert.ok(legacy.events.every(event => event.source.startsWith('derived-legacy:')));
+
+    createTask(repositoryRoot, { id: 'task-after-journal', title: 'New recorded task' });
+    const recorded = await (await fetch(`${started.url}/api/tasks/task-after-journal`)).json();
+    assert.equal(recorded.historySource, 'recorded');
+    assert.deepEqual(recorded.events.map(event => event.event), ['TASK_CREATED']);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector SSE delivers recorded events and resumes from Last-Event-ID', async () => {
+  const repositoryRoot = fixture();
+  const first = appendRuntimeEvent(repositoryRoot, { type: 'RUNTIME_ERROR', taskId: 'task-inspector', data: { message: 'first' } });
+  const second = appendRuntimeEvent(repositoryRoot, { type: 'TASK_RESUMED', taskId: 'task-inspector', data: { round: 2 } });
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${started.url}/api/events/stream`, {
+      headers: { 'Last-Event-ID': `${first.sequence}` },
+      signal: controller.signal,
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/event-stream/);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let body = '';
+    const third = appendRuntimeEvent(repositoryRoot, { type: 'TASK_STOPPED', taskId: 'task-inspector', data: { reason: 'fixture' } });
+    const deadline = Date.now() + 4_000;
+    while (Date.now() < deadline && (!body.includes(`id: ${second.sequence}\n`) || !body.includes(`id: ${third.sequence}\n`))) {
+      const result = await Promise.race([
+        reader.read(),
+        new Promise(resolvePromise => setTimeout(() => resolvePromise({ timeout: true }), 700)),
+      ]);
+      if (result.timeout) continue;
+      if (result.done) break;
+      body += decoder.decode(result.value, { stream: true });
+    }
+    assert.match(body, new RegExp(`id: ${second.sequence}\\n`));
+    assert.match(body, new RegExp(`id: ${third.sequence}\\n`));
+    assert.equal(body.includes(`id: ${first.sequence}\n`), false);
+    assert.match(body, /event: runtime-event/);
+  } finally {
+    controller.abort();
+    await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
   }
 });

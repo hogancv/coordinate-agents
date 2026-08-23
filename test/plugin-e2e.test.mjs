@@ -15,6 +15,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { resolveCanonicalRuntime } from '../skills/coordinate-agents/scripts/runtime-entry.mjs';
+import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
@@ -321,6 +322,11 @@ test('Task dispatch owns IMPLEMENT handoff, launch, implementation sync, review,
     ], env);
     assert.equal(approved.status, 0, approved.stderr);
     assert.equal(JSON.parse(approved.stdout).task.status, 'APPROVED');
+
+    const eventTypes = readRuntimeEvents(repository, { taskId, limit: 100 }).map(event => event.type);
+    for (const type of ['TASK_CREATED', 'TASK_DISPATCHED', 'IMPLEMENTATION_RECEIVED', 'CHANGES_REQUESTED', 'REVIEW_APPROVED']) {
+      assert.ok(eventTypes.includes(type), `missing ${type}`);
+    }
 
     const rejected = invoke([
       'task', 'dispatch', '--root', repository, '--id', taskId, '--json',

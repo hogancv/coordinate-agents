@@ -6,7 +6,8 @@ description: Security and privacy boundaries for the local plaintext .agent-bus 
 
 # Security
 
-`.agent-bus` is **local plaintext working data**. It is not encrypted and must not contain tokens, cookies, passwords, private keys, or unnecessary production data.
+`.agent-bus` is **local plaintext working data**, including the append-only Event Journal under
+`.agent-bus/events/`. It is not encrypted and must not contain tokens, cookies, passwords, private keys, or unnecessary production data.
 
 Execution Session metadata is bounded and excludes environment variables. Session endpoints are
 derived from the validated repository root and Session ID; input is structured text, not a shell

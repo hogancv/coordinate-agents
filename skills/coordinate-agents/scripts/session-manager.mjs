@@ -24,6 +24,7 @@ import { readUserConfig, resolveAgentConfig } from './user-config.mjs';
 import { getAdapter } from '../adapters/index.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
+import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
 
 export const EXECUTION_SESSION_STATES = Object.freeze([
   'starting',
@@ -180,6 +181,43 @@ function writeRecord(root, record) {
   return record;
 }
 
+function sessionStateEventType(state) {
+  return ({
+    starting: 'SESSION_STARTING',
+    running: 'SESSION_STARTED',
+    idle: 'SESSION_IDLE',
+    busy: 'SESSION_BUSY',
+    exited: 'SESSION_EXITED',
+    failed: 'SESSION_FAILED',
+  })[state] || null;
+}
+
+function appendSessionEvent(root, record, type, data = {}, associations = {}) {
+  if (!record || !type) return null;
+  return appendRuntimeEvent(root, {
+    type,
+    taskId: associations.taskId,
+    sessionId: record.id,
+    agentId: record.agent,
+    data: {
+      state: record.state,
+      exitCode: record.exitCode ?? null,
+      signal: record.signal || null,
+      error: record.error || null,
+      ...data,
+    },
+  });
+}
+
+function ensureSessionStateEvent(root, record) {
+  const type = sessionStateEventType(record?.state);
+  if (!type) return;
+  const latest = readRuntimeEvents(root, { sessionId: record.id, limit: 1 }).at(-1);
+  if (record.state === 'exited' && latest?.type === 'SESSION_CLOSED') return;
+  if (latest?.type === type && latest?.data?.state === record.state) return;
+  appendSessionEvent(root, record, type);
+}
+
 function parseRecord(root, path) {
   const bus = join(root, '.agent-bus');
   safeInternalStat(join(root, '.agent-bus', 'sessions'), path);
@@ -274,7 +312,10 @@ function requestHost(record, command, { timeoutMs = 2_000 } = {}) {
 }
 
 async function syncHostRecord(root, record) {
-  if (!ACTIVE_STATES.has(record.state)) return record;
+  if (!ACTIVE_STATES.has(record.state)) {
+    ensureSessionStateEvent(root, record);
+    return record;
+  }
   try {
     const runtime = await requestHost(record, { op: 'status' });
     // The host persists terminal PTY state independently of this status
@@ -283,11 +324,15 @@ async function syncHostRecord(root, record) {
     let base = record;
     try {
       const latest = readRecord(root, record.id);
-      if (!ACTIVE_STATES.has(latest.state)) return latest;
+      if (!ACTIVE_STATES.has(latest.state)) {
+        ensureSessionStateEvent(root, latest);
+        return latest;
+      }
       base = latest;
     } catch { /* Keep the validated record if the latest read races cleanup. */ }
     const updated = mergeRuntimeRecord(base, runtime);
     writeRecord(root, updated);
+    if (updated.state !== base.state) ensureSessionStateEvent(root, updated);
     return updated;
   } catch (error) {
     // A host closes shortly after persisting a terminal PTY state. Prefer that
@@ -304,6 +349,7 @@ async function syncHostRecord(root, record) {
       error: `Session host unavailable: ${error.message || error}`,
     };
     writeRecord(root, failed);
+    appendSessionEvent(root, failed, 'SESSION_FAILED');
     return failed;
   }
 }
@@ -378,7 +424,7 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en' } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null } = {}) {
     const repository = sessionRoot(root);
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
@@ -390,7 +436,10 @@ export class ExecutionSessionManager {
     }
     const preferred = await this.findPreferred(repository, sessionId, agent, resolved?.command || null);
     const existing = preferred || await this.findReusable(repository, agent, resolved?.command || null);
-    if (existing) return { session: publicRecord(existing), reused: true, initialInputConsumed: false };
+    if (existing) {
+      appendSessionEvent(repository, existing, 'SESSION_REUSED', {}, { taskId });
+      return { session: publicRecord(existing), reused: true, initialInputConsumed: false };
+    }
     const launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
@@ -419,6 +468,7 @@ export class ExecutionSessionManager {
       hostPid: null,
     };
     writeRecord(repository, record);
+    appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId });
     let host;
     try {
       host = fork(this.hostPath, [], {
@@ -461,6 +511,7 @@ export class ExecutionSessionManager {
       try { host?.kill(); } catch { /* Only the host process created above is eligible. */ }
       const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
       writeRecord(repository, failed);
+      appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId });
       throw runtimeError('SESSION_START_FAILED', `Failed to start execution session ${id}: ${error.message || error}`, { recoverable: true, agent, command: resolved.command, root: repository, sessionId: id, details: { agent, command: resolved.command, root: repository } });
     }
 
@@ -476,6 +527,7 @@ export class ExecutionSessionManager {
         await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
       }
     }
+    if (current.state !== 'starting') appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId });
     return { session: publicRecord(current), reused: false, initialInputConsumed: Boolean(launch.initialInputConsumed) };
   }
 
@@ -513,7 +565,7 @@ export class ExecutionSessionManager {
     return { session: publicRecord(current), ...result, output: redactOutput(result.output || '', MAX_READ_BYTES) };
   }
 
-  async write(root, id, input, { submit = true } = {}) {
+  async write(root, id, input, { submit = true, taskId = null } = {}) {
     const repository = sessionRoot(root);
     if (typeof input !== 'string' || input.length === 0) throw runtimeError('SESSION_WRITE_FAILED', 'Session input must be a non-empty string.', { recoverable: false, sessionId: id, root: repository });
     if (input.length > 256 * 1024) throw runtimeError('SESSION_WRITE_FAILED', 'Session input exceeds the size limit.', { recoverable: false, sessionId: id, root: repository });
@@ -523,6 +575,10 @@ export class ExecutionSessionManager {
     const runtime = await requestHost(current, { op: 'write', input, submit });
     const updated = mergeRuntimeRecord(current, runtime);
     writeRecord(repository, updated);
+    if (updated.state !== current.state) {
+      const type = sessionStateEventType(updated.state);
+      appendSessionEvent(repository, updated, type, {}, { taskId });
+    }
     return publicRecord(updated);
   }
 
@@ -557,10 +613,12 @@ export class ExecutionSessionManager {
       const runtime = await requestHost(current, { op: 'close', graceful, timeoutMs }, { timeoutMs: Math.max(5_000, timeoutMs + 2_000) });
       const updated = mergeRuntimeRecord(current, runtime);
       writeRecord(repository, updated);
+      appendSessionEvent(repository, updated, 'SESSION_CLOSED');
       return publicRecord(updated);
     } catch (error) {
       const failed = { ...current, pid: null, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
       writeRecord(repository, failed);
+      appendSessionEvent(repository, failed, 'SESSION_FAILED');
       throw normalizeRuntimeError(error, 'SESSION_CLOSE_FAILED');
     }
   }

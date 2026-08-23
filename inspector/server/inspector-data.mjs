@@ -22,6 +22,7 @@ import {
 import { runtimeSessionFacts } from '../../skills/coordinate-agents/scripts/session-service.mjs';
 import { observeAgentBus } from '../../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
+import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const TASK_ID_PATTERN = /\btask-[A-Za-z0-9][A-Za-z0-9_-]{1,127}\b/;
 const MAX_EVENT_SCAN = 600;
@@ -213,6 +214,39 @@ function readAgents(root) {
   });
 }
 
+function journalDetails(event) {
+  const data = event?.data && typeof event.data === 'object' ? event.data : {};
+  const preferred = data.summary || data.message || data.feedback || data.reason || data.subject || data.details;
+  if (preferred) return bounded(preferred, MAX_EVENT_DETAILS);
+  const entries = Object.entries(data)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .slice(0, 6)
+    .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+  return bounded(entries.join(' · '), MAX_EVENT_DETAILS);
+}
+
+function inspectorJournalEvent(event) {
+  return {
+    timestamp: event.timestamp,
+    sequence: event.sequence,
+    taskId: event.taskId || null,
+    sessionId: event.sessionId || null,
+    agent: event.agentId || null,
+    role: event.role || null,
+    messageId: event.messageId || null,
+    event: event.type,
+    type: event.type,
+    details: journalDetails(event),
+    data: event.data || {},
+    source: 'journal',
+    recorded: true,
+  };
+}
+
+function recordedEvents(root, options = {}) {
+  return readRuntimeEvents(root, options).map(inspectorJournalEvent);
+}
+
 function readSessions(root, tasks = readTaskRecords(root)) {
   const bus = busFor(root);
   if (!bus || !existsSync(join(bus, 'sessions'))) return Promise.resolve([]);
@@ -239,6 +273,7 @@ function readSessions(root, tasks = readTaskRecords(root)) {
     const taskIds = tasks
       .filter(task => task.sessionId === record.id)
       .map(task => task.id);
+    const sessionEvents = recordedEvents(root, { sessionId: record.id, limit: 200 });
     return {
       sessionId: current.id,
       id: current.id,
@@ -251,6 +286,18 @@ function readSessions(root, tasks = readTaskRecords(root)) {
       exitCode: current.exitCode ?? null,
       signal: current.signal || null,
       error: current.error ? bounded(current.error, 2 * 1024) : null,
+      events: sessionEvents.length > 0 ? sessionEvents : [{
+        timestamp: current.lastActivityAt || current.createdAt,
+        sequence: null,
+        taskId: taskIds[0] || null,
+        sessionId: current.id,
+        agent: current.agent,
+        event: `SESSION_${`${current.state || 'unknown'}`.toUpperCase()}`,
+        details: 'Historical session state before Event Journal recording.',
+        source: 'derived-legacy',
+        recorded: false,
+      }],
+      historySource: sessionEvents.length > 0 ? 'recorded' : 'derived-legacy',
     };
   }));
 }
@@ -384,7 +431,7 @@ function sortEvents(events) {
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 
-function readEvents(root, { taskId = null, limit = 100 } = {}) {
+function readLegacyEvents(root, { taskId = null, limit = 100 } = {}) {
   const bus = busFor(root);
   if (!bus) return [];
   const tasks = readTaskRecords(root);
@@ -395,7 +442,17 @@ function readEvents(root, { taskId = null, limit = 100 } = {}) {
     ...errorEvents(bus),
   ];
   const filtered = taskId ? events.filter(event => event.taskId === taskId) : events;
-  return sortEvents(filtered).slice(0, Math.min(500, Math.max(1, Number(limit) || 100)));
+  return sortEvents(filtered)
+    .slice(0, Math.min(500, Math.max(1, Number(limit) || 100)))
+    .map(event => ({ ...event, sequence: null, sessionId: null, recorded: false, source: `derived-legacy:${event.source}` }));
+}
+
+function readEvents(root, options = {}) {
+  const recorded = recordedEvents(root, options);
+  if (recorded.length > 0) return recorded.sort((a, b) => b.sequence - a.sequence);
+  if (options.after !== undefined && options.after !== null) return [];
+  if (options.sessionId || options.type) return [];
+  return readLegacyEvents(root, options);
 }
 
 function statusFromEvent(event) {
@@ -410,13 +467,14 @@ function statusFromEvent(event) {
 }
 
 function buildTimeline(task, events) {
+  const recorded = events.some(event => event.recorded);
   const timeline = events
     .map(event => ({
       ...event,
       status: statusFromEvent(event),
     }))
-    .filter(event => event.status || event.event === 'TASK_CREATED' || event.source === 'task')
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    .filter(event => recorded || event.status || event.event === 'TASK_CREATED' || event.source.includes('task'))
+    .sort((a, b) => recorded ? (a.sequence - b.sequence) : a.timestamp.localeCompare(b.timestamp));
   const hasCurrent = timeline.some(event => event.status === task.status);
   if (!hasCurrent) {
     timeline.push({
@@ -426,7 +484,8 @@ function buildTimeline(task, events) {
       event: `TASK_${task.status}`,
       status: task.status,
       details: '',
-      source: 'task',
+      source: 'derived-legacy:task',
+      recorded: false,
     });
   }
   return timeline;
@@ -441,11 +500,20 @@ export function createInspectorData(root) {
     },
     readTask(id) {
       const task = sanitizeTask(readTask(repository, id));
-      const events = readEvents(repository, { taskId: task.id, limit: 300 });
+      let events = recordedEvents(repository, { taskId: task.id, limit: 300 });
+      if (events.length > 0 && task.sessionId) {
+        const sessionEvents = recordedEvents(repository, { sessionId: task.sessionId, limit: 300 });
+        const seen = new Set(events.map(event => event.sequence));
+        events = [...events, ...sessionEvents.filter(event => !seen.has(event.sequence))]
+          .sort((a, b) => a.sequence - b.sequence)
+          .slice(-300);
+      }
+      if (events.length === 0) events = readLegacyEvents(repository, { taskId: task.id, limit: 300 });
       return {
         ...task,
         timeline: buildTimeline(task, events),
         events,
+        historySource: events.some(event => event.recorded) ? 'recorded' : 'derived-legacy',
         agentFlow: [
           { role: 'planner', agent: task.planner },
           { role: 'implementer', agent: task.implementer },

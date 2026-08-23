@@ -27,6 +27,7 @@ import {
   runtimeSessionWrite,
 } from '../skills/coordinate-agents/scripts/session-service.mjs';
 import { ExecutionSessionManager } from '../skills/coordinate-agents/scripts/session-manager.mjs';
+import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
@@ -145,6 +146,10 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.match(read.output, /persistent-fixture/);
     const closed = await runtimeSessionClose({ root, sessionId: opened.session.id, timeoutMs: 500 });
     assert.ok(['exited', 'failed'].includes(closed.session.state));
+    const eventTypes = readRuntimeEvents(root, { sessionId: opened.session.id, limit: 50 }).map(event => event.type);
+    assert.ok(eventTypes.includes('SESSION_STARTING'));
+    assert.ok(eventTypes.includes('SESSION_STARTED'));
+    assert.ok(eventTypes.includes('SESSION_CLOSED'));
     assert.equal((readFileSync(starts, 'utf8') || '').length, 1);
   } finally {
     await removeTree(root);
@@ -177,6 +182,7 @@ test('Task dispatch reuses the same healthy session after CHANGES_REQUESTED', as
     assert.equal(second.session.reused, true);
     assert.equal(readFileSync(starts, 'utf8'), 'S');
     assert.equal(readFileSync(done, 'utf8'), 'DD');
+    assert.ok(readRuntimeEvents(root, { taskId: 'task-session-reuse', limit: 100 }).some(event => event.type === 'SESSION_REUSED'));
 
     const otherManager = new ExecutionSessionManager();
     const attached = await otherManager.status(root, firstSessionId);
@@ -253,6 +259,7 @@ test('missing executable fails fast and a crashed session becomes inspectable wi
     const inspected = await runtimeSessionInspect({ root, sessionId: opened.session.id });
     assert.equal(inspected.session.state, 'failed');
     assert.equal(inspected.session.exitCode, 9);
+    assert.ok(readRuntimeEvents(root, { sessionId: opened.session.id, limit: 50 }).some(event => event.type === 'SESSION_FAILED'));
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });

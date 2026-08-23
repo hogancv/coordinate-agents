@@ -15,6 +15,7 @@ Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-a
 Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
 Execution Session and PTY Runtime: https://hogancv.github.io/coordinate-agents/session-runtime.html
 Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
+Durable Runtime Event Journal: https://hogancv.github.io/coordinate-agents/event-journal.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
 MCP troubleshooting: https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html
 Security: https://hogancv.github.io/coordinate-agents/security.html

@@ -44,6 +44,58 @@ function parseLimit(value) {
   return Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
 }
 
+function parseSequence(value, fallback = null) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function eventOptions(url, request = null) {
+  return {
+    taskId: url.searchParams.get('taskId') || null,
+    sessionId: url.searchParams.get('sessionId') || null,
+    type: url.searchParams.get('type') || null,
+    after: parseSequence(url.searchParams.get('after'), parseSequence(request?.headers?.['last-event-id'], null)),
+    limit: parseLimit(url.searchParams.get('limit')),
+  };
+}
+
+function streamEvents(request, response, data, url) {
+  let cursor = eventOptions(url, request).after || 0;
+  let closed = false;
+  response.writeHead(200, {
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'X-Accel-Buffering': 'no',
+  });
+  response.write('retry: 1000\n\n');
+  const push = () => {
+    if (closed) return;
+    try {
+      const events = data.readEvents({ ...eventOptions(url), after: cursor, limit: 100 });
+      for (const event of events) {
+        if (!event.recorded || !Number.isInteger(event.sequence)) continue;
+        response.write(`id: ${event.sequence}\nevent: runtime-event\ndata: ${JSON.stringify(event)}\n\n`);
+        cursor = event.sequence;
+      }
+    } catch (error) {
+      response.write(`event: inspector-error\ndata: ${JSON.stringify({ error: redactOutput(error.message || String(error), 2 * 1024) })}\n\n`);
+    }
+  };
+  push();
+  const poll = setInterval(push, 500);
+  const heartbeat = setInterval(() => { if (!closed) response.write(': keepalive\n\n'); }, 15_000);
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(poll);
+    clearInterval(heartbeat);
+  };
+  request.once('close', finish);
+  response.once('close', finish);
+}
+
 function apiError(response, error) {
   const code = error?.code || '';
   const status = code === 'TASK_NOT_FOUND' ? 404 : 500;
@@ -91,10 +143,11 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
         return;
       }
       if (pathname === '/api/events') {
-        json(response, 200, data.readEvents({
-          taskId: url.searchParams.get('taskId') || null,
-          limit: parseLimit(url.searchParams.get('limit')),
-        }));
+        json(response, 200, data.readEvents(eventOptions(url, request)));
+        return;
+      }
+      if (pathname === '/api/events/stream') {
+        streamEvents(request, response, data, url);
         return;
       }
       json(response, 404, { error: 'Inspector API endpoint not found.' });

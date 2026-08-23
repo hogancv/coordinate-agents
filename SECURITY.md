@@ -36,7 +36,7 @@ Run `doctor` after installation and treat any non-zero result as a failure.
 ## Runtime data and adapter boundary
 
 `.agent-bus/` is local plaintext working data, not a secret store. It can contain full prompts,
-requirements, review comments, commit hashes, paths, logs, source excerpts, role state, host/process
+requirements, review comments, commit hashes, paths, logs, Event Journal records, source excerpts, role state, host/process
 metadata, leases, deduplication records, message history, and bounded Execution Session facts.
 
 The bus inherits the repository's operating-system permissions and is not encrypted. Local

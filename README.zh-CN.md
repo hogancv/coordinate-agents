@@ -113,7 +113,8 @@ npx @hogancv/coordinate-agents inspector --port 3000
 ```
 
 它提供 localhost-only 控制台，用于查看 Task 时间线、Planner → Implementer → Reviewer
-拓扑、Session 状态与有界输出、证据/审查事实，以及最近的 Agent Bus 事件。它直接读取现有
+拓扑、Session 状态与有界输出、证据/审查事实，以及最近的 Runtime 事件。Runtime 会把关键生命周期
+变化写入仓库本地、append-only 的 [Event Journal](./docs/event-journal.md)，供 Inspector 与恢复诊断使用。它直接读取现有
 `.agent-bus` Runtime 状态，不创建数据库、不接收 Task 输入、不发送消息、不控制 Session、不替代
 Codex，也不修改 Task workflow。数据来源和限制请参阅[Inspector 指南](./docs/inspector.md)。
 

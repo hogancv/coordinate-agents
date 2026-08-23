@@ -65,6 +65,7 @@ sandbox-bypass flag.
 - [Protocol and recovery](./protocol.html)
 - [Execution Session and PTY Runtime](./session-runtime.html)
 - [Local Inspector Web UI](./inspector.html)
+- [Durable Runtime Event Journal](./event-journal.html)
 - [Security boundary](./security.html)
 - [Troubleshooting](./troubleshooting.html)
 - [Role comparison](./comparison.html)

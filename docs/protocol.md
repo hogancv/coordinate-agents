@@ -10,6 +10,10 @@ description: How the local-first Agent Bus coordinates messages, claims, reviews
 deduplication keys, leases, quarantine, append-only agent state, idempotent completion, and
 Runtime-owned Execution Session records. It does not require an external CAO server or database.
 
+Key Task, Session, review, recovery, and Bus lifecycle hooks also append sanitized
+schema-v1 records to `.agent-bus/events/runtime.jsonl`. This journal is
+observability history, not an event-sourced replacement for current state.
+
 ## Architecture
 
 1. **Coordination Layer**: Maps workflow roles (`planner`, `implementer`, `reviewer`) to registered agents and enforces human release gating (`RELEASE_APPROVED`).

@@ -14,6 +14,7 @@ import {
 } from './config.mjs';
 import { normalizeRuntimeError, runtimeError, serializeRuntimeError } from './runtime-contract.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
 
 export const TASK_STATUSES = Object.freeze([
   'CREATED',
@@ -188,7 +189,15 @@ export function createTask(root, input = {}) {
   if (existsSync(join(tasks, `${task.id}.json`))) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task already exists: ${task.id}`, { recoverable: true, taskId: task.id });
   }
-  return writeTask(root, task);
+  const written = writeTask(root, task);
+  appendRuntimeEvent(root, {
+    type: 'TASK_CREATED',
+    taskId: written.id,
+    agentId: written.planner,
+    role: 'planner',
+    data: { title: written.title, status: written.status, round: written.round },
+  });
+  return written;
 }
 
 export function updateTask(root, id, update) {
@@ -196,7 +205,16 @@ export function updateTask(root, id, update) {
   const next = typeof update === 'function' ? update({ ...current }) : { ...current, ...update };
   next.id = current.id;
   next.updatedAt = now();
-  return writeTask(root, next);
+  const written = writeTask(root, next);
+  if (current.status !== written.status) {
+    appendRuntimeEvent(root, {
+      type: 'TASK_STATUS_CHANGED',
+      taskId: written.id,
+      sessionId: written.sessionId || undefined,
+      data: { from: current.status, to: written.status, round: written.round },
+    });
+  }
+  return written;
 }
 
 export function assertTaskTransition(currentStatus, nextStatus, taskId = null) {
@@ -275,16 +293,29 @@ export function prepareTaskForDispatch(root, id, spec = undefined) {
 
 export function markTaskError(root, id, error, details = {}) {
   const normalized = normalizeRuntimeError(error);
-  return updateTask(root, id, task => ({
+  const task = updateTask(root, id, task => ({
     ...task,
     ...details,
     status: 'ERROR',
     lastError: serializeRuntimeError(normalized, { includeLegacy: true }),
   }));
+  appendRuntimeEvent(root, {
+    type: 'TASK_ERROR',
+    taskId: task.id,
+    sessionId: task.sessionId || undefined,
+    agentId: task.implementer,
+    data: {
+      code: task.lastError?.code || 'AGENT_RUNTIME_ERROR',
+      message: task.lastError?.message || '',
+      recoverable: task.lastError?.recoverable !== false,
+    },
+  });
+  return task;
 }
 
 export function resumeTask(root, id) {
-  return updateTask(root, id, task => {
+  const before = readTask(root, id);
+  const task = updateTask(root, id, task => {
     if (task.status === 'APPROVED') {
       throw runtimeError('TASK_STATE_CONFLICT', `Approved task cannot be resumed: ${task.id}`, { recoverable: false, taskId: task.id });
     }
@@ -305,6 +336,17 @@ export function resumeTask(root, id) {
     if (task.status === 'SPEC_READY') return task;
     return task;
   });
+  if (before.status !== task.status || before.round !== task.round) {
+    appendRuntimeEvent(root, {
+      type: 'TASK_RESUMED',
+      taskId: task.id,
+      sessionId: task.sessionId || undefined,
+      agentId: task.planner,
+      role: 'planner',
+      data: { from: before.status, to: task.status, round: task.round },
+    });
+  }
+  return task;
 }
 
 function parseBusMessage(content) {
@@ -381,7 +423,7 @@ export function syncTaskFromAgentBus(root, id) {
     details: redactOutput(message.body, 8 * 1024),
     createdAt: message.fields.created_at || now(),
   };
-  return setTaskStatus(root, id, 'REVIEWING', {
+  const updated = setTaskStatus(root, id, 'REVIEWING', {
     implementationCommit: commit || task.implementationCommit || null,
     evidence: [...(Array.isArray(task.evidence) ? task.evidence : []), evidence],
     implementationMessage: {
@@ -393,6 +435,16 @@ export function syncTaskFromAgentBus(root, id) {
     },
     lastError: null,
   });
+  appendRuntimeEvent(root, {
+    type: 'IMPLEMENTATION_RECEIVED',
+    taskId: updated.id,
+    sessionId: updated.sessionId || undefined,
+    agentId: updated.implementer,
+    role: 'implementer',
+    messageId: idValue,
+    data: { relatedCommit: commit || null, round: updated.round },
+  });
+  return updated;
 }
 
 export function recordReviewDecision(root, id, decision, { feedback = '', evidence = null } = {}) {
@@ -413,11 +465,20 @@ export function recordReviewDecision(root, id, decision, { feedback = '', eviden
     decidedAt: now(),
   };
   if (normalizedDecision === 'REVIEW_APPROVED') {
-    return setTaskStatus(root, id, 'APPROVED', {
+    const updated = setTaskStatus(root, id, 'APPROVED', {
       reviewDecision: normalizedDecision,
       reviewFeedback: reviewRecord.feedback,
       reviewHistory: [...(Array.isArray(task.reviewHistory) ? task.reviewHistory : []), reviewRecord],
     });
+    appendRuntimeEvent(root, {
+      type: 'REVIEW_APPROVED',
+      taskId: updated.id,
+      sessionId: updated.sessionId || undefined,
+      agentId: updated.reviewer,
+      role: 'reviewer',
+      data: { round: reviewRecord.round, implementationCommit: reviewRecord.implementationCommit },
+    });
+    return updated;
   }
   if (normalizedDecision === 'CHANGES_REQUESTED') {
     if (!reviewRecord.feedback) {
@@ -426,12 +487,21 @@ export function recordReviewDecision(root, id, decision, { feedback = '', eviden
         taskId: task.id,
       });
     }
-    return setTaskStatus(root, id, 'CHANGES_REQUESTED', {
+    const updated = setTaskStatus(root, id, 'CHANGES_REQUESTED', {
       round: task.round + 1,
       reviewDecision: normalizedDecision,
       reviewFeedback: reviewRecord.feedback,
       reviewHistory: [...(Array.isArray(task.reviewHistory) ? task.reviewHistory : []), reviewRecord],
     });
+    appendRuntimeEvent(root, {
+      type: 'CHANGES_REQUESTED',
+      taskId: updated.id,
+      sessionId: updated.sessionId || undefined,
+      agentId: updated.reviewer,
+      role: 'reviewer',
+      data: { round: reviewRecord.round, feedback: reviewRecord.feedback },
+    });
+    return updated;
   }
   throw runtimeError('TASK_STATE_CONFLICT', `Unsupported review decision: ${decision || '(empty)'}`, {
     recoverable: false,
@@ -440,13 +510,21 @@ export function recordReviewDecision(root, id, decision, { feedback = '', eviden
 }
 
 export function stopTask(root, id, reason = null) {
-  return updateTask(root, id, task => {
+  const task = updateTask(root, id, task => {
     if (task.status === 'APPROVED') {
       throw runtimeError('TASK_STATE_CONFLICT', `Approved task cannot be stopped: ${task.id}`, { recoverable: false, taskId: task.id });
     }
     assertTaskTransition(task.status, 'STOPPED', task.id);
     return { ...task, status: 'STOPPED', stopReason: reason ? `${reason}` : null };
   });
+  appendRuntimeEvent(root, {
+    type: 'TASK_STOPPED',
+    taskId: task.id,
+    sessionId: task.sessionId || undefined,
+    agentId: task.planner,
+    data: { reason: task.stopReason },
+  });
+  return task;
 }
 
 export function taskIsTerminal(task) {

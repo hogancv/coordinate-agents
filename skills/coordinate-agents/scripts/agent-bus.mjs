@@ -26,6 +26,11 @@ import {
   validateConfig,
   writeConfig,
 } from './config.mjs';
+import { appendRuntimeEvent } from './runtime-events.mjs';
+
+function relatedTaskId(...values) {
+  return values.join(' ').match(/\btask-[A-Za-z0-9][A-Za-z0-9_-]{1,127}\b/)?.[0] || undefined;
+}
 
 function parseArgs(argv) {
   if (!argv.length || ['--help', '-h', 'help'].includes(argv[0])) return { command: 'help' };
@@ -276,6 +281,13 @@ function send(options, bus) {
       const recordPath = join(bus, 'dedupe', `${dedupeHash}.json`);
       atomicWrite(recordPath, `${JSON.stringify({ message_id: id, message_name: name, created_at: now.toISOString() }, null, 2)}\n`, join(bus, 'tmp'));
     }
+    appendRuntimeEvent(dirname(bus), {
+      type: 'BUS_MESSAGE_SENT',
+      taskId: relatedTaskId(dedupeKey, subject, body),
+      agentId: from,
+      messageId: id,
+      data: { from, to, messageType: type, subject },
+    });
     console.log(resolve(destination));
   } finally {
     release();
@@ -381,13 +393,21 @@ async function wait(options, bus) {
         try {
           renameSync(source, claimed);
           writeLease(claimed, bus, leaseSeconds);
+          let fields;
           try {
-            parseMessage(claimed, agent, bus);
+            fields = parseMessage(claimed, agent, bus);
           } catch (error) {
             rmSync(`${claimed}.lease.json`, { force: true });
             quarantine(claimed, agent, bus, error.message);
             continue;
           }
+          appendRuntimeEvent(dirname(bus), {
+            type: 'BUS_MESSAGE_PROCESSING',
+            taskId: relatedTaskId(fields.dedupe_key, fields.subject),
+            agentId: agent,
+            messageId: fields.id,
+            data: { from: fields.from, to: fields.to, messageType: fields.type },
+          });
           console.log(resolve(claimed));
           return;
         } catch (error) {
@@ -432,8 +452,16 @@ function complete(options, bus) {
     return;
   }
   safeInternalStat(bus, messagePath);
+  const fields = parseMessage(messagePath, parts[0], bus);
   renameSync(messagePath, destination);
   rmSync(`${messagePath}.lease.json`, { force: true });
+  appendRuntimeEvent(dirname(bus), {
+    type: 'BUS_MESSAGE_PROCESSED',
+    taskId: relatedTaskId(fields.dedupe_key, fields.subject),
+    agentId: parts[0],
+    messageId: fields.id,
+    data: { from: fields.from, to: fields.to, messageType: fields.type },
+  });
   console.log(resolve(destination));
 }
 

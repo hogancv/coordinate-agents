@@ -37,6 +37,10 @@ graph TD
 2. **Agent Bus Protocol**: manages agent registry (`.agent-bus/config.json`), message routing, queues, lease sidecars, deduplication, append-only state, and quarantine. The protocol layer is decoupled from vendor implementations and concrete transports.
 3. **Agent Adapters / Runtime**: detects CLI availability and resolves launch commands/arguments using argument arrays without shell-string interpolation.
 
+The canonical Runtime also appends sanitized, sequence-ordered lifecycle facts to
+`.agent-bus/events/runtime.jsonl`. The Event Journal is observability history;
+Task, Session, queue, and Agent state files remain canonical current state.
+
 ## Agent Identity vs Workflow Role
 
 - **Agent Identity (`agent_id`)**: A unique, persistent identifier (1-64 lowercase alphanumeric chars, `_`, `-`) bound to a concrete runtime adapter and command (e.g., `codex`, `antigravity`, `claude`, `test-bot`).

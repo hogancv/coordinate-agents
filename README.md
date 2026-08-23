@@ -126,7 +126,9 @@ npx @hogancv/coordinate-agents inspector --port 3000
 
 It opens a localhost-only dashboard for Task timelines, Planner → Implementer →
 Reviewer topology, Session state and bounded output, evidence/review facts, and
-recent Agent Bus events. It reads the existing `.agent-bus` Runtime state; it
+recent Runtime events. The Runtime records key lifecycle transitions in a
+repository-local append-only [Event Journal](./docs/event-journal.md) used by
+Inspector and recovery diagnostics. It reads the existing `.agent-bus` Runtime state; it
 does not create a database, accept Task input, send messages, control Sessions,
 replace Codex, or change the Task workflow. See the [Inspector guide](./docs/inspector.md)
 for the data sources and limitations.
