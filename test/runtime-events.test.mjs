@@ -93,15 +93,22 @@ test('Event payloads redact secret-bearing keys and values without persisting re
     appendRuntimeEvent(root, {
       type: 'RUNTIME_ERROR',
       data: {
-        token: 'token-value',
-        password: 'password-value',
-        cookie: 'cookie-value',
-        privateKey: 'private-key-value',
-        nested: { authorization: 'Bearer abc123', message: 'api_key=abc123 safe tail' },
+        token: '[test-token-placeholder]',
+        password: '[test-password-placeholder]',
+        cookie: '[test-cookie-placeholder]',
+        privateKey: '[test-private-key-placeholder]',
+        nested: { authorization: 'Bearer [test-auth-placeholder]', message: 'api_key=[test-api-key-placeholder] safe tail' },
       },
     });
     const raw = readFileSync(runtimeEventJournalPath(root), 'utf8');
-    for (const secret of ['token-value', 'password-value', 'cookie-value', 'private-key-value', 'abc123']) assert.equal(raw.includes(secret), false);
+    for (const placeholder of [
+      '[test-token-placeholder]',
+      '[test-password-placeholder]',
+      '[test-cookie-placeholder]',
+      '[test-private-key-placeholder]',
+      '[test-auth-placeholder]',
+      '[test-api-key-placeholder]',
+    ]) assert.equal(raw.includes(placeholder), false);
     assert.equal(raw.includes(root), false);
     const [event] = readRuntimeEvents(root);
     assert.equal(event.data.token, '[REDACTED]');
