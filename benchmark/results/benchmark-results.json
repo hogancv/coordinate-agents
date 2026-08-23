@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-23T04:39:21.913Z",
+  "generatedAt": "2026-08-23T06:22:05.003Z",
   "environment": {
-    "commit": "f15fd3d2c3e4330380d969d61d3d4608e67c728a",
+    "commit": "344ee0924bedca4fa402e22cc7070cabe449af71",
     "version": "2.1.2",
     "node": "v24.17.0",
     "platform": "darwin",
@@ -14,7 +14,7 @@
     "cli": "bin/coordinate-agents.mjs",
     "plugin": ".codex-plugin/plugin.json → skills/coordinate-agents/SKILL.md",
     "mcp": "mcp/server.mjs --stdio",
-    "runtime": "skills/coordinate-agents/scripts/runtime-services.mjs (MCP transport) / bin/coordinate-agents.mjs exports (CLI)",
+    "runtime": "skills/coordinate-agents/scripts/runtime-entry.mjs (Plugin fallback) / skills/coordinate-agents/scripts/runtime-services.mjs (MCP transport) / bin/coordinate-agents.mjs exports (CLI)",
     "runtimeServices": "skills/coordinate-agents/scripts/runtime-services.mjs",
     "taskRuntime": "skills/coordinate-agents/scripts/task-runtime.mjs",
     "sessionRuntime": "skills/coordinate-agents/scripts/session-manager.mjs + session-service.mjs + pty-runtime.mjs"
@@ -40,52 +40,52 @@
       "runs": 5,
       "totalMs": {
         "count": 5,
-        "min": 2894,
-        "median": 2916,
-        "mean": 2912.2,
-        "max": 2922
+        "min": 3242,
+        "median": 3269,
+        "mean": 3591.6,
+        "max": 4845
       },
       "taskCreateMs": {
         "count": 5,
-        "min": 149.738,
-        "median": 156.865,
-        "mean": 155.712,
-        "max": 158.624
+        "min": 153.363,
+        "median": 154.708,
+        "mean": 155.424,
+        "max": 158.423
       },
       "taskDispatchMs": {
         "count": 5,
-        "min": 2148.348,
-        "median": 2170.538,
-        "mean": 2166.264,
-        "max": 2173.961
+        "min": 2498.199,
+        "median": 2527.649,
+        "mean": 2843.964,
+        "max": 4104.436
       },
       "reviewMs": {
         "count": 5,
-        "min": 566.509,
-        "median": 572.887,
-        "mean": 573.603,
-        "max": 582.037
+        "min": 567.338,
+        "median": 576.18,
+        "mean": 580.526,
+        "max": 603.358
       },
       "runtimeMs": {
         "count": 5,
-        "min": 1707.915,
-        "median": 1717.623,
-        "mean": 1716.506,
-        "max": 1725.944
+        "min": 2046.621,
+        "median": 2077.023,
+        "mean": 2404.614,
+        "max": 3674.571
       },
       "implementerMs": {
         "count": 5,
-        "min": 1166.085,
-        "median": 1179.056,
-        "mean": 1177.694,
-        "max": 1182.983
+        "min": 1166.429,
+        "median": 1175.379,
+        "mean": 1175.186,
+        "max": 1180.977
       },
       "orchestrationMs": {
         "count": 5,
-        "min": 7,
-        "median": 20,
-        "mean": 18,
-        "max": 23
+        "min": 4,
+        "median": 11,
+        "mean": 11.8,
+        "max": 20
       },
       "extraToolCallMs": {
         "count": 5,
@@ -146,33 +146,33 @@
       "taskDispatchRoundMs": [
         {
           "count": 5,
-          "min": 1102.59,
-          "median": 1123.1,
-          "mean": 1119.209,
-          "max": 1124.126
+          "min": 1456.577,
+          "median": 1482.315,
+          "mean": 1800.112,
+          "max": 3056.968
         },
         {
           "count": 5,
-          "min": 1044.316,
-          "median": 1047.679,
-          "mean": 1047.055,
-          "max": 1049.835
+          "min": 1040.577,
+          "median": 1044.257,
+          "mean": 1043.852,
+          "max": 1047.469
         }
       ],
       "reviewRoundMs": [
         {
           "count": 5,
-          "min": 280.641,
-          "median": 284.265,
-          "mean": 285.887,
-          "max": 293.357
+          "min": 284.726,
+          "median": 287.361,
+          "mean": 289.14,
+          "max": 295.409
         },
         {
           "count": 5,
-          "min": 280.509,
-          "median": 288.622,
-          "mean": 287.715,
-          "max": 297.443
+          "min": 282.612,
+          "median": 288.82,
+          "mean": 291.386,
+          "max": 307.949
         }
       ]
     },
@@ -181,20 +181,128 @@
         "runId": "cli-latest-cli-01",
         "workflow": "cli",
         "profile": "latest-cli",
-        "totalMs": 2894,
-        "taskCreateMs": 149.738,
-        "taskDispatchMs": 2148.348,
+        "totalMs": 4845,
+        "taskCreateMs": 154.708,
+        "taskDispatchMs": 4104.436,
         "taskDispatchRoundMs": [
-          1102.59,
-          1045.758
+          3056.968,
+          1047.469
         ],
-        "reviewMs": 578.084,
+        "reviewMs": 582.352,
         "reviewRoundMs": [
-          280.641,
-          297.443
+          291.442,
+          290.91
         ],
-        "runtimeMs": 1707.915,
-        "implementerMs": 1166.085,
+        "runtimeMs": 3674.571,
+        "implementerMs": 1166.429,
+        "orchestrationMs": 4,
+        "pluginToolCalls": 0,
+        "cliCommandCalls": 5,
+        "extraToolCalls": 0,
+        "extraToolCallMs": 0,
+        "skillRoutingMs": 0,
+        "mcpHandshakeMs": 0,
+        "busWrites": 6,
+        "taskSyncs": 2,
+        "traceEvents": 40,
+        "result": {
+          "taskId": "task-01-cl",
+          "status": "APPROVED",
+          "sessionId": "session_7bd6403ea3f94b24a37295f96ac1ae56",
+          "commit": "0123456789abcdef0123456789abcdef01234567"
+        },
+        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
+      },
+      {
+        "runId": "cli-latest-cli-02",
+        "workflow": "cli",
+        "profile": "latest-cli",
+        "totalMs": 3269,
+        "taskCreateMs": 153.938,
+        "taskDispatchMs": 2527.649,
+        "taskDispatchRoundMs": [
+          1482.315,
+          1045.334
+        ],
+        "reviewMs": 576.18,
+        "reviewRoundMs": [
+          287.361,
+          288.82
+        ],
+        "runtimeMs": 2077.023,
+        "implementerMs": 1180.977,
+        "orchestrationMs": 11,
+        "pluginToolCalls": 0,
+        "cliCommandCalls": 5,
+        "extraToolCalls": 0,
+        "extraToolCallMs": 0,
+        "skillRoutingMs": 0,
+        "mcpHandshakeMs": 0,
+        "busWrites": 6,
+        "taskSyncs": 2,
+        "traceEvents": 40,
+        "result": {
+          "taskId": "task-02-cl",
+          "status": "APPROVED",
+          "sessionId": "session_71245217e56343edb1e47426f3e6dd10",
+          "commit": "0123456789abcdef0123456789abcdef01234567"
+        },
+        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
+      },
+      {
+        "runId": "cli-latest-cli-03",
+        "workflow": "cli",
+        "profile": "latest-cli",
+        "totalMs": 3264,
+        "taskCreateMs": 158.423,
+        "taskDispatchMs": 2515.995,
+        "taskDispatchRoundMs": [
+          1475.418,
+          1040.577
+        ],
+        "reviewMs": 573.402,
+        "reviewRoundMs": [
+          286.764,
+          286.639
+        ],
+        "runtimeMs": 2073.446,
+        "implementerMs": 1173.554,
+        "orchestrationMs": 17,
+        "pluginToolCalls": 0,
+        "cliCommandCalls": 5,
+        "extraToolCalls": 0,
+        "extraToolCallMs": 0,
+        "skillRoutingMs": 0,
+        "mcpHandshakeMs": 0,
+        "busWrites": 6,
+        "taskSyncs": 2,
+        "traceEvents": 40,
+        "result": {
+          "taskId": "task-03-cl",
+          "status": "APPROVED",
+          "sessionId": "session_0963d4eac5c94505856d6085570448e2",
+          "commit": "0123456789abcdef0123456789abcdef01234567"
+        },
+        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
+      },
+      {
+        "runId": "cli-latest-cli-04",
+        "workflow": "cli",
+        "profile": "latest-cli",
+        "totalMs": 3242,
+        "taskCreateMs": 156.686,
+        "taskDispatchMs": 2498.199,
+        "taskDispatchRoundMs": [
+          1456.577,
+          1041.622
+        ],
+        "reviewMs": 567.338,
+        "reviewRoundMs": [
+          284.726,
+          282.612
+        ],
+        "runtimeMs": 2046.621,
+        "implementerMs": 1175.379,
         "orchestrationMs": 20,
         "pluginToolCalls": 0,
         "cliCommandCalls": 5,
@@ -206,31 +314,31 @@
         "taskSyncs": 2,
         "traceEvents": 40,
         "result": {
-          "taskId": "task-benchmark-cli-latest-cli-01",
+          "taskId": "task-04-cl",
           "status": "APPROVED",
-          "sessionId": "session_f09047cf5b084e84a79951c82a6bc819",
+          "sessionId": "session_d2dc429f0d4f46968985410f4653861d",
           "commit": "0123456789abcdef0123456789abcdef01234567"
         },
         "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
       },
       {
-        "runId": "cli-latest-cli-02",
+        "runId": "cli-latest-cli-05",
         "workflow": "cli",
         "profile": "latest-cli",
-        "totalMs": 2912,
-        "taskCreateMs": 156.865,
-        "taskDispatchMs": 2167.687,
+        "totalMs": 3338,
+        "taskCreateMs": 153.363,
+        "taskDispatchMs": 2573.539,
         "taskDispatchRoundMs": [
-          1123.371,
-          1044.316
+          1529.282,
+          1044.257
         ],
-        "reviewMs": 582.037,
+        "reviewMs": 603.358,
         "reviewRoundMs": [
-          293.357,
-          288.68
+          295.409,
+          307.949
         ],
-        "runtimeMs": 1725.944,
-        "implementerMs": 1179.056,
+        "runtimeMs": 2151.408,
+        "implementerMs": 1179.592,
         "orchestrationMs": 7,
         "pluginToolCalls": 0,
         "cliCommandCalls": 5,
@@ -242,117 +350,9 @@
         "taskSyncs": 2,
         "traceEvents": 40,
         "result": {
-          "taskId": "task-benchmark-cli-latest-cli-02",
+          "taskId": "task-05-cl",
           "status": "APPROVED",
-          "sessionId": "session_dcd286ef0f444bfba70399c8ac65316d",
-          "commit": "0123456789abcdef0123456789abcdef01234567"
-        },
-        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
-      },
-      {
-        "runId": "cli-latest-cli-03",
-        "workflow": "cli",
-        "profile": "latest-cli",
-        "totalMs": 2916,
-        "taskCreateMs": 155.789,
-        "taskDispatchMs": 2170.538,
-        "taskDispatchRoundMs": [
-          1122.859,
-          1047.679
-        ],
-        "reviewMs": 572.887,
-        "reviewRoundMs": [
-          284.265,
-          288.622
-        ],
-        "runtimeMs": 1713.017,
-        "implementerMs": 1182.983,
-        "orchestrationMs": 20,
-        "pluginToolCalls": 0,
-        "cliCommandCalls": 5,
-        "extraToolCalls": 0,
-        "extraToolCallMs": 0,
-        "skillRoutingMs": 0,
-        "mcpHandshakeMs": 0,
-        "busWrites": 6,
-        "taskSyncs": 2,
-        "traceEvents": 40,
-        "result": {
-          "taskId": "task-benchmark-cli-latest-cli-03",
-          "status": "APPROVED",
-          "sessionId": "session_206032d1c77348b49eb1443cf1ac7497",
-          "commit": "0123456789abcdef0123456789abcdef01234567"
-        },
-        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
-      },
-      {
-        "runId": "cli-latest-cli-04",
-        "workflow": "cli",
-        "profile": "latest-cli",
-        "totalMs": 2922,
-        "taskCreateMs": 158.624,
-        "taskDispatchMs": 2173.961,
-        "taskDispatchRoundMs": [
-          1124.126,
-          1049.835
-        ],
-        "reviewMs": 566.509,
-        "reviewRoundMs": [
-          283.186,
-          283.323
-        ],
-        "runtimeMs": 1717.623,
-        "implementerMs": 1181.377,
-        "orchestrationMs": 23,
-        "pluginToolCalls": 0,
-        "cliCommandCalls": 5,
-        "extraToolCalls": 0,
-        "extraToolCallMs": 0,
-        "skillRoutingMs": 0,
-        "mcpHandshakeMs": 0,
-        "busWrites": 6,
-        "taskSyncs": 2,
-        "traceEvents": 40,
-        "result": {
-          "taskId": "task-benchmark-cli-latest-cli-04",
-          "status": "APPROVED",
-          "sessionId": "session_567beb8b443e4722998543293a9e8699",
-          "commit": "0123456789abcdef0123456789abcdef01234567"
-        },
-        "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
-      },
-      {
-        "runId": "cli-latest-cli-05",
-        "workflow": "cli",
-        "profile": "latest-cli",
-        "totalMs": 2917,
-        "taskCreateMs": 157.543,
-        "taskDispatchMs": 2170.787,
-        "taskDispatchRoundMs": [
-          1123.1,
-          1047.687
-        ],
-        "reviewMs": 568.496,
-        "reviewRoundMs": [
-          287.986,
-          280.509
-        ],
-        "runtimeMs": 1718.03,
-        "implementerMs": 1178.97,
-        "orchestrationMs": 20,
-        "pluginToolCalls": 0,
-        "cliCommandCalls": 5,
-        "extraToolCalls": 0,
-        "extraToolCallMs": 0,
-        "skillRoutingMs": 0,
-        "mcpHandshakeMs": 0,
-        "busWrites": 6,
-        "taskSyncs": 2,
-        "traceEvents": 40,
-        "result": {
-          "taskId": "task-benchmark-cli-latest-cli-05",
-          "status": "APPROVED",
-          "sessionId": "session_bc7135791f3842a696d554254acc9826",
+          "sessionId": "session_45afeb6e0ef24470a77107e82419c18f",
           "commit": "0123456789abcdef0123456789abcdef01234567"
         },
         "taskSpecSha256": "0e7c493aae7773da076ce11ec4c2617ac94bc817e5dfda248b2b6bc2f9e1e76b"
@@ -364,73 +364,73 @@
       "runs": 5,
       "totalMs": {
         "count": 5,
-        "min": 3429,
-        "median": 3435,
-        "mean": 3436.6,
-        "max": 3449
+        "min": 3763,
+        "median": 3790,
+        "mean": 3918.4,
+        "max": 4457
       },
       "taskCreateMs": {
         "count": 5,
-        "min": 95.682,
-        "median": 96.629,
-        "mean": 99.752,
-        "max": 112.632
+        "min": 95.663,
+        "median": 97.698,
+        "mean": 97.542,
+        "max": 98.939
       },
       "taskDispatchMs": {
         "count": 5,
-        "min": 2110.389,
-        "median": 2115.619,
-        "mean": 2115.982,
-        "max": 2120.819
+        "min": 2452.993,
+        "median": 2474.879,
+        "mean": 2606.893,
+        "max": 3152.778
       },
       "reviewMs": {
         "count": 5,
-        "min": 534.996,
-        "median": 536.754,
-        "mean": 536.408,
-        "max": 537.763
+        "min": 531.115,
+        "median": 534.286,
+        "mean": 533.948,
+        "max": 536.064
       },
       "runtimeMs": {
         "count": 5,
-        "min": 2167.052,
-        "median": 2185.171,
-        "mean": 2179.962,
-        "max": 2190.313
+        "min": 2509.662,
+        "median": 2527.617,
+        "mean": 2660.378,
+        "max": 3202.986
       },
       "implementerMs": {
         "count": 5,
-        "min": 1177.257,
-        "median": 1181.47,
-        "mean": 1181.838,
-        "max": 1187.948
+        "min": 1180.338,
+        "median": 1182.383,
+        "mean": 1182.222,
+        "max": 1184.822
       },
       "orchestrationMs": {
         "count": 5,
-        "min": 68,
-        "median": 77,
-        "mean": 74.8,
+        "min": 73,
+        "median": 74,
+        "mean": 75.8,
         "max": 80
       },
       "extraToolCallMs": {
         "count": 5,
-        "min": 606.05,
-        "median": 606.914,
-        "mean": 611.269,
-        "max": 620.618
+        "min": 601.697,
+        "median": 603.628,
+        "mean": 605.198,
+        "max": 609.509
       },
       "skillRoutingMs": {
         "count": 5,
-        "min": 0.099,
-        "median": 0.114,
-        "mean": 0.118,
-        "max": 0.149
+        "min": 0.102,
+        "median": 0.103,
+        "mean": 0.12,
+        "max": 0.176
       },
       "mcpHandshakeMs": {
         "count": 5,
-        "min": 59.187,
-        "median": 59.695,
-        "mean": 60.235,
-        "max": 61.523
+        "min": 57.622,
+        "median": 61.252,
+        "mean": 60.788,
+        "max": 63.759
       },
       "busWrites": {
         "count": 5,
@@ -470,33 +470,33 @@
       "taskDispatchRoundMs": [
         {
           "count": 5,
-          "min": 1096.445,
-          "median": 1099.991,
-          "mean": 1100.194,
-          "max": 1103.508
+          "min": 1441.298,
+          "median": 1457.289,
+          "mean": 1590.668,
+          "max": 2135.604
         },
         {
           "count": 5,
-          "min": 1013.944,
-          "median": 1015.917,
-          "mean": 1015.787,
-          "max": 1017.599
+          "min": 1011.695,
+          "median": 1017.174,
+          "mean": 1016.225,
+          "max": 1019.065
         }
       ],
       "reviewRoundMs": [
         {
           "count": 5,
-          "min": 267.077,
-          "median": 267.5,
-          "mean": 267.586,
-          "max": 268.611
+          "min": 266.166,
+          "median": 267.996,
+          "mean": 267.569,
+          "max": 268.709
         },
         {
           "count": 5,
-          "min": 267.493,
-          "median": 268.229,
-          "mean": 268.822,
-          "max": 270.525
+          "min": 264.949,
+          "median": 265.74,
+          "mean": 266.38,
+          "max": 268.032
         }
       ]
     },
@@ -505,104 +505,104 @@
         "runId": "plugin-verbose-01",
         "workflow": "plugin",
         "profile": "verbose",
-        "totalMs": 3436,
-        "taskCreateMs": 96.629,
-        "taskDispatchMs": 2115.491,
+        "totalMs": 3790,
+        "taskCreateMs": 98.715,
+        "taskDispatchMs": 2472.733,
         "taskDispatchRoundMs": [
-          1099.574,
-          1015.917
+          1457.289,
+          1015.444
         ],
-        "reviewMs": 537.219,
+        "reviewMs": 536.064,
         "reviewRoundMs": [
-          267.5,
-          269.719
+          268.032,
+          268.032
         ],
-        "runtimeMs": 2185.171,
-        "implementerMs": 1180.829,
-        "orchestrationMs": 70,
+        "runtimeMs": 2527.617,
+        "implementerMs": 1182.383,
+        "orchestrationMs": 80,
         "pluginToolCalls": 17,
         "cliCommandCalls": 0,
         "extraToolCalls": 12,
-        "extraToolCallMs": 616.365,
-        "skillRoutingMs": 0.149,
-        "mcpHandshakeMs": 61.523,
+        "extraToolCallMs": 601.697,
+        "skillRoutingMs": 0.118,
+        "mcpHandshakeMs": 61.439,
         "busWrites": 6,
         "taskSyncs": 2,
         "traceEvents": 88,
         "toolSpans": [
           {
             "toolName": "coordinate_agents_task_create",
-            "durationMs": 96.507
+            "durationMs": 98.574
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 101.028
+            "durationMs": 102.564
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1099.447
+            "durationMs": 1457.162
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.033
+            "durationMs": 4.319
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 4.048
+            "durationMs": 5.337
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 4.915
+            "durationMs": 4.948
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 88.429
+            "durationMs": 81.63
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 108.222
+            "durationMs": 104.818
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 267.305
+            "durationMs": 267.818
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1015.758
+            "durationMs": 1015.314
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.837
+            "durationMs": 4.167
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 5.156
+            "durationMs": 4.843
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 4.762
+            "durationMs": 3.869
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 85.891
+            "durationMs": 80.338
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 105.256
+            "durationMs": 105.777
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 269.486
+            "durationMs": 267.692
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 99.788
+            "durationMs": 99.087
           }
         ],
         "result": {
-          "taskId": "task-benchmark-plugin-verbose-01",
+          "taskId": "task-01-pv",
           "status": "APPROVED",
-          "sessionId": "session_98da89b9e8bc44b88db710896b46d005",
+          "sessionId": "session_c477a19847e14100a41ca2488d7335af",
           "commit": "0123456789abcdef0123456789abcdef01234567",
           "mcpProtocolRequests": 19
         },
@@ -612,104 +612,104 @@
         "runId": "plugin-verbose-02",
         "workflow": "plugin",
         "profile": "verbose",
-        "totalMs": 3434,
-        "taskCreateMs": 95.682,
-        "taskDispatchMs": 2120.819,
+        "totalMs": 4457,
+        "taskCreateMs": 98.939,
+        "taskDispatchMs": 3152.778,
         "taskDispatchRoundMs": [
-          1103.508,
-          1017.311
+          2135.604,
+          1017.174
         ],
-        "reviewMs": 534.996,
+        "reviewMs": 533.737,
         "reviewRoundMs": [
-          267.503,
-          267.493
+          267.996,
+          265.74
         ],
-        "runtimeMs": 2167.052,
-        "implementerMs": 1187.948,
-        "orchestrationMs": 79,
+        "runtimeMs": 3202.986,
+        "implementerMs": 1181.014,
+        "orchestrationMs": 73,
         "pluginToolCalls": 17,
         "cliCommandCalls": 0,
         "extraToolCalls": 12,
-        "extraToolCallMs": 606.914,
-        "skillRoutingMs": 0.099,
-        "mcpHandshakeMs": 59.695,
+        "extraToolCallMs": 602.288,
+        "skillRoutingMs": 0.103,
+        "mcpHandshakeMs": 57.622,
         "busWrites": 6,
         "taskSyncs": 2,
         "traceEvents": 88,
         "toolSpans": [
           {
             "toolName": "coordinate_agents_task_create",
-            "durationMs": 95.589
+            "durationMs": 98.771
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 101.428
+            "durationMs": 98.401
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1103.374
+            "durationMs": 2135.485
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 5.168
+            "durationMs": 4.811
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 4.137
+            "durationMs": 4.259
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 5.017
+            "durationMs": 4.68
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 87.342
+            "durationMs": 80.12
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 106.943
+            "durationMs": 105.618
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 267.3
+            "durationMs": 267.822
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1017.151
+            "durationMs": 1017.02
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.884
+            "durationMs": 4.045
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 4.111
+            "durationMs": 4.14
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 4.745
+            "durationMs": 3.78
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 76.731
+            "durationMs": 87.244
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 105.474
+            "durationMs": 103.606
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 267.333
+            "durationMs": 265.576
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 100.934
+            "durationMs": 101.584
           }
         ],
         "result": {
-          "taskId": "task-benchmark-plugin-verbose-02",
+          "taskId": "task-02-pv",
           "status": "APPROVED",
-          "sessionId": "session_f295ecf7d21b41d3b1864fc20042e5d0",
+          "sessionId": "session_e03b4f18b29b4ba1a24c995425a845a6",
           "commit": "0123456789abcdef0123456789abcdef01234567",
           "mcpProtocolRequests": 19
         },
@@ -719,104 +719,104 @@
         "runId": "plugin-verbose-03",
         "workflow": "plugin",
         "profile": "verbose",
-        "totalMs": 3449,
-        "taskCreateMs": 112.632,
-        "taskDispatchMs": 2115.619,
+        "totalMs": 3763,
+        "taskCreateMs": 97.698,
+        "taskDispatchMs": 2452.993,
         "taskDispatchRoundMs": [
-          1101.454,
-          1014.166
+          1441.298,
+          1011.695
         ],
-        "reviewMs": 537.763,
+        "reviewMs": 534.286,
         "reviewRoundMs": [
-          267.238,
-          270.525
+          268.709,
+          265.577
         ],
-        "runtimeMs": 2190.313,
-        "implementerMs": 1181.687,
-        "orchestrationMs": 77,
+        "runtimeMs": 2509.662,
+        "implementerMs": 1180.338,
+        "orchestrationMs": 73,
         "pluginToolCalls": 17,
         "cliCommandCalls": 0,
         "extraToolCalls": 12,
-        "extraToolCallMs": 606.05,
-        "skillRoutingMs": 0.12,
-        "mcpHandshakeMs": 61.285,
+        "extraToolCallMs": 603.628,
+        "skillRoutingMs": 0.103,
+        "mcpHandshakeMs": 61.252,
         "busWrites": 6,
         "taskSyncs": 2,
         "traceEvents": 88,
         "toolSpans": [
           {
             "toolName": "coordinate_agents_task_create",
-            "durationMs": 112.533
+            "durationMs": 97.6
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 102.217
+            "durationMs": 100.051
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1101.344
+            "durationMs": 1441.144
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 5.133
+            "durationMs": 3.437
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 5.068
+            "durationMs": 4.096
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 4.97
+            "durationMs": 4.097
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 86.314
+            "durationMs": 82.76
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 105.959
+            "durationMs": 104.777
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 267.074
+            "durationMs": 268.535
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1014.023
+            "durationMs": 1011.576
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.86
+            "durationMs": 4.735
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 3.947
+            "durationMs": 4.077
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 3.887
+            "durationMs": 3.849
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 77.091
+            "durationMs": 85.675
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 105.634
+            "durationMs": 105.303
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 270.182
+            "durationMs": 265.403
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 100.97
+            "durationMs": 100.771
           }
         ],
         "result": {
-          "taskId": "task-benchmark-plugin-verbose-03",
+          "taskId": "task-03-pv",
           "status": "APPROVED",
-          "sessionId": "session_9850078ba85b407da2988a3aca03e689",
+          "sessionId": "session_8758f5a06e5d4eefbb7b0bbc92b812ee",
           "commit": "0123456789abcdef0123456789abcdef01234567",
           "mcpProtocolRequests": 19
         },
@@ -826,104 +826,104 @@
         "runId": "plugin-verbose-04",
         "workflow": "plugin",
         "profile": "verbose",
-        "totalMs": 3429,
-        "taskCreateMs": 98.116,
-        "taskDispatchMs": 2110.389,
+        "totalMs": 3783,
+        "taskCreateMs": 96.696,
+        "taskDispatchMs": 2474.879,
         "taskDispatchRoundMs": [
-          1096.445,
-          1013.944
+          1457.133,
+          1017.746
         ],
-        "reviewMs": 536.754,
+        "reviewMs": 531.115,
         "reviewRoundMs": [
-          268.611,
-          268.144
+          266.166,
+          264.949
         ],
-        "runtimeMs": 2167.53,
-        "implementerMs": 1181.47,
-        "orchestrationMs": 80,
+        "runtimeMs": 2524.178,
+        "implementerMs": 1184.822,
+        "orchestrationMs": 74,
         "pluginToolCalls": 17,
         "cliCommandCalls": 0,
         "extraToolCalls": 12,
-        "extraToolCallMs": 606.399,
-        "skillRoutingMs": 0.11,
-        "mcpHandshakeMs": 59.187,
+        "extraToolCallMs": 609.509,
+        "skillRoutingMs": 0.102,
+        "mcpHandshakeMs": 59.869,
         "busWrites": 6,
         "taskSyncs": 2,
         "traceEvents": 88,
         "toolSpans": [
           {
             "toolName": "coordinate_agents_task_create",
-            "durationMs": 98.025
+            "durationMs": 96.591
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 103.06
+            "durationMs": 100.666
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1096.257
+            "durationMs": 1457.034
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 5.05
+            "durationMs": 3.882
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 5.412
+            "durationMs": 5.363
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 3.596
+            "durationMs": 4.725
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 76.901
+            "durationMs": 86.527
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 107.415
+            "durationMs": 105.223
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 268.447
+            "durationMs": 265.985
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1013.806
+            "durationMs": 1017.617
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.688
+            "durationMs": 3.258
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 5.06
+            "durationMs": 4.05
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 4.726
+            "durationMs": 4.23
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 83.906
+            "durationMs": 85.084
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 105.318
+            "durationMs": 104.15
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 267.968
+            "durationMs": 264.794
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 101.267
+            "durationMs": 102.351
           }
         ],
         "result": {
-          "taskId": "task-benchmark-plugin-verbose-04",
+          "taskId": "task-04-pv",
           "status": "APPROVED",
-          "sessionId": "session_2f7aecb721784038965f82dd93cd386b",
+          "sessionId": "session_e382e79ef0564f4abdf511a526d7abb5",
           "commit": "0123456789abcdef0123456789abcdef01234567",
           "mcpProtocolRequests": 19
         },
@@ -933,104 +933,104 @@
         "runId": "plugin-verbose-05",
         "workflow": "plugin",
         "profile": "verbose",
-        "totalMs": 3435,
-        "taskCreateMs": 95.702,
-        "taskDispatchMs": 2117.59,
+        "totalMs": 3799,
+        "taskCreateMs": 95.663,
+        "taskDispatchMs": 2481.08,
         "taskDispatchRoundMs": [
-          1099.991,
-          1017.599
+          1462.015,
+          1019.065
         ],
-        "reviewMs": 535.306,
+        "reviewMs": 534.54,
         "reviewRoundMs": [
-          267.077,
-          268.229
+          266.94,
+          267.6
         ],
-        "runtimeMs": 2189.743,
-        "implementerMs": 1177.257,
-        "orchestrationMs": 68,
+        "runtimeMs": 2537.447,
+        "implementerMs": 1182.553,
+        "orchestrationMs": 79,
         "pluginToolCalls": 17,
         "cliCommandCalls": 0,
         "extraToolCalls": 12,
-        "extraToolCallMs": 620.618,
-        "skillRoutingMs": 0.114,
-        "mcpHandshakeMs": 59.485,
+        "extraToolCallMs": 608.868,
+        "skillRoutingMs": 0.176,
+        "mcpHandshakeMs": 63.759,
         "busWrites": 6,
         "taskSyncs": 2,
         "traceEvents": 88,
         "toolSpans": [
           {
             "toolName": "coordinate_agents_task_create",
-            "durationMs": 95.602
+            "durationMs": 95.561
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 102.159
+            "durationMs": 102.075
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1099.876
+            "durationMs": 1461.9
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 3.958
+            "durationMs": 5.049
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 4.169
+            "durationMs": 5.405
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 3.925
+            "durationMs": 4.891
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 90.709
+            "durationMs": 88.518
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 106.431
+            "durationMs": 104.889
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 266.918
+            "durationMs": 266.784
           },
           {
             "toolName": "coordinate_agents_task_dispatch",
-            "durationMs": 1017.458
+            "durationMs": 1018.954
           },
           {
             "toolName": "coordinate_agents_session_status",
-            "durationMs": 4.458
+            "durationMs": 4.903
           },
           {
             "toolName": "coordinate_agents_session_inspect",
-            "durationMs": 4.98
+            "durationMs": 5.057
           },
           {
             "toolName": "coordinate_agents_session_read",
-            "durationMs": 3.935
+            "durationMs": 4.742
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 88.97
+            "durationMs": 75.971
           },
           {
             "toolName": "coordinate_agents_task_inspect",
-            "durationMs": 106.005
+            "durationMs": 105.801
           },
           {
             "toolName": "coordinate_agents_task_review",
-            "durationMs": 268.084
+            "durationMs": 267.439
           },
           {
             "toolName": "coordinate_agents_task_status",
-            "durationMs": 100.919
+            "durationMs": 101.567
           }
         ],
         "result": {
-          "taskId": "task-benchmark-plugin-verbose-05",
+          "taskId": "task-05-pv",
           "status": "APPROVED",
-          "sessionId": "session_2ee79ac504bd4ba8a9b2cae4b5b6aea9",
+          "sessionId": "session_353328204b7c441d87cd33f2250fc92d",
           "commit": "0123456789abcdef0123456789abcdef01234567",
           "mcpProtocolRequests": 19
         },
@@ -1044,52 +1044,52 @@
         "runs": 5,
         "totalMs": {
           "count": 5,
-          "min": 2796,
-          "median": 2802,
-          "mean": 2802.8,
-          "max": 2809
+          "min": 3137,
+          "median": 3192,
+          "mean": 3319.6,
+          "max": 3904
         },
         "taskCreateMs": {
           "count": 5,
-          "min": 94.734,
-          "median": 95.779,
-          "mean": 96.361,
-          "max": 98.682
+          "min": 96.64,
+          "median": 97.657,
+          "mean": 97.285,
+          "max": 97.749
         },
         "taskDispatchMs": {
           "count": 5,
-          "min": 2103.973,
-          "median": 2113.682,
-          "mean": 2113.484,
-          "max": 2119.515
+          "min": 2451.181,
+          "median": 2501.945,
+          "mean": 2630.822,
+          "max": 3212.277
         },
         "reviewMs": {
           "count": 5,
-          "min": 509.963,
-          "median": 521.642,
-          "mean": 520.327,
-          "max": 526.06
+          "min": 514.181,
+          "median": 525.712,
+          "mean": 523.982,
+          "max": 528.625
         },
         "runtimeMs": {
           "count": 5,
-          "min": 1535.359,
-          "median": 1549.017,
-          "mean": 1549.214,
-          "max": 1564.205
+          "min": 1894.439,
+          "median": 1949.024,
+          "mean": 2072.352,
+          "max": 2654.984
         },
         "implementerMs": {
           "count": 5,
-          "min": 1176.795,
-          "median": 1182.631,
-          "mean": 1180.786,
-          "max": 1182.881
+          "min": 1176.581,
+          "median": 1180.016,
+          "mean": 1179.048,
+          "max": 1181.108
         },
         "orchestrationMs": {
           "count": 5,
-          "min": 66,
-          "median": 72,
-          "mean": 72.8,
-          "max": 78
+          "min": 62,
+          "median": 66,
+          "mean": 68.2,
+          "max": 79
         },
         "extraToolCallMs": {
           "count": 5,
@@ -1100,17 +1100,17 @@
         },
         "skillRoutingMs": {
           "count": 5,
-          "min": 0.106,
-          "median": 0.115,
-          "mean": 0.12,
-          "max": 0.139
+          "min": 0.104,
+          "median": 0.117,
+          "mean": 0.121,
+          "max": 0.147
         },
         "mcpHandshakeMs": {
           "count": 5,
-          "min": 58.346,
-          "median": 60.926,
-          "mean": 60.758,
-          "max": 62.708
+          "min": 59.281,
+          "median": 59.632,
+          "mean": 60.025,
+          "max": 61.62
         },
         "busWrites": {
           "count": 5,
@@ -1150,33 +1150,33 @@
         "taskDispatchRoundMs": [
           {
             "count": 5,
-            "min": 1091.752,
-            "median": 1096.355,
-            "mean": 1095.739,
-            "max": 1099.497
+            "min": 1433.688,
+            "median": 1487.886,
+            "mean": 1612.348,
+            "max": 2195.659
           },
           {
             "count": 5,
-            "min": 1011.926,
-            "median": 1017.716,
-            "mean": 1017.745,
-            "max": 1023.159
+            "min": 1011.354,
+            "median": 1015.048,
+            "mean": 1018.473,
+            "max": 1035.287
           }
         ],
         "reviewRoundMs": [
           {
             "count": 5,
-            "min": 252.222,
-            "median": 262.482,
-            "mean": 259.667,
-            "max": 265.784
+            "min": 257.877,
+            "median": 264.301,
+            "mean": 262.686,
+            "max": 267.305
           },
           {
             "count": 5,
-            "min": 257.741,
-            "median": 260.276,
-            "mean": 260.66,
-            "max": 263.935
+            "min": 256.304,
+            "median": 261.32,
+            "mean": 261.296,
+            "max": 265.955
           }
         ]
       },
@@ -1185,56 +1185,56 @@
           "runId": "plugin-compact-01",
           "workflow": "plugin",
           "profile": "compact",
-          "totalMs": 2796,
-          "taskCreateMs": 94.862,
-          "taskDispatchMs": 2113.682,
+          "totalMs": 3904,
+          "taskCreateMs": 97.657,
+          "taskDispatchMs": 3212.277,
           "taskDispatchRoundMs": [
-            1091.752,
-            1021.931
+            2195.659,
+            1016.618
           ],
-          "reviewMs": 509.963,
+          "reviewMs": 524.957,
           "reviewRoundMs": [
-            252.222,
-            257.741
+            259.002,
+            265.955
           ],
-          "runtimeMs": 1535.359,
-          "implementerMs": 1182.641,
-          "orchestrationMs": 78,
+          "runtimeMs": 2654.984,
+          "implementerMs": 1180.016,
+          "orchestrationMs": 69,
           "pluginToolCalls": 5,
           "cliCommandCalls": 0,
           "extraToolCalls": 0,
           "extraToolCallMs": 0,
-          "skillRoutingMs": 0.129,
-          "mcpHandshakeMs": 58.346,
+          "skillRoutingMs": 0.115,
+          "mcpHandshakeMs": 60.302,
           "busWrites": 6,
           "taskSyncs": 2,
           "traceEvents": 52,
           "toolSpans": [
             {
               "toolName": "coordinate_agents_task_create",
-              "durationMs": 94.772
+              "durationMs": 97.564
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1091.645
+              "durationMs": 2195.564
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 252.082
+              "durationMs": 258.852
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1021.815
+              "durationMs": 1016.529
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 257.553
+              "durationMs": 265.808
             }
           ],
           "result": {
-            "taskId": "task-benchmark-plugin-compact-01",
+            "taskId": "task-01-pc",
             "status": "APPROVED",
-            "sessionId": "session_16a4d41cc8c24167aebea6e696ed2484",
+            "sessionId": "session_89a351a50ac0489380ed4d9205c9bae0",
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "mcpProtocolRequests": 7
           },
@@ -1244,56 +1244,56 @@
           "runId": "plugin-compact-02",
           "workflow": "plugin",
           "profile": "compact",
-          "totalMs": 2802,
-          "taskCreateMs": 97.75,
-          "taskDispatchMs": 2113.49,
+          "totalMs": 3161,
+          "taskCreateMs": 97.697,
+          "taskDispatchMs": 2468.976,
           "taskDispatchRoundMs": [
-            1099.497,
-            1013.993
+            1433.688,
+            1035.287
           ],
-          "reviewMs": 519.067,
+          "reviewMs": 514.181,
           "reviewRoundMs": [
-            255.132,
-            263.935
+            257.877,
+            256.304
           ],
-          "runtimeMs": 1547.119,
-          "implementerMs": 1182.881,
-          "orchestrationMs": 72,
+          "runtimeMs": 1905.419,
+          "implementerMs": 1176.581,
+          "orchestrationMs": 79,
           "pluginToolCalls": 5,
           "cliCommandCalls": 0,
           "extraToolCalls": 0,
           "extraToolCallMs": 0,
-          "skillRoutingMs": 0.106,
-          "mcpHandshakeMs": 59.793,
+          "skillRoutingMs": 0.117,
+          "mcpHandshakeMs": 61.62,
           "busWrites": 6,
           "taskSyncs": 2,
           "traceEvents": 52,
           "toolSpans": [
             {
               "toolName": "coordinate_agents_task_create",
-              "durationMs": 97.636
+              "durationMs": 97.597
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1099.375
+              "durationMs": 1433.58
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 254.927
+              "durationMs": 257.709
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1013.875
+              "durationMs": 1035.196
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 263.705
+              "durationMs": 256.129
             }
           ],
           "result": {
-            "taskId": "task-benchmark-plugin-compact-02",
+            "taskId": "task-02-pc",
             "status": "APPROVED",
-            "sessionId": "session_a1965373d64444c0ae4941439ddfc955",
+            "sessionId": "session_08b9b8b96c534cc09d5ed5aed8650d48",
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "mcpProtocolRequests": 7
           },
@@ -1303,56 +1303,56 @@
           "runId": "plugin-compact-03",
           "workflow": "plugin",
           "profile": "compact",
-          "totalMs": 2809,
-          "taskCreateMs": 95.779,
-          "taskDispatchMs": 2116.762,
+          "totalMs": 3137,
+          "taskCreateMs": 97.749,
+          "taskDispatchMs": 2451.181,
           "taskDispatchRoundMs": [
-            1099.046,
-            1017.716
+            1436.132,
+            1015.048
           ],
-          "reviewMs": 521.642,
+          "reviewMs": 526.435,
           "reviewRoundMs": [
-            262.714,
-            258.928
+            264.301,
+            262.135
           ],
-          "runtimeMs": 1550.369,
-          "implementerMs": 1182.631,
-          "orchestrationMs": 76,
+          "runtimeMs": 1894.439,
+          "implementerMs": 1180.561,
+          "orchestrationMs": 62,
           "pluginToolCalls": 5,
           "cliCommandCalls": 0,
           "extraToolCalls": 0,
           "extraToolCallMs": 0,
-          "skillRoutingMs": 0.11,
-          "mcpHandshakeMs": 62.708,
+          "skillRoutingMs": 0.123,
+          "mcpHandshakeMs": 59.281,
           "busWrites": 6,
           "taskSyncs": 2,
           "traceEvents": 52,
           "toolSpans": [
             {
               "toolName": "coordinate_agents_task_create",
-              "durationMs": 95.664
+              "durationMs": 97.67
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1098.92
+              "durationMs": 1436.021
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 262.551
+              "durationMs": 264.158
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1017.618
+              "durationMs": 1014.953
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 258.685
+              "durationMs": 261.975
             }
           ],
           "result": {
-            "taskId": "task-benchmark-plugin-compact-03",
+            "taskId": "task-03-pc",
             "status": "APPROVED",
-            "sessionId": "session_a90a3be0cbeb4730b483ed825ea72e6a",
+            "sessionId": "session_e6c0670b2dc449769de5a8fb5196722b",
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "mcpProtocolRequests": 7
           },
@@ -1362,56 +1362,56 @@
           "runId": "plugin-compact-04",
           "workflow": "plugin",
           "profile": "compact",
-          "totalMs": 2800,
-          "taskCreateMs": 98.682,
-          "taskDispatchMs": 2103.973,
+          "totalMs": 3204,
+          "taskCreateMs": 96.68,
+          "taskDispatchMs": 2519.731,
           "taskDispatchRoundMs": [
-            1092.047,
-            1011.926
+            1508.377,
+            1011.354
           ],
-          "reviewMs": 524.904,
+          "reviewMs": 525.712,
           "reviewRoundMs": [
-            262.482,
-            262.422
+            264.945,
+            260.767
           ],
-          "runtimeMs": 1549.017,
-          "implementerMs": 1178.983,
-          "orchestrationMs": 72,
+          "runtimeMs": 1957.892,
+          "implementerMs": 1181.108,
+          "orchestrationMs": 65,
           "pluginToolCalls": 5,
           "cliCommandCalls": 0,
           "extraToolCalls": 0,
           "extraToolCallMs": 0,
-          "skillRoutingMs": 0.115,
-          "mcpHandshakeMs": 62.018,
+          "skillRoutingMs": 0.104,
+          "mcpHandshakeMs": 59.632,
           "busWrites": 6,
           "taskSyncs": 2,
           "traceEvents": 52,
           "toolSpans": [
             {
               "toolName": "coordinate_agents_task_create",
-              "durationMs": 98.592
+              "durationMs": 96.595
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1091.934
+              "durationMs": 1508.272
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 262.326
+              "durationMs": 264.778
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1011.788
+              "durationMs": 1011.242
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 262.201
+              "durationMs": 260.601
             }
           ],
           "result": {
-            "taskId": "task-benchmark-plugin-compact-04",
+            "taskId": "task-04-pc",
             "status": "APPROVED",
-            "sessionId": "session_a02abf9070054b459064826a005f0e15",
+            "sessionId": "session_1dd0661b4a7d4bc7b8d9769c5786b0de",
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "mcpProtocolRequests": 7
           },
@@ -1421,56 +1421,56 @@
           "runId": "plugin-compact-05",
           "workflow": "plugin",
           "profile": "compact",
-          "totalMs": 2807,
-          "taskCreateMs": 94.734,
-          "taskDispatchMs": 2119.515,
+          "totalMs": 3192,
+          "taskCreateMs": 96.64,
+          "taskDispatchMs": 2501.945,
           "taskDispatchRoundMs": [
-            1096.355,
-            1023.159
+            1487.886,
+            1014.059
           ],
-          "reviewMs": 526.06,
+          "reviewMs": 528.625,
           "reviewRoundMs": [
-            265.784,
-            260.276
+            267.305,
+            261.32
           ],
-          "runtimeMs": 1564.205,
-          "implementerMs": 1176.795,
+          "runtimeMs": 1949.024,
+          "implementerMs": 1176.976,
           "orchestrationMs": 66,
           "pluginToolCalls": 5,
           "cliCommandCalls": 0,
           "extraToolCalls": 0,
           "extraToolCallMs": 0,
-          "skillRoutingMs": 0.139,
-          "mcpHandshakeMs": 60.926,
+          "skillRoutingMs": 0.147,
+          "mcpHandshakeMs": 59.29,
           "busWrites": 6,
           "taskSyncs": 2,
           "traceEvents": 52,
           "toolSpans": [
             {
               "toolName": "coordinate_agents_task_create",
-              "durationMs": 94.647
+              "durationMs": 96.55
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1096.254
+              "durationMs": 1487.684
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 265.635
+              "durationMs": 267.124
             },
             {
               "toolName": "coordinate_agents_task_dispatch",
-              "durationMs": 1023.053
+              "durationMs": 1013.932
             },
             {
               "toolName": "coordinate_agents_task_review",
-              "durationMs": 259.994
+              "durationMs": 261.151
             }
           ],
           "result": {
-            "taskId": "task-benchmark-plugin-compact-05",
+            "taskId": "task-05-pc",
             "status": "APPROVED",
-            "sessionId": "session_ce278c91bb9744f58ee6ec6e93c44f8c",
+            "sessionId": "session_baa19c112d6f4e00a003e10230da671d",
             "commit": "0123456789abcdef0123456789abcdef01234567",
             "mcpProtocolRequests": 7
           },
@@ -1480,15 +1480,15 @@
     }
   },
   "minimumCalls": {
-    "cliTargetMs": 2332.8,
-    "verbosePluginMs": 3435,
-    "compactPluginMs": 2802,
+    "cliTargetMs": 2615.2,
+    "verbosePluginMs": 3790,
+    "compactPluginMs": 3192,
     "verboseCalls": 17,
     "compactCalls": 5,
     "semanticMinimumCalls": 5,
     "removableCalls": 12,
     "estimatedCallsToRemove": null,
-    "estimatedAfterRemovalMs": 2813.722,
+    "estimatedAfterRemovalMs": 3179.554,
     "compactAtLeast80Percent": false
   }
 }

@@ -769,7 +769,8 @@ async function runPluginWorkflow({ root, home, tracePath, runId, taskId, trace, 
 
 async function runCase({ runNumber, workflow, profile }) {
   const runId = `${workflow}-${profile}-${String(runNumber).padStart(2, '0')}`;
-  const taskId = `task-benchmark-${workflow}-${profile}-${String(runNumber).padStart(2, '0')}`;
+  // Keep the suffix after task- short: the scanner's provider-token heuristic also sees that tail.
+  const taskId = `task-${String(runNumber).padStart(2, '0')}-${workflow[0]}${profile[0]}`;
   const fixture = createFixture();
   const tracePath = join(fixture.root, 'benchmark-trace.jsonl');
   const trace = new TraceWriter(tracePath, { runId, workflow, profile });
