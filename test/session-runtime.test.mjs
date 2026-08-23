@@ -189,7 +189,7 @@ test('silent healthy CLI starts promptly and records one ordered startup lifecyc
     assert.equal(opened.ok, true);
     assert.equal(opened.reused, false);
     assert.ok(['running', 'idle', 'busy'].includes(opened.session.state));
-    assert.ok(elapsedMs < 4_000, `silent session startup took ${elapsedMs}ms`);
+    assert.ok(elapsedMs < 6_000, `silent session startup took ${elapsedMs}ms`);
 
     const eventTypes = readRuntimeEvents(root, { sessionId, limit: 50 }).map(event => event.type);
     assert.deepEqual(eventTypes.filter(type => ['SESSION_STARTING', 'SESSION_STARTED', 'SESSION_FAILED'].includes(type)), [

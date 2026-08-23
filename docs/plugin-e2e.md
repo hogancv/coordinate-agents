@@ -26,7 +26,7 @@ The current implementation has one canonical Runtime source:
 | JSON contract | `skills/coordinate-agents/scripts/runtime-contract.mjs` |
 | Machine configuration | `skills/coordinate-agents/scripts/user-config.mjs` at `~/.coordinate-agents/config.json` |
 | Project orchestration | `.agent-bus/config.json`, inboxes, state, leases, and the existing Agent Bus scripts |
-| Adapter registry | `skills/coordinate-agents/adapters/index.mjs` and the existing adapter contract |
+| Adapter registry | `skills/coordinate-agents/adapters/index.mjs`; public shape validation is frozen separately in Adapter Contract v1 |
 | Task execution | `task dispatch` uses the Session Manager to validate, open/reuse, write, observe, and persist `sessionId`; legacy `launch` remains a compatibility path |
 | npm payload | `package.json.files` includes `.codex-plugin`, `skills`, and `bin` |
 
@@ -172,5 +172,7 @@ a path containing spaces and runs with an empty executable `PATH`. It verifies:
 The same fixture covers Windows `.cmd` wrappers and POSIX executable wrappers
 according to the host platform. No MCP server, lifecycle Hook, Autopilot,
 parallel Implementer, external daemon, database, Codex Terminal UI automation,
-or external Adapter SDK is needed for this closure. The Runtime-owned Session
-Host exists only after an explicit Task/Session operation.
+or third-party adapter loading is needed for this closure. The public Adapter
+Contract v1 is an expand-only validation surface at `adapter-sdk.mjs`; it does
+not yet change this registry or Runtime behavior. The Runtime-owned Session Host
+exists only after an explicit Task/Session operation.

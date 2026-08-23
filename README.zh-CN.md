@@ -97,6 +97,12 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 
 项目命令配置优先于用户配置，用户配置优先于适配器默认值。Runtime 不会猜测最终可执行文件名称。详见 [Codex CLI](./docs/codex-cli.md)、[Antigravity CLI](./docs/antigravity-cli.md)和[方案对比](./docs/comparison.md)。
 
+### Adapter Contract v1
+
+npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边界；npm 使用者从 `@hogancv/coordinate-agents/adapter-sdk.mjs` 导入。Contract v1 约束适配器身份、能力、检测、配置兼容性、参数数组形式的启动计划、持久 Session 首次输入与启动策略。可执行文件和路径验证、进程与 Session 生命周期、有限输出、持久化状态、审查及发布门禁仍完全由 Runtime 管理。
+
+当前 expand 步骤不会把第三方模块加载进 Runtime registry。未来的本地适配器模块必须经过显式选择，并被视为可信代码；契约验证不是针对恶意 JavaScript 的沙箱。详见随包提供的 [Adapter Contract v1 参考](./skills/coordinate-agents/references/adapter-contract-v1.md)。
+
 ## 本地 Inspector
 
 在已初始化 Agent Bus 的仓库中启动只读本地 Inspector：

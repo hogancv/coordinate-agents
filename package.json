@@ -3,10 +3,16 @@
   "version": "2.1.3",
   "description": "A local-first coordination protocol, plugin, and runtime for AI coding agents.",
   "type": "module",
+  "exports": {
+    "./adapter-sdk": "./adapter-sdk.mjs",
+    "./adapter-sdk.mjs": "./adapter-sdk.mjs",
+    "./*": "./*"
+  },
   "bin": {
     "coordinate-agents": "bin/coordinate-agents.mjs"
   },
   "files": [
+    "adapter-sdk.mjs",
     ".codex-plugin",
     ".mcp.json",
     ".agents",

@@ -49,6 +49,8 @@ test('canonical skill directory is complete and self-contained', () => {
     join('adapters', 'antigravity-cli.mjs'),
     join('adapters', 'generic-cli.mjs'),
     join('adapters', 'executable.mjs'),
+    join('adapters', 'contract-v1.mjs'),
+    join('references', 'adapter-contract-v1.md'),
     join('references', 'protocol.md'),
     join('references', 'task-templates.md'),
     join('scripts', 'agent-bus.mjs'),
@@ -93,6 +95,7 @@ test('single source invariant: root does not contain duplicate runtime copies', 
 
 test('npm pack payload includes plugin manifest and canonical skill tree', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.ok(packageJson.files.includes('adapter-sdk.mjs'), 'public Adapter SDK entry must be in package.json files');
   assert.ok(packageJson.files.includes('.codex-plugin'), '.codex-plugin must be in package.json files');
   assert.ok(packageJson.files.includes('skills'), 'skills must be in package.json files');
 
@@ -105,6 +108,8 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/SKILL.md')), 'Pack must contain skills/coordinate-agents/SKILL.md');
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/scripts/agent-bus.mjs')), 'Pack must contain skills/coordinate-agents/scripts/agent-bus.mjs');
       assert.ok(filenames.some(f => f === 'bin/coordinate-agents.mjs'), 'Pack must contain the canonical Runtime bin');
+      assert.ok(filenames.some(f => f === 'adapter-sdk.mjs'), 'Pack must contain the public Adapter SDK entry');
+      assert.ok(filenames.some(f => f === 'skills/coordinate-agents/adapters/contract-v1.mjs'), 'Pack must contain Adapter Contract v1');
       assert.ok(filenames.some(f => f === 'skills/coordinate-agents/scripts/runtime-entry.mjs'), 'Pack must contain the Plugin Runtime resolver');
     } catch {
       // If npm pack json output is wrapped or formatted differently, fallback to checking stdout

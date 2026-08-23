@@ -97,3 +97,8 @@ For protocol details and task templates, read the relative resources
 `references/protocol.md` and `references/task-templates.md`. For direct Bus
 inspection, the canonical runtime remains `scripts/agent-bus.mjs` and
 `scripts/agent-observer.mjs`; do not hand-edit queue files.
+
+Adapter authors must use the public `adapter-sdk.mjs` entry and the frozen
+Contract v1 boundary documented in `references/adapter-contract-v1.md`; the
+current expand step does not authorize loading arbitrary modules into the
+runtime registry.
