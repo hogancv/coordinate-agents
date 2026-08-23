@@ -6,6 +6,10 @@ Coordinate Agents 是一个面向 Codex 与外部 AI 编码代理的本地优先
 
 推荐通过本 GitHub 仓库安装 Codex 插件。npm 包继续用于 standalone Runtime 和兼容性工作流。
 
+![完整端到端终端演示](./assets/demo.gif)
+
+该动图由 `npm run demo` 在隔离 Git 仓库中生成；脱敏后的原始记录见 [assets/demo-transcript.txt](./assets/demo-transcript.txt)。
+
 ## 为什么使用 Coordinate Agents
 
 一个优秀的编码代理可以独立工作。当你希望第二个代理负责实现，同时让 Codex 清晰地维护规格与审查边界时，协作层才真正有价值。

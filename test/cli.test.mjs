@@ -193,7 +193,7 @@ test('README landing pages keep plugin quick start concise and link to detailed 
 test('package.json provides canonical bin only', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
-  assert.equal(packageJson.version, '2.1.2');
+  assert.equal(packageJson.version, '2.1.3');
   assert.deepEqual(Object.keys(packageJson.bin), ['coordinate-agents']);
   assert.equal(packageJson.bin['coordinate-agents'], 'bin/coordinate-agents.mjs');
 });

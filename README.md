@@ -6,6 +6,10 @@ Coordinate Agents is a local-first coordination protocol and runtime for Codex a
 
 The recommended distribution is the Codex Plugin from this GitHub repository. The npm package remains available for standalone runtime and compatibility workflows.
 
+![End-to-end terminal demo](./assets/demo.gif)
+
+The recording comes from `npm run demo` in an isolated Git repository. Its sanitized source transcript is available at [assets/demo-transcript.txt](./assets/demo-transcript.txt).
+
 ## Why Coordinate Agents
 
 A capable coding agent can work alone. Coordination becomes useful when you want a second agent to implement while Codex keeps the specification and review boundary clear.

@@ -48,6 +48,16 @@ function now() {
   return new Date().toISOString();
 }
 
+function ownedProcessIsAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
 function safeArgs(args) {
   return Array.isArray(args)
     ? args.map(value => redactOutput(`${value}`, 2 * 1024))
@@ -526,7 +536,10 @@ export class ExecutionSessionManager {
     }
 
     const deadline = Date.now() + 5_000;
-    const healthyStabilityMs = 200;
+    // Some PTY backends can briefly report a spawned process as running even
+    // when it exits immediately. Keep startup bounded, but require enough
+    // stability for the terminal exit fact to win before publishing STARTED.
+    const healthyStabilityMs = 2_500;
     const minimumHealthyProbes = 25;
     let healthySince = null;
     let healthyProbeCount = 0;
@@ -559,7 +572,7 @@ export class ExecutionSessionManager {
         } catch { /* Keep probing until the bounded startup deadline. */ }
       }
       if (!ACTIVE_STATES.has(current.state)) break;
-      if (HEALTHY_STARTUP_STATES.has(current.state)) {
+      if (HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
         healthySince ??= Date.now();
         healthyProbeCount += 1;
         // A scheduler stall can cross the wall-clock window between only two
@@ -572,9 +585,9 @@ export class ExecutionSessionManager {
       }
       await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
-    if (HEALTHY_STARTUP_STATES.has(current.state)) {
+    if (HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
       appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId });
-    } else if (current.state !== 'starting') {
+    } else if (!ACTIVE_STATES.has(current.state) && current.state !== 'starting') {
       ensureSessionStateEvent(repository, current, { taskId });
     }
     return { session: publicRecord(current), reused: false, initialInputConsumed: Boolean(launch.initialInputConsumed) };
