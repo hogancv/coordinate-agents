@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { AgentAdapter, getAdapter, listAdapters, registerAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
+import { resolveExecutable } from '../skills/coordinate-agents/adapters/executable.mjs';
 
 test('AgentAdapter defines normalized statuses and default lifecycle methods', () => {
   assert.deepEqual(AgentAdapter.STATUSES, {
@@ -216,4 +218,22 @@ test('generic-cli supports {agent} placeholder and rejects {role}', () => {
     () => genericLegacy.resolveLaunch(launchContext),
     /Unsupported template placeholder: \{role\}\. Use \{agent\}\./
   );
+});
+
+test('POSIX shebangs may use a symlinked system interpreter', { skip: process.platform === 'win32' }, () => {
+  const directory = mkdtempSync(join(tmpdir(), 'coordinate-agents-shebang-'));
+  try {
+    const interpreter = join(directory, 'node-link');
+    const script = join(directory, 'fixture');
+    symlinkSync(process.execPath, interpreter);
+    writeFileSync(script, `#!${interpreter}\nprocess.exit(0);\n`, 'utf8');
+    chmodSync(script, 0o755);
+
+    const resolved = resolveExecutable(script);
+    assert.equal(resolved.available, true, resolved.details);
+    assert.equal(resolved.command, process.execPath);
+    assert.deepEqual(resolved.prefix, [script]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

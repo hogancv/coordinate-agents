@@ -1,4 +1,4 @@
-import { accessSync, closeSync, existsSync, lstatSync, openSync, readSync } from 'node:fs';
+import { accessSync, closeSync, existsSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { basename, delimiter, extname, isAbsolute, join } from 'node:path';
 import { X_OK } from 'node:constants';
@@ -165,7 +165,16 @@ function resolveShebangInterpreter(interpreter, args, candidate) {
   const interpreterCandidate = isPathLike(interpreterName)
     ? interpreterName
     : posixCandidate(interpreterName);
-  const resolved = posixEntrypoint(interpreterName, interpreterCandidate);
+  let canonicalInterpreter = interpreterCandidate;
+  try {
+    // System shebangs commonly use stable symlinks such as /bin/sh. Resolve
+    // only the interpreter to its real file; directly configured commands
+    // retain the stricter no-symlink rule in posixEntrypoint.
+    canonicalInterpreter = interpreterCandidate ? realpathSync(interpreterCandidate) : null;
+  } catch {
+    canonicalInterpreter = null;
+  }
+  const resolved = posixEntrypoint(interpreterName, canonicalInterpreter);
   if (!resolved.available) {
     return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Shebang interpreter is unavailable: ${interpreterName}`, { resolvedCommand: candidate });
   }
