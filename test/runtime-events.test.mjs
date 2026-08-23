@@ -36,7 +36,7 @@ function repository() {
 function storedEvent(sequence, type = 'TASK_STATUS_CHANGED') {
   return JSON.stringify({
     schemaVersion: EVENT_SCHEMA_VERSION,
-    eventId: `evt_fixture_${sequence}`,
+    eventId: `evt_00000000-0000-4000-8000-${`${sequence}`.padStart(12, '0')}`,
     sequence,
     timestamp: '2026-08-23T00:00:00.000Z',
     type,

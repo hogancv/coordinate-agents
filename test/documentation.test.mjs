@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -56,77 +56,42 @@ test('AI installation guide defines canonical identity and the complete safe lif
   assert.match(guide, /non-zero[\s\S]*failed installation/);
 });
 
-test('both READMEs expose three AI installation prompts beside quick start', () => {
+test('both READMEs are aligned plugin-first landing pages', () => {
   const english = read('README.md');
   const chinese = read('README.zh-CN.md');
-  assert.ok(english.indexOf('## Let an AI install it') < english.indexOf('## Requirements'));
-  assert.ok(chinese.indexOf('## 让 AI 帮你安装') < chinese.indexOf('## 环境要求'));
+  const englishHeadings = ['Why Coordinate Agents', 'How It Works', 'Quick Start', 'Example', 'Key Capabilities', 'Supported Agents and Adapters', 'Local Inspector', 'Documentation', 'Safety and Release Boundary', 'Project Status', 'License'];
+  const chineseHeadings = ['为什么使用 Coordinate Agents', '工作原理', '快速开始', '示例', '核心能力', '支持的代理与适配器', '本地 Inspector', '文档导航', '安全与发布边界', '项目状态', '许可证'];
+  for (const heading of englishHeadings) assert.match(english, new RegExp(`^## ${heading}$`, 'm'));
+  for (const heading of chineseHeadings) assert.match(chinese, new RegExp(`^## ${heading}$`, 'm'));
+  assert.ok(english.split(/\r?\n/).length < 400);
+  assert.ok(chinese.split(/\r?\n/).length < 400);
   for (const document of [english, chinese]) {
+    assert.match(document, /codex plugin marketplace add hogancv\/coordinate-agents/);
+    assert.match(document, /codex plugin add coordinate-agents@coordinate-agents/);
     assert.match(document, /AI_INSTALL\.md/);
-    assert.match(document, /doctor --codex/);
-    assert.match(document, /doctor --antigravity/);
-    assert.match(document, /hogancv\/coordinate-agents/);
+    assert.match(document, /docs\/session-runtime\.md/);
+    assert.match(document, /docs\/event-journal\.md/);
+    assert.match(document, /RELEASE_APPROVED/);
   }
-  assert.match(english, /Do not use a third-party fork, request credentials/);
-  assert.match(chinese, /不要使用第三方 Fork，不要索取凭据/);
-});
-
-test('README FAQ answers natural-language discovery questions', () => {
-  const english = read('README.md');
-  const chinese = read('README.zh-CN.md');
-  for (const question of [
-    'What is coordinate-agents?',
-    'How do I coordinate Codex CLI and Antigravity CLI?',
-    'How do I use two coding agents in one Git repository?',
-    'How does it prevent two AI agents from editing code simultaneously?',
-    'How do I install a Codex Skill from npm?',
-    'What are the Codex CLI vs Antigravity CLI roles?',
-    'How do I recover interrupted multi-agent coding work?',
-    'Is `.agent-bus` secure?',
-    'How do I uninstall coordinate-agents?',
-  ]) assert.ok(english.includes(`### ${question}`), `README FAQ is missing ${question}`);
-  assert.match(english, /https:\/\/github\.com\/hogancv\/coordinate-agents/);
-  assert.match(english, /AI_INSTALL\.md/);
-  assert.match(english, /SECURITY\.md/);
-  for (const phrase of [
-    '## 常见问题',
-    '如何让 Codex CLI 和 Antigravity CLI 协作？',
-    '如何防止两个 AI 代理同时修改代码？',
-    '如何从 npm 安装 Codex Skill？',
-    '如何恢复被中断的多代理开发工作？',
-    '如何卸载 coordinate-agents？',
-  ]) assert.ok(chinese.includes(phrase), `Chinese README FAQ is missing ${phrase}`);
-});
-
-test('documents direct Codex App usage and concrete Implementer commands', () => {
-  const english = read('README.md');
-  const chinese = read('README.zh-CN.md');
-  const skill = read(join('skills', 'coordinate-agents', 'SKILL.md'));
-  const gettingStarted = read(join('docs', 'getting-started.md'));
-  for (const document of [english, chinese, skill, gettingStarted]) {
-    assert.match(document, /Codex App/);
-    assert.match(document, /coordinate-agents/);
-    assert.match(document, /\.git/);
-    assert.match(document, /agy/);
-    assert.match(document, /claude/);
-  }
-  assert.match(english, /do not need to open two CLI windows/i);
-  assert.match(chinese, /不需要手动打开两个 CLI 窗口/);
-  assert.match(skill, /actual local executable/);
-  assert.match(english, /Use \$coordinate-agents to configure Claude Code/i);
-  assert.match(chinese, /使用 \$coordinate-agents，帮我把 Claude Code 配置/);
-  assert.match(english, /does \*\*not\*\* automatically append[\s\S]*dangerously-skip-permissions/i);
-  assert.match(chinese, /不会[\s\S]*自动[\s\S]*dangerously-skip-permissions/);
   assert.ok(
-    english.indexOf('## Codex Plugin via GitHub Marketplace (Recommended)')
-      < english.indexOf('## 60-second quick start'),
-    'Codex Plugin installation must precede the CLI quick start'
+    english.indexOf('codex plugin marketplace add') < english.indexOf('npx @hogancv/coordinate-agents@latest'),
+    'Plugin installation must precede standalone npm usage'
   );
   assert.ok(
-    chinese.indexOf('## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）')
-      < chinese.indexOf('## 60 秒快速开始'),
-    'Chinese Codex Plugin installation must precede the CLI quick start'
+    chinese.indexOf('codex plugin marketplace add') < chinese.indexOf('npx @hogancv/coordinate-agents@latest'),
+    'Chinese Plugin installation must precede standalone npm usage'
   );
+});
+
+test('README relative links resolve to repository files', () => {
+  for (const name of ['README.md', 'README.zh-CN.md']) {
+    const document = read(name);
+    const links = [...document.matchAll(/\]\((\.\/[^)#]+)(?:#[^)]+)?\)/g)].map(match => match[1]);
+    assert.ok(links.length >= 20, `${name} should provide useful documentation navigation`);
+    for (const link of links) {
+      assert.equal(existsSync(resolve(root, link)), true, `${name} contains a broken link: ${link}`);
+    }
+  }
 });
 
 test('documentation site exposes stable task-focused pages and canonical metadata', () => {
@@ -228,39 +193,29 @@ test('documentation defines agent-agnostic runtime, adapter architecture, and dy
   const chinese = read('README.zh-CN.md');
 
   for (const phrase of [
-    'Agent Bus, Adapters, and Roles',
-    'Coordination Layer',
-    'Agent Bus Protocol Layer',
-    'Adapters & Runtime Layer',
+    'local-first coordination protocol and runtime',
+    'Agent Bus',
+    'Planner, Implementer, and Reviewer',
+    'Supported Agents and Adapters',
+    'antigravity-cli',
+    'codex-cli',
     'generic-cli',
-    'Desktop Adapter Extension Model',
-    'Receive',
-    'Execute',
-    'Observe',
-    'Result',
-    'Report',
-    'agent add',
-    'agent list',
-    'agent doctor',
+    'Project command configuration takes precedence',
+    'Persistent, bounded, and inspectable execution sessions',
   ]) {
     assert.ok(english.includes(phrase), `English README missing architectural term: ${phrase}`);
   }
 
   for (const phrase of [
-    '架构：代理总线、适配器与工作流角色',
-    '协作编排层',
-    '代理总线协议层',
-    '适配器与运行时层',
+    '本地优先协作协议和运行时',
+    'Agent Bus',
+    'Planner、Implementer 与 Reviewer',
+    '支持的代理与适配器',
+    'antigravity-cli',
+    'codex-cli',
     'generic-cli',
-    '桌面代理扩展模型',
-    'Receive（接收）',
-    'Execute（执行）',
-    'Observe（观测）',
-    'Result（产出）',
-    'Report（汇报）',
-    'agent add',
-    'agent list',
-    'agent doctor',
+    '项目命令配置优先于用户配置',
+    '持久、有限输出且可检查的 Execution Session',
   ]) {
     assert.ok(chinese.includes(phrase), `Chinese README missing architectural term: ${phrase}`);
   }

@@ -28,6 +28,8 @@ const LOCK_TIMEOUT_MS = 2_000;
 const STALE_LOCK_MS = 30_000;
 const SENSITIVE_KEY = /(?:authorization|credential|cookie|environment|env|password|passwd|private[_-]?key|secret|token|api[_-]?key)/i;
 const ASSOCIATION_FIELDS = ['taskId', 'sessionId', 'agentId', 'role', 'messageId'];
+const EVENT_ID_PATTERN = /^evt_[0-9a-f-]{36}$/;
+const EVENT_TYPE_PATTERN = /^[A-Z][A-Z0-9_]{1,127}$/;
 
 function eventPaths(root, { create = false } = {}) {
   const supplied = resolve(`${root || process.cwd()}`);
@@ -79,7 +81,7 @@ export function sanitizeRuntimeEventData(data) {
 }
 
 function validateType(type) {
-  if (typeof type !== 'string' || !/^[A-Z][A-Z0-9_]{1,127}$/.test(type)) {
+  if (typeof type !== 'string' || !EVENT_TYPE_PATTERN.test(type)) {
     throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Invalid runtime event type: ${type || '(empty)'}`, { recoverable: false });
   }
   return type;
@@ -92,10 +94,12 @@ function sleepSync(milliseconds) {
 function validStoredEvent(value) {
   return value && typeof value === 'object' && !Array.isArray(value)
     && value.schemaVersion === EVENT_SCHEMA_VERSION
-    && typeof value.eventId === 'string'
+    && typeof value.eventId === 'string' && EVENT_ID_PATTERN.test(value.eventId)
     && Number.isInteger(value.sequence) && value.sequence > 0
     && typeof value.timestamp === 'string' && !Number.isNaN(Date.parse(value.timestamp))
-    && typeof value.type === 'string';
+    && typeof value.type === 'string' && EVENT_TYPE_PATTERN.test(value.type)
+    && value.data && typeof value.data === 'object' && !Array.isArray(value.data)
+    && (Object.getPrototypeOf(value.data) === Object.prototype || Object.getPrototypeOf(value.data) === null);
 }
 
 function validateJournalMetadata(metadata, journal) {

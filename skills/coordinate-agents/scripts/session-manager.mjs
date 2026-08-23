@@ -36,6 +36,7 @@ export const EXECUTION_SESSION_STATES = Object.freeze([
 ]);
 
 const ACTIVE_STATES = new Set(['starting', 'running', 'idle', 'busy']);
+const HEALTHY_STARTUP_STATES = new Set(['running', 'idle', 'busy']);
 const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_READ_BYTES = 32 * 1024;
@@ -210,6 +211,15 @@ function appendSessionEvent(root, record, type, data = {}, associations = {}) {
 }
 
 function ensureSessionStateEvent(root, record, associations = {}) {
+  if (HEALTHY_STARTUP_STATES.has(record?.state)) {
+    const started = readRuntimeEvents(root, {
+      sessionId: record.id,
+      type: 'SESSION_STARTED',
+      limit: 1,
+    }).at(-1);
+    if (!started) appendSessionEvent(root, record, 'SESSION_STARTED', {}, associations);
+    if (record.state === 'running') return;
+  }
   const type = sessionStateEventType(record?.state);
   if (!type) return;
   const latest = readRuntimeEvents(root, { sessionId: record.id, limit: 1 }).at(-1);
@@ -517,8 +527,9 @@ export class ExecutionSessionManager {
 
     const deadline = Date.now() + 5_000;
     const healthyStabilityMs = 200;
+    const minimumHealthyProbes = 25;
     let healthySince = null;
-    let startupActivityObserved = false;
+    let healthyProbeCount = 0;
     let current = record;
     while (Date.now() < deadline) {
       try {
@@ -533,9 +544,6 @@ export class ExecutionSessionManager {
           base = latest;
         } catch { /* Keep the current validated startup record. */ }
         current = mergeRuntimeRecord(base, runtime);
-        startupActivityObserved ||= Number(runtime?.bufferedBytes || 0) > 0
-          || Number(runtime?.outputCursor || 0) > 0
-          || ['idle', 'busy'].includes(current.state);
         writeRecord(repository, current);
       } catch {
         // A short-lived Implementer may close its host before the next probe,
@@ -551,13 +559,24 @@ export class ExecutionSessionManager {
         } catch { /* Keep probing until the bounded startup deadline. */ }
       }
       if (!ACTIVE_STATES.has(current.state)) break;
-      if (current.state !== 'starting' && startupActivityObserved) {
+      if (HEALTHY_STARTUP_STATES.has(current.state)) {
         healthySince ??= Date.now();
-        if (Date.now() - healthySince >= healthyStabilityMs) break;
-      } else healthySince = null;
+        healthyProbeCount += 1;
+        // A scheduler stall can cross the wall-clock window between only two
+        // probes. Require several successful host round trips as well so an
+        // already-exited child can publish its terminal fact before STARTED.
+        if (healthyProbeCount >= minimumHealthyProbes && Date.now() - healthySince >= healthyStabilityMs) break;
+      } else {
+        healthySince = null;
+        healthyProbeCount = 0;
+      }
       await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
-    if (current.state !== 'starting') ensureSessionStateEvent(repository, current, { taskId });
+    if (HEALTHY_STARTUP_STATES.has(current.state)) {
+      appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId });
+    } else if (current.state !== 'starting') {
+      ensureSessionStateEvent(repository, current, { taskId });
+    }
     return { session: publicRecord(current), reused: false, initialInputConsumed: Boolean(launch.initialInputConsumed) };
   }
 

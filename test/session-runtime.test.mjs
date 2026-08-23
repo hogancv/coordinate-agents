@@ -48,17 +48,26 @@ function isolatedHome() {
   return home;
 }
 
-function persistentExecutable(root, name = 'agy-proxy', { crash = false } = {}) {
+function persistentExecutable(root, name = 'agy-proxy', { crash = false, silent = false } = {}) {
   const directory = join(root, 'tools with spaces');
   mkdirSync(directory, { recursive: true });
   const command = join(directory, name);
+  if (crash) {
+    if (process.platform === 'win32') {
+      const cmd = `${command}.cmd`;
+      writeFileSync(cmd, '@if "%~1"=="--version" (echo persistent-fixture 1.0.0& exit /b 0)\r\n@exit /b 9\r\n', 'utf8');
+      return cmd;
+    }
+    writeFileSync(command, '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo persistent-fixture 1.0.0\n  exit 0\nfi\nexit 9\n', 'utf8');
+    chmodSync(command, 0o755);
+    return command;
+  }
   const source = `const fs = require('node:fs');
 const cp = require('node:child_process');
 const args = process.argv.slice(2);
 if (args[0] === '--version') { console.log('persistent-fixture 1.0.0'); process.exit(0); }
 if (process.env.FIXTURE_STARTS) fs.appendFileSync(process.env.FIXTURE_STARTS, 'S');
-${crash ? "process.exit(9);" : ''}
-console.log('persistent-fixture-ready');
+${silent ? '' : "console.log('persistent-fixture-ready');"}
 let buffer = '';
 const completed = new Set();
 process.stdin.setEncoding('utf8');
@@ -156,6 +165,44 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.equal(eventTypes.filter(type => type === 'SESSION_CLOSED').length, 1);
     assert.equal((readFileSync(starts, 'utf8') || '').length, 1);
   } finally {
+    await removeTree(root);
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('silent healthy CLI starts promptly and records one ordered startup lifecycle', async () => {
+  const root = repository('coordinate-agents-session-silent-');
+  const home = isolatedHome();
+  const command = persistentExecutable(root, 'agy-silent', { silent: true });
+  process.env.FIXTURE_STARTS = join(root, 'starts.txt');
+  process.env.FIXTURE_DONE = join(root, 'done.txt');
+  process.env.FIXTURE_ROOT = root;
+  process.env.FIXTURE_AGENT = 'antigravity';
+  process.env.BUS_TOOL = busTool;
+  let sessionId = null;
+  try {
+    await configure(root, command);
+    const startedAt = Date.now();
+    const opened = await runtimeSessionOpen({ root, agent: 'antigravity' });
+    const elapsedMs = Date.now() - startedAt;
+    sessionId = opened.session.id;
+    assert.equal(opened.ok, true);
+    assert.equal(opened.reused, false);
+    assert.ok(['running', 'idle', 'busy'].includes(opened.session.state));
+    assert.ok(elapsedMs < 2_000, `silent session startup took ${elapsedMs}ms`);
+
+    const eventTypes = readRuntimeEvents(root, { sessionId, limit: 50 }).map(event => event.type);
+    assert.deepEqual(eventTypes.filter(type => ['SESSION_STARTING', 'SESSION_STARTED', 'SESSION_FAILED'].includes(type)), [
+      'SESSION_STARTING',
+      'SESSION_STARTED',
+    ]);
+
+    await runtimeSessionStatus({ root, sessionId });
+    await runtimeSessionRead({ root, sessionId, maxLines: 20, maxBytes: 4096 });
+    const afterRead = readRuntimeEvents(root, { sessionId, limit: 50 }).map(event => event.type);
+    assert.equal(afterRead.filter(type => type === 'SESSION_STARTED').length, 1);
+  } finally {
+    if (sessionId) await closeQuietly(root, sessionId);
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
   }

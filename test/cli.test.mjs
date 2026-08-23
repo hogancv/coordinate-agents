@@ -33,7 +33,10 @@ function fakeCliEnvironment(rootPath, names = ['codex', 'agy']) {
       chmodSync(path, 0o755);
     }
   }
-  return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
+  return {
+    PATH: `${bin}${delimiter}${process.env.PATH || ''}`,
+    COORDINATE_AGENTS_HOME: join(rootPath, '.test-coordinate-agents-home'),
+  };
 }
 
 function fakeAgentDoctorEnvironment(rootPath, names) {
@@ -63,6 +66,7 @@ function fakeAgentDoctorEnvironment(rootPath, names) {
     : '';
   return {
     PATH: [bin, gitDirectory, systemPath].filter(Boolean).join(delimiter),
+    COORDINATE_AGENTS_HOME: join(rootPath, '.test-coordinate-agents-home'),
   };
 }
 
@@ -130,7 +134,10 @@ process.exit(Number(process.env.AGENT_EXIT_CODE || 0));
     writeFileSync(executable, `#!${process.execPath}\n${source}`, 'utf8');
     chmodSync(executable, 0o755);
   }
-  return { PATH: `${bin}${delimiter}${process.env.PATH || ''}` };
+  return {
+    PATH: `${bin}${delimiter}${process.env.PATH || ''}`,
+    COORDINATE_AGENTS_HOME: join(rootPath, '.test-coordinate-agents-home'),
+  };
 }
 
 function busInvoke(args) {
@@ -168,19 +175,19 @@ test('prints English and Chinese help', () => {
   assert.match(zh.stdout, /快速|初始化项目/);
 });
 
-test('documents a 60-second path and three first-use task templates', () => {
+test('README landing pages keep plugin quick start concise and link to detailed workflows', () => {
   const english = readFileSync(join(root, 'README.md'), 'utf8');
   const chinese = readFileSync(join(root, 'README.zh-CN.md'), 'utf8');
   const templates = readFileSync(join(root, 'skills', 'coordinate-agents', 'references', 'task-templates.md'), 'utf8');
-  assert.match(english, /## 60-second quick start/);
-  assert.match(chinese, /## 60 秒快速开始/);
+  assert.match(english, /## Quick Start/);
+  assert.match(chinese, /## 快速开始/);
+  assert.match(english, /codex plugin add coordinate-agents@coordinate-agents/);
+  assert.match(chinese, /codex plugin add coordinate-agents@coordinate-agents/);
+  assert.match(english, /docs\/getting-started\.md/);
+  assert.match(chinese, /docs\/getting-started\.md/);
   for (const type of ['bug', 'feature', 'refactor']) {
-    assert.match(english, new RegExp(`--template ${type}`));
-    assert.match(chinese, new RegExp(`--template ${type}`));
     assert.ok(templates.includes('(`' + type + '`)'));
   }
-  assert.match(english, /No role prompt needs to be copied/);
-  assert.match(chinese, /不再需要手动复制或维护两段角色提示词/);
 });
 
 test('package.json provides canonical bin only', () => {
@@ -570,7 +577,10 @@ test('doctor prints a repair command for every missing component and skill', () 
   try {
     const result = invoke([
       'doctor', '--codex', '--codex-home', join(sandbox, 'codex'), '--lang', 'en',
-    ], { PATH: '' });
+    ], {
+      PATH: '',
+      COORDINATE_AGENTS_HOME: join(sandbox, '.test-coordinate-agents-home'),
+    });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Git: missing[\s\S]*Fix:/);
     assert.match(result.stderr, /Codex CLI: missing[\s\S]*Fix:/);
