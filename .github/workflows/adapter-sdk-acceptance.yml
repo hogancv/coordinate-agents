@@ -33,3 +33,40 @@ jobs:
         run: npm run demo
       - name: Verify package payload
         run: npm pack --dry-run
+
+  release-artifact:
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: Release artifact / Node 22
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.x'
+          package-manager-cache: false
+      - name: Install from lockfile
+        run: npm ci
+      - name: Verify exact tagged artifact
+        shell: bash
+        env:
+          GIT_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/coordinate-agents-artifact"
+          pack_json="$RUNNER_TEMP/coordinate-agents-pack.json"
+          mkdir -p "$artifact_dir"
+          npm pack --ignore-scripts --json --pack-destination "$artifact_dir" > "$pack_json"
+          artifact="$(PACK_JSON="$pack_json" ARTIFACT_DIR="$artifact_dir" node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            const [entry] = JSON.parse(readFileSync(process.env.PACK_JSON, "utf8"));
+            console.log(join(process.env.ARTIFACT_DIR, entry.filename));
+          ')"
+          version="$(node -p "require('./package.json').version")"
+          npm run release:verify -- "$artifact" \
+            --expected-version "$version" \
+            --expected-source-commit "$GIT_SHA" \
+            --expected-tag "$RELEASE_TAG"

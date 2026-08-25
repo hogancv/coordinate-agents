@@ -48,18 +48,32 @@ class VerificationError extends Error {
 }
 
 function usage() {
-  return 'Usage: node scripts/verify-release-artifact.mjs <package.tgz> [--expected-version <semver>]';
+  return 'Usage: node scripts/verify-release-artifact.mjs <package.tgz> --expected-version <semver> --expected-source-commit <commit> --expected-tag <tag>';
 }
 
 function parseArgs(argv) {
   let artifact = null;
   let expectedVersion = null;
+  let expectedSourceCommit = null;
+  let expectedTag = null;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--expected-version') {
       expectedVersion = argv[index + 1];
       if (!expectedVersion || expectedVersion.startsWith('-')) {
         throw new VerificationError(`Missing value for --expected-version. ${usage()}`);
+      }
+      index += 1;
+    } else if (value === '--expected-source-commit') {
+      expectedSourceCommit = argv[index + 1];
+      if (!expectedSourceCommit || expectedSourceCommit.startsWith('-')) {
+        throw new VerificationError(`Missing value for --expected-source-commit. ${usage()}`);
+      }
+      index += 1;
+    } else if (value === '--expected-tag') {
+      expectedTag = argv[index + 1];
+      if (!expectedTag || expectedTag.startsWith('-')) {
+        throw new VerificationError(`Missing value for --expected-tag. ${usage()}`);
       }
       index += 1;
     } else if (value.startsWith('-')) {
@@ -70,8 +84,15 @@ function parseArgs(argv) {
       throw new VerificationError(`Unexpected argument: ${value}. ${usage()}`);
     }
   }
-  if (!artifact) throw new VerificationError(usage());
-  return { artifact: resolve(artifact), expectedVersion };
+  if (!artifact || !expectedVersion || !expectedSourceCommit || !expectedTag) {
+    throw new VerificationError(usage());
+  }
+  return {
+    artifact: resolve(artifact),
+    expectedVersion,
+    expectedSourceCommit,
+    expectedTag,
+  };
 }
 
 function compact(value) {
@@ -175,6 +196,23 @@ function verifyIdentity(packageRoot, expectedVersion) {
   return { packageJson, pluginJson };
 }
 
+function verifyCandidateFacts(packageJson, expectedSourceCommit, expectedTag) {
+  if (!/^[0-9a-f]{40}$/i.test(expectedSourceCommit)) {
+    throw new VerificationError(`Expected source commit must be a full 40-character Git SHA: ${expectedSourceCommit}`);
+  }
+  if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(expectedTag)) {
+    throw new VerificationError(`Expected tag must be a stable version tag: ${expectedTag}`);
+  }
+  if (expectedTag !== `v${packageJson.version}`) {
+    throw new VerificationError(`Expected tag ${expectedTag} does not match package version ${packageJson.version}.`);
+  }
+  return {
+    sourceCommit: expectedSourceCommit,
+    tag: expectedTag,
+    version: packageJson.version,
+  };
+}
+
 function verifyPayload(packageRoot) {
   for (const file of REQUIRED_FILES) assertRegularFile(join(packageRoot, file), file);
   const llms = readFileSync(join(packageRoot, 'llms.txt'), 'utf8');
@@ -253,11 +291,17 @@ function extractArtifact(artifact, tempRoot) {
 }
 
 function main() {
-  const { artifact, expectedVersion } = parseArgs(process.argv.slice(2));
+  const {
+    artifact,
+    expectedVersion,
+    expectedSourceCommit,
+    expectedTag,
+  } = parseArgs(process.argv.slice(2));
   const tempRoot = mkdtempSync(join(tmpdir(), 'coordinate-agents-release-'));
   try {
     const packageRoot = extractArtifact(artifact, tempRoot);
     const identity = verifyIdentity(packageRoot, expectedVersion);
+    const candidate = verifyCandidateFacts(identity.packageJson, expectedSourceCommit, expectedTag);
     const payload = verifyPayload(packageRoot);
     const home = join(tempRoot, 'example-home');
     mkdirSync(home, { recursive: true });
@@ -267,6 +311,7 @@ function main() {
     console.log(JSON.stringify({
       ok: true,
       artifact,
+      candidate,
       package: {
         name: identity.packageJson.name,
         version: identity.packageJson.version,

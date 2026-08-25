@@ -15,6 +15,16 @@ function npmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';
 }
 
+function sourceCommit() {
+  const result = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
+}
+
 test('release candidate metadata and notes cover the Adapter SDK scope', () => {
   assert.equal(packageJson.version, '2.2.0');
   assert.equal(pluginJson.version, packageJson.version);
@@ -31,6 +41,8 @@ test('release candidate metadata and notes cover the Adapter SDK scope', () => {
     'Setup and MCP integration',
     'Minimal external Adapter example',
     'Windows/macOS/Linux and Node.js 18/22',
+    '--expected-source-commit',
+    '--expected-tag',
     'RELEASE_APPROVED',
     'PUBLISH',
   ]) assert.match(changelog, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -61,6 +73,8 @@ test('packed release artifact passes isolated payload, example, setup, and docto
 
     const verified = spawnSync(process.execPath, [
       verifier, artifact, '--expected-version', packageJson.version,
+      '--expected-source-commit', sourceCommit(),
+      '--expected-tag', `v${packageJson.version}`,
     ], {
       cwd: root,
       encoding: 'utf8',
@@ -69,6 +83,9 @@ test('packed release artifact passes isolated payload, example, setup, and docto
     assert.equal(verified.status, 0, verified.stderr || verified.stdout);
     const report = JSON.parse(verified.stdout);
     assert.equal(report.ok, true);
+    assert.equal(report.candidate.sourceCommit, sourceCommit());
+    assert.equal(report.candidate.tag, `v${packageJson.version}`);
+    assert.equal(report.candidate.version, packageJson.version);
     assert.equal(report.package.name, packageJson.name);
     assert.equal(report.package.version, packageJson.version);
     assert.equal(report.plugin.version, pluginJson.version);

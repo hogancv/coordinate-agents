@@ -46,6 +46,12 @@ uv run --with pyyaml python "$HOME/.codex/skills/.system/skill-creator/scripts/q
 uv run --with pyyaml python "$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py" .
 ```
 
-After creating the candidate tarball, `npm run release:verify -- <artifact>`
-checks package and Plugin identity, payload completeness, the offline external
-example, and the isolated Plugin/runtime discovery and doctor path.
+After creating the candidate tarball, run
+`npm run release:verify -- <artifact> --expected-version 2.2.0
+--expected-source-commit <candidate-commit> --expected-tag v2.2.0`. The verifier
+records the exact source commit, tag, package/Plugin identity, payload
+completeness, offline external example, and isolated Plugin/runtime discovery
+and doctor path.
+
+The manually gated npm workflow repeats this isolated verification from the
+exact `release_tag` before the OIDC trusted-publisher step.
