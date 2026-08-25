@@ -18,11 +18,11 @@ const completedTasks = new Set();
 function emit() {
   if (emitted) return;
   emitted = true;
-  process.stdout.write(`COORDINATE_MINIMAL_EXTERNAL_ADAPTER:${JSON.stringify({
+  process.stdout.write('COORDINATE_MINIMAL_EXTERNAL_ADAPTER:' + JSON.stringify({
     argv: process.argv.slice(2),
     cwd: process.cwd(),
     stdin,
-  })}\n`);
+  }) + '\n');
 }
 
 function completeTaskFromPrompt() {
@@ -35,10 +35,13 @@ function completeTaskFromPrompt() {
   const taskMatches = stdin.matchAll(/Task ID:\s*(task-[A-Za-z0-9_-]+)[\s\S]*?Round:\s*(\d+)/g);
   for (const match of taskMatches) {
     const [, taskId, round] = match;
-    const key = `${taskId}:${round}`;
+    const key = taskId + ':' + round;
     if (completedTasks.has(key)) continue;
     completedTasks.add(key);
-    const body = `Task ID: ${taskId}\nRound: ${round}\nimplementationCommit: minimalexternal1234\nMinimal external offline fixture completed.`;
+    const body = 'Task ID: ' + taskId
+      + '\nRound: ' + round
+      + '\nimplementationCommit: minimalexternal1234'
+      + '\nMinimal external offline fixture completed.';
     const result = spawnSync(process.execPath, [
       busTool,
       'send',
@@ -46,8 +49,8 @@ function completeTaskFromPrompt() {
       '--from', from,
       '--to', to,
       '--type', 'IMPLEMENTATION_DONE',
-      '--subject', `Minimal external fixture completed ${taskId}`,
-      '--dedupe-key', `task:${taskId}:round:${round}:implementation`,
+      '--subject', 'Minimal external fixture completed ' + taskId,
+      '--dedupe-key', 'task:' + taskId + ':round:' + round + ':implementation',
       '--related-commit', 'minimalexternal1234',
       '--body', body,
     ], { encoding: 'utf8', windowsHide: true });
