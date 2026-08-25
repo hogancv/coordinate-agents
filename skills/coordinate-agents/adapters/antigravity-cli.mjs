@@ -1,5 +1,6 @@
 import { AgentAdapter } from './base.mjs';
-import { checkExecutable, executableError, resolveExecutable } from './executable.mjs';
+import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
+import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
 
 export class AntigravityCliAdapter extends AgentAdapter {
   constructor(config = {}) {
@@ -9,12 +10,15 @@ export class AntigravityCliAdapter extends AgentAdapter {
 
   detect({ version = true } = {}) {
     const command = this.config.command || 'agy';
-    return checkExecutable(command, { versionArgs: version ? ['--version'] : null });
+    return checkAdapterExecutable(command, {
+      versionArgs: version ? ['--version'] : null,
+      conformanceFixture: this.config.conformanceFixture,
+    });
   }
 
   resolveLaunch({ prompt }) {
     const command = this.config.command || 'agy';
-    const resolved = resolveExecutable(command);
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot launch Antigravity safely');
     const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
     const args = [...configuredArgs, '--prompt-interactive', prompt];
@@ -27,7 +31,7 @@ export class AntigravityCliAdapter extends AgentAdapter {
 
   resolveSessionLaunch({ initialPrompt = '', agent, language }) {
     const command = this.config.command || 'agy';
-    const resolved = resolveExecutable(command);
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot open Antigravity session safely');
     const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
     const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
@@ -73,3 +77,19 @@ export class AntigravityCliAdapter extends AgentAdapter {
     };
   }
 }
+
+export const ANTIGRAVITY_CLI_ADAPTER_DESCRIPTOR = defineAdapter({
+  contractVersion: ADAPTER_CONTRACT_VERSION,
+  id: 'antigravity-cli',
+  capabilities: {
+    detection: true,
+    configuration: true,
+    oneShotLaunch: true,
+    persistentSession: true,
+  },
+  create(config) {
+    return new AntigravityCliAdapter(config);
+  },
+}, { allowReserved: true });
+
+AntigravityCliAdapter.descriptor = ANTIGRAVITY_CLI_ADAPTER_DESCRIPTOR;

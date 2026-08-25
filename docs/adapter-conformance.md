@@ -37,6 +37,12 @@ metacharacters. Launch plans are executed only when their command, prefix, and
 cwd point at that generated fixture; an arbitrary command is rejected before
 spawn.
 
+The three repository-owned adapters expose the same descriptors and are checked
+by the same runner: `CODEX_CLI_ADAPTER_DESCRIPTOR`,
+`ANTIGRAVITY_CLI_ADAPTER_DESCRIPTOR`, and `GENERIC_CLI_ADAPTER_DESCRIPTOR`.
+Built-in IDs are reserved, so maintainer conformance calls opt into
+`allowReserved: true`; third-party adapters must use a new ID.
+
 ```js
 const descriptor = defineAdapter({
   contractVersion: ADAPTER_CONTRACT_VERSION,
@@ -105,6 +111,11 @@ shape checks without spawning; the default is to execute both declared launch
 plans against the fake process. Temporary roots are removed in a `finally`
 path. For local debugging or custom harnesses, callers may use
 `createConformanceFixture()` directly and must call its `cleanup()` method.
+
+The built-in registry creates its three adapters through their validated
+Contract v1 descriptors. Runtime code reads the frozen descriptor capabilities
+when it chooses persistent-session behavior; the legacy `capabilities()` method
+remains available for compatibility metadata.
 
 ## What is proved
 

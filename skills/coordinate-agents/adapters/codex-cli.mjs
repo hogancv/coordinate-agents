@@ -1,6 +1,7 @@
 import { dirname, join, resolve } from 'node:path';
 import { AgentAdapter } from './base.mjs';
-import { checkExecutable, executableError, resolveExecutable } from './executable.mjs';
+import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
+import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
 
 function codexWindowsEntrypoint(path) {
   return join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
@@ -14,15 +15,19 @@ export class CodexCliAdapter extends AgentAdapter {
 
   detect({ version = true } = {}) {
     const command = this.config.command || 'codex';
-    return checkExecutable(command, {
+    return checkAdapterExecutable(command, {
       versionArgs: version ? ['--version'] : null,
       windowsEntrypoint: codexWindowsEntrypoint,
+      conformanceFixture: this.config.conformanceFixture,
     });
   }
 
   resolveLaunch({ root, prompt }) {
     const command = this.config.command || 'codex';
-    const resolved = resolveExecutable(command, { windowsEntrypoint: codexWindowsEntrypoint });
+    const resolved = resolveAdapterExecutable(command, {
+      windowsEntrypoint: codexWindowsEntrypoint,
+      conformanceFixture: this.config.conformanceFixture,
+    });
     if (!resolved.available) throw executableError(resolved, 'Cannot launch Codex safely');
     const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
     const args = [...configuredArgs, '-C', resolve(root), prompt];
@@ -35,7 +40,10 @@ export class CodexCliAdapter extends AgentAdapter {
 
   resolveSessionLaunch({ root, initialPrompt = '' }) {
     const command = this.config.command || 'codex';
-    const resolved = resolveExecutable(command, { windowsEntrypoint: codexWindowsEntrypoint });
+    const resolved = resolveAdapterExecutable(command, {
+      windowsEntrypoint: codexWindowsEntrypoint,
+      conformanceFixture: this.config.conformanceFixture,
+    });
     if (!resolved.available) throw executableError(resolved, 'Cannot open Codex session safely');
     const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
     const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
@@ -61,3 +69,19 @@ export class CodexCliAdapter extends AgentAdapter {
     };
   }
 }
+
+export const CODEX_CLI_ADAPTER_DESCRIPTOR = defineAdapter({
+  contractVersion: ADAPTER_CONTRACT_VERSION,
+  id: 'codex-cli',
+  capabilities: {
+    detection: true,
+    configuration: true,
+    oneShotLaunch: true,
+    persistentSession: true,
+  },
+  create(config) {
+    return new CodexCliAdapter(config);
+  },
+}, { allowReserved: true });
+
+CodexCliAdapter.descriptor = CODEX_CLI_ADAPTER_DESCRIPTOR;

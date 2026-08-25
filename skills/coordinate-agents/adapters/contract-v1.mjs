@@ -30,6 +30,7 @@ const CAPABILITY_KEY_SET = new Set(ADAPTER_CAPABILITY_KEYS);
 const DESCRIPTOR_KEY_SET = new Set(['contractVersion', 'id', 'capabilities', 'create']);
 const ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const LAUNCH_POLICY_MODES = new Set(['one-shot', 'bus-supervised']);
+const INSTANCE_CONTRACTS = new WeakMap();
 
 export class AdapterContractError extends Error {
   constructor(code, message, details = {}) {
@@ -178,6 +179,10 @@ export function validateAdapterInstance(descriptor, instance, options = {}) {
   return instance;
 }
 
+export function getAdapterContract(instance) {
+  return INSTANCE_CONTRACTS.get(instance) || null;
+}
+
 export function createAdapter(descriptor, config = {}, options = {}) {
   const validated = validateAdapterDescriptor(descriptor, options);
   let instance;
@@ -190,7 +195,17 @@ export function createAdapter(descriptor, config = {}, options = {}) {
       adapterId: validated.id,
     });
   }
-  return validateAdapterInstance(validated, instance, { allowReserved: true });
+  const checked = validateAdapterInstance(validated, instance, { allowReserved: true });
+  INSTANCE_CONTRACTS.set(checked, validated);
+  if (Object.isExtensible(checked) && !Object.prototype.hasOwnProperty.call(checked, 'contract')) {
+    Object.defineProperty(checked, 'contract', {
+      value: validated,
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
+  }
+  return checked;
 }
 
 export function validateDetectionResult(result) {

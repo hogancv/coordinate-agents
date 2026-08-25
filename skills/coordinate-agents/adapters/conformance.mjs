@@ -396,7 +396,10 @@ export function runAdapterConformance(input, options = {}) {
 
     let validated;
     try {
-      validated = validateAdapterDescriptor(descriptor, { registeredIds: options.registeredIds });
+      validated = validateAdapterDescriptor(descriptor, {
+        registeredIds: options.registeredIds,
+        allowReserved: options.allowReserved === true,
+      });
       report.adapterId = validated.id;
       pass(report, 'descriptor');
       recordObservation(report, 'capabilities', validated.capabilities);
@@ -439,7 +442,10 @@ export function runAdapterConformance(input, options = {}) {
 
     let instance;
     try {
-      instance = createAdapter(validated, config, { registeredIds: options.registeredIds });
+      instance = createAdapter(validated, config, {
+        registeredIds: options.registeredIds,
+        allowReserved: options.allowReserved === true,
+      });
       pass(report, 'instance');
     } catch (error) {
       addFailure(report, 'instance', error, fixture);

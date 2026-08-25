@@ -103,6 +103,8 @@ The package and Plugin payload expose the versioned validation boundary at `adap
 
 The public [Adapter Conformance Kit](./docs/adapter-conformance.md) runs the same Contract v1 checks against deterministic fake executables in isolated temporary roots, including paths with spaces and shell metacharacters. It returns bounded CI diagnostics and never contacts a provider or mutates user configuration. This expand step does not load third-party modules into the runtime registry. Future local adapter modules must be explicitly selected and treated as trusted code; contract validation is not a malicious-JavaScript sandbox. See the bundled [Adapter Contract v1 reference](./skills/coordinate-agents/references/adapter-contract-v1.md).
 
+The built-in Codex CLI, Antigravity CLI, and generic CLI adapters are created through validated Contract v1 descriptors and pass this same conformance runner. Runtime session decisions use the frozen descriptor capabilities, while the legacy adapter metadata methods remain compatible.
+
 ## Local Inspector
 
 Start the read-only local Inspector from a repository with an initialized Agent Bus:

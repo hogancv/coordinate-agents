@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { AgentAdapter } from './base.mjs';
-import { checkExecutable, executableError, resolveExecutable } from './executable.mjs';
+import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
+import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
 
 export class GenericCliAdapter extends AgentAdapter {
   constructor(config = {}) {
@@ -14,13 +15,16 @@ export class GenericCliAdapter extends AgentAdapter {
     const versionArgs = Array.isArray(this.config.versionArgs) && this.config.versionArgs.length > 0
       ? this.config.versionArgs
       : ['--version'];
-    return checkExecutable(command, { versionArgs: version ? versionArgs : null });
+    return checkAdapterExecutable(command, {
+      versionArgs: version ? versionArgs : null,
+      conformanceFixture: this.config.conformanceFixture,
+    });
   }
 
   resolveLaunch({ root, prompt, agent, language }) {
     const command = this.config.command;
     if (!command) throw new Error('Cannot launch generic CLI without configured command');
-    const resolved = resolveExecutable(command);
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot launch generic CLI safely');
     const templateArgs = Array.isArray(this.config.args) && this.config.args.length > 0
       ? this.config.args
@@ -52,7 +56,7 @@ export class GenericCliAdapter extends AgentAdapter {
   resolveSessionLaunch({ root, initialPrompt = '', agent, language }) {
     const command = this.config.command;
     if (!command) throw new Error('Cannot open generic CLI session without configured command');
-    const resolved = resolveExecutable(command);
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot open generic CLI session safely');
     const templateArgs = Array.isArray(this.config.args) && this.config.args.length > 0
       ? this.config.args
@@ -81,9 +85,12 @@ export class GenericCliAdapter extends AgentAdapter {
     };
   }
 
-  validateConfiguration({ setup = false } = {}) {
+  validateConfiguration({ setup = false, conformanceFixture = null } = {}) {
     if (!setup) return { compatible: true, code: null, details: null };
     const args = this.config.args;
+    if (conformanceFixture && (!Array.isArray(args) || args.length === 0)) {
+      return { compatible: true, code: null, details: null };
+    }
     if (!Array.isArray(args) || args.length === 0) {
       return {
         compatible: false,
@@ -103,3 +110,19 @@ export class GenericCliAdapter extends AgentAdapter {
     };
   }
 }
+
+export const GENERIC_CLI_ADAPTER_DESCRIPTOR = defineAdapter({
+  contractVersion: ADAPTER_CONTRACT_VERSION,
+  id: 'generic-cli',
+  capabilities: {
+    detection: true,
+    configuration: true,
+    oneShotLaunch: true,
+    persistentSession: true,
+  },
+  create(config) {
+    return new GenericCliAdapter(config);
+  },
+}, { allowReserved: true });
+
+GenericCliAdapter.descriptor = GENERIC_CLI_ADAPTER_DESCRIPTOR;

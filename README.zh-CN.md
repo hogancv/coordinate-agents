@@ -103,6 +103,8 @@ npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边�
 
 公开的 [Adapter Conformance Kit](./docs/adapter-conformance.md) 会在隔离临时根目录中的确定性 fake executable 上运行同一套 Contract v1 检查，覆盖包含空格和 shell 元字符的路径，并返回有界、适合 CI 的诊断；它不会连接 Provider，也不会修改用户配置。当前 expand 步骤不会把第三方模块加载进 Runtime registry。未来的本地适配器模块必须经过显式选择，并被视为可信代码；契约验证不是针对恶意 JavaScript 的沙箱。详见随包提供的 [Adapter Contract v1 参考](./skills/coordinate-agents/references/adapter-contract-v1.md)。
 
+内置的 Codex CLI、Antigravity CLI 和 generic CLI 适配器现在都通过经过验证的 Contract v1 descriptor 创建，并运行同一套 conformance runner。Runtime 的 Session 决策使用冻结的 descriptor capabilities，同时保留旧版适配器 metadata 方法的兼容性。
+
 ## 本地 Inspector
 
 在已初始化 Agent Bus 的仓库中启动只读本地 Inspector：

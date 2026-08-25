@@ -172,7 +172,8 @@ a path containing spaces and runs with an empty executable `PATH`. It verifies:
 The same fixture covers Windows `.cmd` wrappers and POSIX executable wrappers
 according to the host platform. No MCP server, lifecycle Hook, Autopilot,
 parallel Implementer, external daemon, database, Codex Terminal UI automation,
-or third-party adapter loading is needed for this closure. The public Adapter
-Contract v1 is an expand-only validation surface at `adapter-sdk.mjs`; it does
-not yet change this registry or Runtime behavior. The Runtime-owned Session Host
-exists only after an explicit Task/Session operation.
+or third-party adapter loading is needed for this closure. The three built-in
+adapters are created through their public Contract v1 descriptors and pass the
+same deterministic conformance runner used by external adapters. The Runtime
+continues to own executable, process, Session, Task, and release behavior; the
+Session Host exists only after an explicit Task/Session operation.

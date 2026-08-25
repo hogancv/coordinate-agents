@@ -21,7 +21,8 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { getAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
+import { getAdapter, getAdapterContract } from '../skills/coordinate-agents/adapters/index.mjs';
+import { validateDetectionResult, validateLaunchPolicy, validateLaunchResult } from '../skills/coordinate-agents/adapters/contract-v1.mjs';
 import { redactOutput } from '../skills/coordinate-agents/adapters/executable.mjs';
 import { observeAgentBus, waitForAgentActivity } from '../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { discoverCodingClis, setupSnapshot } from '../skills/coordinate-agents/scripts/discovery.mjs';
@@ -2173,11 +2174,13 @@ async function launchAgent(options, t) {
   let resolution = null;
   let agentConfig = projectAgentConfig;
   let adapter = null;
+  let adapterContract = null;
   try {
     const userConfig = readUserConfig();
     resolution = runtimeAgentConfig(projectAgentConfig, userConfig);
     agentConfig = resolution;
     adapter = getAdapter(resolution.adapter, resolution);
+    adapterContract = getAdapterContract(adapter);
   } catch (error) {
     const failure = launchFailure({
       message: compactErrorDetails(error),
@@ -2207,7 +2210,19 @@ async function launchAgent(options, t) {
     throw reportError;
   }
 
-  const policy = adapter.launchPolicy();
+  if (adapterContract && !adapterContract.capabilities.oneShotLaunch) {
+    const error = runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${adapterContract.id}" does not support one-shot launches.`, {
+      recoverable: false,
+      adapter: adapterContract.id,
+      agent: agentId,
+      taskId: associatedTaskId,
+    });
+    markAssociatedTaskError(error);
+    throw error;
+  }
+  const policy = adapterContract
+    ? validateLaunchPolicy(adapter.launchPolicy())
+    : adapter.launchPolicy();
   if (!policy || !['one-shot', 'bus-supervised'].includes(policy.mode)) {
     const error = runtimeError('INVALID_ADAPTER_CONFIG', `Adapter "${agentConfig.adapter}" returned an invalid launch policy.`, { recoverable: false, adapter: agentConfig.adapter, taskId: associatedTaskId });
     markAssociatedTaskError(error);
@@ -2252,7 +2267,9 @@ async function launchAgent(options, t) {
     // not run a vendor-specific auth/model probe or a version command; a CLI
     // that starts but fails during conversation must reach the runtime
     // fail-fast path below.
-    const detection = adapter.detect({ version: false });
+    const detection = adapterContract
+      ? validateDetectionResult(adapter.detect({ version: false }))
+      : adapter.detect({ version: false });
     if (!detection.available) {
       throw launchFailure({
         message: detection.details || `Command '${resolution.command || ''}' is unavailable.`,
@@ -2270,13 +2287,14 @@ async function launchAgent(options, t) {
       const activationPrompt = activation === 0
         ? prompt
         : adapter.resumePrompt({ agentId, root, activation });
-      const resolved = adapter.resolveLaunch({
+      let resolved = adapter.resolveLaunch({
         root,
         prompt: activationPrompt,
         agent: agentId,
         language: options.language,
         activation,
       });
+      if (adapterContract) resolved = validateLaunchResult(resolved);
       let result;
       try {
         result = await runLaunchChild(resolved, root, setActiveChild, { json: options.json, timeoutMs: options.timeoutMs });

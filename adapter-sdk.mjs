@@ -13,6 +13,7 @@ export {
   AdapterContractError,
   createAdapter,
   defineAdapter,
+  getAdapterContract,
   validateAdapterCapabilities,
   validateAdapterDescriptor,
   validateAdapterIdentity,
@@ -33,3 +34,10 @@ export {
   createConformanceFixture,
   runAdapterConformance,
 } from './skills/coordinate-agents/adapters/conformance.mjs';
+
+export {
+  ANTIGRAVITY_CLI_ADAPTER_DESCRIPTOR,
+  BUILTIN_ADAPTER_DESCRIPTORS,
+  CODEX_CLI_ADAPTER_DESCRIPTOR,
+  GENERIC_CLI_ADAPTER_DESCRIPTOR,
+} from './skills/coordinate-agents/adapters/index.mjs';

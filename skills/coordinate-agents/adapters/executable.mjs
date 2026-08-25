@@ -234,6 +234,56 @@ export function resolveExecutable(command, options = {}) {
   return { ...posixEntrypoint(command, candidate), commandInput: command };
 }
 
+function conformanceExecutable(command, fixture) {
+  if (!fixture
+    || command !== process.execPath
+    || fixture.command !== process.execPath
+    || typeof fixture.script !== 'string'
+    || !Array.isArray(fixture.prefix)
+    || fixture.prefix.length !== 1
+    || fixture.prefix[0] !== fixture.script
+    || !existsSync(fixture.script)) {
+    return null;
+  }
+  return {
+    available: true,
+    command: process.execPath,
+    prefix: [...fixture.prefix],
+    resolvedCommand: process.execPath,
+    safe: true,
+    conformanceFixture: true,
+  };
+}
+
+/**
+ * Resolve a configured executable, with an explicit deterministic fixture
+ * escape hatch used only by the public Adapter Conformance Kit. Normal
+ * runtime callers always use the regular executable resolver.
+ */
+export function resolveAdapterExecutable(command, options = {}) {
+  const fixture = conformanceExecutable(command, options.conformanceFixture);
+  if (fixture) return { ...fixture, commandInput: command };
+  const { conformanceFixture: _ignored, ...resolveOptions } = options;
+  return resolveExecutable(command, resolveOptions);
+}
+
+/**
+ * Check a configured executable while preserving the same fixture boundary as
+ * resolveAdapterExecutable().
+ */
+export function checkAdapterExecutable(command, options = {}) {
+  const fixture = conformanceExecutable(command, options.conformanceFixture);
+  if (fixture) {
+    return {
+      ...fixture,
+      command,
+      version: 'fixture-1.0.0',
+    };
+  }
+  const { conformanceFixture: _ignored, ...checkOptions } = options;
+  return checkExecutable(command, checkOptions);
+}
+
 function executeVersion(resolved, versionArgs) {
   try {
     return {

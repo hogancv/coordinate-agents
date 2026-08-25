@@ -21,7 +21,8 @@ import {
   safeInternalStat,
 } from './config.mjs';
 import { readUserConfig, resolveAgentConfig } from './user-config.mjs';
-import { getAdapter } from '../adapters/index.mjs';
+import { getAdapter, getAdapterContract } from '../adapters/index.mjs';
+import { validateLaunchResult } from '../adapters/contract-v1.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
 import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
@@ -375,6 +376,21 @@ async function syncHostRecord(root, record) {
 }
 
 function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en' }) {
+  const contract = getAdapterContract(adapter);
+  if (contract) {
+    if (!contract.capabilities.persistentSession) {
+      throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${contract.id}" does not support persistent sessions.`, {
+        recoverable: false,
+        adapter: contract.id,
+        root,
+        agent,
+      });
+    }
+    return validateLaunchResult(
+      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language }),
+      { kind: 'persistent-session' },
+    );
+  }
   if (typeof adapter.resolveSessionLaunch === 'function') {
     return adapter.resolveSessionLaunch({ root, agent, initialPrompt, language });
   }

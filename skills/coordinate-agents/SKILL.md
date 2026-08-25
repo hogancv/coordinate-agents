@@ -102,4 +102,7 @@ Adapter authors must use the public `adapter-sdk.mjs` entry and the frozen
 Contract v1 boundary documented in `references/adapter-contract-v1.md`. Run
 the public Adapter Conformance Kit documented in `../../docs/adapter-conformance.md`
 against deterministic fixtures before proposing an adapter; the current expand
-step does not authorize loading arbitrary modules into the runtime registry.
+step does not authorize loading arbitrary modules into the runtime registry. The
+repository-owned Codex CLI, Antigravity CLI, and generic CLI adapters are
+created through validated Contract v1 descriptors and are covered by the same
+conformance suite.
