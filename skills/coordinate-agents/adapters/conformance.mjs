@@ -1,5 +1,5 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -32,6 +32,24 @@ const MAX_DIAGNOSTIC_LENGTH = 512;
 const MAX_DIAGNOSTICS = 32;
 const DEFAULT_TIMEOUT_MS = 2_000;
 const DESCRIPTOR_KEYS = new Set(['contractVersion', 'id', 'capabilities', 'create']);
+
+function runFile(command, args, options) {
+  try {
+    return {
+      status: 0,
+      stdout: execFileSync(command, args, options),
+      stderr: '',
+      error: null,
+    };
+  } catch (error) {
+    return {
+      status: Number.isInteger(error?.status) ? error.status : null,
+      stdout: error?.stdout ?? '',
+      stderr: error?.stderr ?? '',
+      error,
+    };
+  }
+}
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -164,7 +182,7 @@ export function createConformanceFixture({ prompt = DEFAULT_CONFORMANCE_PROMPT }
   const script = join(tempRoot, 'fake adapter with spaces & [fixture].mjs');
   try {
     mkdirSync(root, { recursive: true });
-    const init = spawnSync('git', ['init', '--quiet', root], {
+    const init = runFile('git', ['init', '--quiet', root], {
       cwd: tempRoot,
       encoding: 'utf8',
       shell: false,
@@ -198,7 +216,7 @@ export function createConformanceFixture({ prompt = DEFAULT_CONFORMANCE_PROMPT }
     public: publicFixture,
     spawn(plan, { input = '', timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
       spawned += 1;
-      return spawnSync(plan.command, [...plan.prefix, ...plan.args], {
+      return runFile(plan.command, [...plan.prefix, ...plan.args], {
         cwd: plan.cwd || root,
         env: { ...process.env },
         encoding: 'utf8',
