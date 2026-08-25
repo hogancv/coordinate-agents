@@ -101,7 +101,7 @@ Project command configuration takes precedence over user configuration, which ta
 
 The package and Plugin payload expose the versioned validation boundary at `adapter-sdk.mjs`; npm consumers import `@hogancv/coordinate-agents/adapter-sdk.mjs`. Contract v1 covers adapter identity, capabilities, detection, configuration compatibility, argument-array launch plans, persistent-session initial input, and launch policy. The Runtime continues to own executable/path validation, process and Session lifecycle, bounded output, durable state, review, and release gates.
 
-This expand step does not load third-party modules into the runtime registry. Future local adapter modules must be explicitly selected and treated as trusted code; contract validation is not a malicious-JavaScript sandbox. See the bundled [Adapter Contract v1 reference](./skills/coordinate-agents/references/adapter-contract-v1.md).
+The public [Adapter Conformance Kit](./docs/adapter-conformance.md) runs the same Contract v1 checks against deterministic fake executables in isolated temporary roots, including paths with spaces and shell metacharacters. It returns bounded CI diagnostics and never contacts a provider or mutates user configuration. This expand step does not load third-party modules into the runtime registry. Future local adapter modules must be explicitly selected and treated as trusted code; contract validation is not a malicious-JavaScript sandbox. See the bundled [Adapter Contract v1 reference](./skills/coordinate-agents/references/adapter-contract-v1.md).
 
 ## Local Inspector
 

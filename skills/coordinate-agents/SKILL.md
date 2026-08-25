@@ -99,6 +99,7 @@ inspection, the canonical runtime remains `scripts/agent-bus.mjs` and
 `scripts/agent-observer.mjs`; do not hand-edit queue files.
 
 Adapter authors must use the public `adapter-sdk.mjs` entry and the frozen
-Contract v1 boundary documented in `references/adapter-contract-v1.md`; the
-current expand step does not authorize loading arbitrary modules into the
-runtime registry.
+Contract v1 boundary documented in `references/adapter-contract-v1.md`. Run
+the public Adapter Conformance Kit documented in `../../docs/adapter-conformance.md`
+against deterministic fixtures before proposing an adapter; the current expand
+step does not authorize loading arbitrary modules into the runtime registry.

@@ -28,6 +28,7 @@
     "SECURITY.md",
     "llms.txt",
     "docs/llms.txt",
+    "docs/adapter-conformance.md",
     "docs/mcp.md",
     "docs/MCP_TROUBLESHOOTING.md",
     "docs/inspector.md",

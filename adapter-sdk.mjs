@@ -22,3 +22,14 @@ export {
   validateLaunchPolicy,
   validateLaunchResult,
 } from './skills/coordinate-agents/adapters/contract-v1.mjs';
+
+export {
+  ADAPTER_CONFORMANCE_ERROR_CODES,
+  ADAPTER_CONFORMANCE_KIT_VERSION,
+  AdapterConformanceError,
+  CONFORMANCE_FIXTURE_MARKER,
+  DEFAULT_CONFORMANCE_PROMPT,
+  assertAdapterConformance,
+  createConformanceFixture,
+  runAdapterConformance,
+} from './skills/coordinate-agents/adapters/conformance.mjs';

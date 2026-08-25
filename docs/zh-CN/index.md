@@ -50,6 +50,7 @@ Session 工具只提供有界的状态、读写、输出和关闭操作，不会
 - [完整简体中文 README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)
 - [AI 安装指南](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md)
 - [安全说明](../security.html)
+- [Adapter Conformance Kit（英文）](../adapter-conformance.html)
 - [本地 Inspector Web UI（英文）](../inspector.html)
 - [常见问题](../faq.html)
 
