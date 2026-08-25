@@ -91,12 +91,25 @@ export function atomicWrite(destination, content, tempDirectory) {
   const temp = join(tempDirectory, `.tmp-${process.pid}-${randomUUID().replaceAll('-', '')}`);
   writeFileSync(temp, content, { encoding: 'utf8', flag: 'wx' });
   syncFile(temp);
-  try {
-    renameSync(temp, destination);
-  } catch (error) {
-    rmSync(temp, { force: true });
-    throw error;
+  let renameError = null;
+  const attempts = process.platform === 'win32' ? 12 : 1;
+  const waitBuffer = new Int32Array(new SharedArrayBuffer(4));
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      renameSync(temp, destination);
+      return;
+    } catch (error) {
+      renameError = error;
+      if (!['EACCES', 'EBUSY', 'EPERM'].includes(error?.code) || attempt === attempts - 1) break;
+      Atomics.wait(waitBuffer, 0, 0, 25 * (attempt + 1));
+    }
   }
+  try {
+    rmSync(temp, { force: true });
+  } catch (error) {
+    if (!renameError) renameError = error;
+  }
+  throw renameError;
 }
 
 export function validateConfig(config) {

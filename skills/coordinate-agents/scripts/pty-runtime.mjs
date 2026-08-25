@@ -27,9 +27,36 @@ function nativePtyAvailable() {
   // unreliable there across the supported operating systems. A native
   // failure can terminate the detached Session Host before it can publish a
   // useful error, so select the owned stdio backend up front on Node 18.
+  // Windows Node 22 has the same detached-host failure mode in ConPTY; use
+  // the owned pipe backend until that native combination is stable.
   return Boolean(nodePty?.spawn)
     && Number.isInteger(currentNodeMajor)
-    && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR;
+    && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR
+    && !(process.platform === 'win32' && currentNodeMajor >= 22);
+}
+
+function terminateOwnedProcessTree(pid) {
+  if (process.platform !== 'win32' || !Number.isInteger(pid) || pid <= 0) return Promise.resolve();
+  return new Promise(resolve => {
+    let settled = false;
+    let timer;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve();
+    };
+    const killer = spawnChild('taskkill.exe', ['/PID', `${pid}`, '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.once('error', finish);
+    killer.once('close', finish);
+    timer = setTimeout(() => {
+      try { killer.kill(); } catch { /* The cleanup helper may already be gone. */ }
+      finish();
+    }, 1_500);
+  });
 }
 
 function ensureUnixSpawnHelper() {
@@ -356,10 +383,15 @@ export class PtyRuntime {
     ]);
     if (timer) clearTimeout(timer);
     if (this.isActive()) {
+      const ownedPid = this.pid;
       try {
         if (this.pty) this.pty.kill();
         else this.child.kill();
       } catch { /* The owned process may already be gone. */ }
+      // node-pty can own a console process tree rather than the executable
+      // directly. The pipe backend owns the direct ChildProcess and must not
+      // block close on a second Windows taskkill invocation.
+      if (this.pty) await terminateOwnedProcessTree(ownedPid);
       await Promise.race([
         this.exitPromise,
         new Promise(resolve => setTimeout(resolve, Math.min(2_000, waitMs))),
