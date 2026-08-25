@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -36,7 +36,7 @@ test('minimal external Adapter uses only the public SDK and passes offline confo
 });
 
 test('minimal external Adapter follows explicit registration and persistent Session flow', () => {
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-example-child-home-'));
+  const home = mkdtempSync(join(realpathSync(tmpdir()), 'coordinate-agents-example-child-home-'));
   try {
     const result = spawnSync(process.execPath, [registrationChild], {
       cwd: process.cwd(),

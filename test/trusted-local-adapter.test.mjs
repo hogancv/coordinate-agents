@@ -42,9 +42,10 @@ import {
 import { readUserConfig, userConfigPath } from '../skills/coordinate-agents/scripts/user-config.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
+const canonicalTmpdir = realpathSync(tmpdir());
 
 function repository(prefix = 'coordinate-agents-trusted-local-') {
-  const root = mkdtempSync(join(tmpdir(), prefix));
+  const root = mkdtempSync(join(canonicalTmpdir, prefix));
   const git = spawnSync('git', ['init', root], { encoding: 'utf8', windowsHide: true });
   assert.equal(git.status, 0, git.stderr || git.stdout);
   const init = spawnSync(process.execPath, [busTool, 'init', '--root', root], { encoding: 'utf8', windowsHide: true });
@@ -53,7 +54,7 @@ function repository(prefix = 'coordinate-agents-trusted-local-') {
 }
 
 function isolatedHome() {
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-trusted-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-trusted-home-'));
   const previous = {
     coordinate: process.env.COORDINATE_AGENTS_HOME,
     home: process.env.HOME,

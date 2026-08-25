@@ -47,6 +47,10 @@ function boundedInteger(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGE
   return Math.min(max, Math.max(min, value));
 }
 
+function requiresWindowsShell(command) {
+  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(`${command}`);
+}
+
 class OutputBuffer {
   constructor(maxBytes) {
     this.maxBytes = boundedInteger(maxBytes, 64 * 1024, { min: 1024, max: 4 * 1024 * 1024 });
@@ -201,19 +205,32 @@ export class PtyRuntime {
         TERM: this.env.TERM || 'xterm-256color',
       };
       if (nodePty?.spawn) {
-        this.pty = nodePty.spawn(this.command, this.args, {
-          name: 'xterm-256color',
-          cols: this.cols,
-          rows: this.rows,
-          cwd: this.cwd,
-          env,
-          useConpty: true,
-        });
-      } else {
+        try {
+          this.pty = nodePty.spawn(this.command, this.args, {
+            name: 'xterm-256color',
+            cols: this.cols,
+            rows: this.rows,
+            cwd: this.cwd,
+            env,
+            useConpty: true,
+          });
+        } catch {
+          // Native PTY loading can fail on an otherwise supported runtime
+          // (notably when a platform/Node combination has no usable native
+          // prebuild). Keep the owned Session contract by falling back to
+          // pipes instead of publishing a dead session. The fallback still
+          // uses the exact validated command and arguments.
+          this.backend = 'stdio-fallback';
+          this.pty = null;
+        }
+      }
+      if (!this.pty) {
+        const shell = requiresWindowsShell(this.command);
         this.child = spawnChild(this.command, this.args, {
           cwd: this.cwd,
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
+          shell,
           windowsHide: false,
         });
       }

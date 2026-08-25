@@ -105,7 +105,8 @@ conversation. No command is assembled as a shell string.
   process-scoped named pipe. Endpoints are derived from the root and Session
   ID, never accepted from the caller as an arbitrary path.
 - `node-pty` is the preferred PTY backend. A Plugin checkout without installed
-  package dependencies may use the same bounded Session protocol over owned
+  package dependencies, or a platform/Node combination where the native PTY
+  cannot initialize, may use the same bounded Session protocol over owned
   stdio pipes as a degraded compatibility backend; it never broadens process
   ownership or shell access.
 - Ctrl+C is sent through the PTY when available. Forced termination is bounded

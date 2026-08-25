@@ -68,7 +68,8 @@ as arrays, so Windows paths with spaces, `.cmd` wrappers, PowerShell entry
 points, Unicode, and ANSI output are handled without shell-string assembly.
 
 `node-pty` is preferred. A direct Plugin checkout without installed package
-dependencies may use the same owned Session protocol over bounded stdio pipes
+dependencies, or a platform/Node combination where the native PTY cannot
+initialize, may use the same owned Session protocol over bounded stdio pipes
 as a degraded compatibility backend. In either mode, the Session Host can
 interrupt or terminate only the process it created. Metadata excludes
 environment variables, output is bounded/redacted, roots are validated, and

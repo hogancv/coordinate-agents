@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -22,9 +23,10 @@ const cli = join(root, 'bin', 'coordinate-agents.mjs');
 const serverPath = join(root, 'mcp', 'server.mjs');
 const selfTestPath = join(root, 'mcp', 'self-test.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
+const canonicalTmpdir = realpathSync(tmpdir());
 
 function tempRepository(prefix = 'coordinate-agents-mcp-') {
-  const repository = mkdtempSync(join(tmpdir(), prefix));
+  const repository = mkdtempSync(join(canonicalTmpdir, prefix));
   const init = spawnSync('git', ['init', repository], { encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr || init.stdout);
   return repository;
@@ -267,7 +269,7 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
 });
 
 test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and path-safe', async () => {
-  const independentCwd = mkdtempSync(join(tmpdir(), 'Coordinate Agents MCP cwd '));
+  const independentCwd = mkdtempSync(join(canonicalTmpdir, 'Coordinate Agents MCP cwd '));
   const debugClient = new StdioMcpClient(isolatedEnvironment(independentCwd, {
     COORDINATE_AGENTS_MCP_DEBUG: '1',
   }), independentCwd);
@@ -302,7 +304,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.match(selfTest.stdout, /Tools: 16/);
   rmSync(independentCwd, { recursive: true, force: true });
 
-  const pluginRoot = mkdtempSync(join(tmpdir(), 'Coordinate Agents Plugin Fixture '));
+  const pluginRoot = mkdtempSync(join(canonicalTmpdir, 'Coordinate Agents Plugin Fixture '));
   try {
     for (const entry of ['mcp', 'skills', 'bin', '.codex-plugin']) {
       cpSync(join(root, entry), join(pluginRoot, entry), { recursive: true });
@@ -333,7 +335,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
 
 test('MCP stdio workflow uses the same Runtime state and error contract as CLI', async () => {
   const repository = tempRepository();
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-home-'));
   const count = join(repository, 'fixture-count.txt');
   const command = fixtureCommand(repository, 'fixture-implementer');
   const env = isolatedEnvironment(home, {
@@ -490,7 +492,7 @@ test('MCP stdio workflow uses the same Runtime state and error contract as CLI',
 
 test('MCP Setup and Task coordination expose and use one registered external adapter snapshot', async () => {
   const repository = tempRepository('coordinate-agents-mcp-external-');
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-external-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-external-home-'));
   const fixture = externalSessionFixture(repository);
   const modulePath = externalAdapterModule(repository);
   const env = isolatedEnvironment(home, {
@@ -584,7 +586,7 @@ test('MCP Setup and Task coordination expose and use one registered external ada
 
 test('MCP exposes the bounded persistent Session lifecycle through the canonical service', async () => {
   const repository = tempRepository('coordinate-agents-mcp-session-');
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-session-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-session-home-'));
   const client = new StdioMcpClient(isolatedEnvironment(home));
   const source = "console.log('session-ready'); process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => console.log('received:' + chunk)); setInterval(() => {}, 10000);";
   try {
@@ -663,7 +665,7 @@ test('MCP exposes the bounded persistent Session lifecycle through the canonical
 
 test('MCP preserves runtime failure semantics, recovery facts, and explicit resume', async () => {
   const repository = tempRepository('coordinate-agents-mcp-recovery-');
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-recovery-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-recovery-home-'));
   const count = join(repository, 'fixture-count.txt');
   const command = fixtureCommand(repository, 'fixture-recoverable');
   const failureEnv = isolatedEnvironment(home, {
@@ -748,7 +750,7 @@ test('MCP preserves runtime failure semantics, recovery facts, and explicit resu
 
 test('MCP domain failures are structured and do not become protocol errors', async () => {
   const repository = tempRepository('coordinate-agents-mcp-error-');
-  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-error-home-'));
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-error-home-'));
   const server = createMcpServer({ root });
   try {
     const created = await server.handle({

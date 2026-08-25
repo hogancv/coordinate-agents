@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -177,7 +177,11 @@ setTimeout(emit, 50);
  * The caller owns the returned fixture and must call cleanup().
  */
 export function createConformanceFixture({ prompt = DEFAULT_CONFORMANCE_PROMPT } = {}) {
-  const tempRoot = mkdtempSync(join(tmpdir(), 'coordinate-agents-conformance-'));
+  // macOS exposes the system temporary directory through a /var alias. A
+  // child process reports its canonical /private/var cwd, so create the
+  // fixture under the canonical temporary root to keep the observation and
+  // launch plan equivalent on every supported platform.
+  const tempRoot = mkdtempSync(join(realpathSync(tmpdir()), 'coordinate-agents-conformance-'));
   const root = join(tempRoot, 'repository with spaces & [fixture]');
   const script = join(tempRoot, 'fake adapter with spaces & [fixture].mjs');
   try {

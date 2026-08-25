@@ -23,12 +23,13 @@ import { listAdapters } from '../skills/coordinate-agents/adapters/index.mjs';
 
 const rootDirectory = process.cwd();
 const busTool = join(rootDirectory, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
+const canonicalTmpdir = realpathSync(tmpdir());
 const exampleRoot = join(rootDirectory, 'examples', 'minimal-external-adapter');
 const modulePath = join(exampleRoot, 'adapter.mjs');
 const executable = join(exampleRoot, 'fake-agent.mjs');
 
 async function main() {
-  const repository = mkdtempSync(join(tmpdir(), 'coordinate-agents-example-repository-'));
+  const repository = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-example-repository-'));
   let registeredPath = null;
   let sessionId = null;
   const environmentKeys = [

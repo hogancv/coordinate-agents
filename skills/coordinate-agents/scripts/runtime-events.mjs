@@ -26,6 +26,7 @@ const MAX_EVENT_LINE_BYTES = 64 * 1024;
 const READ_CHUNK_BYTES = 64 * 1024;
 const LOCK_TIMEOUT_MS = 2_000;
 const STALE_LOCK_MS = 30_000;
+const TRANSIENT_LOCK_ERRORS = new Set(['EACCES', 'EBUSY', 'EEXIST', 'EPERM']);
 const SENSITIVE_KEY = /(?:authorization|credential|cookie|environment|env|password|passwd|private[_-]?key|secret|token|api[_-]?key)/i;
 const ASSOCIATION_FIELDS = ['taskId', 'sessionId', 'agentId', 'role', 'messageId'];
 const EVENT_ID_PATTERN = /^evt_[0-9a-f-]{36}$/;
@@ -155,20 +156,38 @@ function acquireAppendLock(paths) {
       const descriptor = openSync(paths.lock, 'wx', 0o600);
       writeSync(descriptor, `${process.pid}\n`);
       closeSync(descriptor);
-      return () => rmSync(paths.lock, { force: true });
+      return () => {
+        const releaseDeadline = Date.now() + LOCK_TIMEOUT_MS;
+        while (Date.now() <= releaseDeadline) {
+          try {
+            rmSync(paths.lock, { force: true });
+            return;
+          } catch (error) {
+            if (!TRANSIENT_LOCK_ERRORS.has(error?.code)) throw error;
+            sleepSync(10);
+          }
+        }
+        // A lock that cannot be removed is safe to recover through the
+        // existing stale-lock policy. Do not turn a successful journal write
+        // into a failure merely because Windows briefly retained a handle.
+      };
     } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
+      if (!TRANSIENT_LOCK_ERRORS.has(error?.code)) throw error;
       try {
         const metadata = lstatSync(paths.lock);
         if (!metadata.isFile() || metadata.isSymbolicLink()) {
           throw runtimeError('RUNTIME_EVENT_WRITE_FAILED', `Unsafe Event Journal lock: ${paths.lock}`, { recoverable: true });
         }
         if (Date.now() - metadata.mtimeMs > STALE_LOCK_MS) {
-          rmSync(paths.lock, { force: true });
+          try {
+            rmSync(paths.lock, { force: true });
+          } catch (staleError) {
+            if (!TRANSIENT_LOCK_ERRORS.has(staleError?.code)) throw staleError;
+          }
           continue;
         }
       } catch (lockError) {
-        if (lockError.code !== 'ENOENT') throw lockError;
+        if (lockError.code !== 'ENOENT' && !TRANSIENT_LOCK_ERRORS.has(lockError?.code)) throw lockError;
       }
       sleepSync(10);
     }
