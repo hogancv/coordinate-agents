@@ -4,16 +4,26 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 // The Plugin payload is intentionally runnable directly from a Git checkout,
-// where npm dependencies may not have been installed. Use node-pty whenever it
-// is present; keep the same owned-session contract over pipes as a degraded
-// compatibility backend for setup/diagnostic flows in such payloads.
+// where npm dependencies may not have been installed or the native backend is
+// not reliable for the active Node runtime. Use node-pty on supported runtimes;
+// keep the same owned-session contract over pipes as a portable compatibility
+// backend everywhere else.
 let nodePty = null;
 try { nodePty = await import('node-pty'); } catch { nodePty = null; }
 
 const require = createRequire(import.meta.url);
 
+function nativePtyAvailable() {
+  // node-pty 1.x can load on Node 18 while its native backend remains
+  // unreliable there across the supported operating systems. A native
+  // failure can terminate the detached Session Host before it can publish a
+  // useful error, so select the owned stdio backend up front on Node 18.
+  const major = Number.parseInt(`${process.versions.node || ''}`.split('.', 1)[0], 10);
+  return Boolean(nodePty?.spawn) && Number.isInteger(major) && major >= 20;
+}
+
 function ensureUnixSpawnHelper() {
-  if (process.platform === 'win32' || !nodePty) return;
+  if (process.platform === 'win32' || !nativePtyAvailable()) return;
   try {
     const packageRoot = dirname(dirname(require.resolve('node-pty')));
     const candidates = [
@@ -45,10 +55,6 @@ function timestamp() {
 function boundedInteger(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
   if (!Number.isInteger(value)) return fallback;
   return Math.min(max, Math.max(min, value));
-}
-
-function requiresWindowsShell(command) {
-  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(`${command}`);
 }
 
 class OutputBuffer {
@@ -135,7 +141,7 @@ export class PtyRuntime {
     this.output = new OutputBuffer(maxOutputBytes);
     this.pty = null;
     this.child = null;
-    this.backend = nodePty?.spawn ? 'node-pty' : 'stdio-fallback';
+    this.backend = nativePtyAvailable() ? 'node-pty' : 'stdio-fallback';
     this.pid = null;
     this.state = 'starting';
     this.createdAt = timestamp();
@@ -204,7 +210,7 @@ export class PtyRuntime {
         ...this.env,
         TERM: this.env.TERM || 'xterm-256color',
       };
-      if (nodePty?.spawn) {
+      if (nativePtyAvailable()) {
         try {
           this.pty = nodePty.spawn(this.command, this.args, {
             name: 'xterm-256color',
@@ -225,12 +231,10 @@ export class PtyRuntime {
         }
       }
       if (!this.pty) {
-        const shell = requiresWindowsShell(this.command);
         this.child = spawnChild(this.command, this.args, {
           cwd: this.cwd,
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
-          shell,
           windowsHide: false,
         });
       }
@@ -279,8 +283,15 @@ export class PtyRuntime {
     const value = `${input ?? ''}`;
     if (!value) return this.snapshot();
     const suffix = submit && !/[\r\n]$/.test(value) ? (this.pty ? '\r' : '\n') : '';
-    if (this.pty) this.pty.write(`${value}${suffix}`);
-    else this.child.stdin.write(`${value}${suffix}`);
+    const payload = `${value}${suffix}`;
+    if (this.pty) this.pty.write(payload);
+    else {
+      this.child.stdin.write(payload);
+      // A terminal echoes typed input; mirror that observable contract when
+      // the portable pipe backend is selected so callers can inspect one
+      // consistent Session transcript on every supported runtime.
+      this._appendOutput(payload);
+    }
     this.lastActivityAt = timestamp();
     this._setState('busy');
     this._scheduleIdle();
