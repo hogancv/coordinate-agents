@@ -17,7 +17,7 @@ server completed `initialize` and `tools/list`.
 ## 1. Confirm the installed Plugin payload
 
 The Plugin and the MCP server are shipped together. Confirm the installed
-Plugin is the intended `2.1.3` payload and inspect its actual root, not only the
+Plugin is the intended `2.2.0` payload and inspect its actual root, not only the
 marketplace entry:
 
 ```powershell
@@ -35,7 +35,7 @@ skills/coordinate-agents/scripts/runtime-services.mjs
 ```
 
 `plugin.json` must contain `"mcpServers": "./.mcp.json"`. A cached Plugin can
-still report version `2.1.3` while pointing at an older Git revision that does
+still report version `2.2.0` while pointing at an older Git revision that does
 not contain the MCP payload. The version string alone is not a cache refresh
 proof.
 
@@ -46,7 +46,7 @@ name:
 ```powershell
 codex plugin remove coordinate-agents@coordinate-agents
 codex plugin marketplace remove coordinate-agents
-codex plugin marketplace add hogancv/coordinate-agents --ref v2.1.3
+codex plugin marketplace add hogancv/coordinate-agents --ref v2.2.0
 codex plugin add coordinate-agents@coordinate-agents
 ```
 
