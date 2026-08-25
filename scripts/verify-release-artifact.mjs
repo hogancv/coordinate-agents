@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -8,9 +9,10 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, relative, resolve, sep } from 'node:path';
+import { basename, delimiter, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PACKAGE_NAME = '@hogancv/coordinate-agents';
@@ -237,10 +239,31 @@ function verifyExternalExample(packageRoot, env) {
   };
 }
 
+function createCodexFixture(tempRoot) {
+  const bin = join(tempRoot, 'doctor-bin');
+  mkdirSync(bin, { recursive: true });
+  if (process.platform === 'win32') {
+    const script = join(bin, 'codex.cjs');
+    writeFileSync(script, "console.log('codex-fixture-1.0.0');\n", 'utf8');
+    writeFileSync(join(bin, 'codex.cmd'), `@"${process.execPath}" "${script}" %*\r\n`, 'utf8');
+  } else {
+    const executable = join(bin, 'codex');
+    writeFileSync(executable, '#!/bin/sh\necho codex-fixture-1.0.0\n', 'utf8');
+    chmodSync(executable, 0o755);
+  }
+  return bin;
+}
+
 function verifyRuntime(packageRoot, tempRoot, env, expectedVersion) {
   const cli = join(packageRoot, 'bin', 'coordinate-agents.mjs');
   const repository = join(tempRoot, 'consumer-repository');
   const home = join(tempRoot, 'consumer-home');
+  const fixtureBin = createCodexFixture(tempRoot);
+  const existingPath = env.PATH || env.Path || process.env.PATH || process.env.Path || '';
+  const doctorEnv = {
+    ...env,
+    PATH: `${fixtureBin}${delimiter}${existingPath}`,
+  };
   mkdirSync(repository, { recursive: true });
   mkdirSync(home, { recursive: true });
   run('git', ['init', repository], { cwd: packageRoot, env });
@@ -263,7 +286,7 @@ function verifyRuntime(packageRoot, tempRoot, env, expectedVersion) {
   const doctor = parseChildJson(run(process.execPath, [
     cli, 'doctor', '--codex', '--codex-home', join(home, '.codex'),
     '--root', repository, '--json',
-  ], { cwd: packageRoot, env: isolatedEnvironment(home) }), 'Plugin doctor');
+  ], { cwd: packageRoot, env: doctorEnv }), 'Plugin doctor');
   if (doctor.ok !== true) throw new VerificationError('Packaged Plugin doctor did not pass in an isolated home.', doctor);
 
   return {
