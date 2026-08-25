@@ -15,6 +15,8 @@ Antigravity role (Reference implementer): https://hogancv.github.io/coordinate-a
 Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
 Execution Session and PTY Runtime: https://hogancv.github.io/coordinate-agents/session-runtime.html
 Adapter Conformance Kit: https://hogancv.github.io/coordinate-agents/adapter-conformance.html
+Adapter SDK acceptance gate: the same Contract kit plus the external Task/
+Session path runs on Windows, macOS, and Linux with Node.js 18 and 22.
 External Adapter Author Guide: https://hogancv.github.io/coordinate-agents/adapter-author-guide.html
 Trusted local Contract v1 adapters: register one exact `.mjs`, `.js`, or `.cjs`
 path with `coordinate-agents adapter register <local-file>`; no URL import,

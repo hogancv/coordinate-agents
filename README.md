@@ -111,6 +111,11 @@ trusted-local registration, and package payload. The complete [minimal external
 Adapter example](./examples/minimal-external-adapter/README.md) remains outside
 the built-in registry and requires no provider access.
 
+The repository [Adapter SDK acceptance gate](./docs/adapter-conformance.md#repository-acceptance-gate)
+runs built-in and external descriptors through the same kit and covers the
+Windows/macOS/Linux × Node.js 18/22 matrix without changing Task, Bus, Event
+Journal, Inspector, MCP, review, or release ownership.
+
 Setup discovery and the existing MCP setup/Task tools expose the same additive
 `adapters` registry snapshot, including registered external identities and
 Contract capabilities. Discovery does not launch an adapter; configured

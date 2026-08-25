@@ -8,11 +8,14 @@ import {
   runtimeAdapterRegister,
   runtimeAdapterRemove,
   runtimeSetupConfigure,
+  runtimeTaskCreate,
+  runtimeTaskOperation,
 } from '../bin/coordinate-agents.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,
   runtimeSessionOpen,
+  runtimeSessionRead,
   runtimeSessionWrite,
 } from '../skills/coordinate-agents/scripts/session-service.mjs';
 import { resolveConfiguredSessionAgent } from '../skills/coordinate-agents/scripts/session-manager.mjs';
@@ -28,6 +31,13 @@ async function main() {
   const repository = mkdtempSync(join(tmpdir(), 'coordinate-agents-example-repository-'));
   let registeredPath = null;
   let sessionId = null;
+  const environmentKeys = [
+    'COORDINATE_MINIMAL_EXTERNAL_ADAPTER_BUS_TOOL',
+    'COORDINATE_MINIMAL_EXTERNAL_ADAPTER_ROOT',
+    'COORDINATE_MINIMAL_EXTERNAL_ADAPTER_FROM',
+    'COORDINATE_MINIMAL_EXTERNAL_ADAPTER_TO',
+  ];
+  const previousEnvironment = Object.fromEntries(environmentKeys.map(key => [key, process.env[key]]));
   try {
     const git = spawnSync('git', ['init', repository], { encoding: 'utf8', windowsHide: true });
     assert.equal(git.status, 0, git.stderr || git.stdout);
@@ -66,14 +76,46 @@ async function main() {
     assert.deepEqual(launch.prefix, [executable]);
     assert.deepEqual(launch.args, ['--mode', 'persistent']);
 
+    // The fake executable is still entirely offline. These scoped variables
+    // enable it to send the deterministic IMPLEMENTATION_DONE fixture when
+    // the Runtime writes the real Task prompt through the owned Session.
+    process.env.COORDINATE_MINIMAL_EXTERNAL_ADAPTER_BUS_TOOL = busTool;
+    process.env.COORDINATE_MINIMAL_EXTERNAL_ADAPTER_ROOT = repository;
+    process.env.COORDINATE_MINIMAL_EXTERNAL_ADAPTER_FROM = 'minimal-example';
+    process.env.COORDINATE_MINIMAL_EXTERNAL_ADAPTER_TO = 'codex';
+
+    const created = await runtimeTaskCreate({
+      root: repository,
+      id: 'task-minimal-external',
+      title: 'Minimal external Adapter acceptance path',
+      spec: 'Exercise setup, Task dispatch, persistent Session reuse, I/O, and cleanup.',
+    });
+    assert.equal(created.ok, true, JSON.stringify(created));
+    const taskId = created.task.id;
+
+    const dispatched = await runtimeTaskOperation('dispatch', {
+      root: repository,
+      taskId,
+      sessionWaitMs: 5_000,
+    });
+    assert.equal(dispatched.ok, true, JSON.stringify(dispatched));
+    assert.equal(dispatched.task.status, 'REVIEWING');
+    assert.equal(dispatched.task.implementationCommit, 'minimalexternal1234');
+    assert.equal(dispatched.agent.adapter, 'minimal-external-adapter');
+    assert.equal(dispatched.agent.resolvedCommand, process.execPath);
+    assert.equal(dispatched.launch.type, 'persistent-pty-session');
+    sessionId = dispatched.session.id;
+
     const opened = await runtimeSessionOpen({
       root: repository,
       agent: 'minimal-example',
     });
     assert.equal(opened.ok, true, JSON.stringify(opened));
-    sessionId = opened.session.id;
+    assert.equal(opened.reused, true);
+    assert.equal(opened.session.id, sessionId);
     assert.equal(opened.session.agent, 'minimal-example');
     assert.equal(opened.session.command, process.execPath);
+
     const written = await runtimeSessionWrite({
       root: repository,
       sessionId,
@@ -88,6 +130,9 @@ async function main() {
     }
     assert.match(inspected.output.output, /COORDINATE_MINIMAL_EXTERNAL_ADAPTER:/, JSON.stringify(inspected));
     assert.match(inspected.output.output, /minimal external persistent prompt/);
+    const read = await runtimeSessionRead({ root: repository, sessionId, maxLines: 40, maxBytes: 8_192 });
+    assert.match(read.output, /COORDINATE_MINIMAL_EXTERNAL_ADAPTER:/, JSON.stringify(read));
+    assert.match(read.output, /minimal external persistent prompt/);
     const closed = await runtimeSessionClose({ root: repository, sessionId, timeoutMs: 1_000 });
     assert.ok(['exited', 'failed'].includes(closed.session.state));
     sessionId = null;
@@ -108,6 +153,10 @@ async function main() {
     }
     if (registeredPath) {
       try { await runtimeAdapterRemove({ path: registeredPath }); } catch { /* Preserve the primary assertion. */ }
+    }
+    for (const key of environmentKeys) {
+      if (previousEnvironment[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnvironment[key];
     }
     rmSync(repository, { recursive: true, force: true });
   }

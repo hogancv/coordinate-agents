@@ -166,3 +166,26 @@ JavaScript sandbox: a local adapter module is trusted code executed by the
 current Node.js process. The kit does not scan directories, import URLs,
 download packages, install dependencies, access a live provider, or edit a
 user's configuration.
+
+## Repository acceptance gate
+
+The repository gate runs the built-in descriptors and the bundled external
+example through this same public kit, then exercises the complete external
+setup, Task dispatch, persistent Session reuse, input/output, close, and
+trusted-local cleanup path. The ordinary regression suite also protects the
+Task, Agent Bus, Event Journal, Inspector, MCP, review, executable-precedence,
+and release-authorization boundaries.
+
+Run the local gate from a clean checkout:
+
+```sh
+npm ci
+npm run check
+npm run demo
+npm pack --dry-run
+```
+
+The authoritative matrix is defined in
+`.github/workflows/adapter-sdk-acceptance.yml` and runs these checks on
+Windows, macOS, and Linux with Node.js 18 and Node.js 22. Local results prove
+only the current host; the matrix workflow is the cross-platform evidence.
