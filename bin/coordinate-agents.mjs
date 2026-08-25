@@ -21,7 +21,11 @@ import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
-import { getAdapter, getAdapterContract } from '../skills/coordinate-agents/adapters/index.mjs';
+import {
+  getAdapter,
+  getAdapterContract,
+  getAdapterRegistrySnapshot,
+} from '../skills/coordinate-agents/adapters/index.mjs';
 import {
   validateConfigurationResult,
   validateDetectionResult,
@@ -96,7 +100,8 @@ const auxiliarySkillNames = Object.freeze(['coordinate-setup', 'coordinate-task'
 
 async function loadConfiguredAdaptersForRuntime(userConfig = null) {
   const config = userConfig || readUserConfig();
-  return loadConfiguredTrustedAdapters(config, { baseDir: dirname(userConfigPath()) });
+  await loadConfiguredTrustedAdapters(config, { baseDir: dirname(userConfigPath()) });
+  return getAdapterRegistrySnapshot();
 }
 
 const messages = {
@@ -1286,7 +1291,7 @@ function taskImplementationPrompt(task) {
   ].filter(Boolean).join('\n\n');
 }
 
-async function taskAgentResolution(root, task) {
+async function taskAgentResolution(root, task, adapterRegistry = null) {
   const busPath = join(root, '.agent-bus');
   const busConfig = readConfig(busPath);
   const workflowImplementer = busConfig.workflow?.implementer || task.implementer;
@@ -1306,7 +1311,7 @@ async function taskAgentResolution(root, task) {
     });
   }
   const userConfig = readUserConfig();
-  await loadConfiguredAdaptersForRuntime(userConfig);
+  const registry = adapterRegistry || await loadConfiguredAdaptersForRuntime(userConfig);
   const resolved = runtimeAgentConfig(projectAgent, userConfig);
   const adapter = getAdapter(resolved.adapter, resolved);
   const contract = getAdapterContract(adapter);
@@ -1324,7 +1329,15 @@ async function taskAgentResolution(root, task) {
       details: compatibility.details,
     });
   }
-  return { busConfig, workflowImplementer, projectAgent, resolved, adapter, contract };
+  return {
+    busConfig,
+    workflowImplementer,
+    projectAgent,
+    resolved,
+    adapter,
+    contract,
+    registryAdapter: registry.find(item => item.id === resolved.adapter) || null,
+  };
 }
 
 function markDispatchFailure(root, task, error, agentId = null) {
@@ -1345,11 +1358,11 @@ function markDispatchFailure(root, task, error, agentId = null) {
   return normalized;
 }
 
-async function taskDispatch(root, task, options, t) {
+async function taskDispatch(root, task, options, t, adapterRegistry = null) {
   let resolution;
   let agentId = null;
   try {
-    resolution = await taskAgentResolution(root, task);
+    resolution = await taskAgentResolution(root, task, adapterRegistry);
     agentId = resolution.workflowImplementer;
     if (task.implementer !== agentId) {
       task = setTaskStatus(root, task.id, task.status, { implementer: agentId });
@@ -1489,6 +1502,8 @@ async function taskDispatch(root, task, options, t) {
       agent: {
         id: agentId,
         adapter: resolution.resolved.adapter,
+        adapterCapabilities: resolution.registryAdapter?.capabilities || null,
+        adapterContractVersion: resolution.registryAdapter?.contractVersion || null,
         command: resolution.resolved.command,
         commandSource: resolution.resolved.commandSource,
         available: true,
@@ -1551,7 +1566,7 @@ function taskReview(root, task, options) {
 }
 
 async function taskCommand(options, { json = false } = {}) {
-  await loadConfiguredAdaptersForRuntime();
+  const adapterRegistry = await loadConfiguredAdaptersForRuntime();
   const root = assertGitRepository(options.root, messages.en);
   ensureProjectBus(root);
   ensureTaskStore(root);
@@ -1581,7 +1596,7 @@ async function taskCommand(options, { json = false } = {}) {
     else if (subcommand === 'dispatch') {
       task = syncTaskFromAgentBus(root, id);
       task = prepareTaskForDispatch(root, id, options.spec || undefined);
-      const payload = await taskDispatch(root, task, options, messages[detectLanguage(options.language)]);
+      const payload = await taskDispatch(root, task, options, messages[detectLanguage(options.language)], adapterRegistry);
       const result = jsonSuccess(commandName, payload);
       if (!json) console.log(JSON.stringify(payload, null, 2));
       return result;
@@ -1603,7 +1618,6 @@ async function taskCommand(options, { json = false } = {}) {
 }
 
 async function setupCommand(options, { json = false } = {}) {
-  await loadConfiguredAdaptersForRuntime();
   let root = resolve(options.root);
   if (options.requireRepository) {
     root = assertGitRepository(options.root, messages.en);
@@ -1611,7 +1625,8 @@ async function setupCommand(options, { json = false } = {}) {
     try { root = assertGitRepository(options.root, messages.en); } catch { /* Discovery is also useful before a project is selected. */ }
   }
   const userConfig = readUserConfig();
-  const snapshot = setupSnapshot({ root, userConfig });
+  const adapterRegistry = await loadConfiguredAdaptersForRuntime(userConfig);
+  const snapshot = setupSnapshot({ root, userConfig, adapterRegistry });
   const result = jsonSuccess('setup', {
     ...snapshot,
     userConfigPath: userConfigPath(),
@@ -1647,7 +1662,11 @@ function inferSetupIdentity(options) {
   }
   const commandName = basename(command).replace(/\.(cmd|bat|exe|com|ps1)$/i, '').toLowerCase();
   const identity = supplied || commandName;
-  const knownIdentity = SETUP_ADAPTERS[identity] ? identity : commandName;
+  // An explicitly supplied Agent identity is authoritative even when its
+  // executable has a different name.  This keeps Agent, Adapter, and
+  // executable identities separate for external adapters as well as the
+  // built-in aliases (for example antigravity -> agy-proxy).
+  const knownIdentity = (SETUP_ADAPTERS[identity] || supplied) ? identity : commandName;
   const id = ['agy', 'agy-proxy'].includes(knownIdentity) ? 'antigravity' : knownIdentity;
   validateAgentId(id);
   const adapter = options.adapterExplicit
@@ -1700,7 +1719,6 @@ function restoreUserConfigSnapshot(path, existed, content) {
 }
 
 async function setupConfigureCommand(options, { json = false } = {}) {
-  await loadConfiguredAdaptersForRuntime();
   const t = messages[detectLanguage(options.language)];
   const root = assertGitRepository(options.root, t);
   const identity = inferSetupIdentity(options);
@@ -1713,6 +1731,7 @@ async function setupConfigureCommand(options, { json = false } = {}) {
   const hadUserConfig = existsSync(configPath);
   const previousUserConfig = hadUserConfig ? readFileSync(configPath, 'utf8') : null;
   const originalUserConfig = readUserConfig();
+  const adapterRegistry = await loadConfiguredAdaptersForRuntime(originalUserConfig);
   const candidateUserConfig = JSON.parse(JSON.stringify(originalUserConfig));
   setUserConfigValue(candidateUserConfig, `agent.${identity.id}.command`, identity.command);
   if (args !== undefined) setUserConfigValue(candidateUserConfig, `agent.${identity.id}.args`, args);
@@ -1845,6 +1864,7 @@ async function setupConfigureCommand(options, { json = false } = {}) {
 
     const payload = jsonSuccess('setup.configure', {
       root,
+      adapters: adapterRegistry,
       agent: {
         id: identity.id,
         adapter: resolved.adapter,

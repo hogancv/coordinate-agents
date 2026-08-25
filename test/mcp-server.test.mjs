@@ -14,7 +14,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createMcpServer } from '../mcp/server.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -73,6 +73,80 @@ process.exit(0);
   writeFileSync(command, `#!${process.execPath}\n${source}`, 'utf8');
   chmodSync(command, 0o755);
   return command;
+}
+
+function externalAdapterModule(repository) {
+  const modulePath = join(repository, 'external-mcp-adapter.mjs');
+  const sdkUrl = pathToFileURL(join(root, 'adapter-sdk.mjs')).href;
+  writeFileSync(modulePath, `
+import { existsSync } from 'node:fs';
+import { ADAPTER_CONTRACT_VERSION, defineAdapter } from ${JSON.stringify(sdkUrl)};
+
+export default defineAdapter({
+  contractVersion: ADAPTER_CONTRACT_VERSION,
+  id: 'external-mcp-adapter',
+  capabilities: {
+    detection: true,
+    configuration: true,
+    oneShotLaunch: true,
+    persistentSession: true,
+  },
+  create(config) {
+    const command = config.command || '';
+    const script = Array.isArray(config.args) ? config.args[0] || '' : '';
+    return {
+      validateConfiguration() {
+        return command && script && existsSync(script)
+          ? { compatible: true, code: null, details: null }
+          : { compatible: false, code: 'INVALID_ADAPTER_CONFIG', details: 'external MCP fixture requires command and script.' };
+      },
+      detect() {
+        return command && script && existsSync(script)
+          ? { available: true, command, runtimeCommand: command, resolvedCommand: command, prefix: [], version: 'external-mcp-fixture-1.0.0' }
+          : { available: false, command, runtimeCommand: command, code: 'COMMAND_NOT_FOUND', details: 'external MCP fixture is unavailable.' };
+      },
+      resolveLaunch({ root, prompt }) {
+        return { command, prefix: [], args: [script, prompt], cwd: root, resolvedCommand: command };
+      },
+      resolveSessionLaunch({ root }) {
+        return { command, prefix: [], args: [script], cwd: root, initialInputConsumed: false, resolvedCommand: command };
+      },
+      launchPolicy() {
+        return { mode: 'bus-supervised', pollIntervalMs: 10 };
+      },
+    };
+  },
+});
+`, 'utf8');
+  return modulePath;
+}
+
+function externalSessionFixture(repository) {
+  const fixture = join(repository, 'external-mcp-fixture.cjs');
+  writeFileSync(fixture, String.raw`const cp = require('node:child_process');
+console.log('external-mcp-ready');
+let buffer = '';
+const completed = new Set();
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => {
+  buffer += chunk;
+  for (const match of buffer.matchAll(/Task ID:\s*(task-[A-Za-z0-9_-]+)[\s\S]*?Round:\s*(\d+)/g)) {
+    const key = match[1] + ':' + match[2];
+    if (completed.has(key)) continue;
+    completed.add(key);
+    const result = cp.spawnSync(process.execPath, [
+      process.env.BUS_TOOL, 'send', '--root', process.env.FIXTURE_ROOT,
+      '--from', process.env.FIXTURE_AGENT, '--to', 'codex',
+      '--type', 'IMPLEMENTATION_DONE', '--subject', 'external MCP fixture done',
+      '--related-commit', 'externalmcp1234', '--body',
+      'Task ID: ' + match[1] + '\nimplementationCommit: externalmcp1234\nExternal MCP adapter completed',
+    ], { encoding: 'utf8', windowsHide: true });
+    if (result.status !== 0) process.stderr.write(result.stderr || result.stdout || 'fixture send failed');
+    console.log('external-mcp-done:' + key);
+  }
+});
+`, 'utf8');
+  return fixture;
 }
 
 class StdioMcpClient {
@@ -283,7 +357,8 @@ test('MCP stdio workflow uses the same Runtime state and error contract as CLI',
     assert.equal(discovered.result.structuredContent.ok, true);
     assert.equal(discovered.result.structuredContent.command, 'setup');
     assert.deepEqual(discovered.result.structuredContent, JSON.parse(cliDiscovered.stdout));
-    assert.deepEqual(Object.keys(discovered.result.structuredContent).sort(), ['agents', 'availableCommands', 'command', 'configuredAgents', 'detectedButNotConfigured', 'ok', 'projectConfigPath', 'root', 'userConfigPath'].sort());
+    assert.deepEqual(Object.keys(discovered.result.structuredContent).sort(), ['adapters', 'agents', 'availableCommands', 'command', 'configuredAgents', 'detectedButNotConfigured', 'ok', 'projectConfigPath', 'root', 'userConfigPath'].sort());
+    assert.ok(discovered.result.structuredContent.adapters.some(adapter => adapter.id === 'generic-cli'));
 
     const setupArgs = JSON.stringify(['{prompt}']);
     const cliConfigured = invokeCli([
@@ -406,6 +481,100 @@ test('MCP stdio workflow uses the same Runtime state and error contract as CLI',
     });
     assert.equal(recovery.result.structuredContent.ok, true);
     assert.equal(recovery.result.structuredContent.recommendedRecovery.automaticRetry, false);
+  } finally {
+    await client.close();
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('MCP Setup and Task coordination expose and use one registered external adapter snapshot', async () => {
+  const repository = tempRepository('coordinate-agents-mcp-external-');
+  const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-mcp-external-home-'));
+  const fixture = externalSessionFixture(repository);
+  const modulePath = externalAdapterModule(repository);
+  const env = isolatedEnvironment(home, {
+    FIXTURE_ROOT: repository,
+    FIXTURE_AGENT: 'external-implementer',
+    BUS_TOOL: busTool,
+  });
+  const registered = invokeCli(['adapter', 'register', modulePath, '--json'], env);
+  assert.equal(registered.status, 0, registered.stderr || registered.stdout);
+  const client = new StdioMcpClient(env);
+  try {
+    await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
+
+    const discoveredBeforeSetup = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_discover',
+      arguments: { root: repository },
+    });
+    const adapterBeforeSetup = discoveredBeforeSetup.result.structuredContent.adapters
+      .find(adapter => adapter.id === 'external-mcp-adapter');
+    assert.deepEqual(adapterBeforeSetup.capabilities, {
+      detection: true,
+      configuration: true,
+      oneShotLaunch: true,
+      persistentSession: true,
+    });
+    assert.deepEqual(adapterBeforeSetup.configuredAgents, []);
+
+    const configured = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_configure',
+      arguments: {
+        root: repository,
+        agent: 'external-implementer',
+        command: process.execPath,
+        adapter: 'external-mcp-adapter',
+        args: [fixture],
+        role: 'implementer',
+      },
+    });
+    assert.equal(configured.result.structuredContent.ok, true, JSON.stringify(configured));
+    assert.equal(configured.result.structuredContent.agent.adapter, 'external-mcp-adapter');
+    assert.equal(configured.result.structuredContent.agent.command, process.execPath);
+    assert.equal(configured.result.structuredContent.agent.commandSource, 'user');
+    assert.equal(configured.result.structuredContent.adapters.find(adapter => adapter.id === 'external-mcp-adapter').capabilities.persistentSession, true);
+
+    const discoveredAfterSetup = await client.request('tools/call', {
+      name: 'coordinate_agents_setup_discover',
+      arguments: { root: repository },
+    });
+    const adapterAfterSetup = discoveredAfterSetup.result.structuredContent.adapters
+      .find(adapter => adapter.id === 'external-mcp-adapter');
+    assert.equal(adapterAfterSetup.configuredAgents[0].id, 'external-implementer');
+    assert.equal(adapterAfterSetup.configuredAgents[0].command, process.execPath);
+    assert.equal(adapterAfterSetup.configuredAgents[0].available, true);
+    const externalAgent = discoveredAfterSetup.result.structuredContent.agents
+      .find(agent => agent.configuredAgent === 'external-implementer');
+    assert.equal(externalAgent.adapter, 'external-mcp-adapter');
+    assert.equal(externalAgent.available, true);
+
+    const created = await client.request('tools/call', {
+      name: 'coordinate_agents_task_create',
+      arguments: {
+        root: repository,
+        id: 'task-mcp-external',
+        title: 'MCP external adapter task',
+        spec: 'Exercise the registered external adapter through MCP.',
+      },
+    });
+    assert.equal(created.result.structuredContent.ok, true, JSON.stringify(created));
+    const dispatched = await client.request('tools/call', {
+      name: 'coordinate_agents_task_dispatch',
+      arguments: { root: repository, taskId: 'task-mcp-external' },
+    });
+    assert.equal(dispatched.result.structuredContent.ok, true, JSON.stringify(dispatched));
+    assert.equal(dispatched.result.structuredContent.task.status, 'REVIEWING');
+    assert.equal(dispatched.result.structuredContent.agent.adapter, 'external-mcp-adapter');
+    assert.equal(dispatched.result.structuredContent.agent.adapterCapabilities.persistentSession, true);
+    assert.equal(dispatched.result.structuredContent.task.sessionId, dispatched.result.structuredContent.session.id);
+
+    const closed = await client.request('tools/call', {
+      name: 'coordinate_agents_session_close',
+      arguments: { root: repository, sessionId: dispatched.result.structuredContent.session.id, graceful: false, timeoutMs: 1_000 },
+    });
+    assert.equal(closed.result.structuredContent.ok, true, JSON.stringify(closed));
+    assert.equal(closed.result.structuredContent.session.pid, null);
   } finally {
     await client.close();
     rmSync(repository, { recursive: true, force: true });

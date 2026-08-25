@@ -85,6 +85,14 @@ The result contains `agent.id: "antigravity"`,
 `agent.commandSource: "user"`, `project.registered: true`, and
 `workflow.implementer: "antigravity"`.
 
+The same setup response includes the additive `adapters` registry snapshot.
+When a trusted local Contract v1 module is registered, discovery reports its
+identity and capabilities without launching it; a configured external Agent
+adds only its Contract-defined detection facts. MCP calls the same Runtime
+operations, so selecting that adapter preserves the exact command precedence
+and the canonical Task/persistent-Session lifecycle without adding a second
+tool catalog.
+
 ## Task dispatch
 
 Task creation remains separate from dispatch so Codex can hold a
@@ -168,14 +176,16 @@ a path containing spaces and runs with an empty executable `PATH`. It verifies:
 - missing executable failure without Bus handoff or launch;
 - non-zero fixture exit as `AGENT_EXIT_NONZERO`, Task/Agent `ERROR`, and explicit resume.
 - Session open/status/inspect/write/read/close, bounded output, root/Agent isolation, and same-Session review rework.
+- MCP setup discovery/configuration and external-adapter Task/Session coverage
+  are exercised separately by `test/mcp-server.test.mjs` using an explicitly
+  registered local Contract v1 fixture.
 
 The same fixture covers Windows `.cmd` wrappers and POSIX executable wrappers
 according to the host platform. No MCP server, lifecycle Hook, Autopilot,
 parallel Implementer, external daemon, database, Codex Terminal UI automation,
 or third-party adapter loading is needed for this closure. Separately, trusted
 local Contract v1 modules may now be loaded only through an explicit
-`adapter register <local-file>` operation; that path is not part of this
-historical built-in fixture. The three built-in adapters are created through
+`adapter register <local-file>` operation. The three built-in adapters are created through
 their public Contract v1 descriptors and pass the same deterministic
 conformance runner used by external adapters. The Runtime continues to own
 executable, process, Session, Task, and release behavior; the Session Host

@@ -94,6 +94,13 @@ machine command, registers the project Agent with its Adapter, assigns the Imple
 checks Adapter compatibility and the executable, runs the equivalent doctor checks, and only then
 returns `READY`. It must not manually combine lower-level configuration operations.
 
+If a user has explicitly registered a trusted local Contract v1 module, the same discovery response
+lists its identity and capabilities in the additive `adapters` snapshot. Setup may select that exact
+Adapter ID; it does not execute a launch plan during discovery, and any configured external Agent is
+checked only through the Adapter's declared detection operation. Existing MCP tool names and inputs
+remain compatible, while the selected Agent, Adapter, and executable identities and project > user >
+Adapter-default precedence remain distinct.
+
 Do not infer a usable Implementer from a role name. Resolve the actual local
 executable and preserve user configuration outside the installed Skill.
 

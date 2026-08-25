@@ -105,6 +105,14 @@ The public [Adapter Conformance Kit](./docs/adapter-conformance.md) runs the sam
 
 The built-in Codex CLI, Antigravity CLI, and generic CLI adapters are created through validated Contract v1 descriptors and pass this same conformance runner. Runtime session decisions use the frozen descriptor capabilities, while the legacy adapter metadata methods remain compatible.
 
+Setup discovery and the existing MCP setup/Task tools expose the same additive
+`adapters` registry snapshot, including registered external identities and
+Contract capabilities. Discovery does not launch an adapter; configured
+external Agents contribute only their Contract-defined detection facts. Setup
+can select an external adapter without merging Agent, Adapter, and executable
+identities, and the canonical Task/persistent-Session path preserves exact
+project command > user command > adapter default precedence.
+
 ## Local Inspector
 
 Start the read-only local Inspector from a repository with an initialized Agent Bus:

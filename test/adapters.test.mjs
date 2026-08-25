@@ -3,7 +3,13 @@ import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { AgentAdapter, getAdapter, listAdapters, registerAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
+import {
+  AgentAdapter,
+  getAdapter,
+  getAdapterRegistrySnapshot,
+  listAdapters,
+  registerAdapter,
+} from '../skills/coordinate-agents/adapters/index.mjs';
 import { resolveExecutable } from '../skills/coordinate-agents/adapters/executable.mjs';
 
 test('AgentAdapter defines normalized statuses and default lifecycle methods', () => {
@@ -69,6 +75,26 @@ test('registered adapters provide capabilities and correct adapter instances', (
   assert.equal(genericCaps.name, 'generic-cli');
 
   assert.throws(() => getAdapter('unknown-adapter', { id: 'test' }), /Unknown adapter: unknown-adapter/);
+});
+
+test('registry snapshot exposes serializable Contract identity and capabilities only', () => {
+  const snapshot = getAdapterRegistrySnapshot();
+  const codex = snapshot.find(adapter => adapter.id === 'codex-cli');
+  assert.deepEqual(codex, {
+    id: 'codex-cli',
+    builtin: true,
+    sourcePath: null,
+    contractVersion: 1,
+    capabilities: {
+      detection: true,
+      configuration: true,
+      oneShotLaunch: true,
+      persistentSession: true,
+    },
+  });
+  assert.equal(Object.prototype.hasOwnProperty.call(codex, 'create'), false);
+  assert.equal(Object.isFrozen(snapshot), true);
+  assert.equal(Object.isFrozen(codex.capabilities), true);
 });
 
 test('Antigravity adapter keeps permission flags explicit', () => {

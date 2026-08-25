@@ -19,6 +19,7 @@ import {
   runtimeAdapterRegister,
   runtimeAdapterRemove,
   runtimeSetupConfigure,
+  runtimeSetupDiscover,
   runtimeTaskCreate,
   runtimeTaskOperation,
 } from '../bin/coordinate-agents.mjs';
@@ -282,6 +283,22 @@ test('registered external adapter drives setup, Task dispatch, and Session reuse
   try {
     await runtimeAdapterRegister({ path: modulePath });
     registeredPath = realpathSync(modulePath);
+    const beforeFailedSetupBus = snapshotTree(join(root, '.agent-bus'));
+    const beforeFailedSetupUserConfig = snapshotTree(dirname(userConfigPath()));
+    await assert.rejects(
+      runtimeSetupConfigure({
+        root,
+        agent: 'external-failing',
+        command: process.execPath,
+        adapter: 'fixture-session-adapter',
+        args: [join(root, 'missing-fixture.cjs')],
+        role: 'implementer',
+      }),
+      error => error.code === 'INVALID_ADAPTER_CONFIG',
+    );
+    assert.deepEqual(snapshotTree(join(root, '.agent-bus')), beforeFailedSetupBus);
+    assert.deepEqual(snapshotTree(dirname(userConfigPath())), beforeFailedSetupUserConfig);
+
     const configured = await runtimeSetupConfigure({
       root,
       agent: 'node',
@@ -293,6 +310,21 @@ test('registered external adapter drives setup, Task dispatch, and Session reuse
     assert.equal(configured.ok, true, JSON.stringify(configured));
     assert.equal(configured.agent.adapter, 'fixture-session-adapter');
     assert.equal(configured.agent.resolvedCommand, process.execPath);
+
+    const discovered = await runtimeSetupDiscover({ root });
+    assert.equal(discovered.ok, true, JSON.stringify(discovered));
+    const discoveredAdapter = discovered.adapters.find(adapter => adapter.id === 'fixture-session-adapter');
+    assert.deepEqual(discoveredAdapter?.capabilities, {
+      detection: true,
+      configuration: true,
+      oneShotLaunch: true,
+      persistentSession: true,
+    });
+    assert.equal(discoveredAdapter.configuredAgents[0].id, 'node');
+    assert.equal(discoveredAdapter.configuredAgents[0].available, true);
+    assert.equal(discoveredAdapter.configuredAgents[0].command, process.execPath);
+    assert.equal(discovered.agents.at(-1).configuredAgent, 'node');
+    assert.equal(discovered.agents.at(-1).adapter, 'fixture-session-adapter');
 
     const created = await runtimeTaskCreate({
       root,

@@ -55,6 +55,10 @@ it before sharing diagnostics.
   validates the descriptor before updating user configuration and does not modify project `.agent-bus` state.
 - The Runtime revalidates adapter launch plans and retains ownership of executable identity, cwd/root
   containment, process/PTY lifecycle, bounded output, recovery, durable state, and release policy.
+- Setup discovery returns registry identity/capability facts without resolving or starting a launch
+  plan. For an already configured external Agent, availability is obtained only through the
+  Adapter Contract's declared detection operation; discovery does not silently start a session or
+  hand process authority to the adapter.
 - Adapters execute CLI processes passing arguments strictly as arrays without invoking a shell (`shell: false`).
 - On Windows, batch scripts (`.cmd`/`.bat`) without safe executable or Node.js entrypoints are rejected to prevent shell interpolation.
 - Agent IDs are strictly validated (`^[a-z][a-z0-9_-]{0,63}$`, blocking Windows device names and path separators).

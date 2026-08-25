@@ -42,6 +42,7 @@ export {
   CODEX_CLI_ADAPTER_DESCRIPTOR,
   GENERIC_CLI_ADAPTER_DESCRIPTOR,
   getAdapterDescriptor,
+  getAdapterRegistrySnapshot,
   getAdapterSourcePath,
   listAdapters,
   registerAdapter,

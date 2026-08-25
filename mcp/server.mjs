@@ -60,7 +60,7 @@ const taskIdentityProperties = {
 const TOOL_DEFINITIONS = Object.freeze([
   {
     name: 'coordinate_agents_setup_discover',
-    description: 'Discover available coding CLIs without changing configuration.',
+    description: 'Discover available coding CLIs and registered Adapter Contract identities/capabilities without changing configuration.',
     operation: 'setupDiscover',
     command: 'setup',
     inputSchema: {
@@ -72,7 +72,7 @@ const TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'coordinate_agents_setup_configure',
-    description: 'Configure an agent executable and assign a project workflow role transactionally.',
+    description: 'Configure an executable, select a built-in or registered external adapter, and assign a project workflow role transactionally.',
     operation: 'setupConfigure',
     command: 'setup.configure',
     inputSchema: {

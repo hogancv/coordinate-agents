@@ -40,6 +40,11 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "
 It checks `codex`, `claude`, `agy`, `agy-proxy`, and `gemini` by resolving the
 actual executable. It reports unavailable commands and distinguishes
 `detected-but-not-configured` agents. Detection never writes configuration.
+The response also includes the additive `adapters` registry snapshot with each
+registered identity, Contract version, capabilities, and configured Agent
+facts. A trusted external adapter is represented without launching it; when an
+external Agent is already configured, discovery uses only that adapter's
+Contract-defined `detect()` operation for availability facts.
 
 When the user chooses an agent, inspect its native help and perform one
 high-level setup transaction through `coordinate_agents_setup_configure`. It
@@ -48,6 +53,13 @@ writes the machine-specific executable to
 assigns the workflow role, checks executable availability, and returns READY
 facts. Do not manually compose `config set`, `agent add`, workflow editing,
 and doctor calls:
+
+An explicitly registered external adapter can be selected with its exact
+identity through the same operation. The returned `adapters` snapshot is
+additive and keeps Agent identity, Adapter identity, and executable identity
+separate. An unavailable or incompatible adapter fails before either the user
+configuration or project workflow transaction is committed, and the Runtime
+rolls back any partial setup changes.
 
 Fallback/debug syntax only:
 

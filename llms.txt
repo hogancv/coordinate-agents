@@ -19,6 +19,12 @@ Trusted local Contract v1 adapters: register one exact `.mjs`, `.js`, or `.cjs`
 path with `coordinate-agents adapter register <local-file>`; no URL import,
 directory scan, download, or automatic npm installation is performed, and the
 module runs with the current Node.js permissions.
+Setup discovery and MCP setup/Task operations expose the same additive
+`adapters` registry snapshot with registered identities and Contract
+capabilities. Discovery does not launch an adapter; configured external Agents
+contribute only their declared detection facts, while exact Agent/Adapter/
+executable identity and project > user > adapter-default precedence remain
+separate through Task and persistent-Session execution.
 Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
 Durable Runtime Event Journal: https://hogancv.github.io/coordinate-agents/event-journal.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html

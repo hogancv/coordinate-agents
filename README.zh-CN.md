@@ -105,6 +105,13 @@ npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边�
 
 内置的 Codex CLI、Antigravity CLI 和 generic CLI 适配器现在都通过经过验证的 Contract v1 descriptor 创建，并运行同一套 conformance runner。Runtime 的 Session 决策使用冻结的 descriptor capabilities，同时保留旧版适配器 metadata 方法的兼容性。
 
+Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼容的
+`adapters` registry snapshot，其中包含已注册外部适配器的身份和 Contract
+能力。Discovery 不会启动适配器；已配置的外部 Agent 只会提供其 Contract
+定义的检测事实。Setup 可以选择外部适配器，同时保持 Agent、Adapter 与可执行文件
+身份分离；canonical Task/持久 Session 路径继续遵守项目命令 > 用户命令 >
+适配器默认值的精确优先级。
+
 ## 本地 Inspector
 
 在已初始化 Agent Bus 的仓库中启动只读本地 Inspector：

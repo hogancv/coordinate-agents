@@ -73,6 +73,18 @@ for example, `antigravity` may use `agy-proxy`. Session output and input are
 bounded, and `session_write` is structured text rather than a general shell
 execution surface.
 
+`coordinate_agents_setup_discover` returns an additive `adapters` snapshot.
+Each record exposes the registered Adapter Contract identity, contract version,
+capabilities, and configured Agent facts. Explicitly registered external
+adapters appear alongside the three built-ins; discovery never resolves a
+launch plan or starts an Implementer. For a configured external adapter, the
+only adapter process operation performed by discovery is its Contract-defined
+`detect()` call. `coordinate_agents_setup_configure` accepts the same adapter
+identity and preserves the exact configured command and project > user >
+adapter-default precedence. The setup response and subsequent Task dispatch
+use the same registry view, while existing tool names and input shapes remain
+unchanged.
+
 ## Output and errors
 
 Successful and business-failure results use the existing Runtime contract:

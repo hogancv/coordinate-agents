@@ -84,6 +84,24 @@ export function getAdapterSourcePath(adapterName) {
   return adapterRegistry.get(adapterName)?.sourcePath || null;
 }
 
+/**
+ * Return the serializable Adapter Registry view used by Setup, Runtime, and
+ * transport integrations.  Descriptors deliberately expose identity and
+ * Contract capabilities only; the executable factory never crosses the
+ * transport boundary.
+ */
+export function getAdapterRegistrySnapshot() {
+  return Object.freeze([...adapterRegistry.entries()].map(([id, entry]) => Object.freeze({
+    id,
+    builtin: Boolean(entry.builtin),
+    sourcePath: entry.sourcePath || null,
+    contractVersion: entry.descriptor?.contractVersion || null,
+    capabilities: entry.descriptor
+      ? Object.freeze({ ...entry.descriptor.capabilities })
+      : null,
+  })));
+}
+
 export function getAdapter(adapterName, config = {}) {
   const entry = adapterRegistry.get(adapterName);
   if (!entry) {
