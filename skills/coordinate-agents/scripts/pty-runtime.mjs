@@ -8,8 +8,17 @@ import { dirname, join } from 'node:path';
 // not reliable for the active Node runtime. Use node-pty on supported runtimes;
 // keep the same owned-session contract over pipes as a portable compatibility
 // backend everywhere else.
+const NODE_PTY_MIN_NODE_MAJOR = 20;
+
+function nodeMajorVersion() {
+  return Number.parseInt(`${process.versions.node || ''}`.split('.', 1)[0], 10);
+}
+
+const currentNodeMajor = nodeMajorVersion();
 let nodePty = null;
-try { nodePty = await import('node-pty'); } catch { nodePty = null; }
+if (currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR) {
+  try { nodePty = await import('node-pty'); } catch { nodePty = null; }
+}
 
 const require = createRequire(import.meta.url);
 
@@ -18,8 +27,9 @@ function nativePtyAvailable() {
   // unreliable there across the supported operating systems. A native
   // failure can terminate the detached Session Host before it can publish a
   // useful error, so select the owned stdio backend up front on Node 18.
-  const major = Number.parseInt(`${process.versions.node || ''}`.split('.', 1)[0], 10);
-  return Boolean(nodePty?.spawn) && Number.isInteger(major) && major >= 20;
+  return Boolean(nodePty?.spawn)
+    && Number.isInteger(currentNodeMajor)
+    && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR;
 }
 
 function ensureUnixSpawnHelper() {
