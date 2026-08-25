@@ -22,6 +22,7 @@ export {
   validateDetectionResult,
   validateLaunchPolicy,
   validateLaunchResult,
+  validateRuntimeLaunchPlan,
 } from './skills/coordinate-agents/adapters/contract-v1.mjs';
 
 export {
@@ -40,4 +41,19 @@ export {
   BUILTIN_ADAPTER_DESCRIPTORS,
   CODEX_CLI_ADAPTER_DESCRIPTOR,
   GENERIC_CLI_ADAPTER_DESCRIPTOR,
+  getAdapterDescriptor,
+  getAdapterSourcePath,
+  listAdapters,
+  registerAdapter,
+  unregisterAdapter,
 } from './skills/coordinate-agents/adapters/index.mjs';
+
+export {
+  TRUSTED_ADAPTER_MODULE_EXTENSIONS,
+  loadConfiguredTrustedAdapters,
+  loadTrustedAdapterModule,
+  loadTrustedAdapterModules,
+  normalizeTrustedAdapterModulePath,
+  unregisterTrustedAdapterModule,
+  trustedAdapterModuleRecords,
+} from './skills/coordinate-agents/adapters/trusted-local.mjs';

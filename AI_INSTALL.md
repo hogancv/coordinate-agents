@@ -38,6 +38,7 @@ This is the canonical installation procedure for AI assistants installing
 2. **Project-Local Agent Registration & Protocol Runtime (Git Repository)**:
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
    - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents agent add <id> --adapter <adapter>`.
+   - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents adapter register <local-file>`; the loader never scans directories or imports URLs.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
 `coordinate-agents` 包含两个不同层级：
@@ -319,6 +320,19 @@ sets the selected project root as the child process working directory, so do not
 vendor-specific `--dir` flag exists. Keep the exact `args` produced by the AI only after checking
 the selected CLI's own help output.
 
+For an adapter that implements the public Contract v1, register one exact local module before using
+its adapter ID. Registration validates the descriptor before writing the user configuration and does
+not touch the project Bus:
+
+```sh
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter register "<absolute-local-adapter.mjs>" --json
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter list --json
+```
+
+Only regular `.mjs`, `.js`, or `.cjs` files without symlink/junction/hard-link paths are accepted.
+The module runs with the current Node.js permissions; this is a trust boundary, not a JavaScript
+sandbox. Failed registration leaves the user configuration and project `.agent-bus` unchanged.
+
 安装并验证 Codex 插件后，可以直接在 Codex App 中使用本 Skill。对于使用 Codex App 的用户，这是推荐的
 交互方式：不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。
 
@@ -355,6 +369,17 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> agent add claude \
 
 `generic-cli` 支持 `{prompt}`、`{root}`、`{agent}`、`{lang}` 占位符；运行时也会把选定项目根目录作为子进程工作目录，
 因此不要假设厂商 CLI 一定存在 `--dir`。只有在检查对应 CLI 自己的帮助输出后，才保存 AI 生成的 `args`。
+
+如果适配器实现了公开的 Contract v1，使用其 adapter ID 前必须先显式注册一个确定的本地模块。注册会在写入用户配置前验证
+descriptor，且不会修改项目 Bus：
+
+```sh
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter register "<absolute-local-adapter.mjs>" --json
+npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter list --json
+```
+
+只接受没有符号链接、junction 或 hard link 路径的正规 `.mjs`、`.js` 或 `.cjs` 文件。模块会在当前 Node.js 权限下运行，
+这是信任边界而不是 JavaScript 沙箱；注册失败时用户配置与项目 `.agent-bus` 保持不变。
 
 ## Configure executable commands / 配置可执行命令
 

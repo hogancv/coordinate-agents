@@ -55,7 +55,8 @@ function persistentExecutable(root, name = 'agy-proxy', { crash = false, silent 
   if (crash) {
     if (process.platform === 'win32') {
       const cmd = `${command}.cmd`;
-      writeFileSync(cmd, '@if "%~1"=="--version" (echo persistent-fixture 1.0.0& exit /b 0)\r\n@exit /b 9\r\n', 'utf8');
+      writeFileSync(`${command}.cjs`, "if (process.argv[2] === '--version') { console.log('persistent-fixture 1.0.0'); process.exit(0); } process.exit(9);\n", 'utf8');
+      writeFileSync(cmd, '@echo off\r\n@exit /b 9\r\n', 'utf8');
       return cmd;
     }
     writeFileSync(command, '#!/bin/sh\nif [ "$1" = "--version" ]; then\n  echo persistent-fixture 1.0.0\n  exit 0\nfi\nexit 9\n', 'utf8');
@@ -73,7 +74,7 @@ const completed = new Set();
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {
   buffer += chunk;
-  const matches = [...buffer.matchAll(/Task ID:\\s*(task-[A-Za-z0-9_-]+)[\\s\\S]*?Round:\\s*(\\d+)/g)];
+  const matches = [...buffer.matchAll(/Task ID:\\s*(task-[A-Za-z0-9_-]+?)(?:\\s*Round:\\s*(\\d+))/g)];
   for (const match of matches) {
     const key = match[1] + ':' + match[2];
     if (completed.has(key)) continue;
@@ -103,19 +104,25 @@ async function configure(root, command, agent = 'antigravity', adapter = 'antigr
 }
 
 async function closeQuietly(root, sessionId) {
-  try { await runtimeSessionClose({ root, sessionId, graceful: true, timeoutMs: 500 }); } catch { /* Cleanup is best effort after a crash. */ }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const result = await runtimeSessionClose({ root, sessionId, graceful: false, timeoutMs: 1_000 });
+      if (!['starting', 'running', 'idle', 'busy'].includes(result?.session?.state)) return;
+    } catch { /* Cleanup is best effort after a test failure. */ }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
 }
 
 async function removeTree(path) {
   let lastError = null;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       rmSync(path, { recursive: true, force: true });
       if (!existsSync(path)) return;
     } catch (error) {
       lastError = error;
     }
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
   if (lastError) throw lastError;
 }
@@ -219,31 +226,32 @@ test('Task dispatch reuses the same healthy session after CHANGES_REQUESTED', as
   process.env.FIXTURE_ROOT = root;
   process.env.FIXTURE_AGENT = 'antigravity';
   process.env.BUS_TOOL = busTool;
+  let sessionId = null;
   try {
     await configure(root, command);
     await runtimeTaskCreate({ root, id: 'task-session-reuse', title: 'Persistent task', spec: 'Implement the persistent fixture workflow.' });
     const first = await runtimeTaskOperation('dispatch', { root, taskId: 'task-session-reuse' });
     assert.equal(first.task.status, 'REVIEWING');
-    const firstSessionId = first.task.sessionId;
-    assert.ok(firstSessionId);
+    sessionId = first.task.sessionId;
+    assert.ok(sessionId);
     await runtimeTaskOperation('review', { root, taskId: 'task-session-reuse', decision: 'CHANGES_REQUESTED', feedback: 'Keep the same coding-agent context and address this finding.' });
     const second = await runtimeTaskOperation('dispatch', { root, taskId: 'task-session-reuse' });
     assert.equal(second.task.status, 'REVIEWING');
-    assert.equal(second.task.sessionId, firstSessionId);
+    assert.equal(second.task.sessionId, sessionId);
     assert.equal(second.session.reused, true);
     assert.equal(readFileSync(starts, 'utf8'), 'S');
     assert.equal(readFileSync(done, 'utf8'), 'DD');
-    const sessionEventTypes = readRuntimeEvents(root, { sessionId: firstSessionId, limit: 100 }).map(event => event.type);
+    const sessionEventTypes = readRuntimeEvents(root, { sessionId, limit: 100 }).map(event => event.type);
     assert.ok(sessionEventTypes.includes('SESSION_REUSED'));
     assert.equal(sessionEventTypes.filter(type => type === 'SESSION_STARTED').length, 1);
     assert.equal(sessionEventTypes.filter(type => type === 'SESSION_REUSED').length, 1);
 
     const otherManager = new ExecutionSessionManager();
-    const attached = await otherManager.status(root, firstSessionId);
-    assert.equal(attached.id, firstSessionId);
+    const attached = await otherManager.status(root, sessionId);
+    assert.equal(attached.id, sessionId);
     assert.equal(attached.command, command);
-    await closeQuietly(root, firstSessionId);
   } finally {
+    if (sessionId) await closeQuietly(root, sessionId);
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
   }
@@ -273,9 +281,9 @@ test('sessions are isolated by root and Agent identity, and custom executable na
     sessions.push([rootA, otherAgent.session.id]);
   } finally {
     for (const [root, id] of sessions) await closeQuietly(root, id);
-    rmSync(rootA, { recursive: true, force: true });
-    rmSync(rootB, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    await removeTree(rootA);
+    await removeTree(rootB);
+    await removeTree(home);
   }
 });
 

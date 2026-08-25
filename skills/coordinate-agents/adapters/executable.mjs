@@ -277,6 +277,7 @@ export function checkAdapterExecutable(command, options = {}) {
     return {
       ...fixture,
       command,
+      runtimeCommand: fixture.command,
       version: 'fixture-1.0.0',
     };
   }
@@ -307,7 +308,14 @@ function executeVersion(resolved, versionArgs) {
 export function checkExecutable(command, { versionArgs = ['--version'], ...resolveOptions } = {}) {
   const resolved = resolveExecutable(command, resolveOptions);
   if (!resolved.available) return resolved;
-  if (versionArgs === null) return { ...resolved, command, available: true };
+  if (versionArgs === null) {
+    return {
+      ...resolved,
+      command,
+      runtimeCommand: resolved.command,
+      available: true,
+    };
+  }
 
   const result = executeVersion(resolved, versionArgs);
   if (result.error || result.status !== 0) {
@@ -322,7 +330,7 @@ export function checkExecutable(command, { versionArgs = ['--version'], ...resol
         command,
         code,
         result.error?.message || `Version check failed with status ${result.status}`,
-        { resolvedCommand: resolved.resolvedCommand, prefix: resolved.prefix },
+        { resolvedCommand: resolved.resolvedCommand, prefix: resolved.prefix, runtimeCommand: resolved.command },
       ),
       stdoutTail: redactOutput(result.stdout),
       stderrTail: redactOutput(result.stderr),
@@ -332,6 +340,7 @@ export function checkExecutable(command, { versionArgs = ['--version'], ...resol
   return {
     ...resolved,
     command,
+    runtimeCommand: resolved.command,
     available: true,
     version,
   };

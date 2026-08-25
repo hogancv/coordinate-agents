@@ -50,6 +50,7 @@ export class GenericCliAdapter extends AgentAdapter {
       command: resolved.command,
       prefix: resolved.prefix,
       args: resolvedArgs,
+      resolvedCommand: resolved.resolvedCommand,
     };
   }
 

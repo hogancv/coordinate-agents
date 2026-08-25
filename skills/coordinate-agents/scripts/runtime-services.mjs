@@ -8,6 +8,9 @@
 
 import {
   runtimeRecoverInspect,
+  runtimeAdapterList,
+  runtimeAdapterRegister,
+  runtimeAdapterRemove,
   runtimeSetupConfigure,
   runtimeSetupDiscover,
   runtimeTaskCreate,
@@ -24,7 +27,16 @@ import {
   runtimeSessionWrite,
 } from './session-service.mjs';
 
-export { runtimeSetupDiscover, runtimeSetupConfigure, runtimeTaskCreate, runtimeTaskOperation, runtimeRecoverInspect };
+export {
+  runtimeAdapterList,
+  runtimeAdapterRegister,
+  runtimeAdapterRemove,
+  runtimeSetupDiscover,
+  runtimeSetupConfigure,
+  runtimeTaskCreate,
+  runtimeTaskOperation,
+  runtimeRecoverInspect,
+};
 export {
   runtimeSessionOpen,
   runtimeSessionStatus,

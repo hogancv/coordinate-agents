@@ -22,8 +22,21 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, spawnSync } from 'node:child_process';
 import { getAdapter, getAdapterContract } from '../skills/coordinate-agents/adapters/index.mjs';
-import { validateDetectionResult, validateLaunchPolicy, validateLaunchResult } from '../skills/coordinate-agents/adapters/contract-v1.mjs';
+import {
+  validateConfigurationResult,
+  validateDetectionResult,
+  validateLaunchPolicy,
+  validateRuntimeLaunchPlan,
+} from '../skills/coordinate-agents/adapters/contract-v1.mjs';
 import { redactOutput } from '../skills/coordinate-agents/adapters/executable.mjs';
+import {
+  loadConfiguredTrustedAdapters,
+  normalizeTrustedAdapterModulePath,
+  prepareTrustedAdapterModules,
+  registerPreparedTrustedAdapterModules,
+  unregisterTrustedAdapterModule,
+  trustedAdapterModuleRecords,
+} from '../skills/coordinate-agents/adapters/trusted-local.mjs';
 import { observeAgentBus, waitForAgentActivity } from '../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { discoverCodingClis, setupSnapshot } from '../skills/coordinate-agents/scripts/discovery.mjs';
 import {
@@ -81,6 +94,11 @@ const metadataFile = '.coordinate-agents.json';
 const templateNames = new Set(['bug', 'feature', 'refactor']);
 const auxiliarySkillNames = Object.freeze(['coordinate-setup', 'coordinate-task', 'coordinate-review', 'coordinate-recover']);
 
+async function loadConfiguredAdaptersForRuntime(userConfig = null) {
+  const config = userConfig || readUserConfig();
+  return loadConfiguredTrustedAdapters(config, { baseDir: dirname(userConfigPath()) });
+}
+
 const messages = {
   en: {
     usage: `coordinate-agents <command> [options]
@@ -94,6 +112,7 @@ Commands:
   status        Show the project Agent Bus and Task status
   task          Manage durable tasks (create, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
+  adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
   config        Manage user-level executable configuration (set, get, list)
   doctor        Check prerequisites/installations and print repair commands
@@ -131,6 +150,7 @@ Examples:
   npx @hogancv/coordinate-agents install
   npx @hogancv/coordinate-agents quickstart --template feature --task "Build a Todo app"
   npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude
+  npx @hogancv/coordinate-agents adapter register "C:\\path\\to\\adapter.mjs"
   npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
   npx @hogancv/coordinate-agents doctor`,
     installed: 'Installed {target}: {path}',
@@ -199,6 +219,7 @@ Examples:
   quickstart    初始化项目并生成两条可复制的启动命令
   launch        使用已生成的协作提示词启动一个 CLI
   agent         管理注册的 Agent（add, list, doctor）
+  adapter       管理可信本地 Contract v1 适配器（register、list、remove）
   config        管理用户级可执行文件配置（set, get, list）
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
@@ -239,6 +260,7 @@ Examples:
   npx @hogancv/coordinate-agents install
   npx @hogancv/coordinate-agents quickstart --template feature --task "开发 Todo 应用"
   npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude
+  npx @hogancv/coordinate-agents adapter register "C:\\path\\to\\adapter.mjs"
   npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
   npx @hogancv/coordinate-agents doctor --lang zh-CN`,
     installed: '已安装 {target}：{path}',
@@ -346,6 +368,11 @@ function parseArgs(argv) {
   if (args[0] && !args[0].startsWith('-')) {
     result.command = args.shift();
     if (result.command === 'agent' && args[0] && !args[0].startsWith('-')) {
+      result.subcommand = args.shift();
+      if (args[0] && !args[0].startsWith('-')) {
+        result.targetAgent = args.shift();
+      }
+    } else if (result.command === 'adapter' && args[0] && !args[0].startsWith('-')) {
       result.subcommand = args.shift();
       if (args[0] && !args[0].startsWith('-')) {
         result.targetAgent = args.shift();
@@ -755,6 +782,10 @@ function handleConfigCommand(options, t) {
         if (agent.args !== undefined) console.log(format(t.configArgsLabel, { value: JSON.stringify(agent.args) }));
       }
     }
+    console.log(`\nTrusted local adapters`);
+    const adapters = Array.isArray(config.adapters) ? config.adapters : [];
+    if (adapters.length === 0) console.log(t.configNone);
+    else for (const modulePath of adapters) console.log(`  ${modulePath}`);
     return;
   }
 
@@ -822,6 +853,98 @@ function jsonConfigCommand(options) {
     return jsonSuccess('config.set', { path: written, key, value: getUserConfigValue(config, key) });
   }
   throw runtimeError('INVALID_AGENT_CONFIG', `Unknown config subcommand: ${options.subcommand}`, { recoverable: false });
+}
+
+async function adapterCommand(options, { json = false } = {}) {
+  const path = userConfigPath();
+  const baseDir = dirname(path);
+  const subcommand = options.subcommand || 'list';
+  const hadUserConfig = existsSync(path);
+  const previousUserConfig = hadUserConfig ? readFileSync(path, 'utf8') : null;
+  const config = readUserConfig();
+  const removing = subcommand === 'remove' || subcommand === 'unregister';
+  if (!removing) await loadConfiguredTrustedAdapters(config, { baseDir });
+  const configured = Array.isArray(config.adapters) ? [...config.adapters] : [];
+
+  if (subcommand === 'list') {
+    const payload = jsonSuccess('adapter.list', {
+      path,
+      adapters: trustedAdapterModuleRecords(),
+      configuredPaths: configured,
+    });
+    if (!json) {
+      console.log(`Trusted local adapters (${path}):`);
+      const records = payload.adapters;
+      if (records.length === 0) console.log('  (none)');
+      else for (const record of records) console.log(`  ${record.id} -> ${record.path}`);
+    }
+    return payload;
+  }
+
+  if (subcommand === 'register' || subcommand === 'add') {
+    const [suppliedPath, ...extra] = [options.targetAgent || options.positionals[0], ...options.positionals.slice(options.targetAgent ? 0 : 1)];
+    if (!suppliedPath || extra.length > 0) {
+      throw runtimeError('INVALID_ADAPTER_CONFIG', 'adapter register requires exactly one local module path.', { recoverable: false, details: 'Usage: coordinate-agents adapter register <path>' });
+    }
+    const normalizedPath = normalizeTrustedAdapterModulePath(suppliedPath, { baseDir: process.cwd() });
+    const pathKey = value => process.platform === 'win32' ? value.toLowerCase() : value;
+    if (configured.some(value => pathKey(value) === pathKey(normalizedPath))) {
+      throw runtimeError('INVALID_ADAPTER_CONFIG', `Adapter module is already registered: ${normalizedPath}`, { recoverable: false, details: { path: 'module.path', modulePath: normalizedPath } });
+    }
+
+    // Prepare and validate before changing user configuration. The project
+    // Bus is intentionally not opened or written by adapter registration.
+    const prepared = await prepareTrustedAdapterModules([normalizedPath], { baseDir });
+    const previous = [...configured];
+    config.adapters = [...configured, normalizedPath];
+    let written = false;
+    try {
+      const writtenPath = writeUserConfig(config);
+      written = true;
+      const committed = registerPreparedTrustedAdapterModules(prepared);
+      const record = committed[0] || trustedAdapterModuleRecords().find(item => item.path === normalizedPath);
+      const payload = jsonSuccess('adapter.register', {
+        path: writtenPath,
+        adapter: record || { path: normalizedPath },
+        configuredPaths: config.adapters,
+      });
+      if (!json) console.log(`Registered trusted local adapter ${record?.id || '(unknown)'}: ${normalizedPath}`);
+      return payload;
+    } catch (error) {
+      config.adapters = previous;
+      if (written) {
+        try { restoreUserConfigSnapshot(path, hadUserConfig, previousUserConfig); } catch { /* Preserve the original registration error. */ }
+      }
+      throw error;
+    }
+  }
+
+  if (subcommand === 'remove' || subcommand === 'unregister') {
+    const [suppliedPath, ...extra] = [options.targetAgent || options.positionals[0], ...options.positionals.slice(options.targetAgent ? 0 : 1)];
+    if (!suppliedPath || extra.length > 0) {
+      throw runtimeError('INVALID_ADAPTER_CONFIG', 'adapter remove requires exactly one local module path.', { recoverable: false });
+    }
+    const normalizedPath = normalizeTrustedAdapterModulePath(suppliedPath, { baseDir: process.cwd(), requireExists: false });
+    const pathKey = value => process.platform === 'win32' ? value.toLowerCase() : value;
+    const remaining = configured.filter(value => pathKey(value) !== pathKey(normalizedPath));
+    if (remaining.length === configured.length) {
+      throw runtimeError('INVALID_ADAPTER_CONFIG', `Adapter module is not registered: ${normalizedPath}`, { recoverable: false });
+    }
+    config.adapters = remaining;
+    const writtenPath = writeUserConfig(config);
+    try {
+      unregisterTrustedAdapterModule(normalizedPath, { baseDir });
+    } catch (error) {
+      config.adapters = configured;
+      try { restoreUserConfigSnapshot(path, hadUserConfig, previousUserConfig); } catch { /* Preserve the original removal error. */ }
+      throw error;
+    }
+    const payload = jsonSuccess('adapter.remove', { path: writtenPath, removedPath: normalizedPath, configuredPaths: remaining });
+    if (!json) console.log(`Removed trusted local adapter registration: ${normalizedPath}`);
+    return payload;
+  }
+
+  throw runtimeError('INVALID_ADAPTER_CONFIG', `Unknown adapter subcommand: ${subcommand}. Use register, list, or remove.`, { recoverable: false });
 }
 
 function firstDoctorError(checks) {
@@ -1020,6 +1143,7 @@ function readLatestErrorArtifact(root, agentId) {
 }
 
 async function recoverInspectCommand(options) {
+  await loadConfiguredAdaptersForRuntime();
   const root = assertGitRepository(options.root, messages.en);
   const id = options.taskId || options.positionals?.[0] || null;
   const taskId = resolveTaskId(root, id);
@@ -1162,7 +1286,7 @@ function taskImplementationPrompt(task) {
   ].filter(Boolean).join('\n\n');
 }
 
-function taskAgentResolution(root, task) {
+async function taskAgentResolution(root, task) {
   const busPath = join(root, '.agent-bus');
   const busConfig = readConfig(busPath);
   const workflowImplementer = busConfig.workflow?.implementer || task.implementer;
@@ -1181,9 +1305,14 @@ function taskAgentResolution(root, task) {
       taskId: task.id,
     });
   }
-  const resolved = runtimeAgentConfig(projectAgent, readUserConfig());
+  const userConfig = readUserConfig();
+  await loadConfiguredAdaptersForRuntime(userConfig);
+  const resolved = runtimeAgentConfig(projectAgent, userConfig);
   const adapter = getAdapter(resolved.adapter, resolved);
-  const compatibility = adapter.validateConfiguration({ setup: true });
+  const contract = getAdapterContract(adapter);
+  const compatibility = contract && contract.capabilities.configuration
+    ? validateConfigurationResult(adapter.validateConfiguration({ setup: true }))
+    : adapter.validateConfiguration({ setup: true });
   if (!compatibility.compatible) {
     throw runtimeError(compatibility.code || 'UNSUPPORTED_CAPABILITY', compatibility.details || `Adapter ${resolved.adapter} cannot drive the configured Implementer.`, {
       recoverable: false,
@@ -1195,7 +1324,7 @@ function taskAgentResolution(root, task) {
       details: compatibility.details,
     });
   }
-  return { busConfig, workflowImplementer, projectAgent, resolved, adapter };
+  return { busConfig, workflowImplementer, projectAgent, resolved, adapter, contract };
 }
 
 function markDispatchFailure(root, task, error, agentId = null) {
@@ -1220,12 +1349,22 @@ async function taskDispatch(root, task, options, t) {
   let resolution;
   let agentId = null;
   try {
-    resolution = taskAgentResolution(root, task);
+    resolution = await taskAgentResolution(root, task);
     agentId = resolution.workflowImplementer;
     if (task.implementer !== agentId) {
       task = setTaskStatus(root, task.id, task.status, { implementer: agentId });
     }
-    const detection = resolution.adapter.detect({ version: false });
+    if (resolution.contract && !resolution.contract.capabilities.detection) {
+      throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${resolution.contract.id}" does not support executable detection.`, {
+        recoverable: false,
+        taskId: task.id,
+        agent: agentId,
+        adapter: resolution.contract.id,
+      });
+    }
+    const detection = resolution.contract
+      ? validateDetectionResult(resolution.adapter.detect({ version: false }))
+      : resolution.adapter.detect({ version: false });
     if (!detection.available) {
       throw runtimeError(canonicalErrorCode(detection.code, 'EXECUTABLE_NOT_FOUND'), detection.details || `Executable is unavailable: ${resolution.resolved.command}`, {
         recoverable: true,
@@ -1412,6 +1551,7 @@ function taskReview(root, task, options) {
 }
 
 async function taskCommand(options, { json = false } = {}) {
+  await loadConfiguredAdaptersForRuntime();
   const root = assertGitRepository(options.root, messages.en);
   ensureProjectBus(root);
   ensureTaskStore(root);
@@ -1462,7 +1602,8 @@ async function taskCommand(options, { json = false } = {}) {
   return result;
 }
 
-function setupCommand(options, { json = false } = {}) {
+async function setupCommand(options, { json = false } = {}) {
+  await loadConfiguredAdaptersForRuntime();
   let root = resolve(options.root);
   if (options.requireRepository) {
     root = assertGitRepository(options.root, messages.en);
@@ -1558,7 +1699,8 @@ function restoreUserConfigSnapshot(path, existed, content) {
   }
 }
 
-function setupConfigureCommand(options, { json = false } = {}) {
+async function setupConfigureCommand(options, { json = false } = {}) {
+  await loadConfiguredAdaptersForRuntime();
   const t = messages[detectLanguage(options.language)];
   const root = assertGitRepository(options.root, t);
   const identity = inferSetupIdentity(options);
@@ -1605,7 +1747,10 @@ function setupConfigureCommand(options, { json = false } = {}) {
     }
     const candidateResolution = resolveAgentConfig(candidateProjectAgent, candidateUserConfig);
     const adapter = getAdapter(identity.adapter, candidateResolution);
-    const compatibility = adapter.validateConfiguration({ setup: true });
+    const adapterContract = getAdapterContract(adapter);
+    const compatibility = adapterContract && adapterContract.capabilities.configuration
+      ? validateConfigurationResult(adapter.validateConfiguration({ setup: true }))
+      : adapter.validateConfiguration({ setup: true });
     if (!compatibility.compatible) {
       throw runtimeError(compatibility.code || 'UNSUPPORTED_CAPABILITY', compatibility.details || `Adapter ${identity.adapter} cannot drive this executable.`, {
         recoverable: false,
@@ -1615,7 +1760,17 @@ function setupConfigureCommand(options, { json = false } = {}) {
         details: compatibility.details,
       });
     }
-    const detection = adapter.detect({ version: true });
+    if (adapterContract && !adapterContract.capabilities.detection) {
+      throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${adapterContract.id}" does not support executable detection.`, {
+        recoverable: false,
+        agent: identity.id,
+        adapter: adapterContract.id,
+        command: candidateResolution.command,
+      });
+    }
+    const detection = adapterContract
+      ? validateDetectionResult(adapter.detect({ version: true }))
+      : adapter.detect({ version: true });
     if (!detection.available) {
       throw runtimeError(canonicalErrorCode(detection.code, 'EXECUTABLE_NOT_FOUND'), detection.details || `Executable is unavailable: ${identity.command}`, {
         recoverable: true,
@@ -1652,7 +1807,10 @@ function setupConfigureCommand(options, { json = false } = {}) {
 
     const resolved = resolveAgentConfig(projectAgent, readUserConfig());
     const finalAdapter = getAdapter(resolved.adapter, resolved);
-    const finalCompatibility = finalAdapter.validateConfiguration({ setup: true });
+    const finalContract = getAdapterContract(finalAdapter);
+    const finalCompatibility = finalContract && finalContract.capabilities.configuration
+      ? validateConfigurationResult(finalAdapter.validateConfiguration({ setup: true }))
+      : finalAdapter.validateConfiguration({ setup: true });
     if (!finalCompatibility.compatible) {
       throw runtimeError(finalCompatibility.code || 'UNSUPPORTED_CAPABILITY', finalCompatibility.details || 'Adapter compatibility check failed after configuration.', {
         recoverable: false,
@@ -1662,7 +1820,17 @@ function setupConfigureCommand(options, { json = false } = {}) {
         details: finalCompatibility.details,
       });
     }
-    const finalDetection = finalAdapter.detect({ version: true });
+    if (finalContract && !finalContract.capabilities.detection) {
+      throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${finalContract.id}" does not support executable detection.`, {
+        recoverable: false,
+        agent: identity.id,
+        adapter: finalContract.id,
+        command: resolved.command,
+      });
+    }
+    const finalDetection = finalContract
+      ? validateDetectionResult(finalAdapter.detect({ version: true }))
+      : finalAdapter.detect({ version: true });
     if (!finalDetection.available) {
       throw runtimeError(canonicalErrorCode(finalDetection.code, 'EXECUTABLE_NOT_FOUND'), finalDetection.details || `Executable is unavailable: ${resolved.command}`, {
         recoverable: true,
@@ -2177,6 +2345,7 @@ async function launchAgent(options, t) {
   let adapterContract = null;
   try {
     const userConfig = readUserConfig();
+    await loadConfiguredAdaptersForRuntime(userConfig);
     resolution = runtimeAgentConfig(projectAgentConfig, userConfig);
     agentConfig = resolution;
     adapter = getAdapter(resolution.adapter, resolution);
@@ -2212,6 +2381,16 @@ async function launchAgent(options, t) {
 
   if (adapterContract && !adapterContract.capabilities.oneShotLaunch) {
     const error = runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${adapterContract.id}" does not support one-shot launches.`, {
+      recoverable: false,
+      adapter: adapterContract.id,
+      agent: agentId,
+      taskId: associatedTaskId,
+    });
+    markAssociatedTaskError(error);
+    throw error;
+  }
+  if (adapterContract && !adapterContract.capabilities.detection) {
+    const error = runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${adapterContract.id}" does not support executable detection.`, {
       recoverable: false,
       adapter: adapterContract.id,
       agent: agentId,
@@ -2294,7 +2473,14 @@ async function launchAgent(options, t) {
         language: options.language,
         activation,
       });
-      if (adapterContract) resolved = validateLaunchResult(resolved);
+      if (adapterContract) {
+        resolved = validateRuntimeLaunchPlan(resolved, {
+          detection,
+          root,
+          kind: 'one-shot',
+          initialPrompt: activationPrompt,
+        });
+      }
       let result;
       try {
         result = await runLaunchChild(resolved, root, setActiveChild, { json: options.json, timeoutMs: options.timeoutMs });
@@ -2471,11 +2657,11 @@ async function launchAgent(options, t) {
   }
 }
 
-function handleAgentCommand(options, t) {
+async function handleAgentCommand(options, t) {
   const root = assertGitRepository(options.root, t);
   const busTool = busToolPath;
   if (options.subcommand === 'discover') {
-    setupCommand(options, { json: false });
+    await setupCommand(options, { json: false });
     return;
   }
   if (options.subcommand === 'add') {
@@ -2533,9 +2719,9 @@ function handleAgentCommand(options, t) {
   throw new Error(`Unknown agent subcommand: ${options.subcommand}. Use add, list, or doctor.`);
 }
 
-function agentCommandJson(options) {
+async function agentCommandJson(options) {
   if (options.subcommand === 'discover') {
-    const result = setupCommand(options, { json: true });
+    const result = await setupCommand(options, { json: true });
     return { ...result, command: 'agent.discover' };
   }
   if (options.subcommand === 'doctor') return agentDoctorJson(options);
@@ -2595,6 +2781,18 @@ async function run(argv) {
     return;
   }
 
+  if (options.command === 'adapter') {
+    try {
+      const result = await adapterCommand(options, { json: options.json });
+      if (options.json) emitJson(result);
+    } catch (error) {
+      if (options.json) emitJson(jsonFailure(`adapter.${options.subcommand || 'list'}`, error));
+      else console.error(error.message || String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (options.command === 'config') {
     try {
       if (options.json) emitJson(jsonConfigCommand(options));
@@ -2610,8 +2808,8 @@ async function run(argv) {
   if (options.command === 'setup' || options.command === 'discover') {
     try {
       const setupResult = options.command === 'setup' && options.subcommand === 'configure'
-        ? setupConfigureCommand(options, { json: options.json })
-        : setupCommand(options, { json: options.json });
+        ? await setupConfigureCommand(options, { json: options.json })
+        : await setupCommand(options, { json: options.json });
       if (options.json) emitJson(setupResult);
     } catch (error) {
       if (options.json) emitJson(jsonFailure(
@@ -2668,8 +2866,9 @@ async function run(argv) {
 
   if (options.command === 'agent') {
     try {
-      if (options.json) emitJson(agentCommandJson(options));
-      else handleAgentCommand(options, t);
+      await loadConfiguredAdaptersForRuntime();
+      if (options.json) emitJson(await agentCommandJson(options));
+      else await handleAgentCommand(options, t);
     } catch (error) {
       if (options.json) emitJson(jsonFailure(`agent.${options.subcommand || 'list'}`, error));
       else console.error(error.message || String(error));
@@ -2834,6 +3033,7 @@ function serviceOptions(input = {}) {
   return {
     command: 'help',
     subcommand: null,
+    targetAgent: null,
     root: resolve(`${input.root || process.cwd()}`),
     language: 'en',
     json: true,
@@ -2884,6 +3084,28 @@ export function runtimeSetupConfigure(input = {}) {
     agentArgs: input.args === undefined ? null : JSON.stringify(input.args),
   });
   return setupConfigureCommand(options, { json: true });
+}
+
+export async function runtimeAdapterRegister(input = {}) {
+  return adapterCommand(serviceOptions({
+    ...input,
+    command: 'adapter',
+    subcommand: 'register',
+    targetAgent: input.path || input.modulePath || input.targetAgent || null,
+  }), { json: true });
+}
+
+export async function runtimeAdapterList(input = {}) {
+  return adapterCommand(serviceOptions({ ...input, command: 'adapter', subcommand: 'list' }), { json: true });
+}
+
+export async function runtimeAdapterRemove(input = {}) {
+  return adapterCommand(serviceOptions({
+    ...input,
+    command: 'adapter',
+    subcommand: 'remove',
+    targetAgent: input.path || input.modulePath || input.targetAgent || null,
+  }), { json: true });
 }
 
 export async function runtimeTaskCreate(input = {}) {

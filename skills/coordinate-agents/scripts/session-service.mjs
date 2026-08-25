@@ -12,7 +12,7 @@ function sessionInputRoot(input) {
 export async function runtimeSessionOpen(input = {}) {
   const root = sessionInputRoot(input);
   const agent = `${input.agent || ''}`.trim().toLowerCase();
-  const resolution = resolveConfiguredSessionAgent(root, agent);
+  const resolution = await resolveConfiguredSessionAgent(root, agent);
   const opened = await getExecutionSessionManager().open({
     root,
     agent,

@@ -48,9 +48,11 @@ it before sharing diagnostics.
 ### Adapter execution safety
 
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
-  Any future explicitly loaded local adapter module executes with the current Node.js process permissions
-  and must be treated as trusted local code.
-- Contract v1 performs no URL import, directory scan, remote registry lookup, download, or automatic npm installation.
+  A module registered with `coordinate-agents adapter register <local-file>` executes with the current
+  Node.js process permissions and must be treated as trusted local code.
+- Trusted-local loading accepts only the explicit regular `.mjs`, `.js`, or `.cjs` file path and performs no
+  URL import, directory scan, remote registry lookup, download, or automatic npm installation. Registration
+  validates the descriptor before updating user configuration and does not modify project `.agent-bus` state.
 - The Runtime revalidates adapter launch plans and retains ownership of executable identity, cwd/root
   containment, process/PTY lifecycle, bounded output, recovery, durable state, and release policy.
 - Adapters execute CLI processes passing arguments strictly as arrays without invoking a shell (`shell: false`).

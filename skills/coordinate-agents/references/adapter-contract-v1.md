@@ -21,10 +21,11 @@ import {
 Inside a checked-out or cached Plugin payload, import `<plugin-root>/adapter-sdk.mjs`.
 Do not deep-import the canonical implementation under `skills/`.
 
-This first expand step freezes and publishes the contract. It does **not** yet
-load third-party modules into the runtime registry. Explicit trusted-local
-registration, setup integration, and the conformance kit are separate roadmap
-tickets.
+The runtime loads external modules only through explicit trusted-local
+registration. Use `coordinate-agents adapter register <local-file>` (or the
+equivalent Runtime API) before assigning the adapter in project setup. The
+registered path is persisted in the user configuration; runtime loading is
+deterministic and never scans directories or accepts URLs/import specifiers.
 
 ## Descriptor
 
@@ -74,7 +75,9 @@ a deterministic `details.path`.
 
 Detection returns `available: boolean`. An unavailable result also supplies a
 non-empty `code` and `details`; optional executable facts include `command`,
-`resolvedCommand`, and `version`.
+`runtimeCommand`, `resolvedCommand`, `prefix`, and `version`. When present,
+`runtimeCommand`, `resolvedCommand`, and `prefix` are the exact facts that the
+Runtime compares with the fresh launch plan before spawn.
 
 Configuration validation returns `compatible: boolean`. An incompatible result
 also supplies a non-empty canonical `code` and bounded human-readable `details`.
@@ -112,8 +115,9 @@ configured-command precedence, filesystem/root containment, process and PTY
 lifecycle, bounded/redacted I/O, retry and recovery, cleanup, Task/Bus/Event
 Journal/Inspector state, review, and release authorization.
 
-A future explicitly registered local adapter module will execute with the
-permissions of the current Node.js process. It must be treated as trusted local
-code. Contract validation is not a sandbox and does not protect against
-malicious JavaScript. Contract v1 includes no URL imports, directory scanning,
-remote registry, download, or automatic npm installation.
+An explicitly registered local adapter module executes with the permissions of
+the current Node.js process. It must be treated as trusted local code. Contract
+validation is not a sandbox and does not protect against malicious JavaScript.
+The loader accepts only the exact user-selected local file and includes no URL
+imports, directory scanning, remote registry, download, or automatic npm
+installation.

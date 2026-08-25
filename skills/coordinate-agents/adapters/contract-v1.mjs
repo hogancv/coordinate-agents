@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 export const ADAPTER_CONTRACT_VERSION = 1;
 
 export const ADAPTER_CONTRACT_ERROR_CODES = Object.freeze({
@@ -213,9 +215,10 @@ export function validateDetectionResult(result) {
   if (typeof result.available !== 'boolean') {
     contractError('INVALID_ADAPTER_CONFIG', 'detection.available', 'must be a boolean.');
   }
-  for (const key of ['command', 'resolvedCommand', 'version', 'code', 'details']) {
+  for (const key of ['command', 'runtimeCommand', 'resolvedCommand', 'version', 'code', 'details']) {
     assertOptionalString(result[key], `detection.${key}`);
   }
+  assertStringArray(result.prefix, 'detection.prefix', { required: false });
   if (!result.available) {
     assertNonEmptyString(result.code, 'detection.code');
     assertNonEmptyString(result.details, 'detection.details');
@@ -252,6 +255,62 @@ export function validateLaunchResult(result, options = {}) {
     contractError('INVALID_ADAPTER_CONFIG', 'launch.initialInputConsumed', 'must be a boolean for persistent sessions.');
   }
   return result;
+}
+
+function sameStringArray(left, right) {
+  return Array.isArray(left)
+    && Array.isArray(right)
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+/**
+ * Revalidate a Contract v1 launch plan against the Runtime's fresh
+ * executable detection facts. Shape validation alone is intentionally not
+ * enough: the adapter cannot replace the configured executable, wrapper
+ * prefix, repository root, or initial-input delivery contract.
+ */
+export function validateRuntimeLaunchPlan(result, options = {}) {
+  const kind = options.kind || 'one-shot';
+  const launch = validateLaunchResult(result, { kind });
+  const detection = options.detection || null;
+  if (detection) {
+    const expectedCommand = detection.runtimeCommand || detection.command;
+    if (typeof expectedCommand === 'string' && launch.command !== expectedCommand) {
+      contractError('INVALID_ADAPTER_CONFIG', 'launch.command', 'must match the executable selected by detection.', {
+        expected: expectedCommand,
+        received: launch.command,
+      });
+    }
+    if (Array.isArray(detection.prefix) && !sameStringArray(launch.prefix || [], detection.prefix)) {
+      contractError('INVALID_ADAPTER_CONFIG', 'launch.prefix', 'must match the safe executable prefix selected by detection.');
+    }
+    if ((launch.prefix || []).length > 0 && !Array.isArray(detection.prefix)) {
+      contractError('INVALID_ADAPTER_CONFIG', 'detection.prefix', 'must be reported when the launch plan uses an executable prefix.');
+    }
+    if (typeof detection.resolvedCommand === 'string' && launch.resolvedCommand !== detection.resolvedCommand) {
+      contractError('INVALID_ADAPTER_CONFIG', 'launch.resolvedCommand', 'must match the exact configured executable identity selected by detection.', {
+        expected: detection.resolvedCommand,
+        received: launch.resolvedCommand,
+      });
+    }
+    if (launch.resolvedCommand !== undefined && typeof detection.resolvedCommand !== 'string') {
+      contractError('INVALID_ADAPTER_CONFIG', 'detection.resolvedCommand', 'must be reported when the launch plan provides an exact executable identity.');
+    }
+  }
+  if (options.root && launch.cwd !== undefined && resolve(launch.cwd) !== resolve(options.root)) {
+    contractError('INVALID_ADAPTER_CONFIG', 'launch.cwd', 'must equal the Runtime repository root when provided.', {
+      root: resolve(options.root),
+      cwd: resolve(launch.cwd),
+    });
+  }
+  if (kind === 'persistent-session'
+    && options.initialPrompt
+    && launch.initialInputConsumed
+    && !launch.args.some(value => value.includes(options.initialPrompt))) {
+    contractError('INVALID_ADAPTER_CONFIG', 'launch.initialInputConsumed', 'cannot claim argv consumption when the initial prompt is absent from launch.args.');
+  }
+  return launch;
 }
 
 export function validateLaunchPolicy(result) {

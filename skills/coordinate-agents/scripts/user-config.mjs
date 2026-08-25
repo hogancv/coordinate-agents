@@ -59,7 +59,7 @@ export function userConfigPath(options) {
 }
 
 export function defaultUserConfig() {
-  return { version: USER_CONFIG_VERSION, agents: {} };
+  return { version: USER_CONFIG_VERSION, agents: {}, adapters: [] };
 }
 
 export function validateUserConfig(config) {
@@ -69,6 +69,21 @@ export function validateUserConfig(config) {
   }
   if (!isPlainObject(config.agents)) {
     throw new Error('User configuration must define an "agents" object.');
+  }
+  if (config.adapters !== undefined) {
+    if (!Array.isArray(config.adapters)) {
+      throw new Error('User configuration "adapters" must be an array of local module paths.');
+    }
+    const adapterPaths = new Set();
+    for (const modulePath of config.adapters) {
+      if (typeof modulePath !== 'string' || modulePath.trim() === '') {
+        throw new Error('User configuration adapter paths must be non-empty strings.');
+      }
+      if (adapterPaths.has(modulePath)) {
+        throw new Error(`Duplicate user adapter module path: ${modulePath}`);
+      }
+      adapterPaths.add(modulePath);
+    }
   }
 
   for (const [agentId, agent] of Object.entries(config.agents)) {

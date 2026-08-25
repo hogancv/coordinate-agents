@@ -172,8 +172,11 @@ a path containing spaces and runs with an empty executable `PATH`. It verifies:
 The same fixture covers Windows `.cmd` wrappers and POSIX executable wrappers
 according to the host platform. No MCP server, lifecycle Hook, Autopilot,
 parallel Implementer, external daemon, database, Codex Terminal UI automation,
-or third-party adapter loading is needed for this closure. The three built-in
-adapters are created through their public Contract v1 descriptors and pass the
-same deterministic conformance runner used by external adapters. The Runtime
-continues to own executable, process, Session, Task, and release behavior; the
-Session Host exists only after an explicit Task/Session operation.
+or third-party adapter loading is needed for this closure. Separately, trusted
+local Contract v1 modules may now be loaded only through an explicit
+`adapter register <local-file>` operation; that path is not part of this
+historical built-in fixture. The three built-in adapters are created through
+their public Contract v1 descriptors and pass the same deterministic
+conformance runner used by external adapters. The Runtime continues to own
+executable, process, Session, Task, and release behavior; the Session Host
+exists only after an explicit Task/Session operation.

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { fork } from 'node:child_process';
+import { execFileSync, fork } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertContained,
@@ -20,10 +20,16 @@ import {
   readInternalFile,
   safeInternalStat,
 } from './config.mjs';
-import { readUserConfig, resolveAgentConfig } from './user-config.mjs';
+import { readUserConfig, resolveAgentConfig, userConfigPath } from './user-config.mjs';
 import { getAdapter, getAdapterContract } from '../adapters/index.mjs';
-import { validateLaunchResult } from '../adapters/contract-v1.mjs';
+import {
+  validateConfigurationResult,
+  validateDetectionResult,
+  validateLaunchResult,
+  validateRuntimeLaunchPlan,
+} from '../adapters/contract-v1.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
+import { loadConfiguredTrustedAdapters } from '../adapters/trusted-local.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
 import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
 
@@ -57,6 +63,29 @@ function ownedProcessIsAlive(pid) {
   } catch (error) {
     return error?.code === 'EPERM';
   }
+}
+
+async function waitForOwnedHostExit(pid, timeoutMs = 1_000) {
+  if (!ownedProcessIsAlive(pid)) return true;
+  const deadline = Date.now() + Math.max(100, Math.min(5_000, Number.isFinite(timeoutMs) ? timeoutMs : 1_000));
+  while (Date.now() < deadline && ownedProcessIsAlive(pid)) {
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
+  }
+  return !ownedProcessIsAlive(pid);
+}
+
+function terminateOwnedHost(pid) {
+  if (!ownedProcessIsAlive(pid)) return;
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill.exe', ['/PID', `${pid}`, '/T', '/F'], {
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+    } catch { /* The exact owned host may have exited between probes. */ }
+    return;
+  }
+  try { process.kill(pid, 'SIGTERM'); } catch { /* The exact owned host may have exited. */ }
 }
 
 function safeArgs(args) {
@@ -398,7 +427,7 @@ function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'e
   return { ...launch, initialInputConsumed: Boolean(initialPrompt) };
 }
 
-export function resolveConfiguredSessionAgent(root, agent) {
+export async function resolveConfiguredSessionAgent(root, agent) {
   const repository = sessionRoot(root);
   if (typeof agent !== 'string' || !agent.trim()) throw runtimeError('INVALID_AGENT_CONFIG', 'Session agent is required.', { recoverable: false, root: repository });
   const busConfig = readConfig(join(repository, '.agent-bus'));
@@ -406,15 +435,24 @@ export function resolveConfiguredSessionAgent(root, agent) {
   if (!projectAgent) throw runtimeError('INVALID_AGENT_CONFIG', `Agent is not registered: ${agent}`, { recoverable: false, agent, root: repository });
   let resolved;
   let adapter;
+  let userConfig;
   try {
-    resolved = resolveAgentConfig(projectAgent, readUserConfig());
+    userConfig = readUserConfig();
+    await loadConfiguredTrustedAdapters(userConfig, { baseDir: dirname(userConfigPath()) });
+    resolved = resolveAgentConfig(projectAgent, userConfig);
     adapter = getAdapter(resolved.adapter, resolved);
   } catch (error) {
     throw runtimeError(error.code || 'INVALID_AGENT_CONFIG', error.message || String(error), { recoverable: false, agent, adapter: projectAgent.adapter, command: projectAgent.command || null, root: repository });
   }
-  const compatibility = adapter.validateConfiguration({ setup: true });
+  const contract = getAdapterContract(adapter);
+  const compatibility = contract && contract.capabilities.configuration
+    ? validateConfigurationResult(adapter.validateConfiguration({ setup: true }))
+    : adapter.validateConfiguration({ setup: true });
   if (!compatibility.compatible) throw runtimeError(compatibility.code || 'UNSUPPORTED_CAPABILITY', compatibility.details || 'Configured adapter cannot open an execution session.', { recoverable: false, agent, adapter: resolved.adapter, command: resolved.command || null, root: repository, details: compatibility.details });
-  const detection = adapter.detect({ version: false });
+  if (contract && !contract.capabilities.detection) {
+    throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${contract.id}" does not support executable detection.`, { recoverable: false, agent, adapter: contract.id, command: resolved.command || null, root: repository });
+  }
+  const detection = contract ? validateDetectionResult(adapter.detect({ version: false })) : adapter.detect({ version: false });
   if (!detection.available) throw runtimeError(detection.code === 'COMMAND_NOT_FOUND' ? 'EXECUTABLE_NOT_FOUND' : detection.code || 'EXECUTABLE_NOT_RUNNABLE', detection.details || `Executable is unavailable: ${resolved.command || '(none)'}`, { recoverable: true, agent, adapter: resolved.adapter, command: resolved.command || null, root: repository, stage: 'executable', result: detection, details: { agent, command: resolved.command || null, root: repository } });
   return { root: repository, busConfig, projectAgent, resolved, adapter, detection };
 }
@@ -476,13 +514,22 @@ export class ExecutionSessionManager {
       appendSessionEvent(repository, existing, 'SESSION_REUSED', {}, { taskId });
       return { session: publicRecord(existing), reused: true, initialInputConsumed: false };
     }
-    const launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
+    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
     // starting the owned host. This preserves adapter-specific Windows
     // resolution (including .cmd entrypoints) and custom executable names.
-    const checked = adapter.detect({ version: false });
+    const contract = getAdapterContract(adapter);
+    const checked = contract ? validateDetectionResult(adapter.detect({ version: false })) : adapter.detect({ version: false });
     if (!checked.available) throw runtimeError(checked.code === 'COMMAND_NOT_FOUND' ? 'EXECUTABLE_NOT_FOUND' : checked.code || 'EXECUTABLE_NOT_RUNNABLE', checked.details || `Executable is unavailable: ${resolved?.command || '(none)'}`, { recoverable: true, agent, adapter: resolved?.adapter || null, command: resolved?.command || null, root: repository, stage: 'executable', details: { agent, command: resolved?.command || null, root: repository } });
+    if (contract) {
+      launch = validateRuntimeLaunchPlan(launch, {
+        detection: checked,
+        root: repository,
+        kind: 'persistent-session',
+        initialPrompt,
+      });
+    }
     const id = `session_${randomUUID().replaceAll('-', '')}`;
     const endpoint = endpointFor(repository, id);
     const createdAt = now();
@@ -688,12 +735,53 @@ export class ExecutionSessionManager {
     const current = await syncHostRecord(repository, record);
     if (!ACTIVE_STATES.has(current.state)) return publicRecord(current);
     try {
-      const runtime = await requestHost(current, { op: 'close', graceful, timeoutMs }, { timeoutMs: Math.max(5_000, timeoutMs + 2_000) });
-      const updated = mergeRuntimeRecord(current, runtime);
+      let runtime = await requestHost(current, { op: 'close', graceful, timeoutMs }, { timeoutMs: Math.max(5_000, timeoutMs + 2_000) });
+      if (ACTIVE_STATES.has(runtime?.state)) {
+        // A PTY backend may acknowledge a graceful close while its process is
+        // still active. Escalate once through the same owned Session Host
+        // rather than publishing an idle Session as successfully closed.
+        try {
+          runtime = await requestHost(current, {
+            op: 'close',
+            graceful: false,
+            timeoutMs: Math.max(1_000, timeoutMs),
+          }, { timeoutMs: Math.max(5_000, timeoutMs + 2_000) });
+        } catch {
+          // The first close may already have begun the host shutdown. Preserve
+          // its runtime fact and use the exact persisted host PID for bounded
+          // cleanup below instead of retrying an unbounded socket operation.
+        }
+      }
+      let updated = mergeRuntimeRecord(current, runtime);
+      // The host sends the close response immediately before its bounded
+      // shutdown timer. Wait for that exact Runtime-owned host to release its
+      // repository handles before publishing cleanup to callers.
+      let hostExited = await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
+      if (!hostExited) {
+        // A platform PTY can report an active snapshot after its child tree
+        // has been killed, leaving the detached host holding repository files.
+        // Only terminate the host PID recorded for this Session; never accept
+        // a caller-supplied arbitrary process identifier.
+        terminateOwnedHost(current.hostPid);
+        hostExited = await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
+      }
+      if (ACTIVE_STATES.has(updated.state)) {
+        updated = {
+          ...updated,
+          pid: null,
+          state: 'failed',
+          lastActivityAt: now(),
+          error: updated.error || (hostExited ? 'Session close returned an active runtime state.' : 'Owned Session Host did not exit after close.'),
+        };
+      }
       writeRecord(repository, updated);
       appendSessionEvent(repository, updated, 'SESSION_CLOSED');
       return publicRecord(updated);
     } catch (error) {
+      // If the socket disappeared during a close, still clean up the exact
+      // host created for this Session before exposing the failure.
+      terminateOwnedHost(current.hostPid);
+      await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
       const failed = { ...current, pid: null, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
       writeRecord(repository, failed);
       appendSessionEvent(repository, failed, 'SESSION_FAILED');

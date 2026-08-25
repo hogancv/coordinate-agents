@@ -117,6 +117,27 @@ Contract v1 descriptors. Runtime code reads the frozen descriptor capabilities
 when it chooses persistent-session behavior; the legacy `capabilities()` method
 remains available for compatibility metadata.
 
+## Explicit trusted-local modules
+
+An adapter module can be added only through an explicit local path supplied by
+the user or an already persisted `adapters` entry:
+
+```sh
+npx @hogancv/coordinate-agents adapter register "C:\\path\\to\\adapter.mjs" --json
+npx @hogancv/coordinate-agents adapter list --json
+npx @hogancv/coordinate-agents adapter remove "C:\\path\\to\\adapter.mjs" --json
+```
+
+Registration accepts only an existing regular `.mjs`, `.js`, or `.cjs` file
+whose path contains no symlink, junction, or hard link. The module is imported
+from that exact canonical path, its single exported Contract v1 descriptor is
+validated against the built-in and already registered IDs, and only then is
+the user configuration updated. A failed registration leaves both the user
+configuration and project `.agent-bus` unchanged. There is no directory scan,
+URL/import-specifier loading, download, registry lookup, or automatic npm
+installation. The module is trusted local JavaScript and runs with the current
+Node.js process permissions; Contract validation is not a JavaScript sandbox.
+
 ## What is proved
 
 The report contains bounded `checks`, `failures`, `diagnostics`, and structured

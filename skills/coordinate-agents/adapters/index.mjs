@@ -45,7 +45,7 @@ function validateRegistrationName(name) {
   }
 }
 
-export function registerAdapter(name, adapter) {
+export function registerAdapter(name, adapter, options = {}) {
   validateRegistrationName(name);
   const descriptor = descriptorFor(adapter);
   if (descriptor) {
@@ -53,18 +53,35 @@ export function registerAdapter(name, adapter) {
     if (validated.id !== name) {
       throw registrationError('id', `must match descriptor.id "${validated.id}".`, { adapterId: name });
     }
-    adapterRegistry.set(name, { descriptor: validated, builtin: false });
+    adapterRegistry.set(name, { descriptor: validated, builtin: false, sourcePath: options.sourcePath || null });
     return validated;
   }
   if (typeof adapter !== 'function') {
     throw registrationError('factory', 'must be an adapter class or Contract v1 descriptor.');
   }
-  adapterRegistry.set(name, { AdapterClass: adapter, builtin: false });
+  adapterRegistry.set(name, { AdapterClass: adapter, builtin: false, sourcePath: options.sourcePath || null });
   return adapter;
+}
+
+export function unregisterAdapter(name, options = {}) {
+  const entry = adapterRegistry.get(name);
+  if (!entry) return false;
+  if (entry.builtin) {
+    throw registrationError('id', `cannot unregister built-in adapter "${name}".`, { adapterId: name });
+  }
+  if (options.sourcePath && entry.sourcePath !== options.sourcePath) {
+    throw registrationError('sourcePath', `does not match the registered module for adapter "${name}".`, { adapterId: name });
+  }
+  adapterRegistry.delete(name);
+  return true;
 }
 
 export function getAdapterDescriptor(adapterName) {
   return adapterRegistry.get(adapterName)?.descriptor || null;
+}
+
+export function getAdapterSourcePath(adapterName) {
+  return adapterRegistry.get(adapterName)?.sourcePath || null;
 }
 
 export function getAdapter(adapterName, config = {}) {

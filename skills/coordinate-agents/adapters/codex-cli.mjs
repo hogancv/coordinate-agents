@@ -35,6 +35,7 @@ export class CodexCliAdapter extends AgentAdapter {
       command: resolved.command,
       prefix: resolved.prefix,
       args,
+      resolvedCommand: resolved.resolvedCommand,
     };
   }
 
