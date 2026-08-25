@@ -306,7 +306,7 @@ test('Inspector metadata is included in the package payload and CLI help', () =>
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(packageJson.files.includes('inspector'));
   assert.ok(packageJson.files.includes('docs/inspector.md'));
-  const help = spawnSync(process.execPath, [cli, '--help'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  const help = spawnSync(process.execPath, [cli, 'help', '--lang', 'en'], { cwd: root, encoding: 'utf8', windowsHide: true });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);
   assert.match(help.stdout, /--port <port>/);

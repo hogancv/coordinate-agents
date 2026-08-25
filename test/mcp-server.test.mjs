@@ -589,7 +589,7 @@ test('MCP exposes the bounded persistent Session lifecycle through the canonical
   const repository = tempRepository('coordinate-agents-mcp-session-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-session-home-'));
   const client = new StdioMcpClient(isolatedEnvironment(home));
-  const source = "console.log('session-ready'); process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => console.log('received:' + chunk)); setInterval(() => {}, 10000);";
+  const source = "console.log('session-ready'); process.stdin.setEncoding('utf8'); process.stdin.on('data', chunk => console.log('received:' + chunk)); setInterval(() => {}, 120_000);";
   try {
     await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {} });
     const configured = await client.request('tools/call', {
