@@ -55,8 +55,10 @@ The default port is `3000`. Choose another local port when needed:
 npx @hogancv/coordinate-agents inspector --port 3000
 ```
 
-The CLI prints a URL such as `http://localhost:3000`. The server binds to
-`127.0.0.1` only and accepts GET requests only. Stop it with `Ctrl-C`.
+The CLI prints a URL such as `http://localhost:3000`. The primary listener binds
+to `127.0.0.1`; when IPv6 loopback is available, `::1` is served on the same
+port as a localhost compatibility alias. Both listeners are loopback-only and
+accept GET requests only. Stop it with `Ctrl-C`.
 
 ## Pages and panels
 

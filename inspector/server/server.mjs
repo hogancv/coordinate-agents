@@ -165,14 +165,74 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
   const data = createInspectorData(root);
   const server = createInspectorServer({ root: data.root, data });
   return new Promise((resolvePromise, reject) => {
+    let ipv6Loopback = null;
     const onError = error => {
       server.off('listening', onListening);
       reject(error);
     };
-    const onListening = () => {
+    const onListening = async () => {
       server.off('error', onError);
       const address = server.address();
       const boundPort = typeof address === 'object' && address ? address.port : port;
+
+      // Node 18's fetch resolves localhost to ::1 first on some supported
+      // hosts and does not retry 127.0.0.1 after an IPv6 connection refusal.
+      // Keep the documented IPv4 listener as the primary server, and add an
+      // optional IPv6 loopback alias on the same port so the localhost URL is
+      // reachable without exposing the Inspector beyond loopback interfaces.
+      if (host === '127.0.0.1') {
+        const candidate = createInspectorServer({ root: data.root, data });
+        try {
+          await new Promise((resolveAlias, rejectAlias) => {
+            const onAliasError = error => {
+              candidate.off('listening', onAliasListening);
+              rejectAlias(error);
+            };
+            const onAliasListening = () => {
+              candidate.off('error', onAliasError);
+              resolveAlias();
+            };
+            candidate.once('error', onAliasError);
+            candidate.once('listening', onAliasListening);
+            candidate.listen(boundPort, '::1');
+          });
+          ipv6Loopback = candidate;
+          // A later bind error must not become an uncaught EventEmitter error.
+          candidate.on('error', () => {});
+        } catch {
+          try { candidate.close(); } catch { /* IPv6 loopback is optional. */ }
+        }
+      }
+
+      // Return the primary IPv4 server for compatibility, but make its close
+      // lifecycle own the optional IPv6 alias as well.
+      if (ipv6Loopback) {
+        const closePrimary = server.close.bind(server);
+        const closePrimaryConnections = server.closeAllConnections?.bind(server);
+        const closeAlias = ipv6Loopback.close.bind(ipv6Loopback);
+        const closeAliasConnections = ipv6Loopback.closeAllConnections?.bind(ipv6Loopback);
+        let closing = false;
+        server.closeAllConnections = () => {
+          closePrimaryConnections?.();
+          closeAliasConnections?.();
+        };
+        server.close = callback => {
+          if (closing) {
+            callback?.();
+            return server;
+          }
+          closing = true;
+          let remaining = 2;
+          const done = () => {
+            remaining -= 1;
+            if (remaining === 0) callback?.();
+          };
+          try { closePrimary(done); } catch { done(); }
+          try { closeAlias(done); } catch { done(); }
+          return server;
+        };
+      }
+
       resolvePromise({
         server,
         root: data.root,

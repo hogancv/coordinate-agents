@@ -585,7 +585,16 @@ export class ExecutionSessionManager {
           },
         }, error => error ? reject(error) : resolvePromise());
       });
-      try { host.disconnect(); } catch { /* Host is intentionally detached. */ }
+      // The Session Host owns the IPC handoff and disconnects itself after it
+      // receives the init payload. Node 18 on Windows can terminate a
+      // detached fork with exit code 13 when the parent closes IPC immediately
+      // after send() acknowledges the payload, before the child has consumed
+      // its first message. Keep the historical eager disconnect on newer
+      // runtimes, where it avoids leaving an IPC handle around during cleanup.
+      const nodeMajor = Number.parseInt(`${process.versions.node || ''}`.split('.', 1)[0], 10);
+      if (nodeMajor >= 20) {
+        try { host.disconnect(); } catch { /* Host is intentionally detached. */ }
+      }
       host.unref();
     } catch (error) {
       // The host is the only owner of the child process. Ask it to close first
