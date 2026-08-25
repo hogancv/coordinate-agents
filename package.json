@@ -29,13 +29,15 @@
     "llms.txt",
     "docs/llms.txt",
     "docs/adapter-conformance.md",
+    "docs/adapter-author-guide.md",
     "docs/mcp.md",
     "docs/MCP_TROUBLESHOOTING.md",
     "docs/inspector.md",
     "docs/event-journal.md",
     "docs/session-runtime.md",
     "LICENSE",
-    "assets"
+    "assets",
+    "examples"
   ],
   "scripts": {
     "test": "node --test",

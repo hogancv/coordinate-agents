@@ -105,6 +105,8 @@ npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边�
 
 内置的 Codex CLI、Antigravity CLI 和 generic CLI 适配器现在都通过经过验证的 Contract v1 descriptor 创建，并运行同一套 conformance runner。Runtime 的 Session 决策使用冻结的 descriptor capabilities，同时保留旧版适配器 metadata 方法的兼容性。
 
+面向第三方作者的[外部 Adapter 作者指南](./docs/adapter-author-guide.md)说明了公共导入、Contract v1 方法、离线 fixture、显式 trusted-local 注册和包内容校验。完整的[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)位于内置 registry 之外，不需要访问 Provider。
+
 Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼容的
 `adapters` registry snapshot，其中包含已注册外部适配器的身份和 Contract
 能力。Discovery 不会启动适配器；已配置的外部 Agent 只会提供其 Contract
@@ -138,6 +140,7 @@ npx @hogancv/coordinate-agents@latest --help
 - 核心 Runtime：[协议](./docs/protocol.md)、[Execution Session](./docs/session-runtime.md)、[Event Journal](./docs/event-journal.md)、[MCP](./docs/mcp.md)
 - 运维与安全：[Inspector](./docs/inspector.md)、[故障排查](./docs/troubleshooting.md)、[MCP 故障排查](./docs/MCP_TROUBLESHOOTING.md)、[安全](./docs/security.md)
 - 代理与选型：[Codex CLI](./docs/codex-cli.md)、[Antigravity CLI](./docs/antigravity-cli.md)、[方案对比](./docs/comparison.md)
+- Adapter 作者：[作者指南](./docs/adapter-author-guide.md)、[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)
 - 机器可读索引：[llms.txt](./docs/llms.txt)
 
 ## 安全与发布边界

@@ -105,6 +105,12 @@ The public [Adapter Conformance Kit](./docs/adapter-conformance.md) runs the sam
 
 The built-in Codex CLI, Antigravity CLI, and generic CLI adapters are created through validated Contract v1 descriptors and pass this same conformance runner. Runtime session decisions use the frozen descriptor capabilities, while the legacy adapter metadata methods remain compatible.
 
+For third-party authors, the [External Adapter Author Guide](./docs/adapter-author-guide.md)
+walks through the public imports, Contract v1 methods, offline fixture, explicit
+trusted-local registration, and package payload. The complete [minimal external
+Adapter example](./examples/minimal-external-adapter/README.md) remains outside
+the built-in registry and requires no provider access.
+
 Setup discovery and the existing MCP setup/Task tools expose the same additive
 `adapters` registry snapshot, including registered external identities and
 Contract capabilities. Discovery does not launch an adapter; configured
@@ -139,6 +145,7 @@ Use this path for legacy standalone Skill installation, external automation, or 
 - Core runtime: [Protocol](./docs/protocol.md), [Execution Sessions](./docs/session-runtime.md), [Event Journal](./docs/event-journal.md), [MCP](./docs/mcp.md)
 - Operations: [Inspector](./docs/inspector.md), [Troubleshooting](./docs/troubleshooting.md), [MCP troubleshooting](./docs/MCP_TROUBLESHOOTING.md), [Security](./docs/security.md)
 - Agents and choices: [Codex CLI](./docs/codex-cli.md), [Antigravity CLI](./docs/antigravity-cli.md), [Comparison](./docs/comparison.md)
+- Adapter authors: [Author guide](./docs/adapter-author-guide.md), [minimal external Adapter example](./examples/minimal-external-adapter/README.md)
 - Machine-readable index: [llms.txt](./docs/llms.txt)
 
 ## Safety and Release Boundary

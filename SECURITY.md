@@ -50,6 +50,9 @@ it before sharing diagnostics.
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.
+- The offline [External Adapter Author Guide](./docs/adapter-author-guide.md) and
+  [minimal example](./examples/minimal-external-adapter/README.md) use only the public SDK entry and
+  do not require provider accounts, tokens, network access, or real user configuration.
 - Trusted-local loading accepts only the explicit regular `.mjs`, `.js`, or `.cjs` file path and performs no
   URL import, directory scan, remote registry lookup, download, or automatic npm installation. Registration
   validates the descriptor before updating user configuration and does not modify project `.agent-bus` state.

@@ -29,6 +29,10 @@ import {
 The package and Plugin versions are independent from both
 `ADAPTER_CONTRACT_VERSION` and `ADAPTER_CONFORMANCE_KIT_VERSION`.
 
+For a complete external module, offline executable, and explicit registration
+walkthrough, see the [External Adapter Author Guide](./adapter-author-guide.md)
+and the [minimal external Adapter example](../examples/minimal-external-adapter/README.md).
+
 ## Run the kit
 
 The runner creates a temporary repository and a deterministic Node.js fake

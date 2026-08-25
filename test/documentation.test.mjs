@@ -106,6 +106,7 @@ test('documentation site exposes stable task-focused pages and canonical metadat
     'troubleshooting.md',
     'comparison.md',
     'faq.md',
+    'adapter-author-guide.md',
     join('zh-CN', 'index.md'),
   ];
   for (const page of pages) {
@@ -117,6 +118,19 @@ test('documentation site exposes stable task-focused pages and canonical metadat
   assert.match(config, /baseurl: \/coordinate-agents/);
   assert.match(config, /jekyll-sitemap/);
   assert.match(read(join('docs', 'index.md')), /https:\/\/github\.com\/hogancv\/coordinate-agents/);
+});
+
+test('external Adapter author guide links the public SDK and shipped example', () => {
+  const guide = read(join('docs', 'adapter-author-guide.md'));
+  assert.match(guide, /@hogancv\/coordinate-agents\/adapter-sdk\.mjs/);
+  assert.match(guide, /ADAPTER_CONTRACT_VERSION/);
+  assert.match(guide, /INVALID_ADAPTER_CONFIG/);
+  assert.match(guide, /trusted local code/i);
+  for (const path of [
+    join('examples', 'minimal-external-adapter', 'adapter.mjs'),
+    join('examples', 'minimal-external-adapter', 'fake-agent.mjs'),
+    join('examples', 'minimal-external-adapter', 'README.md'),
+  ]) assert.ok(existsSync(join(root, path)), `Missing shipped external Adapter example file: ${path}`);
 });
 
 test('published llms index is canonical, synchronized, and points to rendered documentation', () => {

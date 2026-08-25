@@ -98,6 +98,8 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
   assert.ok(packageJson.files.includes('adapter-sdk.mjs'), 'public Adapter SDK entry must be in package.json files');
   assert.ok(packageJson.files.includes('.codex-plugin'), '.codex-plugin must be in package.json files');
   assert.ok(packageJson.files.includes('skills'), 'skills must be in package.json files');
+  assert.ok(packageJson.files.includes('examples'), 'external Adapter examples must be in package.json files');
+  assert.ok(packageJson.files.includes('docs/adapter-author-guide.md'), 'Adapter author guide must be in package.json files');
 
   const result = spawnSync('npm', ['pack', '--dry-run', '--json'], { cwd: root, encoding: 'utf8', windowsHide: true, shell: true });
   if (result.status === 0) {
@@ -111,6 +113,9 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
       assert.ok(filenames.some(f => f === 'adapter-sdk.mjs'), 'Pack must contain the public Adapter SDK entry');
       assert.ok(filenames.some(f => f === 'skills/coordinate-agents/adapters/contract-v1.mjs'), 'Pack must contain Adapter Contract v1');
       assert.ok(filenames.some(f => f === 'skills/coordinate-agents/scripts/runtime-entry.mjs'), 'Pack must contain the Plugin Runtime resolver');
+      assert.ok(filenames.some(f => f === 'examples/minimal-external-adapter/adapter.mjs'), 'Pack must contain the external Adapter example');
+      assert.ok(filenames.some(f => f === 'examples/minimal-external-adapter/fake-agent.mjs'), 'Pack must contain the example executable fixture');
+      assert.ok(filenames.some(f => f === 'docs/adapter-author-guide.md'), 'Pack must contain the Adapter author guide');
     } catch {
       // If npm pack json output is wrapped or formatted differently, fallback to checking stdout
       assert.match(result.stdout, /\.codex-plugin/);

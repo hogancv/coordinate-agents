@@ -39,6 +39,7 @@ This is the canonical installation procedure for AI assistants installing
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
    - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents agent add <id> --adapter <adapter>`.
    - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents adapter register <local-file>`; the loader never scans directories or imports URLs.
+   - Adapter authors can start with the offline [External Adapter Author Guide](./docs/adapter-author-guide.md) and its bundled minimal example.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
 `coordinate-agents` 包含两个不同层级：
