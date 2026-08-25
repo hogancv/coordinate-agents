@@ -28,6 +28,21 @@ const exampleRoot = join(rootDirectory, 'examples', 'minimal-external-adapter');
 const modulePath = join(exampleRoot, 'adapter.mjs');
 const executable = join(exampleRoot, 'fake-agent.mjs');
 
+async function removeDirectoryWithRetry(path) {
+  let lastError;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error?.code) || attempt === 49) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  throw lastError;
+}
+
 async function main() {
   const repository = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-example-repository-'));
   let registeredPath = null;
@@ -159,7 +174,7 @@ async function main() {
       if (previousEnvironment[key] === undefined) delete process.env[key];
       else process.env[key] = previousEnvironment[key];
     }
-    rmSync(repository, { recursive: true, force: true });
+    await removeDirectoryWithRetry(repository);
   }
 }
 

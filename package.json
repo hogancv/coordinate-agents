@@ -1,6 +1,6 @@
 {
   "name": "@hogancv/coordinate-agents",
-  "version": "2.1.3",
+  "version": "2.2.0",
   "description": "A local-first coordination protocol, plugin, and runtime for AI coding agents.",
   "type": "module",
   "exports": {
@@ -25,6 +25,7 @@
     "AI_INSTALL.md",
     "README.md",
     "README.zh-CN.md",
+    "CHANGELOG.md",
     "SECURITY.md",
     "llms.txt",
     "docs/llms.txt",
@@ -47,7 +48,8 @@
     "prepack": "npm run sync:llms && npm run check",
     "demo": "node scripts/demo.mjs",
     "mcp:self-test": "node mcp/self-test.mjs",
-    "release:check": "npm ci && npm run check && npm pack --dry-run"
+    "release:check": "npm ci && npm run check && npm pack --dry-run",
+    "release:verify": "node scripts/verify-release-artifact.mjs"
   },
   "engines": {
     "node": ">=18"

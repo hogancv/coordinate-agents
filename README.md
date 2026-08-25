@@ -146,7 +146,7 @@ Use this path for legacy standalone Skill installation, external automation, or 
 
 ## Documentation
 
-- Start here: [AI installation contract](./AI_INSTALL.md), [Getting Started](./docs/getting-started.md), [Install with AI](./docs/install-with-ai.md), [FAQ](./docs/faq.md)
+- Start here: [AI installation contract](./AI_INSTALL.md), [Getting Started](./docs/getting-started.md), [Install with AI](./docs/install-with-ai.md), [FAQ](./docs/faq.md), [Changelog](./CHANGELOG.md)
 - Core runtime: [Protocol](./docs/protocol.md), [Execution Sessions](./docs/session-runtime.md), [Event Journal](./docs/event-journal.md), [MCP](./docs/mcp.md)
 - Operations: [Inspector](./docs/inspector.md), [Troubleshooting](./docs/troubleshooting.md), [MCP troubleshooting](./docs/MCP_TROUBLESHOOTING.md), [Security](./docs/security.md)
 - Agents and choices: [Codex CLI](./docs/codex-cli.md), [Antigravity CLI](./docs/antigravity-cli.md), [Comparison](./docs/comparison.md)

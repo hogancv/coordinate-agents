@@ -41,7 +41,22 @@ test('Adapter SDK acceptance matrix is explicit and runs the required release-sa
   for (const command of ['npm ci', 'npm run check', 'npm run demo', 'npm pack --dry-run']) {
     assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')));
   }
+  assert.match(workflow, /release-artifact:/);
+  assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/v'\)/);
+  assert.match(workflow, /npm run release:verify/);
+  assert.match(workflow, /--expected-source-commit/);
+  assert.match(workflow, /--expected-tag/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.doesNotMatch(workflow, /npm publish|npm install -g|curl\s+.*\|\s*(sh|bash)/i);
+});
+
+test('Pages build is explicit, pinned, and build-only', () => {
+  const workflow = readFileSync(join(root, '.github', 'workflows', 'pages-build.yml'), 'utf8');
+  assert.match(workflow, /name: Pages Build/);
+  assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
+  assert.match(workflow, /actions\/jekyll-build-pages@[0-9a-f]{40}/);
+  assert.match(workflow, /source: \.\/docs/);
+  assert.match(workflow, /destination: \.\/_site/);
+  assert.doesNotMatch(workflow, /deploy-pages|pages:\s*write|id-token:\s*write/);
 });

@@ -233,7 +233,8 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
   const server = createMcpServer({ root });
   const initialized = await server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
   assert.equal(initialized.result.serverInfo.name, 'coordinate-agents');
-  assert.equal(initialized.result.serverInfo.version, '2.1.3');
+  const packageVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+  assert.equal(initialized.result.serverInfo.version, packageVersion);
   assert.equal(initialized.result.capabilities.tools.listChanged, false);
   const listed = await server.handle({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
   const names = listed.result.tools.map(tool => tool.name);
@@ -783,8 +784,8 @@ test('MCP domain failures are structured and do not become protocol errors', asy
 test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
-  assert.equal(packageJson.version, '2.1.3');
-  assert.equal(pluginJson.version, '2.1.3');
+  assert.match(packageJson.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(pluginJson.version, packageJson.version);
   assert.equal(pluginJson.mcpServers, './.mcp.json');
   const mcpConfig = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8'));
   const serverIds = Object.keys(mcpConfig.mcpServers);

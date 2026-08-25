@@ -111,7 +111,6 @@ async function handleCommand(command) {
       return runtime.interrupt();
     case 'close': {
       const result = await runtime.close({ graceful: command.graceful !== false, timeoutMs: command.timeoutMs });
-      shutdown();
       return result;
     }
     default:
@@ -142,7 +141,13 @@ function handleSocket(socket) {
       try {
         const result = await handleCommand(command);
         respond(socket, command.id ?? null, result);
-        if (command.op === 'close') socket.end();
+        if (command.op === 'close') {
+          // Keep the named-pipe/socket open until the close response has been
+          // flushed. Windows clients can otherwise observe a detached host
+          // before receiving the successful response.
+          socket.end(() => shutdown());
+          setTimeout(shutdown, 1_000).unref();
+        }
       } catch (error) {
         respond(socket, command.id ?? null, null, error);
       }

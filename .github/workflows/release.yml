@@ -49,6 +49,28 @@ jobs:
         run: npm run check
       - name: Inspect publish contents
         run: npm pack --dry-run
+      - name: Verify isolated release artifact
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/coordinate-agents-artifact"
+          pack_json="$RUNNER_TEMP/coordinate-agents-pack.json"
+          mkdir -p "$artifact_dir"
+          npm pack --ignore-scripts --json --pack-destination "$artifact_dir" > "$pack_json"
+          artifact="$(PACK_JSON="$pack_json" ARTIFACT_DIR="$artifact_dir" node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { join } from "node:path";
+            const [entry] = JSON.parse(readFileSync(process.env.PACK_JSON, "utf8"));
+            console.log(join(process.env.ARTIFACT_DIR, entry.filename));
+          ')"
+          version="$(node -p "require('./package.json').version")"
+          source_commit="$(git rev-parse HEAD)"
+          npm run release:verify -- "$artifact" \
+            --expected-version "$version" \
+            --expected-source-commit "$source_commit" \
+            --expected-tag "$RELEASE_TAG"
 
   publish:
     needs: verify
