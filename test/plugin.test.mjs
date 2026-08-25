@@ -101,7 +101,10 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
   assert.ok(packageJson.files.includes('examples'), 'external Adapter examples must be in package.json files');
   assert.ok(packageJson.files.includes('docs/adapter-author-guide.md'), 'Adapter author guide must be in package.json files');
 
-  const result = spawnSync('npm', ['pack', '--dry-run', '--json'], { cwd: root, encoding: 'utf8', windowsHide: true, shell: true });
+  // This test runs during the package's prepack check. Disable lifecycle
+  // scripts for the nested payload inspection so Node 18 npm does not invoke
+  // prepack -> check -> test -> pack recursively.
+  const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', windowsHide: true, shell: true });
   if (result.status === 0) {
     try {
       const packMeta = JSON.parse(result.stdout);
