@@ -109,7 +109,7 @@ Expected output:
 ```text
 MCP server: OK
 Protocol: 2025-06-18
-Tools: 16
+Tools: 17
 ```
 
 The self-test launches the real stdio subprocess, sends `initialize`, sends

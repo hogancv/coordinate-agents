@@ -16,6 +16,10 @@ does not attach to arbitrary PIDs or automate the Codex App Terminal UI. The pre
 backend may use a bounded owned-stdio compatibility backend when a direct Plugin checkout has no
 installed package dependencies.
 
+Task Graph v1 validation is read-only and precedes Git discovery, Bus handoff, Adapter resolution,
+worktree or Session creation, and child-process spawn. Invalid DAGs return the bounded
+`TASK_GRAPH_INVALID` Runtime error without initializing `.agent-bus` or persisting graph state.
+
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 
 The installer refuses unknown directories, symlinks, junctions, path escapes, modified installs, and extra files by default. Review the full [security policy](https://github.com/hogancv/coordinate-agents/blob/main/SECURITY.md), including private vulnerability reporting.

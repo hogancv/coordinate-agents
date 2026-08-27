@@ -72,4 +72,12 @@ npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
 `launch` 会在启动前检查最终可执行文件；spawn、非零退出或对话运行时失败会写入 `ERROR`
 并停止当前监督，不会自动回退或重试。不会预检测登录状态。
 
+Task Graph v1 是向后兼容的新增契约。通过 MCP 的
+`coordinate_agents_task_graph_validate`（或 CLI 的
+`task graph-validate --input <graph.json>`）可在 Agent Bus、Adapter、worktree、Session
+或进程产生任何副作用前校验父 Task、唯一子任务 ID、显式 Implementer、依赖边、非空规格和
+有界 `maxConcurrency`。无效图返回稳定的 `TASK_GRAPH_INVALID`；结果始终区分
+`parentTaskId` 与 `subtaskId`；父 Task 可选携带现有的非空 `spec` 与 `implementer`。
+详见[Task Graph v1 契约](../task-graph-v1.html)。
+
 `.agent-bus` 是本地明文数据，不要写入令牌、Cookie、密码或私钥。在默认参考工作流中，两个代理不得同时修改产品代码或并发执行 Git 写操作。

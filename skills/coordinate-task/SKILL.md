@@ -14,6 +14,7 @@ workflow and do not make the user construct shell commands:
 
 ```text
 coordinate_agents_task_create
+coordinate_agents_task_graph_validate
 coordinate_agents_task_dispatch
 coordinate_agents_task_status
 coordinate_agents_task_inspect
@@ -47,6 +48,7 @@ debugging, use the fallback syntax below; never expose Agent Bus `send`, `wait`,
 or `state` operations to the user:
 
 ```text
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-validate --root "<repository>" --input "<graph.json>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<task>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
@@ -91,3 +93,13 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task review \
 
 `REVIEW_APPROVED` changes Task status to `APPROVED`; it never authorizes
 merge, push, tag, publish, deploy, or any other release action.
+
+For a dependency-aware run, validate the complete additive Task Graph v1
+before creating or dispatching graph work. The validation operation is
+read-only, requires explicit configured Implementer identities and bounded
+`maxConcurrency`, and rejects duplicate/malformed IDs, missing or cyclic
+dependencies, self-edges, empty specifications, and unconfigured Agents with
+`TASK_GRAPH_INVALID`. It finishes before Bus, Adapter, worktree, Session, or
+process side effects; existing single-Task operations remain unchanged. See
+`../../docs/task-graph-v1.md` for the input shape and parent/subtask identity
+facts.

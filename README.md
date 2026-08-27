@@ -77,6 +77,7 @@ Codex turns that into a durable task, selects the configured Implementer adapter
 ## Key Capabilities
 
 - Durable local tasks, messages, review decisions, and runtime events.
+- Additive Task Graph v1 validation for explicit DAGs before execution side effects.
 - Explicit Planner, Implementer, and Reviewer role boundaries.
 - Adapter-based execution for exact configured CLI commands.
 - Persistent, bounded, and inspectable execution sessions.
@@ -148,6 +149,7 @@ Use this path for legacy standalone Skill installation, external automation, or 
 
 - Start here: [AI installation contract](./AI_INSTALL.md), [Getting Started](./docs/getting-started.md), [Install with AI](./docs/install-with-ai.md), [FAQ](./docs/faq.md), [Changelog](./CHANGELOG.md)
 - Core runtime: [Protocol](./docs/protocol.md), [Execution Sessions](./docs/session-runtime.md), [Event Journal](./docs/event-journal.md), [MCP](./docs/mcp.md)
+- Task Graph: [Task Graph v1 contract](./docs/task-graph-v1.md)
 - Operations: [Inspector](./docs/inspector.md), [Troubleshooting](./docs/troubleshooting.md), [MCP troubleshooting](./docs/MCP_TROUBLESHOOTING.md), [Security](./docs/security.md)
 - Agents and choices: [Codex CLI](./docs/codex-cli.md), [Antigravity CLI](./docs/antigravity-cli.md), [Comparison](./docs/comparison.md)
 - Adapter authors: [Author guide](./docs/adapter-author-guide.md), [minimal external Adapter example](./examples/minimal-external-adapter/README.md)

@@ -75,6 +75,11 @@ import {
   syncTaskFromAgentBus,
 } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import {
+  TASK_GRAPH_MAX_INPUT_BYTES,
+  taskGraphDurableFacts,
+  validateTaskGraphV1,
+} from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
+import {
   canonicalErrorCode,
   isExplicitAuthFailure,
   jsonFailure,
@@ -115,7 +120,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks (create, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks (create, graph-validate, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -140,6 +145,7 @@ Options:
   --role <role>           Setup workflow role (setup configure only; default: implementer)
   --decision <decision>   Task review decision: REVIEW_APPROVED or CHANGES_REQUESTED
   --feedback <text>       Review feedback preserved for the next implementation round
+  --input <path>          Task Graph v1 JSON input for task graph-validate
   --template <type>       Task template: bug, feature, or refactor
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
@@ -229,7 +235,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务（create、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务（create、graph-validate、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -250,6 +256,7 @@ Examples:
   --role <role>           setup configure 的工作流角色（默认：implementer）
   --decision <decision>   Task 审查决策：REVIEW_APPROVED 或 CHANGES_REQUESTED
   --feedback <文本>       保存给下一轮实现的审查反馈
+  --input <路径>          task graph-validate 使用的 Task Graph v1 JSON 输入
   --template <类型>       任务模板：bug、feature 或 refactor
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
@@ -363,6 +370,7 @@ function parseArgs(argv) {
     roleExplicit: false,
     decision: null,
     feedback: '',
+    input: null,
     template: 'feature',
     task: '',
     language: null,
@@ -408,7 +416,7 @@ function parseArgs(argv) {
       '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
       '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
       '--id', '--reason', '--error-code', '--timeout', '--timeout-ms', '--lang',
-      '--role', '--decision', '--feedback', '--port',
+      '--role', '--decision', '--feedback', '--port', '--input',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
@@ -436,6 +444,7 @@ function parseArgs(argv) {
       }
       if (option === '--decision') result.decision = value.toUpperCase();
       if (option === '--feedback') result.feedback = value;
+      if (option === '--input') result.input = value;
       if (option === '--template') result.template = value.toLowerCase();
       if (option === '--task') result.task = value;
       if (option === '--title') result.title = value;
@@ -1566,12 +1575,47 @@ function taskReview(root, task, options) {
 }
 
 async function taskCommand(options, { json = false } = {}) {
+  const subcommand = options.subcommand || 'status';
+  const graphValidate = subcommand === 'graph-validate'
+    || subcommand === 'validate-graph'
+    || (subcommand === 'graph' && options.positionals?.[0] === 'validate');
+  const commandName = graphValidate ? 'task.graph-validate' : `task.${subcommand}`;
+  if (graphValidate) {
+    const hasInlineGraph = Object.prototype.hasOwnProperty.call(options, 'graph') && options.graph !== undefined;
+    const graphInput = hasInlineGraph ? options.graph : readTaskGraphInput(options.input);
+    const requestedRoot = resolve(options.root);
+    const busPath = join(requestedRoot, '.agent-bus');
+    let busConfig;
+    try {
+      if (existsSync(busPath)) assertSafePath(requestedRoot, busPath, messages.en);
+      busConfig = readConfig(busPath);
+    } catch (error) {
+      throw runtimeError('TASK_GRAPH_INVALID', `Unable to read configured Agents for Task Graph v1: ${error.message || error}`, {
+        recoverable: false,
+        stage: 'graph-validation',
+        root: requestedRoot,
+      });
+    }
+    const graph = validateTaskGraphV1(graphInput, {
+      configuredAgents: busConfig.agents.map(agent => agent.id),
+    });
+    // Repository discovery uses Git and therefore may spawn a process. Keep it
+    // after complete graph and configured-Agent validation so malformed input
+    // cannot cross the graph side-effect boundary.
+    const root = assertGitRepository(requestedRoot, messages.en);
+    const result = jsonSuccess(commandName, {
+      root,
+      graph,
+      facts: taskGraphDurableFacts(graph),
+      validation: { valid: true, sideEffects: false },
+    });
+    if (!json) console.log(JSON.stringify(result, null, 2));
+    return result;
+  }
   const adapterRegistry = await loadConfiguredAdaptersForRuntime();
   const root = assertGitRepository(options.root, messages.en);
   ensureProjectBus(root);
   ensureTaskStore(root);
-  const subcommand = options.subcommand || 'status';
-  const commandName = `task.${subcommand}`;
   const busConfig = readConfig(join(root, '.agent-bus'));
   const workflow = busConfig.workflow || {};
   let task;
@@ -1615,6 +1659,37 @@ async function taskCommand(options, { json = false } = {}) {
   if (subcommand === 'list') console.log(JSON.stringify(tasks, null, 2));
   else console.log(JSON.stringify(task, null, 2));
   return result;
+}
+
+function readTaskGraphInput(path) {
+  if (!path) {
+    throw runtimeError('TASK_GRAPH_INVALID', 'task graph-validate requires --input <graph.json>.', {
+      recoverable: false,
+      stage: 'graph-validation',
+    });
+  }
+  const inputPath = resolve(path);
+  let content;
+  try {
+    const metadata = lstatSync(inputPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > TASK_GRAPH_MAX_INPUT_BYTES) {
+      throw new Error(`input must be a regular, non-symlink JSON file no larger than ${TASK_GRAPH_MAX_INPUT_BYTES / 1024 / 1024} MiB`);
+    }
+    content = readFileSync(inputPath, 'utf8');
+  } catch (error) {
+    throw runtimeError('TASK_GRAPH_INVALID', `Unable to read Task Graph v1 input: ${error.message || error}`, {
+      recoverable: false,
+      stage: 'graph-validation',
+    });
+  }
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw runtimeError('TASK_GRAPH_INVALID', `Task Graph v1 input is not valid JSON: ${error.message}`, {
+      recoverable: false,
+      stage: 'graph-validation',
+    });
+  }
 }
 
 async function setupCommand(options, { json = false } = {}) {
@@ -2863,7 +2938,9 @@ async function run(argv) {
       const result = await taskCommand(options, { json: options.json });
       if (options.json) emitJson(result);
     } catch (error) {
-      if (options.json) emitJson(jsonFailure(`task.${options.subcommand || 'status'}`, error));
+      const graphCommand = ['graph-validate', 'validate-graph'].includes(options.subcommand)
+        || (options.subcommand === 'graph' && options.positionals?.[0] === 'validate');
+      if (options.json) emitJson(jsonFailure(graphCommand ? 'task.graph-validate' : `task.${options.subcommand || 'status'}`, error));
       else console.error(error.message || String(error));
       process.exitCode = 1;
     }
@@ -3077,6 +3154,7 @@ function serviceOptions(input = {}) {
     reason: '',
     decision: null,
     feedback: '',
+    input: null,
     evidence: null,
     positionals: [],
     ...input,
@@ -3136,6 +3214,17 @@ export async function runtimeTaskCreate(input = {}) {
     title: input.title || '',
     spec: input.spec || '',
     taskId: input.id || null,
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphValidate(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-validate',
+    graph: input.graph !== undefined
+      ? input.graph
+      : (input.input && typeof input.input === 'object' ? input.input : undefined),
   }), { json: true });
 }
 

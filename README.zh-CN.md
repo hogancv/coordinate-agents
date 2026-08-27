@@ -77,6 +77,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 ## 核心能力
 
 - 持久化本地任务、消息、审查结论和运行时事件。
+- 在任何执行副作用之前，对显式 DAG 进行向后兼容的 Task Graph v1 校验。
 - 明确区分 Planner、Implementer 与 Reviewer 角色。
 - 通过适配器精确执行已配置的 CLI 命令。
 - 提供持久、有限输出且可检查的 Execution Session。
@@ -140,6 +141,7 @@ npx @hogancv/coordinate-agents@latest --help
 
 - 开始使用：[AI 安装契约](./AI_INSTALL.md)、[快速入门](./docs/getting-started.md)、[让 AI 安装](./docs/install-with-ai.md)、[常见问题](./docs/faq.md)、[变更记录](./CHANGELOG.md)
 - 核心 Runtime：[协议](./docs/protocol.md)、[Execution Session](./docs/session-runtime.md)、[Event Journal](./docs/event-journal.md)、[MCP](./docs/mcp.md)
+- Task Graph：[Task Graph v1 契约](./docs/task-graph-v1.md)
 - 运维与安全：[Inspector](./docs/inspector.md)、[故障排查](./docs/troubleshooting.md)、[MCP 故障排查](./docs/MCP_TROUBLESHOOTING.md)、[安全](./docs/security.md)
 - 代理与选型：[Codex CLI](./docs/codex-cli.md)、[Antigravity CLI](./docs/antigravity-cli.md)、[方案对比](./docs/comparison.md)
 - Adapter 作者：[作者指南](./docs/adapter-author-guide.md)、[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)

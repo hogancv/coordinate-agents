@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1.schema.json",
+  "title": "Coordinate Agents Task Graph v1 Input",
+  "type": "object",
+  "required": ["schemaVersion", "parentTask", "subtasks", "maxConcurrency"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "parentTask": {
+      "type": "object",
+      "required": ["id", "title", "planner", "reviewer"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "spec": { "type": "string", "minLength": 1, "maxLength": 262144 },
+        "planner": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "implementer": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "reviewer": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+      },
+      "additionalProperties": false
+    },
+    "subtasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": ["id", "implementer", "spec"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 1024 },
+          "implementer": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+          "spec": { "type": "string", "minLength": 1, "maxLength": 262144 },
+          "dependsOn": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 }
+  },
+  "additionalProperties": false
+}

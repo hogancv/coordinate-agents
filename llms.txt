@@ -32,6 +32,7 @@ separate through Task and persistent-Session execution.
 Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
 Durable Runtime Event Journal: https://hogancv.github.io/coordinate-agents/event-journal.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
+Task Graph v1 contract: https://hogancv.github.io/coordinate-agents/task-graph-v1.html
 MCP troubleshooting: https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html
 Security: https://hogancv.github.io/coordinate-agents/security.html
 Troubleshooting: https://hogancv.github.io/coordinate-agents/troubleshooting.html
@@ -59,6 +60,11 @@ Execution Session open/reuse, bounded PTY input/output,
 uses stable error codes and stops on a failed activation instead of retrying
 automatically. Session tools are
 `coordinate_agents_session_open/status/inspect/write/read/close`.
+Task Graph v1 is additive: `coordinate_agents_task_graph_validate` rejects
+duplicate or malformed subtask IDs, invalid dependencies or cycles,
+unconfigured Implementers, empty specifications, and invalid concurrency before
+Bus, Adapter, worktree, Session, or process side effects. Existing single-Task
+schema-version-1 operations remain unchanged.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

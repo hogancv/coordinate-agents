@@ -14,6 +14,7 @@ import {
   runtimeSetupConfigure,
   runtimeSetupDiscover,
   runtimeTaskCreate,
+  runtimeTaskGraphValidate,
   runtimeTaskOperation,
 } from '../../../bin/coordinate-agents.mjs';
 import {
@@ -34,6 +35,7 @@ export {
   runtimeSetupDiscover,
   runtimeSetupConfigure,
   runtimeTaskCreate,
+  runtimeTaskGraphValidate,
   runtimeTaskOperation,
   runtimeRecoverInspect,
 };
@@ -52,6 +54,8 @@ export const RUNTIME_OPERATIONS = Object.freeze({
   setupDiscover: runtimeSetupDiscover,
   setupConfigure: runtimeSetupConfigure,
   taskCreate: runtimeTaskCreate,
+  taskGraphValidate: runtimeTaskGraphValidate,
+  graphValidate: runtimeTaskGraphValidate,
   taskDispatch: input => runtimeTaskOperation('dispatch', input),
   taskStatus: input => runtimeTaskOperation('status', input),
   taskInspect: input => runtimeTaskOperation('inspect', input),

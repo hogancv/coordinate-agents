@@ -36,6 +36,7 @@
     "docs/inspector.md",
     "docs/event-journal.md",
     "docs/session-runtime.md",
+    "docs/task-graph-v1.md",
     "LICENSE",
     "assets",
     "examples"

@@ -64,6 +64,7 @@ sandbox-bypass flag.
 - [Antigravity CLI role](./antigravity-cli.html)
 - [Protocol and recovery](./protocol.html)
 - [Execution Session and PTY Runtime](./session-runtime.html)
+- [Task Graph v1 Contract](./task-graph-v1.html)
 - [Adapter Conformance Kit](./adapter-conformance.html)
 - [External Adapter Author Guide](./adapter-author-guide.html)
 - [Local Inspector Web UI](./inspector.html)

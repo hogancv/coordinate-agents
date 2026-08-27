@@ -110,6 +110,64 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_validate',
+    description: 'Validate and normalize an additive Task Graph v1 DAG before any worktree, Bus handoff, Adapter resolution, Session, or process side effect.',
+    operation: 'taskGraphValidate',
+    command: 'task.graph-validate',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        graph: {
+          type: 'object',
+          description: 'Task Graph v1 input with one parent Task, explicit Implementers, dependencies, and bounded concurrency.',
+          required: ['schemaVersion', 'parentTask', 'subtasks', 'maxConcurrency'],
+          properties: {
+            schemaVersion: { const: 1 },
+            parentTask: {
+              type: 'object',
+              required: ['id', 'title', 'planner', 'reviewer'],
+              properties: {
+                id: { type: 'string', pattern: '^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$' },
+                title: { type: 'string', minLength: 1, maxLength: 1024 },
+                spec: { type: 'string', minLength: 1, maxLength: 262144 },
+                planner: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+                implementer: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+                reviewer: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+              },
+              additionalProperties: false,
+            },
+            subtasks: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 256,
+              items: {
+                type: 'object',
+                required: ['id', 'implementer', 'spec'],
+                properties: {
+                  id: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+                  title: { type: 'string', minLength: 1, maxLength: 1024 },
+                  implementer: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+                  spec: { type: 'string', minLength: 1, maxLength: 262144 },
+                  dependsOn: {
+                    type: 'array',
+                    uniqueItems: true,
+                    items: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+                  },
+                },
+                additionalProperties: false,
+              },
+            },
+            maxConcurrency: { type: 'integer', minimum: 1, maximum: 32 },
+          },
+          additionalProperties: false,
+        },
+      },
+      required: ['root', 'graph'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_dispatch',
     description: 'Validate and explicitly dispatch an approved Task to the configured Implementer.',
     operation: 'taskDispatch',
@@ -315,6 +373,12 @@ function validateArguments(tool, args) {
     const property = schema.properties[key];
     if (!property) continue;
     const value = args[key];
+    // Let the canonical Runtime classify every graph shape (including null,
+    // arrays, and primitives) with the stable TASK_GRAPH_INVALID contract.
+    // MCP still advertises the object schema to clients, but must not turn a
+    // malformed graph into a transport-level argument error before Runtime
+    // validation can run.
+    if (tool.command === 'task.graph-validate' && key === 'graph') continue;
     if (property.type === 'string' && (typeof value !== 'string' || value.length < (property.minLength || 0))) {
       return `Argument ${key} must be a non-empty string.`;
     }

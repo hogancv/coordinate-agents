@@ -13,6 +13,7 @@ header_pages:
   - protocol.md
   - inspector.md
   - mcp.md
+  - task-graph-v1.md
   - MCP_TROUBLESHOOTING.md
   - security.md
   - troubleshooting.md

@@ -43,7 +43,7 @@ network port, create an external daemon, initialize the Agent Bus, scan
 repositories, or start an Implementer until a tool is called. A Task or
 Session operation may then create a detached, Runtime-owned local Session Host
 for the persistent PTY; that host is scoped to the selected repository and
-Agent and is not Codex App Terminal UI automation.
+Agent Bus transport is not Codex App Terminal UI automation.
 
 ## Tools
 
@@ -52,6 +52,7 @@ Agent and is not Codex App Terminal UI automation.
 | `coordinate_agents_setup_discover` | `root` | — | `setup` |
 | `coordinate_agents_setup_configure` | `root`, `agent`, `command` | `adapter`, `args`, `role` | `setup.configure` |
 | `coordinate_agents_task_create` | `root`, `title` | `id`, `spec`, `planner`, `implementer`, `reviewer` | `task.create` |
+| `coordinate_agents_task_graph_validate` | `root`, `graph` | — | `task.graph-validate` |
 | `coordinate_agents_task_dispatch` | `root`, `taskId` | `spec` | `task.dispatch` |
 | `coordinate_agents_task_status` | `root`, `taskId` | — | `task.status` |
 | `coordinate_agents_task_inspect` | `root`, `taskId` | — | `task.inspect` |
@@ -72,6 +73,12 @@ The setup tool keeps Agent identity, Adapter, and executable command separate;
 for example, `antigravity` may use `agy-proxy`. Session output and input are
 bounded, and `session_write` is structured text rather than a general shell
 execution surface.
+
+`coordinate_agents_task_graph_validate` validates and normalizes the additive
+Task Graph v1 input before Agent Bus initialization or handoff, Adapter
+resolution, worktree or Session creation, and process spawn. It returns
+separate parent Task and parent-scoped subtask facts, or the bounded stable
+`TASK_GRAPH_INVALID` error. See [Task Graph v1](./task-graph-v1.md).
 
 `coordinate_agents_setup_discover` returns an additive `adapters` snapshot.
 Each record exposes the registered Adapter Contract identity, contract version,
@@ -141,9 +148,10 @@ interrupt/termination only to the process it created.
 
 ## Protocol schemas
 
-The stable Task, Runtime error, and evidence shapes are documented in:
+The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are documented in:
 
 - `schemas/task.schema.json`
+- `schemas/task-graph-v1.schema.json`
 - `schemas/runtime-error.schema.json`
 - `schemas/evidence.schema.json`
 

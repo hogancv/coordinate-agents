@@ -47,6 +47,11 @@ it before sharing diagnostics.
 
 ### Adapter execution safety
 
+- Task Graph v1 validation rejects malformed identities, dependencies, cycles, unconfigured
+  Implementers, empty specifications, and invalid concurrency before Git discovery, Bus handoff,
+  Adapter resolution, worktree or Session creation, or child-process spawn. It is a read-only
+  canonical Runtime operation and does not persist graph state.
+
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.
