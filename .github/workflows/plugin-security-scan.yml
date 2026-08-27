@@ -1,6 +1,15 @@
 name: Plugin Security Scan
 
-on: [pull_request, push]
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: plugin-security-scan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

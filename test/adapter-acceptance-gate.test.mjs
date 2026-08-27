@@ -41,6 +41,12 @@ test('Adapter SDK acceptance matrix is explicit and runs the required release-sa
   for (const command of ['npm ci', 'npm run check', 'npm run demo', 'npm pack --dry-run']) {
     assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')));
   }
+  assert.match(workflow, /npm pack --dry-run --ignore-scripts/);
+  assert.match(workflow, /cache: npm/);
+  assert.match(workflow, /cancel-in-progress: true/);
+  assert.match(workflow, /package-payload:/);
+  assert.match(workflow, /branches: \[main\]/);
+  assert.match(workflow, /tags: \['v\*'\]/);
   assert.match(workflow, /release-artifact:/);
   assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/v'\)/);
   assert.match(workflow, /npm run release:verify/);
