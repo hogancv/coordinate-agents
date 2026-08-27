@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import {
@@ -46,12 +46,21 @@ function plainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function repositoryRoot(root) {
+  const supplied = resolve(`${root || process.cwd()}`);
+  // macOS commonly exposes /tmp through a symlink to /private/tmp.  Keep the
+  // root and every descendant in the same canonical namespace before running
+  // the fail-closed path checks; otherwise a harmless alias is mistaken for
+  // an escape when an existing Agent Bus is inspected or updated.
+  return existsSync(supplied) ? realpathSync(supplied) : supplied;
+}
+
 function graphBusPath(root) {
-  return join(resolve(root), '.agent-bus');
+  return join(repositoryRoot(root), '.agent-bus');
 }
 
 export function taskGraphStorePath(root) {
-  const repository = resolve(root);
+  const repository = repositoryRoot(root);
   const bus = graphBusPath(repository);
   assertContained(repository, bus);
   return join(bus, TASK_GRAPH_STORE_DIRECTORY);
@@ -75,7 +84,7 @@ export function taskGraphPath(root, parentTaskId) {
 }
 
 function ensureGraphStore(root, { create = false } = {}) {
-  const repository = resolve(root);
+  const repository = repositoryRoot(root);
   const bus = graphBusPath(repository);
   if (!existsSync(bus)) {
     throw runtimeError('TASK_STATE_CONFLICT', `Agent Bus is not initialized: ${bus}`, { recoverable: true, root: repository });
