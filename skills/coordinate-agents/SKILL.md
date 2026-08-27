@@ -75,7 +75,7 @@ remains a fallback for hosts without direct App skill execution.
 | "Which coding CLIs are installed?" | `coordinate-setup` | `coordinate_agents_setup_discover` |
 | "Configure the implementation agent." | `coordinate-setup` | `coordinate_agents_setup_configure` |
 | "Build this feature with Coordinate Agents." | `coordinate-task` | `coordinate_agents_task_create`, `coordinate_agents_task_dispatch` |
-| "Validate or persist this Task Graph before running it." | `coordinate-task` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create` |
+| "Validate, persist, or dispatch subtasks in a Task Graph." | `coordinate-task` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create`, `coordinate_agents_task_graph_dispatch` |
 | "Review the implementation." | `coordinate-review` | `coordinate_agents_task_inspect`, `coordinate_agents_task_review` |
 | "Continue the last task." | `coordinate-recover` | `coordinate_agents_recover_inspect`, `coordinate_agents_task_resume`, `coordinate_agents_task_dispatch` |
 | "Inspect or control the Implementer session." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_session_open`, `coordinate_agents_session_status`, `coordinate_agents_session_inspect`, `coordinate_agents_session_write`, `coordinate_agents_session_read`, `coordinate_agents_session_close` |
@@ -99,7 +99,9 @@ Tasks. Read `../../docs/task-graph-v1.md` for the frozen contract.
 After validation, call `coordinate_agents_task_graph_create` to persist the
 validated parent and subtasks atomically. It computes deterministic READY,
 WAITING, and BLOCKED frontier facts and writes a `TASK_GRAPH_CREATED` event;
-it never launches an Adapter, Session, or Implementer. Existing Task status
+it never launches an Adapter, Session, or Implementer. Call
+`coordinate_agents_task_graph_dispatch` to execute one READY subtask in an
+isolated Git worktree rooted at the exact graph base commit. Existing Task status
 and inspect tools recognize a graph parent ID and return its durable graph
 view.
 

@@ -272,7 +272,7 @@ export class PtyRuntime {
           cwd: this.cwd,
           env,
           stdio: ['pipe', 'pipe', 'pipe'],
-          windowsHide: false,
+          windowsHide: true,
         });
       }
       const processHandle = this.pty || this.child;

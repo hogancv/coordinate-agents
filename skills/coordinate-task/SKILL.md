@@ -16,6 +16,7 @@ workflow and do not make the user construct shell commands:
 coordinate_agents_task_create
 coordinate_agents_task_graph_validate
 coordinate_agents_task_graph_create
+coordinate_agents_task_graph_dispatch
 coordinate_agents_task_dispatch
 coordinate_agents_task_status
 coordinate_agents_task_inspect
@@ -51,6 +52,7 @@ or `state` operations to the user:
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-validate --root "<repository>" --input "<graph.json>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-create --root "<repository>" --input "<graph.json>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-dispatch --root "<repository>" --id task-... --subtask <subtaskId> --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<task>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
@@ -108,5 +110,9 @@ atomically persists the parent, subtasks, dependency frontier, reasons,
 evidence, and lifecycle event without launching an Implementer. Use the
 existing `task status`/`task inspect` operations, or the explicit
 `task graph-status`/`task graph-inspect` aliases, to read the durable graph.
+To dispatch one ready subtask, use `coordinate_agents_task_graph_dispatch` (or
+`task graph-dispatch --id <parentTaskId> --subtask <subtaskId>`), which executes
+the subtask in an isolated Git worktree rooted at the exact graph base commit
+without touching uncommitted user files, and updates the frontier upon completion.
 See `../../docs/task-graph-v1.md` for the input shape and parent/subtask
 identity facts.

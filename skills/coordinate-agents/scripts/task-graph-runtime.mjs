@@ -1,13 +1,18 @@
-import { existsSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { dirname, join, resolve } from 'node:path';
 
 import {
+  DEFAULT_CONFIG,
+  RESERVED_DEVICE_NAMES,
   acquireConfigLock,
   assertContained,
   assertSafePath,
   atomicWrite,
+  readConfig,
   readInternalFile,
   safeInternalStat,
+  writeConfig,
 } from './config.mjs';
 import {
   TASK_GRAPH_SCHEMA_VERSION,
@@ -25,9 +30,12 @@ import {
 import { validateTaskId } from './task-runtime.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
+export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
 export const TASK_GRAPH_MAX_REASON_BYTES = 8 * 1024;
 export const TASK_GRAPH_MAX_EVIDENCE_ITEMS = 64;
 export const TASK_GRAPH_EVENT_LIMIT = 100;
+const SUBTASK_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
+const COMMIT_SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 
 const GRAPH_STATE_SET = new Set(TASK_GRAPH_STATES);
 const SUBTASK_STATE_SET = new Set(TASK_GRAPH_SUBTASK_STATES);
@@ -81,6 +89,455 @@ export function taskGraphPath(root, parentTaskId) {
   const path = join(store, `${id}.json`);
   assertContained(store, path);
   return path;
+}
+
+export function validateSubtaskId(id) {
+  if (typeof id !== 'string' || !SUBTASK_ID_PATTERN.test(id)) {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph subtask identifier: ${id || '(empty)'}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+    });
+  }
+  const lower = id.toLowerCase();
+  const base = lower.split('.')[0];
+  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(lower)) {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph subtask identifier: ${id}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+    });
+  }
+  return id;
+}
+
+export function taskGraphWorktreesRoot(root) {
+  const repository = repositoryRoot(root);
+  const bus = graphBusPath(repository);
+  assertContained(repository, bus);
+  assertSafePath(repository, bus);
+  const worktrees = join(bus, TASK_GRAPH_WORKTREES_DIRECTORY);
+  assertContained(repository, worktrees);
+  // Check the complete path before any caller creates a directory.  In
+  // particular, a symlinked .agent-bus/worktrees must never be followed by a
+  // recursive mkdir into a path outside the repository.
+  assertSafePath(repository, worktrees);
+  return worktrees;
+}
+
+export function taskGraphWorktreePath(root, parentTaskId, subtaskId) {
+  const repository = repositoryRoot(root);
+  const worktrees = taskGraphWorktreesRoot(repository);
+  let validParentId;
+  try {
+    validParentId = validateTaskId(parentTaskId);
+  } catch {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph parent Task identifier: ${parentTaskId || '(empty)'}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+      taskId: parentTaskId || null,
+    });
+  }
+  let validSubId;
+  try {
+    validSubId = validateSubtaskId(subtaskId);
+  } catch {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph subtask identifier: ${subtaskId || '(empty)'}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+      taskId: parentTaskId || null,
+      details: { parentTaskId, subtaskId },
+    });
+  }
+  const parentWorktrees = join(worktrees, validParentId);
+  assertContained(worktrees, parentWorktrees);
+  assertSafePath(repository, parentWorktrees);
+  const path = join(parentWorktrees, validSubId);
+  assertContained(parentWorktrees, path);
+  if (existsSync(path)) assertSafePath(repository, path);
+  return path;
+}
+
+export function taskGraphBranchName(parentTaskId, subtaskId) {
+  let validParentId;
+  try {
+    validParentId = validateTaskId(parentTaskId);
+  } catch {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph parent Task identifier: ${parentTaskId || '(empty)'}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+      taskId: parentTaskId || null,
+    });
+  }
+  const validSubId = validateSubtaskId(subtaskId);
+  return `coordinate-agents/${validParentId}/${validSubId}`;
+}
+
+export function taskGraphBranchRef(parentTaskId, subtaskId) {
+  return `refs/heads/${taskGraphBranchName(parentTaskId, subtaskId)}`;
+}
+
+export function captureGraphBaseCommit(root) {
+  const repository = repositoryRoot(root);
+  const result = spawnSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.error || result.status !== 0) {
+    const errorDetails = (result.stderr || result.stdout || result.error?.message || '').trim();
+    throw runtimeError('TASK_STATE_CONFLICT', `Failed to determine repository HEAD commit: ${errorDetails}`, {
+      recoverable: false,
+      root: repository,
+    });
+  }
+  const commit = result.stdout.trim();
+  if (!COMMIT_SHA_PATTERN.test(commit)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Invalid repository HEAD commit: ${commit}`, {
+      recoverable: false,
+      root: repository,
+    });
+  }
+  return commit;
+}
+
+function normalizeCommitSha(value, label = 'commit') {
+  const commit = `${value || ''}`.trim();
+  if (!COMMIT_SHA_PATTERN.test(commit)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Invalid ${label}: ${commit || '(empty)'}`, {
+      recoverable: false,
+    });
+  }
+  return commit.toLowerCase();
+}
+
+function gitWorktreeEntries(output) {
+  const entries = [];
+  let current = null;
+  for (const line of `${output || ''}`.split(/\r?\n/)) {
+    if (line.startsWith('worktree ')) {
+      if (current) entries.push(current);
+      current = { path: line.slice('worktree '.length), head: null, branch: null };
+    } else if (current && line.startsWith('HEAD ')) {
+      current.head = line.slice('HEAD '.length).trim();
+    } else if (current && line.startsWith('branch ')) {
+      current.branch = line.slice('branch '.length).trim();
+    }
+  }
+  if (current) entries.push(current);
+  return entries;
+}
+
+function pathMatches(left, right) {
+  const normalizedLeft = resolve(left);
+  const normalizedRight = resolve(right);
+  return process.platform === 'win32'
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight;
+}
+
+function graphWorktreeConflict(message, details = {}) {
+  return runtimeError('TASK_STATE_CONFLICT', message, {
+    recoverable: true,
+    ...details,
+  });
+}
+
+/**
+ * Verify a completion commit against the isolated worktree rather than
+ * trusting an arbitrary commit string supplied by an Agent message.  The
+ * commit must exist in the worktree repository, descend from the captured
+ * graph base, and be reachable from the worktree HEAD.
+ */
+export function verifyGraphImplementationCommit(root, baseCommit, reportedCommit) {
+  const repository = repositoryRoot(root);
+  const base = normalizeCommitSha(baseCommit, 'graph base commit');
+  const candidate = `${reportedCommit || ''}`.trim();
+  if (!/^[0-9a-f]{7,64}$/i.test(candidate)) {
+    throw runtimeError('AGENT_RUNTIME_ERROR', `IMPLEMENTATION_DONE did not provide a valid implementation commit: ${candidate || '(missing)'}`, {
+      recoverable: true,
+      root: repository,
+      stage: 'completion',
+    });
+  }
+  const resolved = spawnSync('git', ['rev-parse', '--verify', `${candidate}^{commit}`], {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (resolved.error || resolved.status !== 0) {
+    throw runtimeError('AGENT_RUNTIME_ERROR', `Implementation commit is not present in the isolated worktree: ${candidate}`, {
+      recoverable: true,
+      root: repository,
+      stage: 'completion',
+      details: (resolved.stderr || resolved.stdout || resolved.error?.message || '').trim(),
+    });
+  }
+  const commit = normalizeCommitSha(resolved.stdout, 'resolved implementation commit');
+  if (commit === base) {
+    throw runtimeError('AGENT_RUNTIME_ERROR', `IMPLEMENTATION_DONE must report a commit after the graph base commit: ${commit}`, {
+      recoverable: true,
+      root: repository,
+      stage: 'completion',
+    });
+  }
+  const head = captureGraphBaseCommit(repository);
+  const ancestorChecks = [
+    ['base commit', ['merge-base', '--is-ancestor', base, commit]],
+    ['worktree HEAD', ['merge-base', '--is-ancestor', commit, head]],
+  ];
+  for (const [label, args] of ancestorChecks) {
+    const result = spawnSync('git', args, { cwd: repository, encoding: 'utf8', windowsHide: true });
+    if (result.error || result.status !== 0) {
+      throw runtimeError('AGENT_RUNTIME_ERROR', `Implementation commit is not reachable from the isolated ${label}: ${commit}`, {
+        recoverable: true,
+        root: repository,
+        stage: 'completion',
+        details: (result.stderr || result.stdout || result.error?.message || '').trim(),
+      });
+    }
+  }
+  return commit;
+}
+
+export function ensureGraphBus(root) {
+  const repository = repositoryRoot(root);
+  const bus = graphBusPath(repository);
+  assertSafePath(repository, bus);
+  mkdirSync(bus, { recursive: true });
+  assertSafePath(repository, bus);
+  const directories = [
+    'specs', 'reviews', 'evidence', 'releases', 'dedupe', 'locks', 'logs', 'tmp', 'launch',
+    'tasks', 'task-graphs', 'events', 'sessions', 'worktrees',
+  ];
+  for (const directory of directories) {
+    const path = join(bus, directory);
+    assertSafePath(repository, path);
+    mkdirSync(path, { recursive: true });
+    assertSafePath(repository, path);
+  }
+  const cfgFile = join(bus, 'config.json');
+  if (existsSync(cfgFile)) assertSafePath(repository, cfgFile);
+  if (!existsSync(cfgFile)) writeConfig(bus, DEFAULT_CONFIG);
+  const config = readConfig(bus);
+  for (const agent of config.agents) {
+    for (const directory of [
+      `inbox/${agent.id}/new`,
+      `inbox/${agent.id}/processing`,
+      `inbox/${agent.id}/processed`,
+      `quarantine/${agent.id}`,
+      `state/${agent.id}`,
+    ]) {
+      const path = join(bus, directory);
+      assertSafePath(repository, path);
+      mkdirSync(path, { recursive: true });
+      assertSafePath(repository, path);
+    }
+  }
+  return bus;
+}
+
+export function ensureSubtaskWorktreeBus(mainRepository, worktreePath) {
+  const repo = repositoryRoot(mainRepository);
+  const requestedWorktree = resolve(worktreePath);
+  assertContained(repo, requestedWorktree);
+  assertSafePath(repo, requestedWorktree);
+  const worktree = repositoryRoot(requestedWorktree);
+  assertContained(repo, worktree);
+  assertSafePath(repo, worktree);
+  const mainBus = graphBusPath(repo);
+  assertSafePath(repo, mainBus);
+  const mainConfigPath = join(mainBus, 'config.json');
+  const worktreeBus = graphBusPath(worktree);
+  assertSafePath(repo, worktreeBus);
+  mkdirSync(worktreeBus, { recursive: true });
+  if (existsSync(mainConfigPath)) {
+    assertSafePath(repo, mainConfigPath);
+    const configContent = readInternalFile(mainBus, mainConfigPath);
+    const worktreeConfigPath = join(worktreeBus, 'config.json');
+    const worktreeTmp = join(worktreeBus, 'tmp');
+    if (existsSync(worktreeConfigPath)) assertSafePath(worktree, worktreeConfigPath);
+    assertSafePath(repo, worktreeTmp);
+    atomicWrite(worktreeConfigPath, configContent, worktreeTmp);
+  }
+  ensureGraphBus(worktree);
+}
+
+export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit) {
+  const repository = repositoryRoot(root);
+  const worktreePath = taskGraphWorktreePath(repository, parentTaskId, subtaskId);
+  const branchName = taskGraphBranchName(parentTaskId, subtaskId);
+  const branchRef = taskGraphBranchRef(parentTaskId, subtaskId);
+  const expectedHead = normalizeCommitSha(baseCommit, 'graph base commit');
+  const worktreesRoot = taskGraphWorktreesRoot(repository);
+  const parentWorktrees = dirname(worktreePath);
+  assertSafePath(repository, worktreesRoot);
+  assertSafePath(repository, parentWorktrees);
+
+  let targetMetadata = null;
+  try { targetMetadata = lstatSync(worktreePath); } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  if (targetMetadata?.isSymbolicLink()) {
+    throw graphWorktreeConflict(`Refusing symbolic link or junction at Task Graph worktree path: ${worktreePath}`, {
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+    });
+  }
+
+  if (targetMetadata) {
+    assertSafePath(repository, worktreePath);
+    if (!targetMetadata.isDirectory()) {
+      throw graphWorktreeConflict(`Task Graph worktree path is not a directory: ${worktreePath}`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+      });
+    }
+    const listResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: repository,
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    if (listResult.error || listResult.status !== 0) {
+      throw graphWorktreeConflict(`Unable to inspect existing Git worktrees for ${worktreePath}.`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+        details: (listResult.stderr || listResult.stdout || listResult.error?.message || '').trim(),
+      });
+    }
+    let canonicalWorktree = resolve(worktreePath);
+    try { canonicalWorktree = realpathSync(worktreePath); } catch { /* assertSafePath already rejected links. */ }
+    const registered = gitWorktreeEntries(listResult.stdout).find(entry => {
+      if (!entry.path) return false;
+      let listedPath = resolve(entry.path.trim());
+      try { listedPath = realpathSync(listedPath); } catch { /* Compare the lexical path below. */ }
+      return pathMatches(listedPath, canonicalWorktree);
+    });
+    if (!registered) {
+      throw graphWorktreeConflict(`Refusing to replace an existing non-Runtime worktree path: ${worktreePath}`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+      });
+    }
+    if (registered.branch !== branchRef) {
+      throw graphWorktreeConflict(`Existing Task Graph worktree is attached to unexpected branch ${registered.branch || '(detached)'}.`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+        details: { expectedBranch: branchRef, actualBranch: registered.branch || null },
+      });
+    }
+    if (registered.head?.toLowerCase() !== expectedHead) {
+      throw graphWorktreeConflict(`Existing Task Graph worktree does not point at the captured base commit: ${worktreePath}`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+        details: { expectedHead, actualHead: registered.head || null },
+      });
+    }
+    return { worktreePath, branch: branchName, ref: branchRef, reused: true };
+  }
+
+  // Inspect the Git worktree registry without pruning it.  Stale metadata is
+  // an explicit cleanup/recovery concern and must not be destructively
+  // rewritten as a side effect of dispatch.
+  const listResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (listResult.error || listResult.status !== 0) {
+    throw graphWorktreeConflict(`Unable to inspect Git worktrees before creating ${worktreePath}.`, {
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      details: (listResult.stderr || listResult.stdout || listResult.error?.message || '').trim(),
+    });
+  }
+  const registeredTarget = gitWorktreeEntries(listResult.stdout).find(entry => pathMatches(entry.path || '', worktreePath));
+  if (registeredTarget) {
+    throw graphWorktreeConflict(`Git still registers the Runtime worktree path and requires explicit cleanup: ${worktreePath}`, {
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      details: { registeredHead: registeredTarget.head || null, registeredBranch: registeredTarget.branch || null },
+    });
+  }
+  assertSafePath(repository, parentWorktrees);
+  mkdirSync(parentWorktrees, { recursive: true });
+  assertSafePath(repository, parentWorktrees);
+
+  const branchCheck = spawnSync('git', ['rev-parse', '--verify', branchRef], {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (branchCheck.error) {
+    throw graphWorktreeConflict(`Unable to inspect Git branch ${branchRef}.`, {
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      details: branchCheck.error.message || String(branchCheck.error),
+    });
+  }
+  const branchExists = !branchCheck.error && branchCheck.status === 0;
+
+  if (branchExists) {
+    const branchHead = branchCheck.stdout.trim().toLowerCase();
+    if (branchHead !== expectedHead) {
+      throw graphWorktreeConflict(`Existing Task Graph branch ${branchRef} does not point at the captured base commit.`, {
+        taskId: parentTaskId,
+        subtaskId,
+        root: repository,
+        details: { expectedHead, actualHead: branchHead },
+      });
+    }
+  }
+
+  const addArgs = branchExists
+    ? ['worktree', 'add', worktreePath, branchRef]
+    : ['worktree', 'add', '-b', branchName, worktreePath, baseCommit];
+
+  const addResult = spawnSync('git', addArgs, {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+
+  if (addResult.error || addResult.status !== 0) {
+    const errorDetails = (addResult.stderr || addResult.stdout || addResult.error?.message || '').trim();
+    throw runtimeError('TASK_STATE_CONFLICT', `Failed to create Git worktree for subtask ${subtaskId}: ${errorDetails}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+    });
+  }
+
+  assertSafePath(repository, worktreePath);
+  const verifyResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
+    cwd: repository,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  const created = !verifyResult.error && verifyResult.status === 0
+    ? gitWorktreeEntries(verifyResult.stdout).find(entry => {
+      let listedPath = resolve(entry.path || '');
+      try { listedPath = realpathSync(listedPath); } catch { /* The add command succeeded; final checks below report it. */ }
+      return pathMatches(listedPath, worktreePath);
+    })
+    : null;
+  if (!created || created.branch !== branchRef || created.head?.toLowerCase() !== expectedHead) {
+    throw graphWorktreeConflict(`Created Git worktree failed Runtime ownership verification: ${worktreePath}`, {
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      details: { expectedBranch: branchRef, actualBranch: created?.branch || null, expectedHead, actualHead: created?.head || null },
+    });
+  }
+  return { worktreePath, branch: branchName, ref: branchRef, reused: false };
 }
 
 function ensureGraphStore(root, { create = false } = {}) {
@@ -281,6 +738,17 @@ function validateStoredGraph(record, parentTaskId = null) {
   if (!Number.isInteger(record.maxConcurrency) || record.maxConcurrency < 1) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid maxConcurrency.`, { recoverable: false, taskId: id });
   }
+  for (const [label, value] of [
+    ['graph base commit', record.baseCommit],
+    ['parent base commit', record.parentTask?.baseCommit],
+  ]) {
+    if (value !== undefined && value !== null && !COMMIT_SHA_PATTERN.test(`${value}`)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid ${label}.`, { recoverable: false, taskId: id });
+    }
+  }
+  if (record.baseCommit && record.parentTask?.baseCommit && `${record.baseCommit}`.toLowerCase() !== `${record.parentTask.baseCommit}`.toLowerCase()) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has conflicting base commit facts.`, { recoverable: false, taskId: id });
+  }
   if (!plainObject(record.parentTask) || record.parentTask.id !== id) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid parent Task record.`, { recoverable: false, taskId: id });
   }
@@ -295,6 +763,9 @@ function validateStoredGraph(record, parentTaskId = null) {
     ids.add(subtask.id);
     if (subtask.subtaskId !== subtask.id || subtask.parentTaskId !== id || !SUBTASK_STATE_SET.has(subtask.state) || subtask.status !== subtask.state) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid subtask record: ${subtask.id}.`, { recoverable: false, taskId: id });
+    }
+    if (subtask.baseCommit !== undefined && subtask.baseCommit !== null && !COMMIT_SHA_PATTERN.test(`${subtask.baseCommit}`)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid base commit for ${subtask.id}.`, { recoverable: false, taskId: id });
     }
     if (!Array.isArray(subtask.dependsOn) || new Set(subtask.dependsOn).size !== subtask.dependsOn.length || subtask.dependsOn.some(dependency => !ids.has(dependency) && dependency !== subtask.id)) {
       // Dependency existence is checked in a second pass because records are
@@ -431,6 +902,7 @@ function graphFacts(record) {
   return {
     parent: {
       ...base.parent,
+      baseCommit: record.baseCommit || record.parentTask.baseCommit || null,
       reason: boundedText(record.parentTask.reason || record.reason),
       evidence: boundedEvidence(record.parentTask.evidence || record.evidence),
     },
@@ -440,6 +912,14 @@ function graphFacts(record) {
         ...fact,
         title: subtask?.title,
         spec: subtask?.spec,
+        baseCommit: subtask?.baseCommit || record.baseCommit || record.parentTask?.baseCommit || null,
+        worktreePath: subtask?.worktreePath || null,
+        branch: subtask?.branch || null,
+        ref: subtask?.ref || null,
+        sessionId: subtask?.sessionId || null,
+        effectiveCommand: subtask?.effectiveCommand || subtask?.command || null,
+        resolvedCommand: subtask?.resolvedCommand || null,
+        implementationCommit: subtask?.implementationCommit || null,
         reason: boundedText(subtask?.reason),
         evidence: boundedEvidence(subtask?.evidence),
       };
@@ -465,6 +945,7 @@ function parentTaskView(record) {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     spec: parent.spec || '',
+    baseCommit: record.baseCommit || parent.baseCommit || null,
     evidence: boundedEvidence(parent.evidence || record.evidence),
     lastError: record.state === 'ERROR' ? (record.reason || null) : null,
     maxConcurrency: record.maxConcurrency,
@@ -482,6 +963,7 @@ export function taskGraphStatusPayload(root, record, { inspect = false, eventLim
     parentTaskId: record.parentTaskId,
     state: record.state,
     status: record.status,
+    baseCommit: record.baseCommit || record.parentTask?.baseCommit || null,
     graph: record,
     task: parentTaskView(record),
     parent: record.parentTask,
@@ -513,43 +995,81 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
         details: { parentTaskId, subtaskId },
       });
     }
+    if (details.expectedState !== undefined && target.state !== details.expectedState) {
+      const code = details.expectedState === 'READY' && target.state === 'RUNNING'
+        ? 'TASK_ALREADY_RUNNING'
+        : 'TASK_STATE_CONFLICT';
+      throw runtimeError(code, `Task Graph subtask ${parentTaskId}/${subtaskId} is ${target.state}; expected ${details.expectedState}.`, {
+        recoverable: code !== 'TASK_ALREADY_RUNNING',
+        taskId: parentTaskId,
+        subtaskId,
+        details: { expectedState: details.expectedState, actualState: target.state },
+      });
+    }
     const reason = details.reason === undefined ? target.reason : boundedText(details.reason);
     const evidence = details.evidence === undefined ? target.evidence : boundedEvidence(details.evidence);
-    const beforeState = target.state;
-    if (beforeState === nextState && sameJson(target.reason, reason) && sameJson(target.evidence, evidence)) {
-      return { graph: current, changed: false, events: [] };
-    }
+    const suppliedBaseCommit = details.baseCommit === undefined || details.baseCommit === null
+      ? details.baseCommit
+      : normalizeCommitSha(details.baseCommit, 'graph base commit');
+    const candidateSubtask = {
+      ...target,
+      ...(details.worktreePath !== undefined ? { worktreePath: details.worktreePath } : {}),
+      ...(details.branch !== undefined ? { branch: details.branch } : {}),
+      ...(details.ref !== undefined ? { ref: details.ref } : {}),
+      ...(details.baseCommit !== undefined ? { baseCommit: suppliedBaseCommit } : {}),
+      ...(details.sessionId !== undefined ? { sessionId: details.sessionId } : {}),
+      ...(details.effectiveCommand !== undefined ? { effectiveCommand: details.effectiveCommand } : {}),
+      ...(details.resolvedCommand !== undefined ? { resolvedCommand: details.resolvedCommand } : {}),
+      ...(details.command !== undefined ? { command: details.command } : {}),
+      ...(details.implementationCommit !== undefined ? { implementationCommit: details.implementationCommit } : {}),
+      ...(details.dispatch !== undefined ? { dispatch: details.dispatch } : {}),
+      ...(details.lastError !== undefined ? { lastError: details.lastError } : {}),
+      ...(details.spec !== undefined ? { spec: details.spec } : {}),
+      state: nextState,
+      status: nextState,
+      reason,
+      evidence,
+    };
     const nextSubtasks = current.subtasks.map(subtask => subtask.id === subtaskId
-      ? {
-        ...subtask,
-        state: nextState,
-        status: nextState,
-        reason,
-        evidence,
-        updatedAt: now(),
-      }
+      ? { ...candidateSubtask, updatedAt: current.updatedAt }
       : { ...subtask });
     const reconciled = reconcileSubtasks(nextSubtasks);
     const nextStateForParent = parentStateFor(current.state, reconciled);
-    const timestamp = now();
-    const next = {
+    const effectiveBaseCommit = suppliedBaseCommit || current.baseCommit || current.parentTask?.baseCommit || null;
+    const candidateGraph = {
       ...current,
+      ...(effectiveBaseCommit ? { baseCommit: effectiveBaseCommit } : {}),
       state: nextStateForParent,
       status: nextStateForParent,
       reason: nextStateForParent === 'ERROR' ? boundedText(details.reason) || current.reason : current.reason,
-      updatedAt: timestamp,
       parentTask: {
         ...current.parentTask,
+        ...(effectiveBaseCommit ? { baseCommit: effectiveBaseCommit } : {}),
         state: nextStateForParent,
         status: nextStateForParent,
-        updatedAt: timestamp,
       },
       subtasks: reconciled,
       frontier: frontierFor(reconciled, current.maxConcurrency),
     };
-    const changed = !sameJson(current, next);
-    if (changed) atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`, tmp);
+    const normalizeForComparison = item => ({
+      ...item,
+      updatedAt: null,
+      parentTask: { ...item.parentTask, updatedAt: null },
+      subtasks: item.subtasks.map(s => ({ ...s, updatedAt: null })),
+    });
+    const changed = !sameJson(normalizeForComparison(current), normalizeForComparison(candidateGraph));
     if (!changed) return { graph: current, changed: false, events: [] };
+    const timestamp = now();
+    const next = {
+      ...candidateGraph,
+      updatedAt: timestamp,
+      parentTask: {
+        ...candidateGraph.parentTask,
+        updatedAt: timestamp,
+      },
+      subtasks: reconciled.map(subtask => subtask.id === subtaskId ? { ...subtask, updatedAt: timestamp } : subtask),
+    };
+    atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`, tmp);
 
     const beforeById = new Map(current.subtasks.map(subtask => [subtask.id, subtask]));
     const changedSubtasks = reconciled.filter(subtask => {
@@ -558,7 +1078,8 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
         || before.state !== subtask.state
         || before.status !== subtask.status
         || !sameJson(before.reason, subtask.reason)
-        || !sameJson(before.evidence, subtask.evidence);
+        || !sameJson(before.evidence, subtask.evidence)
+        || !sameJson({ ...before, updatedAt: null }, { ...subtask, updatedAt: null });
     });
     // Record the requested transition first, then deterministic dependency
     // frontier transitions. This keeps an interruption-replayable causal
@@ -584,6 +1105,14 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
           parentState: nextStateForParent,
           triggerSubtaskId: subtaskId,
           derived: subtask.id !== subtaskId,
+          baseCommit: subtask.baseCommit || null,
+          worktreePath: subtask.worktreePath || null,
+          branch: subtask.branch || null,
+          ref: subtask.ref || null,
+          sessionId: subtask.sessionId || null,
+          effectiveCommand: subtask.effectiveCommand || subtask.command || null,
+          resolvedCommand: subtask.resolvedCommand || null,
+          implementationCommit: subtask.implementationCommit || null,
         },
       });
     });

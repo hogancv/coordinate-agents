@@ -40,9 +40,10 @@ const stringProperty = (description, { minLength = 1 } = {}) => ({
   description,
 });
 
-const integerProperty = (description, { minimum = 0 } = {}) => ({
+const integerProperty = (description, { minimum = 0, maximum = undefined } = {}) => ({
   type: 'integer',
   minimum,
+  ...(maximum === undefined ? {} : { maximum }),
   description,
 });
 
@@ -222,6 +223,24 @@ const TOOL_DEFINITIONS = Object.freeze([
         },
       },
       required: ['root', 'graph'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_task_graph_dispatch',
+    description: 'Validate and explicitly dispatch one selected READY subtask from a persisted Task Graph in an isolated Git worktree.',
+    operation: 'taskGraphDispatch',
+    command: 'task.graph-dispatch',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        subtaskId: stringProperty('Selected READY subtask identifier.'),
+        spec: { type: 'string', description: 'Optional approved subtask specification override.' },
+        sessionWaitMs: integerProperty('Bounded observation window after dispatch.', { minimum: 0, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId', 'subtaskId'],
       additionalProperties: false,
     },
   },
@@ -446,7 +465,9 @@ function validateArguments(tool, args) {
     if (property.type === 'array' && (!Array.isArray(value) || value.some(item => typeof item !== 'string'))) {
       return `Argument ${key} must be an array of strings.`;
     }
-    if (property.type === 'integer' && (!Number.isInteger(value) || value < (property.minimum ?? 0))) {
+    if (property.type === 'integer' && (!Number.isInteger(value)
+      || value < (property.minimum ?? 0)
+      || (property.maximum !== undefined && value > property.maximum))) {
       return `Argument ${key} must be an integer within the supported range.`;
     }
     if (property.type === 'boolean' && typeof value !== 'boolean') return `Argument ${key} must be a boolean.`;

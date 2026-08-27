@@ -464,27 +464,31 @@ export class ExecutionSessionManager {
     this.openLocks = new Map();
   }
 
-  async findReusable(root, agent, command = null) {
+  async findReusable(root, agent, command = null, resolvedCommand = null) {
     const repository = sessionRoot(root);
-    for (const record of listRecords(repository).filter(item => item.agent === agent && ACTIVE_STATES.has(item.state) && (!command || item.command === command))) {
+    for (const record of listRecords(repository).filter(item => item.agent === agent
+      && ACTIVE_STATES.has(item.state)
+      && (!command || item.command === command)
+      && (!resolvedCommand || item.resolvedCommand === resolvedCommand))) {
       const current = await syncHostRecord(repository, record);
       if (ACTIVE_STATES.has(current.state)) return current;
     }
     return null;
   }
 
-  async findPreferred(root, sessionId, agent, command) {
+  async findPreferred(root, sessionId, agent, command, resolvedCommand = null) {
     if (!sessionId) return null;
     const repository = sessionRoot(root);
     const record = readRecord(repository, sessionId);
-    if (record.agent !== agent || (command && record.command !== command)) return null;
+    if (record.agent !== agent || (command && record.command !== command)
+      || (resolvedCommand && record.resolvedCommand !== resolvedCommand)) return null;
     const current = await syncHostRecord(repository, record);
     return ACTIVE_STATES.has(current.state) ? current : null;
   }
 
   async open(options = {}) {
     const repository = sessionRoot(options.root);
-    const key = `${repository}\u0000${options.agent || ''}\u0000${options.resolved?.command || ''}`;
+    const key = `${repository}\u0000${options.agent || ''}\u0000${options.resolved?.command || ''}\u0000${options.resolved?.resolvedCommand || ''}`;
     const previous = this.openLocks.get(key) || Promise.resolve();
     let release;
     const lock = new Promise(resolvePromise => { release = resolvePromise; });
@@ -508,8 +512,19 @@ export class ExecutionSessionManager {
         root: repository,
       });
     }
-    const preferred = await this.findPreferred(repository, sessionId, agent, resolved?.command || null);
-    const existing = preferred || await this.findReusable(repository, agent, resolved?.command || null);
+    const preferred = await this.findPreferred(
+      repository,
+      sessionId,
+      agent,
+      resolved?.command || null,
+      resolved?.resolvedCommand || null,
+    );
+    const existing = preferred || await this.findReusable(
+      repository,
+      agent,
+      resolved?.command || null,
+      resolved?.resolvedCommand || null,
+    );
     if (existing) {
       appendSessionEvent(repository, existing, 'SESSION_REUSED', {}, { taskId });
       return { session: publicRecord(existing), reused: true, initialInputConsumed: false };
@@ -559,7 +574,7 @@ export class ExecutionSessionManager {
         detached: true,
         execArgv: [],
         stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        windowsHide: false,
+        windowsHide: true,
       });
       record.hostPid = host.pid || null;
       writeRecord(repository, record);

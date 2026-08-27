@@ -21,6 +21,11 @@ worktree or Session creation, and child-process spawn. Invalid DAGs return the b
 `TASK_GRAPH_INVALID` Runtime error without initializing `.agent-bus` or persisting graph state.
 The separate graph-create operation persists only an already validated graph record and its
 append-only lifecycle event; it does not launch an Adapter, Session, or Implementer process.
+The graph-dispatch operation captures one exact base commit and uses only a Runtime-owned,
+repository-contained, non-symlinked worktree and branch for the selected READY subtask. Its
+persistent Session is rooted at that worktree; exact Adapter command precedence, bounded I/O, and
+non-zero exit semantics remain in force. Launch or completion failures do not trigger automatic
+retry/fallback or mutate unrelated subtasks, and dispatch never changes the user's checkout.
 
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 

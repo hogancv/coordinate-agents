@@ -349,7 +349,7 @@ export function resumeTask(root, id) {
   return task;
 }
 
-function parseBusMessage(content) {
+export function parseBusMessage(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) return null;
   const fields = {};
@@ -361,13 +361,13 @@ function parseBusMessage(content) {
   return { fields, body: match[2].trim() };
 }
 
-function implementationCommit(fields, body) {
+export function implementationCommit(fields, body) {
   if (fields.related_commit && /^[a-zA-Z0-9._/-]{4,128}$/.test(fields.related_commit)) return fields.related_commit;
   const match = body.match(/(?:implementationCommit|implementation[-_ ]commit|commit)\s*[:=]\s*([a-f0-9]{7,64})/i);
   return match ? match[1] : null;
 }
 
-function evidenceId(messagePath, fields) {
+export function evidenceId(messagePath, fields) {
   return fields.id || createHash('sha256').update(messagePath).digest('hex').slice(0, 16);
 }
 

@@ -111,11 +111,30 @@ a deterministic reason. `TASK_GRAPH_SUBTASK_STATE_CHANGED` and
 `TASK_GRAPH_STATUS_CHANGED` events record later durable transitions; repeated
 identical transitions are idempotent.
 
+## Subtask dispatch in an isolated Git worktree
+
+To execute one approved, dependency-ready subtask from a persisted graph, use
+`coordinate_agents_task_graph_dispatch` through MCP or the CLI operation:
+
+```sh
+coordinate-agents task graph-dispatch --root <repository> --id <parentTaskId> --subtask <subtaskId> --json
+# equivalent nested forms:
+coordinate-agents task graph dispatch <parentTaskId> <subtaskId> --root <repository> --json
+coordinate-agents task graph-dispatch <parentTaskId> <subtaskId> --root <repository> --json
+```
+
+Dispatching one subtask executes the canonical execution slice:
+1. **Base Commit Capture**: Captures the exact HEAD commit SHA of the graph from the repository without staging, committing, resetting, or mutating the user's checked-out worktree or uncommitted files.
+2. **Worktree Isolation**: Creates or reuses a Runtime-owned Git worktree at `.agent-bus/worktrees/<parentTaskId>/<subtaskId>` and branch `coordinate-agents/<parentTaskId>/<subtaskId>` (`refs/heads/coordinate-agents/<parentTaskId>/<subtaskId>`) rooted at the captured base commit. Symlinks, junctions, path escapes, and unsafe branch inputs are rejected.
+3. **Agent & Adapter Resolution**: Resolves the configured Implementer using project > user > adapter-default configuration precedence with exact executable verification.
+4. **Isolated Session Execution**: Opens or reuses a Runtime-owned persistent Session rooted strictly at the worktree directory. Sessions are scoped to the worktree path and never mixed across roots.
+5. **Durable State & Frontier Updates**: On completion, records the implementation commit, bounded evidence, and transitions the subtask state to `SUCCEEDED` (or `FAILED` on non-zero exit/error without mutating sibling subtasks). Succeeded subtasks automatically unlock dependent subtasks in the graph frontier.
+
 ## Determinism and scope
 
 Malformed graphs fail in a fixed validation order. Dependency checks and cycle
 traversal use sorted identifiers, so equivalent invalid inputs produce stable,
-bounded diagnostics. Graph creation, persistence, scheduling, worktrees,
-parallel Sessions, integration, and cleanup are separate Runtime operations;
-the v1 validation contract does not perform any of them and never authorizes a
-merge, push, tag, publish, deploy, or release.
+bounded diagnostics. Graph creation, persistence, subtask dispatch, scheduling,
+worktrees, parallel Sessions, integration, and cleanup are separate Runtime
+operations; the v1 validation and dispatch contracts never authorize a merge,
+push, tag, publish, deploy, or release.

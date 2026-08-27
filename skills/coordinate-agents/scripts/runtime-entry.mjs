@@ -259,7 +259,7 @@ export async function launchCanonicalRuntime(args = process.argv.slice(2), optio
       cwd: options.cwd || process.cwd(),
       env: options.env || process.env,
       stdio: 'inherit',
-      windowsHide: false,
+      windowsHide: true,
     });
     const forwardSignal = signal => {
       if (!child.killed) {

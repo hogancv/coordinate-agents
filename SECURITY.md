@@ -53,6 +53,12 @@ it before sharing diagnostics.
   read-only; the separate graph-create operation persists only the validated graph record and
   append-only lifecycle event, without launching an Adapter, Session, or Implementer process.
 
+- Graph subtask dispatch captures one exact base commit, creates only a Runtime-owned worktree and
+  branch under the repository graph area, and roots the persistent Session there. It rejects unsafe
+  paths and branch inputs, preserves exact Adapter command precedence, keeps the user's checkout
+  unchanged, and fails the selected subtask without automatic retry or sibling mutation when launch
+  or completion validation fails.
+
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.

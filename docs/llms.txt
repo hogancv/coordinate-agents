@@ -69,6 +69,10 @@ schema-version-1 operations remain unchanged. After validation,
 subtasks with deterministic READY/WAITING/BLOCKED frontier facts and a
 `TASK_GRAPH_CREATED` event; existing Task status/inspect views expose the
 durable graph without launching an Adapter, Session, or Implementer process.
+`coordinate_agents_task_graph_dispatch` dispatches one selected READY subtask in
+an isolated Git worktree rooted at the exact graph base commit without touching
+uncommitted files in the user repository or mutating sibling subtasks, unlocking
+dependent subtasks on completion.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

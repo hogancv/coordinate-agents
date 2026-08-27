@@ -50,6 +50,8 @@ import {
   atomicWrite,
   DEFAULT_CONFIG,
   readConfig,
+  readInternalFile,
+  safeInternalStat,
   validateAgentId,
   withConfigTransaction,
   writeConfig,
@@ -67,8 +69,11 @@ import {
 import {
   createTask,
   ensureTaskStore,
+  evidenceId,
+  implementationCommit,
   listTasks,
   markTaskError,
+  parseBusMessage,
   prepareTaskForDispatch,
   recordReviewDecision,
   readTask,
@@ -80,15 +85,25 @@ import {
 } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import {
   TASK_GRAPH_MAX_INPUT_BYTES,
+  TASK_GRAPH_MAX_SPEC_BYTES,
   taskGraphDurableFacts,
   validateTaskGraphV1,
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
 import {
+  captureGraphBaseCommit,
   createTaskGraph,
+  ensureSubtaskWorktree,
+  ensureSubtaskWorktreeBus,
   hasTaskGraph,
   listTaskGraphs,
   readTaskGraph,
+  setTaskGraphSubtaskState,
+  taskGraphBranchName,
+  taskGraphBranchRef,
   taskGraphStatusPayload,
+  taskGraphWorktreePath,
+  verifyGraphImplementationCommit,
+  validateSubtaskId,
 } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import {
   canonicalErrorCode,
@@ -131,7 +146,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -157,6 +172,8 @@ Options:
   --decision <decision>   Task review decision: REVIEW_APPROVED or CHANGES_REQUESTED
   --feedback <text>       Review feedback preserved for the next implementation round
   --input <path>          Task Graph v1 JSON input for graph-validate/graph-create
+  --subtask <id>          Selected READY subtask identifier for graph-dispatch
+  --session-wait-ms <ms>  Bounded graph-dispatch observation window (0-10000)
   --template <type>       Task template: bug, feature, or refactor
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
@@ -246,7 +263,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -268,6 +285,8 @@ Examples:
   --decision <decision>   Task 审查决策：REVIEW_APPROVED 或 CHANGES_REQUESTED
   --feedback <文本>       保存给下一轮实现的审查反馈
   --input <路径>          graph-validate/graph-create 使用的 Task Graph v1 JSON 输入
+  --subtask <id>          graph-dispatch 使用的已就绪子任务标识符
+  --session-wait-ms <毫秒> graph-dispatch 的有界观察窗口（0-10000）
   --template <类型>       任务模板：bug、feature 或 refactor
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
@@ -370,9 +389,11 @@ function parseArgs(argv) {
     title: '',
     spec: '',
     taskId: null,
+    subtaskId: null,
     reason: '',
     errorCode: null,
     timeoutMs: null,
+    sessionWaitMs: null,
     port: 3000,
     adapter: 'generic-cli',
     agentCommand: null,
@@ -426,7 +447,8 @@ function parseArgs(argv) {
       '--codex-home', '--antigravity-home', '--codex-home-base64', '--antigravity-home-base64',
       '--root', '--root-base64', '--agent', '--planner', '--implementer', '--reviewer',
       '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
-      '--id', '--reason', '--error-code', '--timeout', '--timeout-ms', '--lang',
+      '--id', '--task-id', '--parent-task-id', '--subtask', '--subtask-id',
+      '--reason', '--error-code', '--timeout', '--timeout-ms', '--session-wait-ms', '--lang',
       '--role', '--decision', '--feedback', '--port', '--input',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
@@ -460,13 +482,19 @@ function parseArgs(argv) {
       if (option === '--task') result.task = value;
       if (option === '--title') result.title = value;
       if (option === '--spec') result.spec = value;
-      if (option === '--id') result.taskId = value;
+      if (option === '--subtask' || option === '--subtask-id') result.subtaskId = value;
+      if (option === '--id' || option === '--task-id' || option === '--parent-task-id') result.taskId = value;
       if (option === '--reason') result.reason = value;
       if (option === '--error-code') result.errorCode = value;
       if (option === '--timeout' || option === '--timeout-ms') {
         const timeoutMs = Number(value);
         if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error(`INVALID_TIMEOUT:${value}`);
         result.timeoutMs = Math.floor(timeoutMs);
+      }
+      if (option === '--session-wait-ms') {
+        const waitMs = Number(value);
+        if (!Number.isFinite(waitMs) || waitMs < 0) throw new Error(`INVALID_TIMEOUT:${value}`);
+        result.sessionWaitMs = Math.floor(waitMs);
       }
       if (option === '--port') {
         const port = Number(value);
@@ -1365,10 +1393,12 @@ function taskImplementationPrompt(task) {
   ].filter(Boolean).join('\n\n');
 }
 
-async function taskAgentResolution(root, task, adapterRegistry = null) {
+async function taskAgentResolution(root, task, adapterRegistry = null, { implementerOverride = false } = {}) {
   const busPath = join(root, '.agent-bus');
   const busConfig = readConfig(busPath);
-  const workflowImplementer = busConfig.workflow?.implementer || task.implementer;
+  const workflowImplementer = implementerOverride
+    ? task.implementer
+    : (busConfig.workflow?.implementer || task.implementer);
   const projectAgent = busConfig.agents.find(agent => agent.id === workflowImplementer);
   if (!projectAgent) {
     throw runtimeError('INVALID_AGENT_CONFIG', `Workflow implementer is not registered: ${workflowImplementer}`, {
@@ -1644,9 +1674,10 @@ function taskGraphOperation(options) {
   if (['graph-create', 'create-graph'].includes(subcommand)) return 'create';
   if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
   if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
+  if (['graph-dispatch', 'dispatch-graph'].includes(subcommand)) return 'dispatch';
   if (subcommand !== 'graph') return null;
   const nested = options.positionals?.[0];
-  return ['create', 'status', 'inspect'].includes(nested) ? nested : null;
+  return ['create', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
 }
 
 function graphInput(options) {
@@ -1694,9 +1725,11 @@ async function taskGraphCreateCommand(options, { json = false } = {}) {
 function graphTaskId(options, root) {
   const direct = options.taskId || null;
   if (direct) return direct;
-  const nested = options.subcommand === 'graph' && options.positionals?.[0] !== 'status' && options.positionals?.[0] !== 'inspect'
-    ? options.positionals?.[0]
-    : options.subcommand === 'graph' ? options.positionals?.[1] : options.positionals?.[0];
+  const isGraphSubcommand = options.subcommand === 'graph';
+  const nestedPos0 = options.positionals?.[0];
+  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate'].includes(nestedPos0)
+    ? options.positionals?.[1]
+    : options.positionals?.[0];
   if (nested) return nested;
   const graphs = listTaskGraphs(root);
   if (graphs.length === 0) throw runtimeError('TASK_NOT_FOUND', 'No Task Graph exists for this project.', { recoverable: false, root });
@@ -1711,6 +1744,489 @@ function taskGraphViewCommand(options, operation, { json = false, commandName = 
   const payload = jsonSuccess(command, taskGraphStatusPayload(root, graph, { inspect: operation === 'inspect' }));
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
+}
+
+function subtaskImplementationPrompt(graph, subtask, baseCommit) {
+  const previousEvidence = Array.isArray(subtask.evidence) && subtask.evidence.length > 0
+    ? JSON.stringify(subtask.evidence.at(-1))
+    : '(none)';
+  return [
+    'Use $coordinate-agents as the external Implementer for this Subtask.',
+    'Do not create a second planner and do not release, merge, push, tag, deploy, or publish.',
+    `Parent Task ID: ${graph.parentTaskId}`,
+    `Subtask ID: ${subtask.id}`,
+    `Task ID: ${graph.parentTaskId}`,
+    `Round: 1`,
+    `Base Commit: ${baseCommit}`,
+    `Approved specification:\n${subtask.spec}`,
+    subtask.reason ? `Subtask notes:\n${subtask.reason}` : '',
+    `Previous implementation commit/evidence reference: ${subtask.implementationCommit || previousEvidence}`,
+    'Implement only the approved specification in this isolated worktree, run the required validation, commit the product changes, and send one IMPLEMENTATION_DONE message to the Planner with the commit and bounded evidence.',
+  ].filter(Boolean).join('\n\n');
+}
+
+function escapeRegex(value) {
+  return `${value || ''}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findSubtaskImplementationMessages(busRoot, parentTaskId, subtaskId, implementer, planner) {
+  const bus = join(busRoot, '.agent-bus');
+  if (!existsSync(bus)) return [];
+  const inbox = join(bus, 'inbox', planner);
+  const messages = [];
+  for (const stage of ['new', 'processing', 'processed']) {
+    const directory = join(inbox, stage);
+    if (!existsSync(directory)) continue;
+    for (const name of readdirSync(directory).filter(item => item.endsWith('.md')).sort()) {
+      const path = join(directory, name);
+      try {
+        safeInternalStat(bus, path);
+        const parsed = parseBusMessage(readInternalFile(bus, path));
+        if (!parsed || parsed.fields.type !== 'IMPLEMENTATION_DONE') continue;
+        if (parsed.fields.from !== implementer || parsed.fields.to !== planner) continue;
+        const exactDedupeKey = `task:${parentTaskId}:subtask:${subtaskId}:done`;
+        const refersToSubtask = parsed.fields.dedupe_key === exactDedupeKey
+          || (new RegExp(`(?:^|\\r?\\n)Parent Task ID\\s*:\\s*${escapeRegex(parentTaskId)}\\s*$`, 'im').test(parsed.body)
+            && new RegExp(`(?:^|\\r?\\n)Subtask ID\\s*:\\s*${escapeRegex(subtaskId)}\\s*$`, 'im').test(parsed.body));
+        if (!refersToSubtask) continue;
+        messages.push({ path, ...parsed });
+      } catch {
+        // Ignore unreadable or quarantined messages
+      }
+    }
+  }
+  return messages.sort((a, b) => `${a.fields.created_at || ''}`.localeCompare(`${b.fields.created_at || ''}`));
+}
+
+function graphCompletionFromMessage(message, worktreePath, baseCommit) {
+  const reportedCommit = implementationCommit(message.fields, message.body);
+  const commit = verifyGraphImplementationCommit(worktreePath, baseCommit, reportedCommit);
+  return {
+    commit,
+    evidence: [{
+      type: 'IMPLEMENTATION_DONE',
+      id: evidenceId(message.path, message.fields),
+      path: resolve(message.path),
+      relatedCommit: commit,
+      details: redactOutput(message.body, 8 * 1024),
+      createdAt: message.fields.created_at || new Date().toISOString(),
+    }],
+  };
+}
+
+function graphSessionFailure(session, parentTaskId, subtaskId, agentId, resolution, root) {
+  const nonZero = Number.isInteger(session?.exitCode) && session.exitCode !== 0;
+  const message = session?.state === 'exited' && !nonZero
+    ? `Execution session ${session.id} exited without an IMPLEMENTATION_DONE message.`
+    : `Execution session ${session?.id || '(unknown)'} failed after dispatch.`;
+  return runtimeError(nonZero ? 'AGENT_EXIT_NONZERO' : 'AGENT_RUNTIME_ERROR', message, {
+    recoverable: true,
+    taskId: parentTaskId,
+    subtaskId,
+    agent: agentId,
+    adapter: resolution?.resolved?.adapter || null,
+    command: resolution?.resolved?.command || null,
+    sessionId: session?.id || null,
+    root,
+    stage: 'runtime',
+    details: session?.error || null,
+    result: {
+      status: session?.exitCode ?? null,
+      signal: session?.signal || null,
+      resolvedCommand: session?.resolvedCommand || null,
+    },
+  });
+}
+
+async function taskGraphDispatchCommand(options, { json = false } = {}) {
+  const requestedRoot = resolve(options.root);
+  const repository = assertGitRepository(requestedRoot, messages.en);
+  ensureProjectBus(repository);
+  const parentTaskId = graphTaskId(options, repository);
+  const subtaskId = options.subtaskId
+    || (options.subcommand === 'graph' && options.positionals?.[0] === 'dispatch' ? options.positionals?.[2] : null)
+    || (options.subcommand === 'graph-dispatch' ? options.positionals?.[1] : null)
+    || (options.subcommand === 'dispatch' ? options.positionals?.[1] : null)
+    || (options.subcommand === 'graph' ? options.positionals?.[1] : null)
+    || options.positionals?.[0];
+  if (!subtaskId) {
+    throw runtimeError('TASK_GRAPH_INVALID', 'task graph-dispatch requires --subtask <subtaskId>.', {
+      recoverable: false,
+      taskId: parentTaskId,
+      stage: 'graph-validation',
+    });
+  }
+  validateSubtaskId(subtaskId);
+
+  // Validate the derived Runtime-owned location before claiming the graph
+  // state. This keeps an unsafe pre-existing path (including a symlink or
+  // junction) from turning into a durable FAILED transition merely because
+  // the dispatch reached the filesystem phase.
+  let plannedWorktree;
+  try {
+    plannedWorktree = {
+      path: taskGraphWorktreePath(repository, parentTaskId, subtaskId),
+      branch: taskGraphBranchName(parentTaskId, subtaskId),
+      ref: taskGraphBranchRef(parentTaskId, subtaskId),
+    };
+  } catch (error) {
+    if (error?.code) throw error;
+    throw runtimeError('TASK_STATE_CONFLICT', error?.message || String(error), {
+      recoverable: false,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      stage: 'worktree',
+    });
+  }
+
+  const currentGraph = readTaskGraph(repository, parentTaskId);
+  const subtask = currentGraph.subtasks.find(s => s.id === subtaskId);
+  if (!subtask) {
+    throw runtimeError('TASK_NOT_FOUND', `Task Graph subtask not found: ${parentTaskId}/${subtaskId}`, {
+      recoverable: false,
+      taskId: parentTaskId,
+      details: { parentTaskId, subtaskId },
+    });
+  }
+
+  if (['APPROVED', 'STOPPED'].includes(currentGraph.state)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} is in ${currentGraph.state} and cannot dispatch subtasks.`, {
+      recoverable: false,
+      taskId: parentTaskId,
+      subtaskId,
+    });
+  }
+
+  if (subtask.state !== 'READY') {
+    if (subtask.state === 'WAITING') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask "${subtaskId}" is WAITING for dependencies; only READY subtasks can be dispatched.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+        details: { state: subtask.state, reason: subtask.reason },
+      });
+    }
+    if (subtask.state === 'RUNNING') {
+      throw runtimeError('TASK_ALREADY_RUNNING', `Subtask "${subtaskId}" is already RUNNING.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+      });
+    }
+    if (subtask.state === 'BLOCKED') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask "${subtaskId}" is BLOCKED; only READY subtasks can be dispatched.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+        details: { state: subtask.state, reason: subtask.reason },
+      });
+    }
+    if (subtask.state === 'SUCCEEDED') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask "${subtaskId}" has already SUCCEEDED.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+      });
+    }
+    throw runtimeError('TASK_STATE_CONFLICT', `Subtask "${subtaskId}" is in ${subtask.state}; resume required before dispatch.`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+    });
+  }
+
+  let effectiveSpec = subtask.spec;
+  if (options.spec !== undefined && options.spec !== null && options.spec !== '') {
+    const nextSpec = `${options.spec}`.trim();
+    if (!nextSpec) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${subtaskId} requires a non-empty specification.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+      });
+    }
+    if (Buffer.byteLength(nextSpec, 'utf8') > TASK_GRAPH_MAX_SPEC_BYTES) {
+      throw runtimeError('TASK_GRAPH_INVALID', `Subtask ${subtaskId} specification exceeds ${TASK_GRAPH_MAX_SPEC_BYTES} bytes.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+        stage: 'graph-validation',
+      });
+    }
+    effectiveSpec = nextSpec;
+  }
+
+  let adapterRegistry = null;
+  let resolution;
+  let detection = null;
+  let agentId = subtask.implementer;
+  let worktreeInfo = null;
+  let baseCommit = null;
+  let session = null;
+  let opened = null;
+  let claimed = false;
+  let dispatchMessagePath = null;
+  try {
+    // Claim the selected frontier item before any Adapter, worktree, or
+    // Session side effect.  The expected-state check is performed under the
+    // graph lock, so a concurrent dispatch cannot launch the same subtask or
+    // accidentally fail the first caller's RUNNING record.
+    baseCommit = currentGraph.baseCommit || currentGraph.parentTask?.baseCommit || captureGraphBaseCommit(repository);
+    setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
+      expectedState: 'READY',
+      baseCommit,
+      spec: effectiveSpec,
+      reason: `Dispatching subtask ${subtaskId}.`,
+      lastError: null,
+      dispatch: {
+        parentTaskId,
+        subtaskId,
+        baseCommit,
+        startedAt: new Date().toISOString(),
+      },
+    });
+    claimed = true;
+
+    adapterRegistry = await loadConfiguredAdaptersForRuntime();
+    resolution = await taskAgentResolution(repository, {
+      id: parentTaskId,
+      planner: currentGraph.parentTask.planner,
+      implementer: subtask.implementer,
+      round: 1,
+    }, adapterRegistry, { implementerOverride: true });
+    agentId = resolution.workflowImplementer;
+
+    if (resolution.contract && !resolution.contract.capabilities.detection) {
+      throw runtimeError('UNSUPPORTED_CAPABILITY', `Adapter "${resolution.contract.id}" does not support executable detection.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        subtaskId,
+        agent: agentId,
+        adapter: resolution.contract.id,
+      });
+    }
+    detection = resolution.contract
+      ? validateDetectionResult(resolution.adapter.detect({ version: false }))
+      : resolution.adapter.detect({ version: false });
+    if (!detection.available) {
+      throw runtimeError(canonicalErrorCode(detection.code, 'EXECUTABLE_NOT_FOUND'), detection.details || `Executable is unavailable: ${resolution.resolved.command}`, {
+        recoverable: true,
+        taskId: parentTaskId,
+        subtaskId,
+        agent: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        stage: 'executable',
+        result: detection,
+      });
+    }
+
+    worktreeInfo = { worktreePath: plannedWorktree.path, branch: plannedWorktree.branch, ref: plannedWorktree.ref };
+    worktreeInfo = ensureSubtaskWorktree(repository, parentTaskId, subtaskId, baseCommit);
+    ensureSubtaskWorktreeBus(repository, worktreeInfo.worktreePath);
+
+    const body = subtaskImplementationPrompt(currentGraph, { ...subtask, spec: effectiveSpec }, baseCommit);
+    dispatchMessagePath = sendTaskBusMessage(worktreeInfo.worktreePath, {
+      from: currentGraph.parentTask.planner,
+      to: agentId,
+      type: 'IMPLEMENT',
+      subject: `Implement ${parentTaskId}/${subtaskId}`,
+      body,
+      dedupeKey: `task:${parentTaskId}:subtask:${subtaskId}:implement`,
+    });
+
+    setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
+      expectedState: 'RUNNING',
+      baseCommit,
+      worktreePath: worktreeInfo.worktreePath,
+      branch: worktreeInfo.branch,
+      ref: worktreeInfo.ref,
+      command: resolution.resolved.command,
+      effectiveCommand: detection.resolvedCommand || resolution.resolved.command,
+      resolvedCommand: detection.resolvedCommand || null,
+      spec: effectiveSpec,
+      dispatch: {
+        ...(readTaskGraph(repository, parentTaskId).subtasks.find(s => s.id === subtaskId)?.dispatch || {}),
+        implementer: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        commandSource: resolution.resolved.commandSource,
+        resolvedCommand: detection.resolvedCommand || null,
+        baseCommit,
+        worktreePath: worktreeInfo.worktreePath,
+        branch: worktreeInfo.branch,
+        ref: worktreeInfo.ref,
+        messagePath: dispatchMessagePath,
+        dispatchedAt: new Date().toISOString(),
+      },
+    });
+
+    const sessionManager = getExecutionSessionManager();
+    opened = await sessionManager.open({
+      root: worktreeInfo.worktreePath,
+      agent: agentId,
+      sessionId: subtask.sessionId,
+      resolved: {
+        ...resolution.resolved,
+        resolvedCommand: detection.resolvedCommand || null,
+      },
+      adapter: resolution.adapter,
+      initialPrompt: body,
+      language: options.language || 'en',
+      taskId: parentTaskId,
+    });
+    session = opened.session;
+    if (!opened.initialInputConsumed) {
+      session = await sessionManager.write(worktreeInfo.worktreePath, session.id, body, { taskId: parentTaskId });
+    }
+
+    setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
+      expectedState: 'RUNNING',
+      baseCommit,
+      worktreePath: worktreeInfo.worktreePath,
+      branch: worktreeInfo.branch,
+      ref: worktreeInfo.ref,
+      command: resolution.resolved.command,
+      effectiveCommand: detection.resolvedCommand || resolution.resolved.command,
+      resolvedCommand: detection.resolvedCommand || null,
+      sessionId: session.id,
+      dispatch: {
+        ...(readTaskGraph(repository, parentTaskId).subtasks.find(s => s.id === subtaskId)?.dispatch || {}),
+        sessionId: session.id,
+        reusedSession: Boolean(opened.reused),
+      },
+    });
+
+    const graceMs = Number.isInteger(options.sessionWaitMs) && options.sessionWaitMs >= 0
+      ? Math.min(options.sessionWaitMs, 10_000)
+      : 10_000;
+    const deadline = Date.now() + graceMs;
+    let finalSubtaskResult = null;
+    let statusProbeError = null;
+
+    const completeFromLatestMessage = () => {
+      const message = findSubtaskImplementationMessages(
+        worktreeInfo.worktreePath,
+        parentTaskId,
+        subtaskId,
+        agentId,
+        currentGraph.parentTask.planner,
+      ).at(-1);
+      if (!message) return null;
+      const completion = graphCompletionFromMessage(message, worktreeInfo.worktreePath, baseCommit);
+      const updated = setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'SUCCEEDED', {
+        expectedState: 'RUNNING',
+        implementationCommit: completion.commit,
+        evidence: completion.evidence,
+        worktreePath: worktreeInfo.worktreePath,
+        branch: worktreeInfo.branch,
+        ref: worktreeInfo.ref,
+        baseCommit,
+        command: resolution.resolved.command,
+        effectiveCommand: detection.resolvedCommand || resolution.resolved.command,
+        resolvedCommand: detection.resolvedCommand || null,
+        sessionId: session.id,
+        lastError: null,
+      });
+      return { graph: updated.graph, commit: completion.commit, evidence: completion.evidence };
+    };
+
+    while (!finalSubtaskResult) {
+      finalSubtaskResult = completeFromLatestMessage();
+      if (finalSubtaskResult || ['failed', 'exited'].includes(session?.state)) break;
+      if (Date.now() >= deadline) break;
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 50));
+      try {
+        session = await sessionManager.status(worktreeInfo.worktreePath, session.id);
+        statusProbeError = null;
+      } catch (error) {
+        statusProbeError = error;
+      }
+    }
+
+    // A completion may have been written immediately after the last status
+    // probe. Check once more before treating a terminal Session as a failure
+    // or returning a bounded RUNNING observation.
+    if (!finalSubtaskResult) finalSubtaskResult = completeFromLatestMessage();
+    if (!finalSubtaskResult && ['failed', 'exited'].includes(session?.state)) {
+      throw graphSessionFailure(session, parentTaskId, subtaskId, agentId, resolution, repository);
+    }
+    if (!finalSubtaskResult && statusProbeError && Date.now() >= deadline) {
+      throw runtimeError(statusProbeError.code || 'SESSION_NOT_ATTACHED', `Unable to observe execution session ${session.id}: ${statusProbeError.message || statusProbeError}`, {
+        recoverable: true,
+        taskId: parentTaskId,
+        subtaskId,
+        agent: agentId,
+        adapter: resolution.resolved.adapter,
+        command: resolution.resolved.command,
+        sessionId: session.id,
+        root: repository,
+        stage: 'runtime',
+      });
+    }
+
+    const latestGraph = readTaskGraph(repository, parentTaskId);
+    const updatedSubtask = latestGraph.subtasks.find(s => s.id === subtaskId);
+
+    const payload = jsonSuccess('task.graph-dispatch', {
+      root: repository,
+      graphId: parentTaskId,
+      parentTaskId,
+      subtaskId,
+      graph: latestGraph,
+      subtask: updatedSubtask,
+      worktree: {
+        path: worktreeInfo.worktreePath,
+        branch: worktreeInfo.branch,
+        ref: worktreeInfo.ref,
+        baseCommit,
+      },
+      session: {
+        ...session,
+        reused: Boolean(opened?.reused),
+      },
+      workflow: { implementer: agentId },
+      agent: {
+        id: agentId,
+        adapter: resolution.resolved.adapter,
+        adapterCapabilities: resolution.registryAdapter?.capabilities || null,
+        adapterContractVersion: resolution.registryAdapter?.contractVersion || null,
+        command: resolution.resolved.command,
+        commandSource: resolution.resolved.commandSource,
+        available: true,
+        resolvedCommand: detection.resolvedCommand || null,
+      },
+      frontier: latestGraph.frontier,
+      implementationCommit: updatedSubtask?.implementationCommit || null,
+      evidence: updatedSubtask?.evidence || [],
+    });
+
+    if (!json) console.log(JSON.stringify(payload, null, 2));
+    return payload;
+  } catch (error) {
+    const normalized = error?.code ? error : runtimeError('AGENT_RUNTIME_ERROR', error?.message || String(error), {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+    });
+    if (claimed) try {
+      setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'FAILED', {
+        expectedState: 'RUNNING',
+        reason: normalized.message,
+        lastError: serializeRuntimeError(normalized, { includeLegacy: true }),
+        ...(worktreeInfo ? { worktreePath: worktreeInfo.worktreePath, branch: worktreeInfo.branch, ref: worktreeInfo.ref } : {}),
+        ...(baseCommit ? { baseCommit } : {}),
+        ...(session?.id ? { sessionId: session.id } : {}),
+        ...(resolution?.resolved?.command ? {
+          command: resolution.resolved.command,
+          effectiveCommand: detection?.resolvedCommand || resolution.resolved.command,
+          resolvedCommand: detection?.resolvedCommand || null,
+        } : {}),
+      });
+    } catch { /* Preserve primary error */ }
+    throw normalized;
+  }
 }
 
 async function taskCommand(options, { json = false } = {}) {
@@ -1753,6 +2269,7 @@ async function taskCommand(options, { json = false } = {}) {
     return result;
   }
   if (graphOperation === 'create') return await taskGraphCreateCommand(options, { json });
+  if (graphOperation === 'dispatch') return await taskGraphDispatchCommand(options, { json });
   if (graphOperation === 'status' || graphOperation === 'inspect') {
     return taskGraphViewCommand(options, graphOperation, { json });
   }
@@ -1803,6 +2320,9 @@ async function taskCommand(options, { json = false } = {}) {
     else if (subcommand === 'stop') task = stopTask(root, id, options.reason || null);
     else if (subcommand === 'error') task = markTaskError(root, id, runtimeError(options.errorCode || 'AGENT_RUNTIME_ERROR', options.reason || 'Task runtime error.', { recoverable: true, taskId: id }));
     else if (subcommand === 'dispatch') {
+      if (options.subtaskId) {
+        return await taskGraphDispatchCommand(options, { json });
+      }
       task = syncTaskFromAgentBus(root, id);
       task = prepareTaskForDispatch(root, id, options.spec || undefined);
       const payload = await taskDispatch(root, task, options, messages[detectLanguage(options.language)], adapterRegistry);
@@ -2545,7 +3065,7 @@ function runLaunchChild(resolved, root, setActiveChild, { json = false, timeoutM
       // usual scripted/Codex path) are piped so the runtime can retain bounded
       // diagnostic tails without storing the complete session.
       stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit',
-      windowsHide: false,
+      windowsHide: true,
     });
     setActiveChild(child);
     const finish = (callback, value) => {
@@ -3360,7 +3880,9 @@ function serviceOptions(input = {}) {
     reviewer: null,
     title: '',
     spec: '',
-    taskId: null,
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    sessionWaitMs: input.sessionWaitMs ?? null,
     reason: '',
     decision: null,
     feedback: '',
@@ -3465,6 +3987,19 @@ export async function runtimeTaskGraphInspect(input = {}) {
     command: 'task',
     subcommand: 'graph-inspect',
     taskId: input.taskId || input.id || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphDispatch(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-dispatch',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    spec: input.spec !== undefined ? input.spec : undefined,
+    sessionWaitMs: input.sessionWaitMs ?? null,
     positionals: [],
   }), { json: true });
 }

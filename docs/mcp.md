@@ -54,6 +54,7 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_task_create` | `root`, `title` | `id`, `spec`, `planner`, `implementer`, `reviewer` | `task.create` |
 | `coordinate_agents_task_graph_validate` | `root`, `graph` | — | `task.graph-validate` |
 | `coordinate_agents_task_graph_create` | `root`, `graph` | — | `task.graph-create` |
+| `coordinate_agents_task_graph_dispatch` | `root`, `taskId`, `subtaskId` | `spec`, `sessionWaitMs` | `task.graph-dispatch` |
 | `coordinate_agents_task_dispatch` | `root`, `taskId` | `spec` | `task.dispatch` |
 | `coordinate_agents_task_status` | `root`, `taskId` | — | `task.status` |
 | `coordinate_agents_task_inspect` | `root`, `taskId` | — | `task.inspect` |
@@ -89,6 +90,13 @@ but does not resolve an Adapter, open a Session, hand off a Bus message, or
 launch a child process. Existing `coordinate_agents_task_status` and
 `coordinate_agents_task_inspect` calls recognize a graph parent ID; inspect
 also returns bounded graph lifecycle events.
+
+`coordinate_agents_task_graph_dispatch` dispatches one selected `READY` subtask
+from a persisted Task Graph in an isolated Git worktree without modifying
+uncommitted files in the user repository or mutating sibling subtasks. It captures
+the graph base commit, provisions a dedicated worktree and branch, resolves the
+configured Implementer, runs an isolated persistent Session, and updates the
+subtask and frontier state upon completion.
 
 `coordinate_agents_setup_discover` returns an additive `adapters` snapshot.
 Each record exposes the registered Adapter Contract identity, contract version,
