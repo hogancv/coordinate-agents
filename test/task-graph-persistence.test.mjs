@@ -80,7 +80,7 @@ test('Task Graph status and inspect use the same durable record through Runtime,
   const inputPath = join(root, 'graph.json');
   try {
     const input = graph({ parentTask: { ...graph().parentTask, id: 'task-graph-views' } });
-    writeFileSync(inputPath, `${JSON.stringify(input)}\n`, 'utf8');
+    writeFileSync(inputPath, JSON.stringify(input) + '\n', 'utf8');
     const cli = spawnSync(process.execPath, [
       join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-create',
       '--root', root, '--input', inputPath, '--json',
