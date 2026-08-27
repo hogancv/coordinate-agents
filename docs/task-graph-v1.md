@@ -81,6 +81,36 @@ state, and sorted dependency identifiers. Agent, Adapter, and executable
 identities remain separate; graph validation never guesses or resolves an
 executable.
 
+## Durable graph create, status, and inspect
+
+After validation, create the graph through the additive Runtime operation. The
+CLI accepts the same bounded JSON input file:
+
+```sh
+coordinate-agents task graph-create --root <repository> --input <graph.json> --json
+# equivalent nested form:
+coordinate-agents task graph create --root <repository> --input <graph.json> --json
+```
+
+The MCP equivalent is `coordinate_agents_task_graph_create`. Creation writes
+one atomic record at `.agent-bus/task-graphs/<parentTaskId>.json`; the record
+contains the parent Task, every subtask, dependency edges, exact Implementer
+assignments, timestamps, bounded `reason`/`evidence` fields, `maxConcurrency`,
+and a deterministic `frontier`. It writes a `TASK_GRAPH_CREATED` Event Journal
+entry and never resolves an Adapter, opens a Session, sends a Bus handoff, or
+launches a child Implementer process.
+
+The established `task status` and `task inspect` operations recognize a graph
+parent ID without changing the single-Task response for ordinary Tasks. The
+explicit aliases `task graph-status` and `task graph-inspect` are also
+available. Status returns the graph and frontier; inspect adds bounded
+append-only lifecycle events. A dependency-free subtask starts `READY`, a
+subtask with unresolved dependencies starts `WAITING`, and a dependency whose
+record is `FAILED`, `BLOCKED`, or `STOPPED` makes its dependents `BLOCKED` with
+a deterministic reason. `TASK_GRAPH_SUBTASK_STATE_CHANGED` and
+`TASK_GRAPH_STATUS_CHANGED` events record later durable transitions; repeated
+identical transitions are idempotent.
+
 ## Determinism and scope
 
 Malformed graphs fail in a fixed validation order. Dependency checks and cycle

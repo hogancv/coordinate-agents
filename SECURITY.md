@@ -49,8 +49,9 @@ it before sharing diagnostics.
 
 - Task Graph v1 validation rejects malformed identities, dependencies, cycles, unconfigured
   Implementers, empty specifications, and invalid concurrency before Git discovery, Bus handoff,
-  Adapter resolution, worktree or Session creation, or child-process spawn. It is a read-only
-  canonical Runtime operation and does not persist graph state.
+  Adapter resolution, worktree or Session creation, or child-process spawn. Validation remains
+  read-only; the separate graph-create operation persists only the validated graph record and
+  append-only lifecycle event, without launching an Adapter, Session, or Implementer process.
 
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current

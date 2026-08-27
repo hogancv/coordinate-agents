@@ -11,6 +11,7 @@
     "timestamp": { "type": "string", "format": "date-time" },
     "type": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$" },
     "taskId": { "type": "string" },
+    "subtaskId": { "type": "string" },
     "sessionId": { "type": "string" },
     "agentId": { "type": "string" },
     "role": { "type": "string" },

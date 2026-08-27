@@ -2,6 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  appendFileSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -45,10 +46,13 @@ import { observeAgentBus, waitForAgentActivity } from '../skills/coordinate-agen
 import { discoverCodingClis, setupSnapshot } from '../skills/coordinate-agents/scripts/discovery.mjs';
 import {
   assertContained,
+  assertSafePath as assertConfigSafePath,
   atomicWrite,
+  DEFAULT_CONFIG,
   readConfig,
   validateAgentId,
   withConfigTransaction,
+  writeConfig,
 } from '../skills/coordinate-agents/scripts/config.mjs';
 import {
   defaultUserConfig,
@@ -79,6 +83,13 @@ import {
   taskGraphDurableFacts,
   validateTaskGraphV1,
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
+import {
+  createTaskGraph,
+  hasTaskGraph,
+  listTaskGraphs,
+  readTaskGraph,
+  taskGraphStatusPayload,
+} from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import {
   canonicalErrorCode,
   isExplicitAuthFailure,
@@ -120,7 +131,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks (create, graph-validate, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -145,7 +156,7 @@ Options:
   --role <role>           Setup workflow role (setup configure only; default: implementer)
   --decision <decision>   Task review decision: REVIEW_APPROVED or CHANGES_REQUESTED
   --feedback <text>       Review feedback preserved for the next implementation round
-  --input <path>          Task Graph v1 JSON input for task graph-validate
+  --input <path>          Task Graph v1 JSON input for graph-validate/graph-create
   --template <type>       Task template: bug, feature, or refactor
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
@@ -235,7 +246,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务（create、graph-validate、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -256,7 +267,7 @@ Examples:
   --role <role>           setup configure 的工作流角色（默认：implementer）
   --decision <decision>   Task 审查决策：REVIEW_APPROVED 或 CHANGES_REQUESTED
   --feedback <文本>       保存给下一轮实现的审查反馈
-  --input <路径>          task graph-validate 使用的 Task Graph v1 JSON 输入
+  --input <路径>          graph-validate/graph-create 使用的 Task Graph v1 JSON 输入
   --template <类型>       任务模板：bug、feature 或 refactor
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
@@ -844,6 +855,60 @@ function ensureProjectBus(root) {
     });
   }
   return join(root, '.agent-bus');
+}
+
+function ensureGraphBus(root) {
+  const repository = resolve(root);
+  const bus = assertConfigSafePath(repository, join(repository, '.agent-bus'));
+  const directories = [
+    'specs', 'reviews', 'evidence', 'releases', 'dedupe', 'locks', 'logs', 'tmp', 'launch',
+    'tasks', 'task-graphs', 'events',
+  ];
+  mkdirSync(bus, { recursive: true });
+  assertConfigSafePath(repository, bus);
+  for (const directory of directories) {
+    const path = assertConfigSafePath(repository, join(bus, directory));
+    mkdirSync(path, { recursive: true });
+    assertConfigSafePath(repository, path);
+  }
+  const cfgFile = join(bus, 'config.json');
+  if (!existsSync(cfgFile)) writeConfig(bus, DEFAULT_CONFIG);
+  const config = readConfig(bus);
+  for (const agent of config.agents) {
+    for (const directory of [
+      `inbox/${agent.id}/new`,
+      `inbox/${agent.id}/processing`,
+      `inbox/${agent.id}/processed`,
+      `quarantine/${agent.id}`,
+      `state/${agent.id}`,
+    ]) {
+      const path = assertConfigSafePath(repository, join(bus, directory));
+      mkdirSync(path, { recursive: true });
+      assertConfigSafePath(repository, path);
+    }
+  }
+  // Keep the local durable state out of ordinary Git status without invoking
+  // `git rev-parse` (graph creation must not spawn a child process). A linked
+  // worktree's .git marker may point outside the repository; in that case we
+  // leave exclusion untouched rather than writing beyond the requested root.
+  const gitDirectory = join(repository, '.git');
+  try {
+    const metadata = lstatSync(gitDirectory);
+    if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
+      const info = assertConfigSafePath(repository, join(gitDirectory, 'info'));
+      mkdirSync(info, { recursive: true });
+      assertConfigSafePath(repository, info);
+      const exclude = join(info, 'exclude');
+      if (existsSync(exclude)) assertSafePath(repository, exclude, messages.en, false);
+      const existing = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+      if (!existing.split(/\r?\n/).includes('.agent-bus/')) {
+        appendFileSync(exclude, `${existing && !existing.endsWith('\n') ? '\n' : ''}.agent-bus/\n`, 'utf8');
+      }
+    }
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  return bus;
 }
 
 function jsonConfigCommand(options) {
@@ -1574,11 +1639,86 @@ function taskReview(root, task, options) {
   return { root, task: updated, review: { decision, feedback, messagePath } };
 }
 
+function taskGraphOperation(options) {
+  const subcommand = options.subcommand || '';
+  if (['graph-create', 'create-graph'].includes(subcommand)) return 'create';
+  if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
+  if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
+  if (subcommand !== 'graph') return null;
+  const nested = options.positionals?.[0];
+  return ['create', 'status', 'inspect'].includes(nested) ? nested : null;
+}
+
+function graphInput(options) {
+  const hasInlineGraph = Object.prototype.hasOwnProperty.call(options, 'graph') && options.graph !== undefined;
+  return hasInlineGraph ? options.graph : readTaskGraphInput(options.input);
+}
+
+function configuredGraphAgents(root) {
+  const busPath = join(resolve(root), '.agent-bus');
+  try {
+    if (existsSync(busPath)) assertSafePath(resolve(root), busPath, messages.en);
+    const config = readConfig(busPath);
+    return { config, agents: config.agents.map(agent => agent.id) };
+  } catch (error) {
+    throw runtimeError('TASK_GRAPH_INVALID', `Unable to read configured Agents for Task Graph v1: ${error.message || error}`, {
+      recoverable: false,
+      stage: 'graph-validation',
+      root: resolve(root),
+    });
+  }
+}
+
+async function taskGraphCreateCommand(options, { json = false } = {}) {
+  const requestedRoot = resolve(options.root);
+  const input = graphInput(options);
+  const repository = assertGitRepositoryWithoutProcess(requestedRoot, messages.en);
+  // Read the existing registry (or the canonical default when the Bus has not
+  // been initialized) and validate before initializing the Bus or invoking
+  // any Adapter, Session, or child process.
+  const configured = configuredGraphAgents(repository);
+  const validated = validateTaskGraphV1(input, { configuredAgents: configured.agents });
+  ensureGraphBus(repository);
+  const afterInit = configuredGraphAgents(repository);
+  const effective = validateTaskGraphV1(input, { configuredAgents: afterInit.agents });
+  const created = createTaskGraph(repository, effective, { validated: true });
+  const payload = jsonSuccess('task.graph-create', {
+    ...taskGraphStatusPayload(repository, created.graph),
+    event: created.event,
+    validation: { valid: true, sideEffects: true },
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+function graphTaskId(options, root) {
+  const direct = options.taskId || null;
+  if (direct) return direct;
+  const nested = options.subcommand === 'graph' && options.positionals?.[0] !== 'status' && options.positionals?.[0] !== 'inspect'
+    ? options.positionals?.[0]
+    : options.subcommand === 'graph' ? options.positionals?.[1] : options.positionals?.[0];
+  if (nested) return nested;
+  const graphs = listTaskGraphs(root);
+  if (graphs.length === 0) throw runtimeError('TASK_NOT_FOUND', 'No Task Graph exists for this project.', { recoverable: false, root });
+  return graphs[0].parentTaskId;
+}
+
+function taskGraphViewCommand(options, operation, { json = false, commandName = null } = {}) {
+  const root = assertGitRepositoryWithoutProcess(options.root, messages.en);
+  const taskId = graphTaskId(options, root);
+  const graph = readTaskGraph(root, taskId);
+  const command = commandName || `task.graph-${operation}`;
+  const payload = jsonSuccess(command, taskGraphStatusPayload(root, graph, { inspect: operation === 'inspect' }));
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
 async function taskCommand(options, { json = false } = {}) {
   const subcommand = options.subcommand || 'status';
   const graphValidate = subcommand === 'graph-validate'
     || subcommand === 'validate-graph'
     || (subcommand === 'graph' && options.positionals?.[0] === 'validate');
+  const graphOperation = taskGraphOperation(options);
   const commandName = graphValidate ? 'task.graph-validate' : `task.${subcommand}`;
   if (graphValidate) {
     const hasInlineGraph = Object.prototype.hasOwnProperty.call(options, 'graph') && options.graph !== undefined;
@@ -1611,6 +1751,31 @@ async function taskCommand(options, { json = false } = {}) {
     });
     if (!json) console.log(JSON.stringify(result, null, 2));
     return result;
+  }
+  if (graphOperation === 'create') return await taskGraphCreateCommand(options, { json });
+  if (graphOperation === 'status' || graphOperation === 'inspect') {
+    return taskGraphViewCommand(options, graphOperation, { json });
+  }
+
+  // Existing Task status/inspect calls are graph-aware when the requested
+  // Task ID is a persisted parent graph. This preserves the original Task
+  // response for ordinary schema-version-1 Tasks while making the graph path
+  // discoverable through the established operations.
+  if (['status', 'inspect'].includes(subcommand)) {
+    const requestedId = options.taskId || options.positionals?.[0] || null;
+    if (requestedId && hasTaskGraph(resolve(options.root), requestedId)) {
+      return taskGraphViewCommand({ ...options, taskId: requestedId }, subcommand, { json, commandName: `task.${subcommand}` });
+    }
+    if (!requestedId) {
+      try {
+        const graphs = listTaskGraphs(resolve(options.root));
+        if (graphs[0]) {
+          return taskGraphViewCommand({ ...options, taskId: graphs[0].parentTaskId }, subcommand, { json, commandName: `task.${subcommand}` });
+        }
+      } catch {
+        // Preserve the existing single-Task error when no graph store exists.
+      }
+    }
   }
   const adapterRegistry = await loadConfiguredAdaptersForRuntime();
   const root = assertGitRepository(options.root, messages.en);
@@ -2125,6 +2290,47 @@ function assertGitRepository(root, t) {
   const result = spawnSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', windowsHide: true });
   if (result.error || result.status !== 0) throw new Error(format(t.notGitRepo, { path: root }));
   return resolve(result.stdout.trim());
+}
+
+// Graph persistence is deliberately a read/write-only Runtime operation. It
+// must not resolve an Adapter, open a Session, or spawn even a Git helper
+// process merely to discover the repository root. Walk the filesystem for a
+// regular .git directory/file instead; normal Task operations retain the
+// existing Git-backed check above.
+function assertGitRepositoryWithoutProcess(root, t) {
+  const requested = resolve(root || process.cwd());
+  let metadata;
+  try {
+    metadata = lstatSync(requested);
+  } catch {
+    throw new Error(format(t.notGitRepo, { path: requested }));
+  }
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw new Error(format(t.notGitRepo, { path: requested }));
+  }
+  let cursor = requested;
+  while (true) {
+    const marker = join(cursor, '.git');
+    try {
+      const markerMetadata = lstatSync(marker);
+      if (markerMetadata.isSymbolicLink()) {
+        throw new Error(format(t.unsafeBusPath, { path: marker }));
+      }
+      if (markerMetadata.isDirectory()) return resolve(realpathSync(cursor));
+      if (markerMetadata.isFile()) {
+        // Linked worktrees use a text .git marker. We only need to prove the
+        // requested path is a Git worktree; no marker target is followed.
+        const contents = readFileSync(marker, 'utf8');
+        if (/^\s*gitdir\s*:/im.test(contents)) return resolve(realpathSync(cursor));
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  throw new Error(format(t.notGitRepo, { path: requested }));
 }
 
 function assertSafePath(root, path, t, expectDirectory = true) {
@@ -2940,7 +3146,11 @@ async function run(argv) {
     } catch (error) {
       const graphCommand = ['graph-validate', 'validate-graph'].includes(options.subcommand)
         || (options.subcommand === 'graph' && options.positionals?.[0] === 'validate');
-      if (options.json) emitJson(jsonFailure(graphCommand ? 'task.graph-validate' : `task.${options.subcommand || 'status'}`, error));
+      const graphOperation = taskGraphOperation(options);
+      const command = graphCommand
+        ? 'task.graph-validate'
+        : (graphOperation ? `task.graph-${graphOperation}` : `task.${options.subcommand || 'status'}`);
+      if (options.json) emitJson(jsonFailure(command, error));
       else console.error(error.message || String(error));
       process.exitCode = 1;
     }
@@ -3217,6 +3427,17 @@ export async function runtimeTaskCreate(input = {}) {
   }), { json: true });
 }
 
+export async function runtimeTaskGraphCreate(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-create',
+    graph: input.graph !== undefined
+      ? input.graph
+      : (input.input && typeof input.input === 'object' ? input.input : undefined),
+  }), { json: true });
+}
+
 export async function runtimeTaskGraphValidate(input = {}) {
   return taskCommand(serviceOptions({
     ...input,
@@ -3225,6 +3446,26 @@ export async function runtimeTaskGraphValidate(input = {}) {
     graph: input.graph !== undefined
       ? input.graph
       : (input.input && typeof input.input === 'object' ? input.input : undefined),
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphStatus(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-status',
+    taskId: input.taskId || input.id || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphInspect(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-inspect',
+    taskId: input.taskId || input.id || null,
+    positionals: [],
   }), { json: true });
 }
 

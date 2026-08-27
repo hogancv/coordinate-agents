@@ -78,6 +78,10 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 或进程产生任何副作用前校验父 Task、唯一子任务 ID、显式 Implementer、依赖边、非空规格和
 有界 `maxConcurrency`。无效图返回稳定的 `TASK_GRAPH_INVALID`；结果始终区分
 `parentTaskId` 与 `subtaskId`；父 Task 可选携带现有的非空 `spec` 与 `implementer`。
-详见[Task Graph v1 契约](../task-graph-v1.html)。
+校验通过后，可用 `coordinate_agents_task_graph_create` 或 CLI 的
+`task graph-create --input <graph.json>` 原子持久化父 Task、子任务、依赖前沿、原因、证据和
+`TASK_GRAPH_CREATED` 事件；它不会启动 Adapter、Session 或 Implementer。既有 `task status`、
+`task inspect` 以及 `task graph-status`、`task graph-inspect` 别名可读取 READY/WAITING/BLOCKED
+前沿和有界生命周期事件。详见[Task Graph v1 契约](../task-graph-v1.html)。
 
 `.agent-bus` 是本地明文数据，不要写入令牌、Cookie、密码或私钥。在默认参考工作流中，两个代理不得同时修改产品代码或并发执行 Git 写操作。

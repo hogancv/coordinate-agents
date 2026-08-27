@@ -19,6 +19,8 @@ installed package dependencies.
 Task Graph v1 validation is read-only and precedes Git discovery, Bus handoff, Adapter resolution,
 worktree or Session creation, and child-process spawn. Invalid DAGs return the bounded
 `TASK_GRAPH_INVALID` Runtime error without initializing `.agent-bus` or persisting graph state.
+The separate graph-create operation persists only an already validated graph record and its
+append-only lifecycle event; it does not launch an Adapter, Session, or Implementer process.
 
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 

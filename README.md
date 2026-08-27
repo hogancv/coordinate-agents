@@ -77,7 +77,7 @@ Codex turns that into a durable task, selects the configured Implementer adapter
 ## Key Capabilities
 
 - Durable local tasks, messages, review decisions, and runtime events.
-- Additive Task Graph v1 validation for explicit DAGs before execution side effects.
+- Additive Task Graph v1 validation plus durable graph create/status/inspect views with deterministic dependency frontiers.
 - Explicit Planner, Implementer, and Reviewer role boundaries.
 - Adapter-based execution for exact configured CLI commands.
 - Persistent, bounded, and inspectable execution sessions.

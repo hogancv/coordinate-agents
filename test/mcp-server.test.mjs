@@ -243,6 +243,7 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
     'coordinate_agents_setup_configure',
     'coordinate_agents_task_create',
     'coordinate_agents_task_graph_validate',
+    'coordinate_agents_task_graph_create',
     'coordinate_agents_task_dispatch',
     'coordinate_agents_task_status',
     'coordinate_agents_task_inspect',
@@ -283,7 +284,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     });
     assert.equal(initialized.result.protocolVersion, '2025-06-18');
     const listed = await debugClient.request('tools/list');
-    assert.equal(listed.result.tools.length, 17);
+    assert.equal(listed.result.tools.length, 18);
   } finally {
     await debugClient.close();
   }
@@ -291,7 +292,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.match(debugClient.stderr, /server root:/);
   assert.match(debugClient.stderr, /runtime root:/);
   assert.match(debugClient.stderr, /protocol version: 2025-06-18/);
-  assert.match(debugClient.stderr, /tool count: 17/);
+  assert.match(debugClient.stderr, /tool count: 18/);
   assert.match(debugClient.stderr, /initialize received/);
   assert.match(debugClient.stderr, /tools\/list received/);
   const selfTest = spawnSync(process.execPath, [selfTestPath], {
@@ -303,7 +304,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
   assert.match(selfTest.stdout, /MCP server: OK/);
   assert.match(selfTest.stdout, /Protocol: 2025-06-18/);
-  assert.match(selfTest.stdout, /Tools: 17/);
+  assert.match(selfTest.stdout, /Tools: 18/);
   rmSync(independentCwd, { recursive: true, force: true });
 
   const pluginRoot = mkdtempSync(join(canonicalTmpdir, 'Coordinate Agents Plugin Fixture '));
@@ -329,7 +330,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     const responses = launched.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line));
     assert.equal(responses.length, 2);
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
-    assert.equal(responses[1].result.tools.length, 17);
+    assert.equal(responses[1].result.tools.length, 18);
   } finally {
     rmSync(pluginRoot, { recursive: true, force: true });
   }
@@ -797,7 +798,7 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   assert.equal(existsSync(join(root, 'mcp', 'self-test.mjs')), true);
   assert.equal(packageJson.scripts['mcp:self-test'], 'node mcp/self-test.mjs');
   assert.equal(packageJson.files.includes('docs/MCP_TROUBLESHOOTING.md'), true);
-  for (const name of ['task.schema.json', 'task-graph-v1.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
+  for (const name of ['task.schema.json', 'task-graph-v1.schema.json', 'task-graph-v1-record.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
     const schema = JSON.parse(readFileSync(join(root, 'schemas', name), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   }

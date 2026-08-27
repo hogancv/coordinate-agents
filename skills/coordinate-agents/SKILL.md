@@ -75,7 +75,7 @@ remains a fallback for hosts without direct App skill execution.
 | "Which coding CLIs are installed?" | `coordinate-setup` | `coordinate_agents_setup_discover` |
 | "Configure the implementation agent." | `coordinate-setup` | `coordinate_agents_setup_configure` |
 | "Build this feature with Coordinate Agents." | `coordinate-task` | `coordinate_agents_task_create`, `coordinate_agents_task_dispatch` |
-| "Validate this Task Graph before running it." | `coordinate-task` | `coordinate_agents_task_graph_validate` |
+| "Validate or persist this Task Graph before running it." | `coordinate-task` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create` |
 | "Review the implementation." | `coordinate-review` | `coordinate_agents_task_inspect`, `coordinate_agents_task_review` |
 | "Continue the last task." | `coordinate-recover` | `coordinate_agents_recover_inspect`, `coordinate_agents_task_resume`, `coordinate_agents_task_dispatch` |
 | "Inspect or control the Implementer session." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_session_open`, `coordinate_agents_session_status`, `coordinate_agents_session_inspect`, `coordinate_agents_session_write`, `coordinate_agents_session_read`, `coordinate_agents_session_close` |
@@ -95,6 +95,13 @@ error. Validation must finish before any Bus handoff, Adapter resolution,
 worktree, Session, or process side effect. The normalized facts keep
 `parentTaskId` and `subtaskId` distinct; do not reinterpret existing single
 Tasks. Read `../../docs/task-graph-v1.md` for the frozen contract.
+
+After validation, call `coordinate_agents_task_graph_create` to persist the
+validated parent and subtasks atomically. It computes deterministic READY,
+WAITING, and BLOCKED frontier facts and writes a `TASK_GRAPH_CREATED` event;
+it never launches an Adapter, Session, or Implementer. Existing Task status
+and inspect tools recognize a graph parent ID and return its durable graph
+view.
 
 Session operations are explicit and bounded: `session_open` resolves the
 configured executable and starts or reuses one Session; `status` and `inspect`

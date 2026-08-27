@@ -28,7 +28,7 @@ const LOCK_TIMEOUT_MS = 2_000;
 const STALE_LOCK_MS = 30_000;
 const TRANSIENT_LOCK_ERRORS = new Set(['EACCES', 'EBUSY', 'EEXIST', 'EPERM']);
 const SENSITIVE_KEY = /(?:authorization|credential|cookie|environment|env|password|passwd|private[_-]?key|secret|token|api[_-]?key)/i;
-const ASSOCIATION_FIELDS = ['taskId', 'sessionId', 'agentId', 'role', 'messageId'];
+const ASSOCIATION_FIELDS = ['taskId', 'subtaskId', 'sessionId', 'agentId', 'role', 'messageId'];
 const EVENT_ID_PATTERN = /^evt_[0-9a-f-]{36}$/;
 const EVENT_TYPE_PATTERN = /^[A-Z][A-Z0-9_]{1,127}$/;
 
@@ -293,12 +293,20 @@ function normalizedReadOptions(options = {}) {
   const types = options.type === undefined || options.type === null
     ? null
     : new Set((Array.isArray(options.type) ? options.type : [options.type]).map(validateType));
-  return { limit, after, types, taskId: options.taskId || null, sessionId: options.sessionId || null };
+  return {
+    limit,
+    after,
+    types,
+    taskId: options.taskId || null,
+    subtaskId: options.subtaskId || null,
+    sessionId: options.sessionId || null,
+  };
 }
 
 function matches(event, options) {
   if (options.after !== null && event.sequence <= options.after) return false;
   if (options.taskId && event.taskId !== options.taskId) return false;
+  if (options.subtaskId && event.subtaskId !== options.subtaskId) return false;
   if (options.sessionId && event.sessionId !== options.sessionId) return false;
   if (options.types && !options.types.has(event.type)) return false;
   return true;

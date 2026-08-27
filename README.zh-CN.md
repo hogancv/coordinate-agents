@@ -77,7 +77,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 ## 核心能力
 
 - 持久化本地任务、消息、审查结论和运行时事件。
-- 在任何执行副作用之前，对显式 DAG 进行向后兼容的 Task Graph v1 校验。
+- 在任何执行副作用之前校验显式 DAG，并持久化 Task Graph 的创建、状态、检查和确定性依赖前沿。
 - 明确区分 Planner、Implementer 与 Reviewer 角色。
 - 通过适配器精确执行已配置的 CLI 命令。
 - 提供持久、有限输出且可检查的 Execution Session。
