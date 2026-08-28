@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -48,6 +48,34 @@ const NON_EXECUTING_SUBTASK_STATES = new Set(['PENDING', 'READY', 'WAITING']);
 
 function now() {
   return new Date().toISOString();
+}
+
+// Keep Git invocation argument-vector based.  Returning the small
+// spawnSync-compatible result shape preserves the distinction between a Git
+// command's non-zero exit (used for branch-not-found probes) and a process
+// start failure while avoiding shell-string execution.
+function runGit(args, cwd) {
+  try {
+    return {
+      status: 0,
+      stdout: execFileSync('git', args, {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      }),
+      stderr: '',
+      error: undefined,
+    };
+  } catch (error) {
+    const status = Number.isInteger(error?.status) ? error.status : null;
+    return {
+      status,
+      stdout: `${error?.stdout || ''}`,
+      stderr: `${error?.stderr || ''}`,
+      error: status === null ? error : undefined,
+    };
+  }
 }
 
 function plainObject(value) {
@@ -177,11 +205,7 @@ export function taskGraphBranchRef(parentTaskId, subtaskId) {
 
 export function captureGraphBaseCommit(root) {
   const repository = repositoryRoot(root);
-  const result = spawnSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const result = runGit(['rev-parse', '--verify', 'HEAD^{commit}'], repository);
   if (result.error || result.status !== 0) {
     const errorDetails = (result.stderr || result.stdout || result.error?.message || '').trim();
     throw runtimeError('TASK_STATE_CONFLICT', `Failed to determine repository HEAD commit: ${errorDetails}`, {
@@ -258,11 +282,7 @@ export function verifyGraphImplementationCommit(root, baseCommit, reportedCommit
       stage: 'completion',
     });
   }
-  const resolved = spawnSync('git', ['rev-parse', '--verify', `${candidate}^{commit}`], {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const resolved = runGit(['rev-parse', '--verify', `${candidate}^{commit}`], repository);
   if (resolved.error || resolved.status !== 0) {
     throw runtimeError('AGENT_RUNTIME_ERROR', `Implementation commit is not present in the isolated worktree: ${candidate}`, {
       recoverable: true,
@@ -285,7 +305,7 @@ export function verifyGraphImplementationCommit(root, baseCommit, reportedCommit
     ['worktree HEAD', ['merge-base', '--is-ancestor', commit, head]],
   ];
   for (const [label, args] of ancestorChecks) {
-    const result = spawnSync('git', args, { cwd: repository, encoding: 'utf8', windowsHide: true });
+    const result = runGit(args, repository);
     if (result.error || result.status !== 0) {
       throw runtimeError('AGENT_RUNTIME_ERROR', `Implementation commit is not reachable from the isolated ${label}: ${commit}`, {
         recoverable: true,
@@ -393,11 +413,7 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
         root: repository,
       });
     }
-    const listResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
-      cwd: repository,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
+    const listResult = runGit(['worktree', 'list', '--porcelain'], repository);
     if (listResult.error || listResult.status !== 0) {
       throw graphWorktreeConflict(`Unable to inspect existing Git worktrees for ${worktreePath}.`, {
         taskId: parentTaskId,
@@ -443,11 +459,7 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
   // Inspect the Git worktree registry without pruning it.  Stale metadata is
   // an explicit cleanup/recovery concern and must not be destructively
   // rewritten as a side effect of dispatch.
-  const listResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const listResult = runGit(['worktree', 'list', '--porcelain'], repository);
   if (listResult.error || listResult.status !== 0) {
     throw graphWorktreeConflict(`Unable to inspect Git worktrees before creating ${worktreePath}.`, {
       taskId: parentTaskId,
@@ -469,11 +481,7 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
   mkdirSync(parentWorktrees, { recursive: true });
   assertSafePath(repository, parentWorktrees);
 
-  const branchCheck = spawnSync('git', ['rev-parse', '--verify', branchRef], {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const branchCheck = runGit(['rev-parse', '--verify', branchRef], repository);
   if (branchCheck.error) {
     throw graphWorktreeConflict(`Unable to inspect Git branch ${branchRef}.`, {
       taskId: parentTaskId,
@@ -500,11 +508,7 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
     ? ['worktree', 'add', worktreePath, branchRef]
     : ['worktree', 'add', '-b', branchName, worktreePath, baseCommit];
 
-  const addResult = spawnSync('git', addArgs, {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const addResult = runGit(addArgs, repository);
 
   if (addResult.error || addResult.status !== 0) {
     const errorDetails = (addResult.stderr || addResult.stdout || addResult.error?.message || '').trim();
@@ -517,11 +521,7 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
   }
 
   assertSafePath(repository, worktreePath);
-  const verifyResult = spawnSync('git', ['worktree', 'list', '--porcelain'], {
-    cwd: repository,
-    encoding: 'utf8',
-    windowsHide: true,
-  });
+  const verifyResult = runGit(['worktree', 'list', '--porcelain'], repository);
   const created = !verifyResult.error && verifyResult.status === 0
     ? gitWorktreeEntries(verifyResult.stdout).find(entry => {
       let listedPath = resolve(entry.path || '');
