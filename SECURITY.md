@@ -78,6 +78,14 @@ it before sharing diagnostics.
   cleanup failures remain durable bounded errors, while user worktrees, refs, commits, and evidence
   are preserved. Repeating these operations is idempotent.
 
+- Task Graph integration and aggregate review use a distinct Runtime-owned
+  `.agent-bus/worktrees/<parentTaskId>/__integration__` worktree and exact
+  `coordinate-agents/<parentTaskId>/__integration__` ref. All required source
+  refs and commits are verified before application; source worktrees and the
+  current checkout remain unchanged. Conflicts preserve inspectable Git state
+  and durable applied/source facts, while review decisions remain separate from
+  the human `RELEASE_APPROVED` gate.
+
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.

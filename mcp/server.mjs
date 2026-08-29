@@ -343,6 +343,41 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_integrate',
+    description: 'Verify every required subtask completion, apply its commits in deterministic order to a Runtime-owned aggregate review worktree, and preserve conflict facts without changing the current checkout.',
+    operation: 'taskGraphIntegrate',
+    command: 'task.graph-integrate',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        timeoutMs: integerProperty('Bounded Git integration command timeout.', { minimum: 100, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_task_graph_review',
+    description: 'Inspect the Runtime-owned aggregate integration worktree and record REVIEW_APPROVED or CHANGES_REQUESTED without merging, pushing, tagging, releasing, deploying, or publishing.',
+    operation: 'taskGraphReview',
+    command: 'task.graph-review',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        decision: { type: 'string', enum: ['REVIEW_APPROVED', 'CHANGES_REQUESTED'] },
+        feedback: { type: 'string', description: 'Required when decision is CHANGES_REQUESTED.' },
+        evidence: { type: 'object', description: 'Optional bounded review evidence reference.' },
+        timeoutMs: integerProperty('Bounded Git inspection timeout.', { minimum: 100, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId', 'decision'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_dispatch',
     description: 'Validate and explicitly dispatch an approved Task to the configured Implementer.',
     operation: 'taskDispatch',

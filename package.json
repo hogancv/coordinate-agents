@@ -42,7 +42,7 @@
     "examples"
   ],
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "sync:llms": "node scripts/sync-llms.mjs",
     "check:llms": "node scripts/sync-llms.mjs --check",
     "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm test",

@@ -91,14 +91,19 @@ import {
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
 import {
   captureGraphBaseCommit,
+  cleanupTaskGraphIntegrationWorktree,
   cleanupTaskGraphWorktree,
   createTaskGraph,
   ensureSubtaskWorktree,
   ensureSubtaskWorktreeBus,
   hasTaskGraph,
+  inspectTaskGraphIntegration,
   inspectTaskGraphRecovery,
+  integrateTaskGraph,
   listTaskGraphs,
   readTaskGraph,
+  setTaskGraphIntegration,
+  setTaskGraphReview,
   setTaskGraphState,
   setTaskGraphSubtaskState,
   taskGraphBranchName,
@@ -108,6 +113,7 @@ import {
   taskGraphWorktreePath,
   verifyDurableImplementationCommit,
   verifyGraphImplementationCommit,
+  verifyTaskGraphIntegrationSources,
   validateSubtaskId,
 } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import {
@@ -151,7 +157,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-run, graph-recover, graph-resume, graph-stop, graph-cleanup, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-run, graph-recover, graph-resume, graph-stop, graph-cleanup, graph-dispatch, graph-integrate, graph-review, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -1683,12 +1689,14 @@ function taskGraphOperation(options) {
   if (['graph-resume', 'resume-graph'].includes(subcommand)) return 'resume';
   if (['graph-stop', 'stop-graph'].includes(subcommand)) return 'stop';
   if (['graph-cleanup', 'cleanup-graph'].includes(subcommand)) return 'cleanup';
+  if (['graph-integrate', 'integrate-graph'].includes(subcommand)) return 'integrate';
+  if (['graph-review', 'review-graph'].includes(subcommand)) return 'review';
   if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
   if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
   if (['graph-dispatch', 'dispatch-graph'].includes(subcommand)) return 'dispatch';
   if (subcommand !== 'graph') return null;
   const nested = options.positionals?.[0];
-  return ['create', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
+  return ['create', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup', 'integrate', 'review', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
 }
 
 function graphInput(options) {
@@ -1738,7 +1746,7 @@ function graphTaskId(options, root) {
   if (direct) return direct;
   const isGraphSubcommand = options.subcommand === 'graph';
   const nestedPos0 = options.positionals?.[0];
-  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup'].includes(nestedPos0)
+  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup', 'integrate', 'review'].includes(nestedPos0)
     ? options.positionals?.[1]
     : options.positionals?.[0];
   if (nested) return nested;
@@ -2391,6 +2399,221 @@ function graphCleanupSummary(repository, graph) {
   }));
 }
 
+function integrationCleanupFactsChanged(previous, current) {
+  const worktree = value => value && {
+    path: value.path || null,
+    recordedPath: value.recordedPath || null,
+    branch: value.branch || null,
+    ref: value.ref || null,
+    recordedBranch: value.recordedBranch || null,
+    recordedRef: value.recordedRef || null,
+    matchesRecord: value.matchesRecord ?? null,
+    exists: Boolean(value.exists),
+    safe: Boolean(value.safe),
+    registered: Boolean(value.registered),
+    owned: Boolean(value.owned),
+    ownershipKnown: Boolean(value.ownershipKnown),
+    head: value.head || null,
+    registeredBranch: value.registeredBranch || null,
+    error: value.error || null,
+  };
+  // After a successful removal the next inspection has no directory to
+  // describe. Treat that stable absence as the same terminal cleanup fact.
+  if (previous?.status === 'CLEANED' && current?.worktree
+    && !current.worktree.exists && !current.worktree.registered && !current.worktree.error) return false;
+  return JSON.stringify(worktree(previous?.worktree) || null) !== JSON.stringify(worktree(current?.worktree) || null);
+}
+
+function graphIntegrationCleanup(repository, graph, { timeoutMs = 2_000, allowRunning = false } = {}) {
+  const integration = graph.integration;
+  if (!integration) return null;
+  const current = inspectTaskGraphIntegration(repository, graph, { probeGit: true, timeoutMs });
+  const prior = integration.cleanup;
+  if (prior?.status === 'CLEANED' && !integrationCleanupFactsChanged(prior, current)) {
+    return {
+      root: repository,
+      parentTaskId: graph.parentTaskId,
+      status: 'CLEANED',
+      idempotent: true,
+      integrationState: integration.state,
+      worktree: current?.worktree || prior.worktree || null,
+      error: null,
+    };
+  }
+  if (integration.state === 'RUNNING' && !allowRunning) {
+    const error = runtimeError('TASK_STATE_CONFLICT', 'Task Graph integration for ' + graph.parentTaskId + ' is RUNNING; stop or reconcile it before cleanup.', {
+      recoverable: true,
+      taskId: graph.parentTaskId,
+      root: repository,
+      stage: 'integration-cleanup',
+      details: { integration: current || integration },
+    });
+    const cleanup = {
+      status: 'SKIPPED',
+      attemptedAt: prior?.attemptedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      worktree: current?.worktree || null,
+      error: serializeRuntimeError(error, { includeLegacy: true }),
+    };
+    try {
+      setTaskGraphIntegration(repository, graph.parentTaskId, integration.state, {
+        expectedState: integration.state,
+        cleanup,
+        operation: 'graph-cleanup',
+      });
+    } catch {
+      // Preserve the primary non-destructive cleanup decision.
+    }
+    return {
+      root: repository,
+      parentTaskId: graph.parentTaskId,
+      status: 'SKIPPED',
+      idempotent: false,
+      integrationState: integration.state,
+      worktree: current?.worktree || null,
+      error: cleanup.error,
+    };
+  }
+  const worktreeResult = cleanupTaskGraphIntegrationWorktree(repository, graph.parentTaskId, {
+    recordedPath: integration.worktreePath || null,
+    recordedBranch: integration.branch || null,
+    recordedRef: integration.ref || null,
+    timeoutMs,
+  });
+  const cleanup = {
+    status: worktreeResult.status,
+    attemptedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    worktree: worktreeResult.worktree || current?.worktree || null,
+    error: worktreeResult.error || null,
+  };
+  let persistenceError = null;
+  try {
+    setTaskGraphIntegration(repository, graph.parentTaskId, integration.state, {
+      expectedState: integration.state,
+      cleanup,
+      operation: 'graph-cleanup',
+    });
+  } catch (error) {
+    persistenceError = serializeRuntimeError(error, { includeLegacy: true });
+  }
+  return {
+    root: repository,
+    parentTaskId: graph.parentTaskId,
+    status: persistenceError ? 'FAILED' : worktreeResult.status,
+    idempotent: persistenceError ? false : Boolean(worktreeResult.idempotent),
+    integrationState: integration.state,
+    worktree: worktreeResult.worktree || current?.worktree || null,
+    error: persistenceError || worktreeResult.error || null,
+  };
+}
+
+async function taskGraphIntegrateCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  const result = integrateTaskGraph(repository, parentTaskId, { timeoutMs: cleanupTimeout(options) });
+  const latestGraph = readTaskGraph(repository, parentTaskId);
+  const payload = jsonSuccess('task.graph-integrate', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    baseCommit: result.integration?.baseCommit || null,
+    sources: result.sources || [],
+    integration: result.integration || inspectTaskGraphIntegration(repository, latestGraph, { probeGit: true }),
+    graph: latestGraph,
+    idempotent: Boolean(result.idempotent),
+    release: { authorized: false, required: 'explicit user release authorization' },
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+async function taskGraphReviewCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  const graph = readTaskGraph(repository, parentTaskId);
+  // Re-verify source facts at the review boundary so a reviewer never
+  // approves an aggregate whose required subtask evidence or refs changed.
+  const verified = verifyTaskGraphIntegrationSources(repository, graph);
+  const integration = inspectTaskGraphIntegration(repository, graph, { probeGit: true, timeoutMs: cleanupTimeout(options) });
+  const expectedAppliedRefs = verified.sources.map(source => ({
+    subtaskId: source.subtaskId,
+    ref: source.ref,
+    commit: source.commit,
+  }));
+  const actualAppliedRefs = (integration?.appliedRefs || []).map(source => ({
+    subtaskId: source.subtaskId,
+    ref: source.ref,
+    commit: source.commit,
+  }));
+  if (integration?.state !== 'SUCCEEDED'
+    || integration.sourceFingerprint !== verified.sourceFingerprint
+    || integration.baseCommit?.toLowerCase() !== verified.baseCommit.toLowerCase()
+    || JSON.stringify(actualAppliedRefs) !== JSON.stringify(expectedAppliedRefs)) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'Task Graph ' + parentTaskId + ' integration does not match the currently verified source commits.', {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'graph-review',
+      details: {
+        integrationState: integration?.state || null,
+        expectedBaseCommit: verified.baseCommit,
+        integrationBaseCommit: integration?.baseCommit || null,
+        expectedSourceFingerprint: verified.sourceFingerprint,
+        integrationSourceFingerprint: integration?.sourceFingerprint || null,
+        expectedAppliedRefs,
+        actualAppliedRefs,
+      },
+    });
+  }
+  if (!integration?.worktree?.owned || !integration.worktree.safe || !integration.worktree.exists) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'Task Graph ' + parentTaskId + ' integration worktree is not Runtime-owned and inspectable.', {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'graph-review',
+      details: { integration },
+    });
+  }
+  if (!integration.aggregateCommit || integration.worktree.head?.toLowerCase() !== integration.aggregateCommit.toLowerCase()) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'Task Graph ' + parentTaskId + ' integration aggregate commit is not stable for review.', {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'graph-review',
+      details: { aggregateCommit: integration.aggregateCommit, worktreeHead: integration.worktree.head || null },
+    });
+  }
+  if (integration.clean !== true) {
+    throw runtimeError('WORKTREE_CONFLICT', 'Task Graph ' + parentTaskId + ' integration worktree has uncommitted changes and cannot be approved.', {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'graph-review',
+      details: { worktree: integration.worktree, diff: integration.diff },
+    });
+  }
+  const result = setTaskGraphReview(repository, parentTaskId, options.decision, {
+    feedback: options.feedback || options.reason || '',
+    evidence: options.evidence,
+  });
+  const latestGraph = result.graph || readTaskGraph(repository, parentTaskId);
+  const payload = jsonSuccess('task.graph-review', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    decision: result.review?.decision || options.decision,
+    review: result.review,
+    graph: latestGraph,
+    integration: inspectTaskGraphIntegration(repository, latestGraph, { probeGit: true, timeoutMs: cleanupTimeout(options) }),
+    changed: Boolean(result.changed),
+    event: result.event || null,
+    release: { authorized: false, required: 'explicit user release authorization' },
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
 async function cleanupGraphSubtask(repository, graph, subtask, {
   timeoutMs = 2_000,
   allowRunning = false,
@@ -2591,6 +2814,7 @@ async function taskGraphCleanupCommand(options, { json = false } = {}) {
   const repository = assertGitRepository(options.root, messages.en);
   const parentTaskId = graphTaskId(options, repository);
   const graph = readTaskGraph(repository, parentTaskId);
+  const scopedSubtask = Boolean(graphSubtaskOption(options));
   const selected = graphSubtaskSelection(options, graph, { includeTerminal: true });
   const outcomes = [];
   for (const subtask of selected) {
@@ -2600,7 +2824,11 @@ async function taskGraphCleanupCommand(options, { json = false } = {}) {
       parentStateOverride: currentGraph.state,
     }));
   }
-  const latestGraph = readTaskGraph(repository, parentTaskId);
+  let latestGraph = readTaskGraph(repository, parentTaskId);
+  const integrationCleanup = !scopedSubtask
+    ? graphIntegrationCleanup(repository, latestGraph, { timeoutMs: cleanupTimeout(options) })
+    : null;
+  latestGraph = readTaskGraph(repository, parentTaskId);
   const payload = jsonSuccess('task.graph-cleanup', {
     root: repository,
     graphId: parentTaskId,
@@ -2608,6 +2836,7 @@ async function taskGraphCleanupCommand(options, { json = false } = {}) {
     graph: latestGraph,
     outcomes,
     cleanup: graphCleanupSummary(repository, latestGraph),
+    integrationCleanup,
   });
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
@@ -2661,6 +2890,29 @@ async function taskGraphStopCommand(options, { json = false } = {}) {
   if (!scopedSubtask && graph.state !== 'STOPPED') {
     graph = setTaskGraphState(repository, parentTaskId, 'STOPPED', { operation: 'graph-stop', reason: options.reason || 'Task Graph explicitly stopped.' }).graph;
   }
+  let integrationCleanup = null;
+  if (!scopedSubtask) {
+    graph = readTaskGraph(repository, parentTaskId);
+    if (graph.integration?.state === 'RUNNING') {
+      const stoppedIntegration = runtimeError('TASK_STATE_CONFLICT', 'Task Graph integration was interrupted by an explicit graph stop.', {
+        recoverable: true,
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'graph-stop',
+      });
+      graph = setTaskGraphIntegration(repository, parentTaskId, 'FAILED', {
+        expectedState: 'RUNNING',
+        reason: stoppedIntegration.message,
+        lastError: serializeRuntimeError(stoppedIntegration, { includeLegacy: true }),
+        operation: 'graph-stop',
+      }).graph;
+    }
+    integrationCleanup = graphIntegrationCleanup(repository, readTaskGraph(repository, parentTaskId), {
+      timeoutMs: cleanupTimeout(options),
+      allowRunning: true,
+    });
+    graph = readTaskGraph(repository, parentTaskId);
+  }
   const payload = jsonSuccess('task.graph-stop', {
     root: repository,
     graphId: parentTaskId,
@@ -2668,6 +2920,7 @@ async function taskGraphStopCommand(options, { json = false } = {}) {
     graph,
     outcomes,
     cleanup: graphCleanupSummary(repository, graph),
+    integrationCleanup,
   });
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
@@ -3215,6 +3468,8 @@ async function taskCommand(options, { json = false } = {}) {
   if (graphOperation === 'resume') return await taskGraphResumeCommand(options, { json });
   if (graphOperation === 'stop') return await taskGraphStopCommand(options, { json });
   if (graphOperation === 'cleanup') return await taskGraphCleanupCommand(options, { json });
+  if (graphOperation === 'integrate') return await taskGraphIntegrateCommand(options, { json });
+  if (graphOperation === 'review') return await taskGraphReviewCommand(options, { json });
   if (graphOperation === 'dispatch') return await taskGraphDispatchCommand(options, { json });
   if (graphOperation === 'status' || graphOperation === 'inspect') {
     return taskGraphViewCommand(options, graphOperation, { json });
@@ -3238,6 +3493,12 @@ async function taskCommand(options, { json = false } = {}) {
       } catch {
         // Preserve the existing single-Task error when no graph store exists.
       }
+    }
+  }
+  if (subcommand === 'review') {
+    const requestedId = options.taskId || options.positionals?.[0] || null;
+    if (requestedId && hasTaskGraph(resolve(options.root), requestedId)) {
+      return await taskGraphReviewCommand({ ...options, taskId: requestedId }, { json });
     }
   }
   const adapterRegistry = await loadConfiguredAdaptersForRuntime();
@@ -5000,6 +5261,31 @@ export async function runtimeTaskGraphCleanup(input = {}) {
     subcommand: 'graph-cleanup',
     taskId: input.taskId || input.parentTaskId || input.id || null,
     subtaskId: input.subtaskId || input.subtask || null,
+    timeoutMs: input.timeoutMs ?? null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphIntegrate(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-integrate',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    timeoutMs: input.timeoutMs ?? null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphReview(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-review',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    decision: input.decision || null,
+    feedback: input.feedback || input.reason || '',
+    evidence: input.evidence === undefined ? null : input.evidence,
     timeoutMs: input.timeoutMs ?? null,
     positionals: [],
   }), { json: true });

@@ -21,6 +21,8 @@ const expectedTools = [
   'coordinate_agents_task_graph_stop',
   'coordinate_agents_task_graph_cleanup',
   'coordinate_agents_task_graph_dispatch',
+  'coordinate_agents_task_graph_integrate',
+  'coordinate_agents_task_graph_review',
   'coordinate_agents_task_dispatch',
   'coordinate_agents_task_status',
   'coordinate_agents_task_inspect',

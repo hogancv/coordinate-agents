@@ -251,6 +251,8 @@ test('MCP server exposes the canonical lifecycle and exact P0 tool catalog', asy
     'coordinate_agents_task_graph_stop',
     'coordinate_agents_task_graph_cleanup',
     'coordinate_agents_task_graph_dispatch',
+    'coordinate_agents_task_graph_integrate',
+    'coordinate_agents_task_graph_review',
     'coordinate_agents_task_dispatch',
     'coordinate_agents_task_status',
     'coordinate_agents_task_inspect',
@@ -291,7 +293,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     });
     assert.equal(initialized.result.protocolVersion, '2025-06-18');
     const listed = await debugClient.request('tools/list');
-    assert.equal(listed.result.tools.length, 25);
+    assert.equal(listed.result.tools.length, 27);
   } finally {
     await debugClient.close();
   }
@@ -299,7 +301,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.match(debugClient.stderr, /server root:/);
   assert.match(debugClient.stderr, /runtime root:/);
   assert.match(debugClient.stderr, /protocol version: 2025-06-18/);
-  assert.match(debugClient.stderr, /tool count: 25/);
+  assert.match(debugClient.stderr, /tool count: 27/);
   assert.match(debugClient.stderr, /initialize received/);
   assert.match(debugClient.stderr, /tools\/list received/);
   const selfTest = spawnSync(process.execPath, [selfTestPath], {
@@ -311,7 +313,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
   assert.equal(selfTest.status, 0, selfTest.stderr || selfTest.stdout);
   assert.match(selfTest.stdout, /MCP server: OK/);
   assert.match(selfTest.stdout, /Protocol: 2025-06-18/);
-  assert.match(selfTest.stdout, /Tools: 25/);
+  assert.match(selfTest.stdout, /Tools: 27/);
   rmSync(independentCwd, { recursive: true, force: true });
 
   const pluginRoot = mkdtempSync(join(canonicalTmpdir, 'Coordinate Agents Plugin Fixture '));
@@ -337,7 +339,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
     const responses = launched.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line));
     assert.equal(responses.length, 2);
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
-    assert.equal(responses[1].result.tools.length, 25);
+    assert.equal(responses[1].result.tools.length, 27);
   } finally {
     rmSync(pluginRoot, { recursive: true, force: true });
   }

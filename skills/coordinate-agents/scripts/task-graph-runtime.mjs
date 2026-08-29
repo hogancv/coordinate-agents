@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
@@ -23,7 +24,7 @@ import {
   taskGraphDurableFacts,
   validateTaskGraphV1,
 } from './task-graph-contract.mjs';
-import { runtimeError } from './runtime-contract.mjs';
+import { runtimeError, serializeRuntimeError } from './runtime-contract.mjs';
 import {
   appendRuntimeEvent,
   readRuntimeEvents,
@@ -34,6 +35,8 @@ import { EXECUTION_SESSION_STATES } from './session-manager.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
 export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
+export const TASK_GRAPH_INTEGRATION_DIRECTORY = '__integration__';
+export const TASK_GRAPH_INTEGRATION_STATES = Object.freeze(['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED']);
 export const TASK_GRAPH_MAX_REASON_BYTES = 8 * 1024;
 export const TASK_GRAPH_MAX_EVIDENCE_ITEMS = 64;
 export const TASK_GRAPH_EVENT_LIMIT = 100;
@@ -42,6 +45,7 @@ const COMMIT_SHA_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
 
 const GRAPH_STATE_SET = new Set(TASK_GRAPH_STATES);
 const SUBTASK_STATE_SET = new Set(TASK_GRAPH_SUBTASK_STATES);
+const INTEGRATION_STATE_SET = new Set(TASK_GRAPH_INTEGRATION_STATES);
 const TERMINAL_SUBTASK_STATES = new Set(['SUCCEEDED', 'FAILED', 'STOPPED']);
 const FAILED_SUBTASK_STATES = new Set(['FAILED', 'BLOCKED', 'STOPPED']);
 // PENDING/READY/WAITING are frontier states derived from dependency facts.
@@ -206,6 +210,44 @@ export function taskGraphBranchName(parentTaskId, subtaskId) {
 
 export function taskGraphBranchRef(parentTaskId, subtaskId) {
   return `refs/heads/${taskGraphBranchName(parentTaskId, subtaskId)}`;
+}
+
+function graphParentIdentifier(parentTaskId) {
+  try {
+    return validateTaskId(parentTaskId);
+  } catch {
+    throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph parent Task identifier: ${parentTaskId || '(empty)'}.`, {
+      recoverable: false,
+      stage: 'graph-validation',
+      taskId: parentTaskId || null,
+    });
+  }
+}
+
+/**
+ * Integration has a path component that cannot be a valid subtask id. This
+ * keeps the aggregate review worktree separate even when a graph contains a
+ * subtask whose title happens to mention integration.
+ */
+export function taskGraphIntegrationWorktreePath(root, parentTaskId) {
+  const repository = repositoryRoot(root);
+  const worktrees = taskGraphWorktreesRoot(repository);
+  const validParentId = graphParentIdentifier(parentTaskId);
+  const parentWorktrees = join(worktrees, validParentId);
+  assertContained(worktrees, parentWorktrees);
+  assertSafePath(repository, parentWorktrees);
+  const path = join(parentWorktrees, TASK_GRAPH_INTEGRATION_DIRECTORY);
+  assertContained(parentWorktrees, path);
+  if (existsSync(path)) assertSafePath(repository, path);
+  return path;
+}
+
+export function taskGraphIntegrationBranchName(parentTaskId) {
+  return `coordinate-agents/${graphParentIdentifier(parentTaskId)}/${TASK_GRAPH_INTEGRATION_DIRECTORY}`;
+}
+
+export function taskGraphIntegrationBranchRef(parentTaskId) {
+  return `refs/heads/${taskGraphIntegrationBranchName(parentTaskId)}`;
 }
 
 export function captureGraphBaseCommit(root) {
@@ -440,6 +482,91 @@ function inspectGraphWorktree(root, parentTaskId, subtaskId, {
     // until the explicit Git probe used by recovery/cleanup verifies the
     // exact Runtime branch and path.
     worktree.owned = false;
+  }
+  return worktree;
+}
+
+function inspectGraphIntegrationWorktree(root, parentTaskId, {
+  probeGit = false,
+  recordedPath = null,
+  recordedBranch = null,
+  recordedRef = null,
+  timeoutMs = null,
+} = {}) {
+  const repository = repositoryRoot(root);
+  const expectedBranch = taskGraphIntegrationBranchName(parentTaskId);
+  const expectedRef = taskGraphIntegrationBranchRef(parentTaskId);
+  let expectedPath;
+  let pathError = null;
+  try {
+    expectedPath = taskGraphIntegrationWorktreePath(repository, parentTaskId);
+  } catch (error) {
+    pathError = error;
+    expectedPath = join(repository, '.agent-bus', TASK_GRAPH_WORKTREES_DIRECTORY, parentTaskId, TASK_GRAPH_INTEGRATION_DIRECTORY);
+  }
+  let matchesRecord = null;
+  if (recordedPath || recordedBranch || recordedRef) {
+    try {
+      matchesRecord = (!recordedPath || pathMatches(recordedPath, expectedPath))
+        && (!recordedBranch || recordedBranch === expectedBranch)
+        && (!recordedRef || recordedRef === expectedRef);
+    } catch {
+      matchesRecord = false;
+    }
+  }
+  const worktree = {
+    path: expectedPath,
+    branch: expectedBranch,
+    ref: expectedRef,
+    recordedPath: recordedPath || null,
+    recordedBranch: recordedBranch || null,
+    recordedRef: recordedRef || null,
+    matchesRecord,
+    exists: false,
+    safe: false,
+    registered: false,
+    owned: false,
+    ownershipKnown: Boolean(probeGit && !pathError),
+    head: null,
+    registeredBranch: null,
+    error: pathError ? boundedText(pathError.message || pathError) : null,
+  };
+  if (pathError) return worktree;
+  try {
+    const metadata = lstatSync(expectedPath);
+    if (metadata.isSymbolicLink()) throw new Error('symbolic link or junction');
+    assertSafePath(repository, expectedPath);
+    worktree.exists = metadata.isDirectory();
+    worktree.safe = worktree.exists;
+    if (!worktree.exists) worktree.error = 'path is not a directory';
+  } catch (error) {
+    if (error?.code !== 'ENOENT') worktree.error = boundedText(error.message || error);
+  }
+  if (!probeGit) return worktree;
+
+  const listed = runGit(['worktree', 'list', '--porcelain'], repository, { timeoutMs });
+  if (listed.error || listed.status !== 0) {
+    worktree.ownershipKnown = false;
+    worktree.error = boundedText(listed.stderr || listed.stdout || listed.error?.message || 'unable to inspect Git worktrees');
+    return worktree;
+  }
+  const entry = gitWorktreeEntries(listed.stdout).find(candidate => pathMatches(candidate.path || '', expectedPath));
+  if (!entry) {
+    worktree.owned = false;
+    if (worktree.safe && !worktree.error) worktree.error = 'worktree path is not registered with Git';
+    return worktree;
+  }
+  worktree.registered = true;
+  worktree.head = entry.head || null;
+  worktree.registeredBranch = entry.branch || null;
+  const missingSafePath = !worktree.exists && !worktree.error;
+  worktree.owned = matchesRecord !== false
+    && entry.branch === expectedRef
+    && (worktree.safe || missingSafePath);
+  if (matchesRecord === false) {
+    worktree.error = 'recorded integration worktree identity does not match the canonical Runtime path';
+  } else if (entry.branch !== expectedRef) {
+    worktree.error = `unexpected registered branch: ${entry.branch || '(detached)'}`;
   }
   return worktree;
 }
@@ -726,6 +853,150 @@ export function ensureSubtaskWorktree(root, parentTaskId, subtaskId, baseCommit)
   return { worktreePath, branch: branchName, ref: branchRef, reused: false };
 }
 
+/**
+ * Create the Runtime-owned aggregate worktree from the captured graph base.
+ * Unlike a subtask worktree, the integration worktree is deliberately not
+ * addressable by a user-provided subtask identifier.
+ */
+export function ensureTaskGraphIntegrationWorktree(root, parentTaskId, baseCommit) {
+  const repository = repositoryRoot(root);
+  const worktreePath = taskGraphIntegrationWorktreePath(repository, parentTaskId);
+  const branchName = taskGraphIntegrationBranchName(parentTaskId);
+  const branchRef = taskGraphIntegrationBranchRef(parentTaskId);
+  const expectedHead = normalizeCommitSha(baseCommit, 'graph base commit');
+  const worktreesRoot = taskGraphWorktreesRoot(repository);
+  const parentWorktrees = dirname(worktreePath);
+  assertSafePath(repository, worktreesRoot);
+  assertSafePath(repository, parentWorktrees);
+
+  let targetMetadata = null;
+  try { targetMetadata = lstatSync(worktreePath); } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  if (targetMetadata?.isSymbolicLink()) {
+    throw graphWorktreeConflict(`Refusing symbolic link or junction at Task Graph integration worktree path: ${worktreePath}`, {
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+    });
+  }
+
+  const listWorktrees = () => {
+    const result = runGit(['worktree', 'list', '--porcelain'], repository);
+    if (result.error || result.status !== 0) {
+      throw graphWorktreeConflict(`Unable to inspect existing Git worktrees for ${worktreePath}.`, {
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'integration-worktree',
+        details: (result.stderr || result.stdout || result.error?.message || '').trim(),
+      });
+    }
+    return gitWorktreeEntries(result.stdout);
+  };
+
+  if (targetMetadata) {
+    assertSafePath(repository, worktreePath);
+    if (!targetMetadata.isDirectory()) {
+      throw graphWorktreeConflict(`Task Graph integration worktree path is not a directory: ${worktreePath}`, {
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'integration-worktree',
+      });
+    }
+    const registered = listWorktrees().find(entry => pathMatches(entry.path || '', worktreePath));
+    if (!registered) {
+      throw graphWorktreeConflict(`Refusing to replace an existing non-Runtime integration worktree path: ${worktreePath}`, {
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'integration-worktree',
+      });
+    }
+    if (registered.branch !== branchRef) {
+      throw graphWorktreeConflict(`Existing Task Graph integration worktree is attached to unexpected branch ${registered.branch || '(detached)'}.`, {
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'integration-worktree',
+        details: { expectedBranch: branchRef, actualBranch: registered.branch || null },
+      });
+    }
+    if (registered.head?.toLowerCase() !== expectedHead) {
+      throw graphWorktreeConflict(`Existing Task Graph integration worktree does not point at the captured base commit: ${worktreePath}`, {
+        taskId: parentTaskId,
+        root: repository,
+        stage: 'integration-worktree',
+        details: { expectedHead, actualHead: registered.head || null },
+      });
+    }
+    return { worktreePath, branch: branchName, ref: branchRef, reused: true };
+  }
+
+  const registeredTarget = listWorktrees().find(entry => pathMatches(entry.path || '', worktreePath));
+  if (registeredTarget) {
+    throw graphWorktreeConflict(`Git still registers the Runtime integration worktree path and requires explicit cleanup: ${worktreePath}`, {
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+      details: { registeredHead: registeredTarget.head || null, registeredBranch: registeredTarget.branch || null },
+    });
+  }
+  assertSafePath(repository, parentWorktrees);
+  mkdirSync(parentWorktrees, { recursive: true });
+  assertSafePath(repository, parentWorktrees);
+
+  const branchCheck = runGit(['rev-parse', '--verify', branchRef], repository);
+  if (branchCheck.error) {
+    throw graphWorktreeConflict(`Unable to inspect Task Graph integration branch ${branchRef}.`, {
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+      details: branchCheck.error.message || String(branchCheck.error),
+    });
+  }
+  const branchExists = branchCheck.status === 0;
+  if (branchExists && branchCheck.stdout.trim().toLowerCase() !== expectedHead) {
+    throw graphWorktreeConflict(`Existing Task Graph integration branch ${branchRef} does not point at the captured base commit.`, {
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+      details: { expectedHead, actualHead: branchCheck.stdout.trim().toLowerCase() },
+    });
+  }
+
+  const addArgs = branchExists
+    ? ['worktree', 'add', worktreePath, branchRef]
+    : ['worktree', 'add', '-b', branchName, worktreePath, baseCommit];
+  const added = runGit(addArgs, repository);
+  if (added.error || added.status !== 0) {
+    const errorDetails = (added.stderr || added.stdout || added.error?.message || '').trim();
+    throw runtimeError('TASK_STATE_CONFLICT', `Failed to create Git integration worktree: ${errorDetails}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+    });
+  }
+
+  assertSafePath(repository, worktreePath);
+  const createdResult = runGit(['worktree', 'list', '--porcelain'], repository);
+  const created = !createdResult.error && createdResult.status === 0
+    ? gitWorktreeEntries(createdResult.stdout).find(entry => pathMatches(entry.path || '', worktreePath))
+    : null;
+  if (!created || created.branch !== branchRef || created.head?.toLowerCase() !== expectedHead) {
+    throw graphWorktreeConflict(`Created Git integration worktree failed Runtime ownership verification: ${worktreePath}`, {
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-worktree',
+      details: { expectedBranch: branchRef, actualBranch: created?.branch || null, expectedHead, actualHead: created?.head || null },
+    });
+  }
+  return { worktreePath, branch: branchName, ref: branchRef, reused: false };
+}
+
+// Descriptive aliases keep the aggregate worktree helpers discoverable to
+// transports and downstream Runtime consumers.
+export const ensureGraphIntegrationWorktree = ensureTaskGraphIntegrationWorktree;
+export const taskGraphIntegrationPath = taskGraphIntegrationWorktreePath;
+
 function ensureGraphStore(root, { create = false } = {}) {
   const repository = repositoryRoot(root);
   const bus = graphBusPath(repository);
@@ -918,7 +1189,86 @@ function graphRecordFromValidated(validated) {
     updatedAt: timestamp,
     subtasks: reconciled,
     frontier: frontierFor(reconciled, validated.maxConcurrency),
+    integration: null,
+    review: null,
+    reviewHistory: [],
   };
+}
+
+function validateStoredIntegration(integration, parentTaskId) {
+  if (!plainObject(integration)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has a malformed integration record.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (integration.schemaVersion !== TASK_GRAPH_SCHEMA_VERSION || integration.kind !== 'task-graph-integration') {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an unsupported integration schema.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (integration.parentTaskId !== parentTaskId || !INTEGRATION_STATE_SET.has(integration.state) || integration.status !== integration.state) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid integration state.`, { recoverable: false, taskId: parentTaskId });
+  }
+  for (const [label, value] of [
+    ['integration base commit', integration.baseCommit],
+    ['aggregate commit', integration.aggregateCommit],
+    ['worktree head', integration.worktreeHead],
+  ]) {
+    if (value !== undefined && value !== null && !COMMIT_SHA_PATTERN.test(`${value}`)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid ${label}.`, { recoverable: false, taskId: parentTaskId });
+    }
+  }
+  for (const [label, value] of [
+    ['worktreePath', integration.worktreePath],
+    ['branch', integration.branch],
+    ['ref', integration.ref],
+    ['sourceFingerprint', integration.sourceFingerprint],
+  ]) {
+    if (value !== undefined && value !== null && typeof value !== 'string') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid integration ${label}.`, { recoverable: false, taskId: parentTaskId });
+    }
+  }
+  for (const [label, value] of [
+    ['appliedRefs', integration.appliedRefs],
+    ['sourceRefs', integration.sourceRefs],
+    ['appliedCommits', integration.appliedCommits],
+    ['appliedSubtasks', integration.appliedSubtasks],
+  ]) {
+    if (value !== undefined && value !== null && (!Array.isArray(value) || value.length > TASK_GRAPH_MAX_SUBTASKS)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has invalid integration ${label}.`, { recoverable: false, taskId: parentTaskId });
+    }
+  }
+  if (integration.evidence !== undefined && integration.evidence !== null
+    && (!Array.isArray(integration.evidence) || integration.evidence.length > TASK_GRAPH_MAX_EVIDENCE_ITEMS)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has invalid integration evidence.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (integration.conflict !== undefined && integration.conflict !== null && !plainObject(integration.conflict)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid integration conflict record.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (integration.cleanup !== undefined && integration.cleanup !== null && !plainObject(integration.cleanup)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid integration cleanup record.`, { recoverable: false, taskId: parentTaskId });
+  }
+  return integration;
+}
+
+function validateStoredReview(review, parentTaskId) {
+  if (review === undefined || review === null) return;
+  if (!plainObject(review)
+    || review.schemaVersion !== TASK_GRAPH_SCHEMA_VERSION
+    || review.kind !== 'task-graph-review'
+    || !['REVIEW_APPROVED', 'CHANGES_REQUESTED'].includes(review.decision)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid review record.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (typeof review.reviewer !== 'string' || !review.reviewer) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid review reviewer.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (review.feedback !== undefined && typeof review.feedback !== 'string') {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has invalid review feedback.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (review.integrationCommit !== undefined && review.integrationCommit !== null
+    && !COMMIT_SHA_PATTERN.test(`${review.integrationCommit}`)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has an invalid review integration commit.`, { recoverable: false, taskId: parentTaskId });
+  }
+  if (review.evidence !== undefined && review.evidence !== null
+    && (!Array.isArray(review.evidence) || review.evidence.length > TASK_GRAPH_MAX_EVIDENCE_ITEMS)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has invalid review evidence.`, { recoverable: false, taskId: parentTaskId });
+  }
 }
 
 function validateStoredGraph(record, parentTaskId = null) {
@@ -952,6 +1302,12 @@ function validateStoredGraph(record, parentTaskId = null) {
   if (record.baseCommit && record.parentTask?.baseCommit && `${record.baseCommit}`.toLowerCase() !== `${record.parentTask.baseCommit}`.toLowerCase()) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has conflicting base commit facts.`, { recoverable: false, taskId: id });
   }
+  if (record.integration !== undefined && record.integration !== null) validateStoredIntegration(record.integration, id);
+  validateStoredReview(record.review, id);
+  if (record.reviewHistory !== undefined && (!Array.isArray(record.reviewHistory) || record.reviewHistory.length > TASK_GRAPH_MAX_EVIDENCE_ITEMS)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has invalid review history.`, { recoverable: false, taskId: id });
+  }
+  for (const review of record.reviewHistory || []) validateStoredReview(review, id);
   if (!plainObject(record.parentTask) || record.parentTask.id !== id) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid parent Task record.`, { recoverable: false, taskId: id });
   }
@@ -1207,6 +1563,77 @@ export function cleanupTaskGraphWorktree(root, parentTaskId, subtaskId, {
   return { status: 'CLEANED', idempotent: false, worktree: after };
 }
 
+/** Remove only the exact Runtime-owned aggregate integration worktree. */
+export function cleanupTaskGraphIntegrationWorktree(root, parentTaskId, {
+  recordedPath = null,
+  recordedBranch = null,
+  recordedRef = null,
+  timeoutMs = 2_000,
+} = {}) {
+  const repository = repositoryRoot(root);
+  const boundedTimeoutMs = Math.max(100, Math.min(10_000, Number.isFinite(timeoutMs) ? Math.floor(timeoutMs) : 2_000));
+  const recorded = inspectGraphIntegrationWorktree(repository, parentTaskId, {
+    probeGit: true,
+    recordedPath,
+    recordedBranch,
+    recordedRef,
+    timeoutMs: boundedTimeoutMs,
+  });
+  const expectedPath = recorded.path || join(repository, '.agent-bus', TASK_GRAPH_WORKTREES_DIRECTORY, parentTaskId, TASK_GRAPH_INTEGRATION_DIRECTORY);
+  const failure = message => {
+    const error = runtimeError('TASK_STATE_CONFLICT', message, {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-cleanup',
+      details: {
+        path: expectedPath,
+        registered: recorded.registered,
+        branch: recorded.registeredBranch || null,
+        matchesRecord: recorded.matchesRecord,
+      },
+    });
+    return { status: 'FAILED', idempotent: false, worktree: recorded, error: serializeCleanupError(error) };
+  };
+  if (recorded.matchesRecord === false) return failure(`Refusing to remove non-Runtime Task Graph integration worktree: ${expectedPath}`);
+  if (!recorded.exists && !recorded.registered && !recorded.error) {
+    return { status: 'CLEANED', idempotent: true, worktree: recorded };
+  }
+  if (!recorded.owned) return failure(`Refusing to remove non-Runtime Task Graph integration worktree: ${expectedPath}`);
+
+  const removed = runGit(['worktree', 'remove', '--force', expectedPath], repository, { timeoutMs: boundedTimeoutMs });
+  if (removed.error || removed.status !== 0) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Failed to remove Runtime-owned Task Graph integration worktree: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-cleanup',
+      details: (removed.stderr || removed.stdout || removed.error?.message || '').trim(),
+    });
+    return { status: 'FAILED', idempotent: false, worktree: recorded, error: serializeCleanupError(error) };
+  }
+  const after = inspectGraphIntegrationWorktree(repository, parentTaskId, {
+    probeGit: true,
+    recordedPath,
+    recordedBranch,
+    recordedRef,
+    timeoutMs: boundedTimeoutMs,
+  });
+  if (after.exists || after.registered) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Runtime-owned Task Graph integration cleanup remains incomplete: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      root: repository,
+      stage: 'integration-cleanup',
+      details: { path: expectedPath, exists: after.exists, registered: after.registered },
+    });
+    return { status: 'FAILED', idempotent: false, worktree: after, error: serializeCleanupError(error) };
+  }
+  return { status: 'CLEANED', idempotent: false, worktree: after };
+}
+
+export const cleanupGraphIntegrationWorktree = cleanupTaskGraphIntegrationWorktree;
+
 function serializeCleanupError(error) {
   return {
     code: error.code,
@@ -1365,6 +1792,9 @@ function graphFacts(record) {
         evidence: boundedEvidence(subtask?.evidence),
       };
     }),
+    integration: record.integration || null,
+    review: record.review || null,
+    reviewHistory: Array.isArray(record.reviewHistory) ? record.reviewHistory : [],
   };
 }
 
@@ -1398,6 +1828,7 @@ export function taskGraphStatusPayload(root, record, { inspect = false, eventLim
   const events = inspect
     ? readRuntimeEvents(root, { taskId: record.parentTaskId, limit: eventLimit })
     : undefined;
+  const integration = inspectTaskGraphIntegration(root, record, { probeGit: inspect });
   return {
     root: resolve(root),
     graphId: record.parentTaskId,
@@ -1412,9 +1843,694 @@ export function taskGraphStatusPayload(root, record, { inspect = false, eventLim
     frontier: record.frontier,
     facts: graphFacts(record),
     recovery: inspectTaskGraphRecovery(root, record),
+    integration: record.integration || null,
+    integrationFacts: integration,
+    review: record.review || null,
+    reviewHistory: Array.isArray(record.reviewHistory) ? record.reviewHistory : [],
     ...(inspect ? { events } : {}),
   };
 }
+
+function integrationRecordTemplate(parentTaskId, timestamp = now()) {
+  return {
+    schemaVersion: TASK_GRAPH_SCHEMA_VERSION,
+    kind: 'task-graph-integration',
+    parentTaskId,
+    state: 'PENDING',
+    status: 'PENDING',
+    reason: null,
+    lastError: null,
+    baseCommit: null,
+    worktreePath: null,
+    branch: null,
+    ref: null,
+    worktreeHead: null,
+    aggregateCommit: null,
+    sourceFingerprint: null,
+    sourceRefs: [],
+    appliedRefs: [],
+    appliedCommits: [],
+    appliedSubtasks: [],
+    conflict: null,
+    cleanup: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function normalizeIntegrationArray(value, limit = TASK_GRAPH_MAX_SUBTASKS) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, limit).map(item => typeof item === 'string'
+    ? boundedText(item, '')
+    : sanitizeRuntimeEventData(item));
+}
+
+function integrationErrorDetails(error) {
+  return serializeRuntimeError(error, { includeLegacy: true });
+}
+
+/**
+ * Update the durable integration state without changing the graph lifecycle
+ * state. The graph lock serializes each applied commit so a coordinator
+ * restart can inspect exactly how far the aggregate worktree progressed.
+ */
+export function setTaskGraphIntegration(root, parentTaskId, nextState, details = {}) {
+  if (!INTEGRATION_STATE_SET.has(nextState)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Unsupported Task Graph integration state: ${nextState}`, {
+      recoverable: false,
+      taskId: parentTaskId,
+      stage: 'graph-integration',
+    });
+  }
+  const { repository, bus, tmp } = ensureGraphStore(root);
+  const path = taskGraphPath(repository, parentTaskId);
+  const release = acquireConfigLock(bus);
+  try {
+    const current = readStoredGraph(repository, parentTaskId);
+    const previous = current.integration;
+    if (details.expectedState !== undefined && (previous?.state || 'PENDING') !== details.expectedState) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph integration for ${parentTaskId} is ${previous?.state || 'PENDING'}; expected ${details.expectedState}.`, {
+        recoverable: true,
+        taskId: parentTaskId,
+        stage: 'graph-integration',
+        details: { expectedState: details.expectedState, actualState: previous?.state || 'PENDING' },
+      });
+    }
+    const timestamp = now();
+    const base = previous || integrationRecordTemplate(parentTaskId, timestamp);
+    const candidate = {
+      ...base,
+      ...Object.fromEntries(Object.entries(details).filter(([key]) => ![
+        'expectedState', 'operation', 'reason', 'evidence', 'sourceRefs', 'appliedRefs',
+        'appliedCommits', 'appliedSubtasks', 'conflict', 'cleanup', 'lastError',
+      ].includes(key))),
+      schemaVersion: TASK_GRAPH_SCHEMA_VERSION,
+      kind: 'task-graph-integration',
+      parentTaskId,
+      state: nextState,
+      status: nextState,
+      reason: details.reason === undefined ? (base.reason || null) : boundedText(details.reason),
+      lastError: details.lastError === undefined
+        ? (base.lastError || null)
+        : (details.lastError ? sanitizeRuntimeEventData(details.lastError) : null),
+      sourceRefs: details.sourceRefs === undefined ? normalizeIntegrationArray(base.sourceRefs) : normalizeIntegrationArray(details.sourceRefs),
+      appliedRefs: details.appliedRefs === undefined ? normalizeIntegrationArray(base.appliedRefs) : normalizeIntegrationArray(details.appliedRefs),
+      appliedCommits: details.appliedCommits === undefined ? normalizeIntegrationArray(base.appliedCommits) : normalizeIntegrationArray(details.appliedCommits),
+      appliedSubtasks: details.appliedSubtasks === undefined ? normalizeIntegrationArray(base.appliedSubtasks) : normalizeIntegrationArray(details.appliedSubtasks),
+      conflict: details.conflict === undefined ? (base.conflict || null) : (details.conflict ? sanitizeRuntimeEventData(details.conflict) : null),
+      cleanup: details.cleanup === undefined ? (base.cleanup || null) : (details.cleanup ? sanitizeRuntimeEventData(details.cleanup) : null),
+      evidence: details.evidence === undefined ? normalizeIntegrationArray(base.evidence, TASK_GRAPH_MAX_EVIDENCE_ITEMS) : normalizeIntegrationArray(details.evidence, TASK_GRAPH_MAX_EVIDENCE_ITEMS),
+    };
+    const withoutTimestamps = value => ({ ...value, updatedAt: null, createdAt: null });
+    const changed = !sameJson(withoutTimestamps(base), withoutTimestamps(candidate));
+    if (!changed) return { graph: current, integration: previous || null, changed: false, event: null };
+    const next = {
+      ...current,
+      integration: { ...candidate, updatedAt: timestamp },
+      updatedAt: timestamp,
+    };
+    atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`, tmp);
+    const event = appendRuntimeEvent(repository, {
+      type: 'TASK_GRAPH_INTEGRATION_STATE_CHANGED',
+      taskId: parentTaskId,
+      agentId: current.parentTask.planner,
+      role: 'planner',
+      data: {
+        from: previous?.state || null,
+        to: nextState,
+        operation: details.operation || null,
+        baseCommit: candidate.baseCommit || null,
+        worktreePath: candidate.worktreePath || null,
+        branch: candidate.branch || null,
+        ref: candidate.ref || null,
+        aggregateCommit: candidate.aggregateCommit || null,
+        sourceFingerprint: candidate.sourceFingerprint || null,
+        appliedRefs: candidate.appliedRefs,
+        conflict: candidate.conflict,
+        cleanup: candidate.cleanup,
+        lastError: candidate.lastError,
+      },
+    });
+    return { graph: next, integration: next.integration, changed: true, event };
+  } finally {
+    release();
+  }
+}
+
+function reviewRecordEqual(left, right) {
+  return Boolean(left && right)
+    && left.decision === right.decision
+    && left.feedback === right.feedback
+    && left.integrationCommit === right.integrationCommit
+    && sameJson(left.evidence || [], right.evidence || []);
+}
+
+/** Persist graph review decisions at the same boundary as single-Task review. */
+export function setTaskGraphReview(root, parentTaskId, decision, details = {}) {
+  const normalizedDecision = `${decision || ''}`.trim().toUpperCase();
+  if (!['REVIEW_APPROVED', 'CHANGES_REQUESTED'].includes(normalizedDecision)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Unsupported Task Graph review decision: ${decision || '(empty)'}`, {
+      recoverable: false,
+      taskId: parentTaskId,
+      stage: 'graph-review',
+    });
+  }
+  const feedback = details.feedback === undefined ? '' : boundedText(details.feedback, '');
+  if (normalizedDecision === 'CHANGES_REQUESTED' && !feedback) {
+    throw runtimeError('TASK_STATE_CONFLICT', 'CHANGES_REQUESTED requires review feedback.', {
+      recoverable: false,
+      taskId: parentTaskId,
+      stage: 'graph-review',
+    });
+  }
+  const { repository, bus, tmp } = ensureGraphStore(root);
+  const path = taskGraphPath(repository, parentTaskId);
+  const release = acquireConfigLock(bus);
+  try {
+    const current = readStoredGraph(repository, parentTaskId);
+    const integration = current.integration;
+    if (!integration || integration.state !== 'SUCCEEDED') {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} must have a successful integration before review.`, {
+        recoverable: true,
+        taskId: parentTaskId,
+        stage: 'graph-review',
+        details: { integrationState: integration?.state || null },
+      });
+    }
+    if (current.state === 'STOPPED' || (current.state === 'APPROVED' && current.review?.decision !== normalizedDecision)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} is ${current.state} and cannot record this review decision.`, {
+        recoverable: false,
+        taskId: parentTaskId,
+        stage: 'graph-review',
+      });
+    }
+    const timestamp = now();
+    const review = {
+      schemaVersion: TASK_GRAPH_SCHEMA_VERSION,
+      kind: 'task-graph-review',
+      decision: normalizedDecision,
+      reviewer: current.parentTask.reviewer,
+      feedback,
+      integrationCommit: integration.aggregateCommit || null,
+      integrationWorktreePath: integration.worktreePath || null,
+      integrationBranch: integration.branch || null,
+      integrationRef: integration.ref || null,
+      evidence: details.evidence === undefined || details.evidence === null
+        ? [{ type: 'TASK_GRAPH_INTEGRATION', integrationCommit: integration.aggregateCommit || null, appliedRefs: integration.appliedRefs || [] }]
+        : normalizeIntegrationArray(
+          Array.isArray(details.evidence) ? details.evidence : [details.evidence],
+          TASK_GRAPH_MAX_EVIDENCE_ITEMS,
+        ),
+      decidedAt: timestamp,
+    };
+    const nextState = normalizedDecision === 'REVIEW_APPROVED' ? 'APPROVED' : 'REVIEWING';
+    const sameDecision = reviewRecordEqual(current.review, review) && current.state === nextState;
+    if (sameDecision) return { graph: current, review: current.review, changed: false, event: null };
+    const history = [...(Array.isArray(current.reviewHistory) ? current.reviewHistory : []), review]
+      .slice(-TASK_GRAPH_MAX_EVIDENCE_ITEMS);
+    const next = {
+      ...current,
+      state: nextState,
+      status: nextState,
+      review,
+      reviewHistory: history,
+      parentTask: {
+        ...current.parentTask,
+        state: nextState,
+        status: nextState,
+      },
+      updatedAt: timestamp,
+    };
+    atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`, tmp);
+    const event = appendRuntimeEvent(repository, {
+      type: normalizedDecision,
+      taskId: parentTaskId,
+      agentId: current.parentTask.reviewer,
+      role: 'reviewer',
+      data: {
+        graph: true,
+        decision: normalizedDecision,
+        feedback,
+        integrationCommit: review.integrationCommit,
+        appliedRefs: integration.appliedRefs || [],
+        evidence: review.evidence,
+      },
+    });
+    return { graph: next, review, changed: true, event };
+  } finally {
+    release();
+  }
+}
+
+function integrationSourceBaseCommit(graph) {
+  const values = [
+    graph.baseCommit,
+    graph.parentTask?.baseCommit,
+    ...graph.subtasks.map(subtask => subtask.baseCommit),
+  ].filter(value => value !== undefined && value !== null && `${value}`.trim());
+  if (values.length === 0) return null;
+  const normalized = values.map(value => normalizeCommitSha(value, 'graph base commit'));
+  const first = normalized[0];
+  if (normalized.some(value => value !== first)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${graph.parentTaskId} has conflicting base commit facts for integration.`, {
+      recoverable: true,
+      taskId: graph.parentTaskId,
+      stage: 'graph-integration',
+      details: { baseCommits: normalized },
+    });
+  }
+  return first;
+}
+
+/**
+ * Verify every required source before creating the aggregate worktree. The
+ * source ref must be the exact Runtime branch for that subtask and must still
+ * reach the recorded IMPLEMENTATION_DONE commit.
+ */
+export function verifyTaskGraphIntegrationSources(root, graph) {
+  const record = validateStoredGraph(graph);
+  const repository = repositoryRoot(root);
+  const baseCommit = integrationSourceBaseCommit(record);
+  if (!baseCommit) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${record.parentTaskId} has no captured base commit for integration.`, {
+      recoverable: true,
+      taskId: record.parentTaskId,
+      root: repository,
+      stage: 'graph-integration',
+      details: { requiredFact: 'baseCommit' },
+    });
+  }
+  const unresolved = record.subtasks
+    .filter(subtask => subtask.state !== 'SUCCEEDED')
+    .map(subtask => ({ id: subtask.id, state: subtask.state, reason: boundedText(subtask.reason) }));
+  if (unresolved.length > 0) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${record.parentTaskId} cannot integrate until every required subtask succeeds.`, {
+      recoverable: true,
+      taskId: record.parentTaskId,
+      root: repository,
+      stage: 'graph-integration',
+      details: { baseCommit, unresolved },
+    });
+  }
+
+  const sources = [];
+  for (const subtask of [...record.subtasks].sort((left, right) => compareIds(left.id, right.id))) {
+    const expectedBranch = taskGraphBranchName(record.parentTaskId, subtask.id);
+    const expectedRef = taskGraphBranchRef(record.parentTaskId, subtask.id);
+    const evidence = Array.isArray(subtask.evidence) && subtask.evidence.some(item => item?.type === 'IMPLEMENTATION_DONE'
+      && typeof item.relatedCommit === 'string'
+      && item.relatedCommit.toLowerCase() === `${subtask.implementationCommit || ''}`.toLowerCase());
+    if (!evidence) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} lacks verified IMPLEMENTATION_DONE evidence.`, {
+        recoverable: true,
+        taskId: record.parentTaskId,
+        subtaskId: subtask.id,
+        root: repository,
+        stage: 'graph-integration',
+        details: { state: subtask.state, implementationCommit: subtask.implementationCommit || null, expectedRef },
+      });
+    }
+    if (subtask.branch !== expectedBranch || subtask.ref !== expectedRef) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} does not have the exact Runtime source ref required for integration.`, {
+        recoverable: true,
+        taskId: record.parentTaskId,
+        subtaskId: subtask.id,
+        root: repository,
+        stage: 'graph-integration',
+        details: { expectedBranch, actualBranch: subtask.branch || null, expectedRef, actualRef: subtask.ref || null },
+      });
+    }
+    const commit = `${subtask.implementationCommit || ''}`.trim();
+    if (!COMMIT_SHA_PATTERN.test(commit)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} has no valid implementation commit for integration.`, {
+        recoverable: true,
+        taskId: record.parentTaskId,
+        subtaskId: subtask.id,
+        root: repository,
+        stage: 'graph-integration',
+        details: { implementationCommit: subtask.implementationCommit || null, expectedRef },
+      });
+    }
+    const refResult = runGit(['rev-parse', '--verify', `${expectedRef}^{commit}`], repository);
+    if (refResult.error || refResult.status !== 0) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} source ref is missing: ${expectedRef}`, {
+        recoverable: true,
+        taskId: record.parentTaskId,
+        subtaskId: subtask.id,
+        root: repository,
+        stage: 'graph-integration',
+        details: (refResult.stderr || refResult.stdout || refResult.error?.message || '').trim(),
+      });
+    }
+    const refCommit = normalizeCommitSha(refResult.stdout, `source ref for ${subtask.id}`);
+    const candidate = normalizeCommitSha(commit, `implementation commit for ${subtask.id}`);
+    if (candidate === baseCommit) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} implementation commit is the graph base commit.`, {
+        recoverable: true,
+        taskId: record.parentTaskId,
+        subtaskId: subtask.id,
+        root: repository,
+        stage: 'graph-integration',
+        details: { baseCommit, implementationCommit: candidate, expectedRef },
+      });
+    }
+    for (const [label, args] of [
+      ['base commit', ['merge-base', '--is-ancestor', baseCommit, candidate]],
+      ['source ref', ['merge-base', '--is-ancestor', candidate, refCommit]],
+    ]) {
+      const result = runGit(args, repository);
+      if (result.error || result.status !== 0) {
+        throw runtimeError('TASK_STATE_CONFLICT', `Subtask ${record.parentTaskId}/${subtask.id} implementation commit is not reachable from its verified ${label}.`, {
+          recoverable: true,
+          taskId: record.parentTaskId,
+          subtaskId: subtask.id,
+          root: repository,
+          stage: 'graph-integration',
+          details: { baseCommit, implementationCommit: candidate, expectedRef, refCommit, git: (result.stderr || result.stdout || result.error?.message || '').trim() },
+        });
+      }
+    }
+    sources.push({
+      order: sources.length,
+      subtaskId: subtask.id,
+      implementer: subtask.implementer,
+      branch: expectedBranch,
+      ref: expectedRef,
+      commit: candidate,
+      refCommit,
+      evidence: boundedEvidence(subtask.evidence),
+    });
+  }
+  const sourceFingerprint = createHash('sha256')
+    .update(JSON.stringify(sources.map(source => ({ subtaskId: source.subtaskId, ref: source.ref, commit: source.commit }))))
+    .digest('hex');
+  return { repository, parentTaskId: record.parentTaskId, baseCommit, sources, sourceFingerprint };
+}
+
+export function inspectTaskGraphIntegration(root, graph, { probeGit = false, timeoutMs = null } = {}) {
+  const record = validateStoredGraph(graph);
+  if (!record.integration) return null;
+  const integration = validateStoredIntegration(record.integration, record.parentTaskId);
+  const worktree = inspectGraphIntegrationWorktree(repositoryRoot(root), record.parentTaskId, {
+    probeGit,
+    recordedPath: integration.worktreePath || null,
+    recordedBranch: integration.branch || null,
+    recordedRef: integration.ref || null,
+    timeoutMs,
+  });
+  let clean = null;
+  let files = [];
+  let diffStat = null;
+  const head = integration.aggregateCommit || integration.worktreeHead || worktree.head || null;
+  const baseCommit = integration.baseCommit || record.baseCommit || record.parentTask?.baseCommit || null;
+  if (probeGit && worktree.safe && worktree.exists) {
+    const status = runGit(['status', '--porcelain=v1', '--untracked-files=all'], worktree.path, { timeoutMs });
+    clean = !status.error && status.status === 0 && !status.stdout.trim();
+  }
+  if (probeGit && worktree.safe && worktree.exists && baseCommit && head && COMMIT_SHA_PATTERN.test(`${baseCommit}`) && COMMIT_SHA_PATTERN.test(`${head}`)) {
+    const changed = runGit(['diff', '--name-only', `${baseCommit}..${head}`], worktree.path, { timeoutMs });
+    if (!changed.error && changed.status === 0) {
+      files = changed.stdout.split(/\r?\n/).map(value => boundedText(value)).filter(Boolean).slice(0, TASK_GRAPH_MAX_EVIDENCE_ITEMS);
+    }
+    const stat = runGit(['diff', '--stat', `${baseCommit}..${head}`], worktree.path, { timeoutMs });
+    if (!stat.error && stat.status === 0) diffStat = boundedText(stat.stdout);
+  }
+  return {
+    root: repositoryRoot(root),
+    parentTaskId: record.parentTaskId,
+    state: integration.state,
+    status: integration.status,
+    baseCommit: integration.baseCommit || null,
+    worktreePath: integration.worktreePath || worktree.path,
+    branch: integration.branch || worktree.branch,
+    ref: integration.ref || worktree.ref,
+    worktreeHead: integration.worktreeHead || worktree.head || null,
+    aggregateCommit: integration.aggregateCommit || null,
+    sourceFingerprint: integration.sourceFingerprint || null,
+    sourceRefs: integration.sourceRefs || [],
+    appliedRefs: integration.appliedRefs || [],
+    appliedCommits: integration.appliedCommits || [],
+    appliedSubtasks: integration.appliedSubtasks || [],
+    conflict: integration.conflict || null,
+    cleanup: integration.cleanup || null,
+    lastError: integration.lastError || null,
+    evidence: integration.evidence || [],
+    worktree,
+    clean,
+    diff: { baseCommit, head, files, stat: diffStat },
+  };
+}
+
+function gitConflictFacts(worktreePath, source, result, appliedRefs) {
+  const status = runGit(['status', '--porcelain=v1', '--untracked-files=all'], worktreePath);
+  const unmerged = runGit(['diff', '--name-only', '--diff-filter=U'], worktreePath);
+  const cherryPickHead = runGit(['rev-parse', '--verify', 'CHERRY_PICK_HEAD'], worktreePath);
+  const lines = `${unmerged.status === 0 ? unmerged.stdout : status.stdout || ''}`
+    .split(/\r?\n/)
+    .map(value => value.trim())
+    .filter(Boolean)
+    .map(value => value.replace(/^[ MARC?!U][ MARC?!U]\s+/, ''))
+    .map(value => boundedText(value, 1024))
+    .filter(Boolean);
+  return {
+    state: 'CONFLICTED',
+    inProgress: cherryPickHead.status === 0,
+    subtaskId: source.subtaskId,
+    order: source.order,
+    ref: source.ref,
+    branch: source.branch,
+    commit: source.commit,
+    appliedRefs: normalizeIntegrationArray(appliedRefs),
+    files: [...new Set(lines)].slice(0, TASK_GRAPH_MAX_EVIDENCE_ITEMS),
+    status: boundedText(status.stdout),
+    stdout: boundedText(result.stdout),
+    stderr: boundedText(result.stderr || result.error?.message),
+    detectedAt: now(),
+  };
+}
+
+function integrationErrorWithFacts(code, message, parentTaskId, root, details = {}) {
+  return runtimeError(code, message, {
+    recoverable: true,
+    taskId: parentTaskId,
+    root,
+    stage: 'graph-integration',
+    details,
+  });
+}
+
+/**
+ * Apply all verified subtask commits to a fresh aggregate worktree. Every
+ * successful cherry-pick is persisted before the next one starts; a conflict
+ * deliberately leaves Git's in-progress state in place for inspection.
+ */
+export function integrateTaskGraph(root, parentTaskId, { timeoutMs = 2_000 } = {}) {
+  const repository = repositoryRoot(root);
+  let graph = readTaskGraph(repository, parentTaskId);
+  const prepared = verifyTaskGraphIntegrationSources(repository, graph);
+  const prior = graph.integration;
+  if (prior?.state === 'SUCCEEDED') {
+    if (prior.sourceFingerprint === prepared.sourceFingerprint && prior.baseCommit?.toLowerCase() === prepared.baseCommit.toLowerCase()) {
+      return {
+        repository,
+        parentTaskId,
+        graph,
+        integration: inspectTaskGraphIntegration(repository, graph, { probeGit: true, timeoutMs }),
+        sources: prepared.sources,
+        idempotent: true,
+      };
+    }
+    throw integrationErrorWithFacts('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} already has a successful integration for different source commits.`, parentTaskId, repository, {
+      integration: prior,
+      requestedSourceFingerprint: prepared.sourceFingerprint,
+    });
+  }
+  if (prior?.state === 'RUNNING') {
+    throw integrationErrorWithFacts('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} integration is already RUNNING; inspect or reconcile it before retrying.`, parentTaskId, repository, {
+      integration: prior,
+    });
+  }
+  if (prior?.state === 'FAILED' && (prior.conflict || prior.appliedRefs?.length || prior.worktreePath)) {
+    throw integrationErrorWithFacts('WORKTREE_CONFLICT', `Task Graph ${parentTaskId} has a failed integration that requires explicit cleanup or conflict resolution.`, parentTaskId, repository, {
+      integration: prior,
+    });
+  }
+  if (['STOPPED', 'APPROVED'].includes(graph.state)) {
+    throw integrationErrorWithFacts('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} is ${graph.state} and cannot start integration.`, parentTaskId, repository, {
+      graphState: graph.state,
+    });
+  }
+
+  const identity = {
+    worktreePath: taskGraphIntegrationWorktreePath(repository, parentTaskId),
+    branch: taskGraphIntegrationBranchName(parentTaskId),
+    ref: taskGraphIntegrationBranchRef(parentTaskId),
+  };
+  setTaskGraphIntegration(repository, parentTaskId, 'RUNNING', {
+    expectedState: prior?.state || 'PENDING',
+    baseCommit: prepared.baseCommit,
+    worktreePath: identity.worktreePath,
+    branch: identity.branch,
+    ref: identity.ref,
+    sourceFingerprint: prepared.sourceFingerprint,
+    sourceRefs: prepared.sources.map(source => ({
+      order: source.order,
+      subtaskId: source.subtaskId,
+      branch: source.branch,
+      ref: source.ref,
+      commit: source.commit,
+      refCommit: source.refCommit,
+    })),
+    appliedRefs: [],
+    appliedCommits: [],
+    appliedSubtasks: [],
+    aggregateCommit: null,
+    worktreeHead: prepared.baseCommit,
+    conflict: null,
+    cleanup: null,
+    lastError: null,
+    reason: `Integrating ${prepared.sources.length} verified subtask commit(s).`,
+    operation: 'graph-integrate',
+  });
+
+  let worktreeInfo = null;
+  let applied = [];
+  const boundedTimeoutMs = Math.max(100, Math.min(10_000, Number.isFinite(timeoutMs) ? Math.floor(timeoutMs) : 2_000));
+  try {
+    worktreeInfo = ensureTaskGraphIntegrationWorktree(repository, parentTaskId, prepared.baseCommit);
+    const worktree = inspectGraphIntegrationWorktree(repository, parentTaskId, {
+      probeGit: true,
+      recordedPath: identity.worktreePath,
+      recordedBranch: identity.branch,
+      recordedRef: identity.ref,
+      timeoutMs: boundedTimeoutMs,
+    });
+    if (!worktree.owned || !worktree.safe || !worktree.exists) {
+      throw integrationErrorWithFacts('TASK_STATE_CONFLICT', `Runtime integration worktree failed ownership verification: ${identity.worktreePath}`, parentTaskId, repository, {
+        worktree,
+      });
+    }
+    setTaskGraphIntegration(repository, parentTaskId, 'RUNNING', {
+      expectedState: 'RUNNING',
+      worktreePath: worktreeInfo.worktreePath,
+      branch: worktreeInfo.branch,
+      ref: worktreeInfo.ref,
+      worktreeHead: worktree.head || prepared.baseCommit,
+      operation: 'graph-integrate',
+    });
+
+    for (const source of prepared.sources) {
+      const result = runGit(['cherry-pick', '--no-edit', source.commit], worktreeInfo.worktreePath, { timeoutMs: boundedTimeoutMs });
+      if (result.error || result.status !== 0) {
+        const conflict = gitConflictFacts(worktreeInfo.worktreePath, source, result, applied);
+        const error = integrationErrorWithFacts('WORKTREE_CONFLICT', `Failed to apply subtask ${source.subtaskId} commit in the integration worktree.`, parentTaskId, repository, {
+          worktreePath: worktreeInfo.worktreePath,
+          branch: worktreeInfo.branch,
+          ref: worktreeInfo.ref,
+          source,
+          appliedRefs: applied,
+          conflict,
+        });
+        setTaskGraphIntegration(repository, parentTaskId, 'FAILED', {
+          expectedState: 'RUNNING',
+          aggregateCommit: applied.length > 0 ? applied.at(-1).aggregateCommit : prepared.baseCommit,
+          worktreeHead: captureGraphBaseCommit(worktreeInfo.worktreePath),
+          conflict,
+          lastError: integrationErrorDetails(error),
+          reason: error.message,
+          operation: 'graph-integrate',
+        });
+        throw error;
+      }
+      const aggregateCommit = captureGraphBaseCommit(worktreeInfo.worktreePath);
+      const appliedRef = {
+        order: source.order,
+        subtaskId: source.subtaskId,
+        branch: source.branch,
+        ref: source.ref,
+        commit: source.commit,
+        aggregateCommit,
+        appliedAt: now(),
+      };
+      applied = [...applied, appliedRef];
+      setTaskGraphIntegration(repository, parentTaskId, 'RUNNING', {
+        expectedState: 'RUNNING',
+        appliedRefs: applied,
+        appliedCommits: applied.map(item => item.commit),
+        appliedSubtasks: applied.map(item => item.subtaskId),
+        aggregateCommit,
+        worktreeHead: aggregateCommit,
+        reason: `Applied ${applied.length} of ${prepared.sources.length} verified subtask commit(s).`,
+        operation: 'graph-integrate',
+      });
+    }
+
+    const aggregateCommit = captureGraphBaseCommit(worktreeInfo.worktreePath);
+    const integrationRef = runGit(['rev-parse', '--verify', `${worktreeInfo.ref}^{commit}`], repository);
+    if (integrationRef.error || integrationRef.status !== 0 || integrationRef.stdout.trim().toLowerCase() !== aggregateCommit.toLowerCase()) {
+      throw integrationErrorWithFacts('TASK_STATE_CONFLICT', `Integration branch did not retain the aggregate commit for ${parentTaskId}.`, parentTaskId, repository, {
+        ref: worktreeInfo.ref,
+        expected: aggregateCommit,
+        actual: integrationRef.stdout.trim() || null,
+      });
+    }
+    const completed = setTaskGraphIntegration(repository, parentTaskId, 'SUCCEEDED', {
+      expectedState: 'RUNNING',
+      appliedRefs: applied,
+      appliedCommits: applied.map(item => item.commit),
+      appliedSubtasks: applied.map(item => item.subtaskId),
+      aggregateCommit,
+      worktreeHead: aggregateCommit,
+      conflict: null,
+      lastError: null,
+      reason: `Integrated ${applied.length} verified subtask commit(s) in deterministic order.`,
+      evidence: [{
+        type: 'TASK_GRAPH_INTEGRATION',
+        baseCommit: prepared.baseCommit,
+        aggregateCommit,
+        appliedRefs: applied,
+      }],
+      operation: 'graph-integrate',
+    });
+    graph = completed.graph;
+    return {
+      repository,
+      parentTaskId,
+      graph,
+      integration: inspectTaskGraphIntegration(repository, graph, { probeGit: true, timeoutMs: boundedTimeoutMs }),
+      sources: prepared.sources,
+      idempotent: false,
+    };
+  } catch (error) {
+    const normalized = error?.code ? error : integrationErrorWithFacts('AGENT_RUNTIME_ERROR', error?.message || String(error), parentTaskId, repository, {
+      worktreePath: worktreeInfo?.worktreePath || identity.worktreePath,
+      branch: worktreeInfo?.branch || identity.branch,
+      ref: worktreeInfo?.ref || identity.ref,
+    });
+    try {
+      const latest = readTaskGraph(repository, parentTaskId);
+      if (latest.integration?.state === 'RUNNING') {
+        setTaskGraphIntegration(repository, parentTaskId, 'FAILED', {
+          expectedState: 'RUNNING',
+          worktreePath: worktreeInfo?.worktreePath || identity.worktreePath,
+          branch: worktreeInfo?.branch || identity.branch,
+          ref: worktreeInfo?.ref || identity.ref,
+          aggregateCommit: applied.at(-1)?.aggregateCommit || latest.integration.aggregateCommit || null,
+          worktreeHead: applied.at(-1)?.aggregateCommit || latest.integration.worktreeHead || prepared.baseCommit,
+          lastError: integrationErrorDetails(normalized),
+          reason: normalized.message,
+          operation: 'graph-integrate',
+        });
+      }
+    } catch {
+      // Preserve the primary integration error. The durable state write is
+      // retried by an explicit inspect/reconcile operation if it failed too.
+    }
+    throw normalized;
+  }
+}
+
+export const integrateTaskGraphCommits = integrateTaskGraph;
 
 /** Update only the explicit parent graph lifecycle state under the graph lock. */
 export function setTaskGraphState(root, parentTaskId, nextState, details = {}) {

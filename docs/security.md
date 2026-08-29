@@ -41,6 +41,14 @@ close only matching Runtime-owned Sessions and remove only the exact Runtime-own
 a bounded timeout. Ownership mismatches, symlinks, path escapes, and cleanup failures are
 preserved as durable bounded errors; branches, refs, commits, evidence, and the user's worktree
 remain intact.
+Graph integration is a separate, explicit boundary. It runs only after every required subtask has
+verified completion evidence, checks the exact Runtime source refs and captured base commit, and
+applies commits in deterministic order inside a distinct Runtime-owned aggregate worktree. It
+never changes the current checkout or source worktrees. A cherry-pick conflict remains in place
+with bounded source, applied-ref, Git-status, and conflict facts for inspection; no automatic
+resolution, reset, retry, merge, push, tag, publish, deploy, or release occurs. Aggregate review
+rechecks those facts before recording `REVIEW_APPROVED` or `CHANGES_REQUESTED`, and cleanup
+retains the aggregate branch, commits, conflict facts, and evidence.
 
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 

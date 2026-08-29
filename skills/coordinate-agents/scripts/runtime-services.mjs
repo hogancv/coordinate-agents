@@ -24,6 +24,8 @@ import {
   runtimeTaskGraphResume,
   runtimeTaskGraphStop,
   runtimeTaskGraphCleanup,
+  runtimeTaskGraphIntegrate,
+  runtimeTaskGraphReview,
   runtimeTaskGraphDispatch,
   runtimeTaskOperation,
 } from '../../../bin/coordinate-agents.mjs';
@@ -57,6 +59,8 @@ export {
   runtimeTaskGraphResume,
   runtimeTaskGraphStop,
   runtimeTaskGraphCleanup,
+  runtimeTaskGraphIntegrate,
+  runtimeTaskGraphReview,
   runtimeRecoverInspect,
 };
 export {
@@ -85,6 +89,8 @@ export const RUNTIME_OPERATIONS = Object.freeze({
   taskGraphResume: runtimeTaskGraphResume,
   taskGraphStop: runtimeTaskGraphStop,
   taskGraphCleanup: runtimeTaskGraphCleanup,
+  taskGraphIntegrate: runtimeTaskGraphIntegrate,
+  taskGraphReview: runtimeTaskGraphReview,
   taskGraphDispatch: runtimeTaskGraphDispatch,
   taskDispatch: input => runtimeTaskOperation('dispatch', input),
   taskStatus: input => runtimeTaskOperation('status', input),

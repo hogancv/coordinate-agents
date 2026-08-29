@@ -93,6 +93,22 @@ remove only their exact worktrees after bounded cleanup, preserving user files,
 refs, commits, and evidence. Failures are durable and repeated recovery,
 resume, stop, and cleanup calls are idempotent. Their shared output shape is
 `schemas/task-graph-v1-recovery.schema.json`.
+`coordinate_agents_task_graph_integrate` is an explicit post-completion
+boundary: it verifies every required subtask evidence/ref and applies the
+source commits in sorted subtask-id order to a separate Runtime-owned
+`.agent-bus/worktrees/<parentTaskId>/__integration__` review worktree. The
+current checkout and source worktrees stay unchanged. Durable integration
+facts include base, source fingerprint, ordered source refs, applied commits,
+aggregate commit, cleanup, and bounded conflict status. A conflict is not
+automatically resolved, retried, reset, merged, pushed, tagged, published,
+deployed, or released.
+`coordinate_agents_task_graph_review` rechecks the exact source fingerprint,
+aggregate HEAD, Runtime ownership, and worktree cleanliness before recording
+`REVIEW_APPROVED` or `CHANGES_REQUESTED` through the existing reviewer
+boundary. Stale or dirty aggregates are refused. Review approval is not release
+authorization. The output contracts
+are `schemas/task-graph-v1-integrate.schema.json` and
+`schemas/task-graph-v1-review.schema.json`.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 
