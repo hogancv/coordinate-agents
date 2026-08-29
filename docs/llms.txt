@@ -69,6 +69,10 @@ schema-version-1 operations remain unchanged. After validation,
 subtasks with deterministic READY/WAITING/BLOCKED frontier facts and a
 `TASK_GRAPH_CREATED` event; existing Task status/inspect views expose the
 durable graph without launching an Adapter, Session, or Implementer process.
+`coordinate_agents_task_graph_plan` returns deterministic dependency and
+max-concurrency decisions with bounded reasons and exact configured Agent,
+Adapter, executable, and command-source facts. It does not create a worktree,
+Bus message, Session, event, or process.
 `coordinate_agents_task_graph_dispatch` dispatches one selected READY subtask in
 an isolated Git worktree rooted at the exact graph base commit without touching
 uncommitted files in the user repository or mutating sibling subtasks, unlocking

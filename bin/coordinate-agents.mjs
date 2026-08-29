@@ -101,6 +101,7 @@ import {
   taskGraphBranchName,
   taskGraphBranchRef,
   taskGraphStatusPayload,
+  taskGraphSchedulingView,
   taskGraphWorktreePath,
   verifyGraphImplementationCommit,
   validateSubtaskId,
@@ -146,7 +147,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -263,7 +264,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-plan、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -1672,12 +1673,13 @@ function taskReview(root, task, options) {
 function taskGraphOperation(options) {
   const subcommand = options.subcommand || '';
   if (['graph-create', 'create-graph'].includes(subcommand)) return 'create';
+  if (['graph-plan', 'plan-graph'].includes(subcommand)) return 'plan';
   if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
   if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
   if (['graph-dispatch', 'dispatch-graph'].includes(subcommand)) return 'dispatch';
   if (subcommand !== 'graph') return null;
   const nested = options.positionals?.[0];
-  return ['create', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
+  return ['create', 'plan', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
 }
 
 function graphInput(options) {
@@ -1727,7 +1729,7 @@ function graphTaskId(options, root) {
   if (direct) return direct;
   const isGraphSubcommand = options.subcommand === 'graph';
   const nestedPos0 = options.positionals?.[0];
-  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate'].includes(nestedPos0)
+  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan'].includes(nestedPos0)
     ? options.positionals?.[1]
     : options.positionals?.[0];
   if (nested) return nested;
@@ -1742,6 +1744,136 @@ function taskGraphViewCommand(options, operation, { json = false, commandName = 
   const graph = readTaskGraph(root, taskId);
   const command = commandName || `task.graph-${operation}`;
   const payload = jsonSuccess(command, taskGraphStatusPayload(root, graph, { inspect: operation === 'inspect' }));
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+function schedulingDecision(graph, subtask, agent, eligibleIds, capacityLimitedIds) {
+  const dependencies = subtask.dependsOn.map(id => {
+    const dependency = graph.subtasks.find(candidate => candidate.id === id);
+    return { id, state: dependency.state };
+  });
+  let decision = subtask.state;
+  let reason = subtask.reason;
+  if (eligibleIds.has(subtask.id)) {
+    decision = 'ELIGIBLE';
+    reason = subtask.dependsOn.length === 0
+      ? 'Eligible: no dependencies and a concurrency slot is available.'
+      : 'Eligible: all dependencies succeeded and a concurrency slot is available.';
+  } else if (capacityLimitedIds.has(subtask.id)) {
+    decision = 'CAPACITY_LIMITED';
+    reason = `Capacity-limited: ${graph.frontier.runningCount} of ${graph.maxConcurrency} slots are running and earlier READY subtasks consume the remaining slots.`;
+  } else if (subtask.state === 'RUNNING') {
+    reason = 'Running: this subtask already consumes one concurrency slot.';
+  } else if (subtask.state === 'SUCCEEDED') {
+    reason = 'Not schedulable: this subtask already succeeded.';
+  } else if (subtask.state === 'FAILED') {
+    reason = subtask.reason || 'Not schedulable: this subtask failed and requires explicit recovery.';
+  } else if (subtask.state === 'STOPPED') {
+    reason = subtask.reason || 'Not schedulable: this subtask was stopped and requires explicit recovery.';
+  } else if (subtask.state === 'BLOCKED') {
+    reason = subtask.reason || 'Blocked: at least one dependency did not succeed.';
+  } else if (subtask.state === 'WAITING' || subtask.state === 'PENDING') {
+    reason = subtask.reason || 'Waiting: not every dependency has succeeded.';
+  }
+  return {
+    subtaskId: subtask.id,
+    implementer: subtask.implementer,
+    state: subtask.state,
+    decision,
+    reason: redactOutput(reason || 'Not schedulable.', 2 * 1024),
+    dependencies,
+    agent,
+  };
+}
+
+async function taskGraphPlanCommand(options, { json = false } = {}) {
+  const root = assertGitRepositoryWithoutProcess(options.root, messages.en);
+  const taskId = graphTaskId(options, root);
+  const graph = readTaskGraph(root, taskId);
+  const scheduling = taskGraphSchedulingView(graph);
+  const userConfig = readUserConfig();
+  const adapterRegistry = await loadConfiguredAdaptersForRuntime(userConfig);
+  const busConfig = readConfig(join(root, '.agent-bus'));
+  if (!busConfig.agents.some(agent => agent.id === graph.parentTask.planner)) {
+    throw runtimeError('INVALID_AGENT_CONFIG', `Task Graph planner is not registered: ${graph.parentTask.planner}`, {
+      recoverable: false,
+      taskId: graph.parentTaskId,
+      agent: graph.parentTask.planner,
+    });
+  }
+  const agentFacts = new Map();
+
+  for (const implementer of [...new Set(graph.subtasks.map(subtask => subtask.implementer))].sort()) {
+    const projectAgent = busConfig.agents.find(agent => agent.id === implementer);
+    if (!projectAgent) {
+      throw runtimeError('INVALID_AGENT_CONFIG', `Task Graph Implementer is not registered: ${implementer}`, {
+        recoverable: false,
+        taskId: graph.parentTaskId,
+        agent: implementer,
+      });
+    }
+    const resolved = runtimeAgentConfig(projectAgent, userConfig);
+    const registryAdapter = adapterRegistry.find(item => item.id === resolved.adapter) || null;
+    if (!registryAdapter) {
+      throw runtimeError('INVALID_ADAPTER_CONFIG', `Task Graph Implementer ${implementer} references an unregistered Adapter: ${resolved.adapter}`, {
+        recoverable: false,
+        taskId: graph.parentTaskId,
+        agent: implementer,
+        adapter: resolved.adapter,
+        stage: 'adapter',
+      });
+    }
+    if (!resolved.command) {
+      throw runtimeError('INVALID_AGENT_CONFIG', `No executable command is configured for Task Graph Implementer ${implementer}.`, {
+        recoverable: false,
+        taskId: graph.parentTaskId,
+        agent: implementer,
+        adapter: resolved.adapter,
+        stage: 'executable',
+      });
+    }
+    agentFacts.set(implementer, {
+      id: implementer,
+      registered: true,
+      adapter: resolved.adapter,
+      adapterContractVersion: registryAdapter.contractVersion || null,
+      adapterCapabilities: registryAdapter.capabilities || null,
+      command: resolved.command,
+      commandSource: resolved.commandSource,
+      argsSource: resolved.argsSource || null,
+    });
+  }
+
+  const eligibleIds = new Set(scheduling.frontier.eligible);
+  const capacityLimitedIds = new Set(scheduling.frontier.capacityLimited);
+  const decisions = [...scheduling.subtasks]
+    .sort((left, right) => (left.id < right.id ? -1 : (left.id > right.id ? 1 : 0)))
+    .map(subtask => schedulingDecision(
+      graph,
+      subtask,
+      agentFacts.get(subtask.implementer),
+      eligibleIds,
+      capacityLimitedIds,
+    ));
+  const payload = jsonSuccess('task.graph-plan', {
+    root,
+    graphId: graph.parentTaskId,
+    parentTaskId: graph.parentTaskId,
+    graph,
+    frontier: graph.frontier,
+    plan: {
+      schemaVersion: 1,
+      deterministic: true,
+      sideEffects: false,
+      maxConcurrency: graph.maxConcurrency,
+      runningCount: scheduling.frontier.runningCount,
+      availableSlots: scheduling.frontier.availableSlots,
+      eligible: decisions.filter(item => item.decision === 'ELIGIBLE'),
+      capacityLimited: decisions.filter(item => item.decision === 'CAPACITY_LIMITED'),
+      decisions,
+    },
+  });
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
 }
@@ -2269,6 +2401,7 @@ async function taskCommand(options, { json = false } = {}) {
     return result;
   }
   if (graphOperation === 'create') return await taskGraphCreateCommand(options, { json });
+  if (graphOperation === 'plan') return await taskGraphPlanCommand(options, { json });
   if (graphOperation === 'dispatch') return await taskGraphDispatchCommand(options, { json });
   if (graphOperation === 'status' || graphOperation === 'inspect') {
     return taskGraphViewCommand(options, graphOperation, { json });
@@ -3987,6 +4120,16 @@ export async function runtimeTaskGraphInspect(input = {}) {
     command: 'task',
     subcommand: 'graph-inspect',
     taskId: input.taskId || input.id || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphPlan(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-plan',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
     positionals: [],
   }), { json: true });
 }

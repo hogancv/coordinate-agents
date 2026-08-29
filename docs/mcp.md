@@ -54,6 +54,7 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_task_create` | `root`, `title` | `id`, `spec`, `planner`, `implementer`, `reviewer` | `task.create` |
 | `coordinate_agents_task_graph_validate` | `root`, `graph` | — | `task.graph-validate` |
 | `coordinate_agents_task_graph_create` | `root`, `graph` | — | `task.graph-create` |
+| `coordinate_agents_task_graph_plan` | `root`, `taskId` | — | `task.graph-plan` |
 | `coordinate_agents_task_graph_dispatch` | `root`, `taskId`, `subtaskId` | `spec`, `sessionWaitMs` | `task.graph-dispatch` |
 | `coordinate_agents_task_dispatch` | `root`, `taskId` | `spec` | `task.dispatch` |
 | `coordinate_agents_task_status` | `root`, `taskId` | — | `task.status` |
@@ -90,6 +91,14 @@ but does not resolve an Adapter, open a Session, hand off a Bus message, or
 launch a child process. Existing `coordinate_agents_task_status` and
 `coordinate_agents_task_inspect` calls recognize a graph parent ID; inspect
 also returns bounded graph lifecycle events.
+
+`coordinate_agents_task_graph_plan` is a read-only scheduler view over the
+persisted graph. It returns every subtask in deterministic identifier order,
+the dependency outcome and bounded reason for each decision, the concurrency-
+eligible prefix, capacity-limited READY subtasks, and exact configured Agent,
+Adapter, command, and command-source facts. It rejects unknown arguments and
+invalid Agent/Adapter/executable configuration without creating a worktree,
+Bus message, Session, event, or child process.
 
 `coordinate_agents_task_graph_dispatch` dispatches one selected `READY` subtask
 from a persisted Task Graph in an isolated Git worktree without modifying
@@ -171,6 +180,7 @@ The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are doc
 - `schemas/task.schema.json`
 - `schemas/task-graph-v1.schema.json`
 - `schemas/task-graph-v1-record.schema.json`
+- `schemas/task-graph-v1-plan.schema.json`
 - `schemas/runtime-error.schema.json`
 - `schemas/evidence.schema.json`
 

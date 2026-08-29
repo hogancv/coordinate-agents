@@ -227,6 +227,21 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_plan',
+    description: 'Read a deterministic, concurrency-bounded scheduling plan for a persisted Task Graph without creating a worktree, Bus message, Session, or process.',
+    operation: 'taskGraphPlan',
+    command: 'task.graph-plan',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_graph_dispatch',
     description: 'Validate and explicitly dispatch one selected READY subtask from a persisted Task Graph in an isolated Git worktree.',
     operation: 'taskGraphDispatch',

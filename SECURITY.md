@@ -53,6 +53,10 @@ it before sharing diagnostics.
   read-only; the separate graph-create operation persists only the validated graph record and
   append-only lifecycle event, without launching an Adapter, Session, or Implementer process.
 
+- Task Graph planning reports deterministic dependency, capacity, and exact configured
+  Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle
+  event, or child process.
+
 - Graph subtask dispatch captures one exact base commit, creates only a Runtime-owned worktree and
   branch under the repository graph area, and roots the persistent Session there. It rejects unsafe
   paths and branch inputs, preserves exact Adapter command precedence, keeps the user's checkout

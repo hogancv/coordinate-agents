@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-plan.schema.json",
+  "title": "Coordinate Agents Task Graph v1 scheduling plan",
+  "type": "object",
+  "required": ["schemaVersion", "deterministic", "sideEffects", "maxConcurrency", "runningCount", "availableSlots", "eligible", "capacityLimited", "decisions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "deterministic": { "const": true },
+    "sideEffects": { "const": false },
+    "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 },
+    "runningCount": { "type": "integer", "minimum": 0 },
+    "availableSlots": { "type": "integer", "minimum": 0 },
+    "eligible": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+    "capacityLimited": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+    "decisions": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/decision" } }
+  },
+  "$defs": {
+    "dependency": {
+      "type": "object",
+      "required": ["id", "state"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "state": { "type": "string", "enum": ["PENDING", "READY", "WAITING", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED", "STOPPED"] }
+      },
+      "additionalProperties": false
+    },
+    "agent": {
+      "type": "object",
+      "required": ["id", "registered", "adapter", "adapterContractVersion", "adapterCapabilities", "command", "commandSource", "argsSource"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "registered": { "const": true },
+        "adapter": { "type": "string", "minLength": 1 },
+        "adapterContractVersion": { "type": ["string", "null"] },
+        "adapterCapabilities": { "type": ["object", "null"] },
+        "command": { "type": "string", "minLength": 1 },
+        "commandSource": { "type": "string", "enum": ["project", "user", "adapter-default"] },
+        "argsSource": { "type": ["string", "null"], "enum": ["project", "user", null] }
+      },
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "required": ["subtaskId", "implementer", "state", "decision", "reason", "dependencies", "agent"],
+      "properties": {
+        "subtaskId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "implementer": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "state": { "type": "string", "enum": ["PENDING", "READY", "WAITING", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED", "STOPPED"] },
+        "decision": { "type": "string", "enum": ["ELIGIBLE", "CAPACITY_LIMITED", "PENDING", "READY", "WAITING", "RUNNING", "SUCCEEDED", "FAILED", "BLOCKED", "STOPPED"] },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "dependencies": { "type": "array", "items": { "$ref": "#/$defs/dependency" } },
+        "agent": { "$ref": "#/$defs/agent" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

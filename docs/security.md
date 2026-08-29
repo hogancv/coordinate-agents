@@ -21,6 +21,9 @@ worktree or Session creation, and child-process spawn. Invalid DAGs return the b
 `TASK_GRAPH_INVALID` Runtime error without initializing `.agent-bus` or persisting graph state.
 The separate graph-create operation persists only an already validated graph record and its
 append-only lifecycle event; it does not launch an Adapter, Session, or Implementer process.
+Graph planning reports deterministic dependency, capacity, and exact configured
+Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle event,
+or child process.
 The graph-dispatch operation captures one exact base commit and uses only a Runtime-owned,
 repository-contained, non-symlinked worktree and branch for the selected READY subtask. Its
 persistent Session is rooted at that worktree; exact Adapter command precedence, bounded I/O, and

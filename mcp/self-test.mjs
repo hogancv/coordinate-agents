@@ -14,6 +14,7 @@ const expectedTools = [
   'coordinate_agents_task_create',
   'coordinate_agents_task_graph_validate',
   'coordinate_agents_task_graph_create',
+  'coordinate_agents_task_graph_plan',
   'coordinate_agents_task_graph_dispatch',
   'coordinate_agents_task_dispatch',
   'coordinate_agents_task_status',

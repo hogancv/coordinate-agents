@@ -16,6 +16,8 @@ import {
 } from './config.mjs';
 import {
   TASK_GRAPH_SCHEMA_VERSION,
+  TASK_GRAPH_MAX_CONCURRENCY,
+  TASK_GRAPH_MAX_SUBTASKS,
   TASK_GRAPH_STATES,
   TASK_GRAPH_SUBTASK_STATES,
   taskGraphDurableFacts,
@@ -735,7 +737,7 @@ function validateStoredGraph(record, parentTaskId = null) {
   if (!GRAPH_STATE_SET.has(record.state) || record.status !== record.state) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid state.`, { recoverable: false, taskId: id });
   }
-  if (!Number.isInteger(record.maxConcurrency) || record.maxConcurrency < 1) {
+  if (!Number.isInteger(record.maxConcurrency) || record.maxConcurrency < 1 || record.maxConcurrency > TASK_GRAPH_MAX_CONCURRENCY) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid maxConcurrency.`, { recoverable: false, taskId: id });
   }
   for (const [label, value] of [
@@ -752,7 +754,7 @@ function validateStoredGraph(record, parentTaskId = null) {
   if (!plainObject(record.parentTask) || record.parentTask.id !== id) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid parent Task record.`, { recoverable: false, taskId: id });
   }
-  if (!Array.isArray(record.subtasks) || record.subtasks.length === 0) {
+  if (!Array.isArray(record.subtasks) || record.subtasks.length === 0 || record.subtasks.length > TASK_GRAPH_MAX_SUBTASKS) {
     throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has no subtask records.`, { recoverable: false, taskId: id });
   }
   const ids = new Set();
@@ -801,6 +803,30 @@ function readStoredGraph(root, parentTaskId) {
 export function readTaskGraph(root, parentTaskId) {
   ensureGraphStore(root);
   return readStoredGraph(root, parentTaskId);
+}
+
+export function taskGraphSchedulingView(record) {
+  const validated = validateStoredGraph(record);
+  const subtasks = reconcileSubtasks(validated.subtasks);
+  const frontier = frontierFor(subtasks, validated.maxConcurrency);
+  const storedStates = validated.subtasks.map(subtask => ({
+    id: subtask.id,
+    state: subtask.state,
+    reason: subtask.reason || null,
+  }));
+  const derivedStates = subtasks.map(subtask => ({
+    id: subtask.id,
+    state: subtask.state,
+    reason: subtask.reason || null,
+  }));
+  if (!sameJson(storedStates, derivedStates) || !sameJson(validated.frontier, frontier)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${validated.parentTaskId} has contradictory persisted scheduling facts.`, {
+      recoverable: false,
+      taskId: validated.parentTaskId,
+      stage: 'graph-scheduling',
+    });
+  }
+  return { subtasks, frontier };
 }
 
 export function hasTaskGraph(root, parentTaskId) {

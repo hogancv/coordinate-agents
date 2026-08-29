@@ -111,6 +111,29 @@ a deterministic reason. `TASK_GRAPH_SUBTASK_STATE_CHANGED` and
 `TASK_GRAPH_STATUS_CHANGED` events record later durable transitions; repeated
 identical transitions are idempotent.
 
+## Read-only scheduling plan
+
+Preview the next bounded scheduling decision without executing it:
+
+```sh
+coordinate-agents task graph-plan --root <repository> --id <parentTaskId> --json
+# equivalent nested form:
+coordinate-agents task graph plan <parentTaskId> --root <repository> --json
+```
+
+The MCP equivalent is `coordinate_agents_task_graph_plan`. The plan sorts all
+subtasks by identifier, exposes the concurrency-eligible prefix and any
+capacity-limited READY subtasks, and gives every decision a bounded reason plus
+its dependency outcomes. Each decision carries the explicitly assigned Agent,
+registered Adapter, effective configured command, and `project`, `user`, or
+`adapter-default` command source. No fallback Agent is selected. Missing or
+contradictory registry facts fail before execution.
+
+Planning reads the persisted `maxConcurrency` and current RUNNING count. It is
+idempotent: unchanged durable state produces the same plan and creates no
+worktree, Bus message, Session, lifecycle event, or child process. The output
+contract is `schemas/task-graph-v1-plan.schema.json`.
+
 ## Subtask dispatch in an isolated Git worktree
 
 To execute one approved, dependency-ready subtask from a persisted graph, use
