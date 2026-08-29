@@ -61,6 +61,8 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_task_graph_stop` | `root`, `taskId` | `subtaskId`, `reason`, `timeoutMs` | `task.graph-stop` |
 | `coordinate_agents_task_graph_cleanup` | `root`, `taskId` | `subtaskId`, `timeoutMs` | `task.graph-cleanup` |
 | `coordinate_agents_task_graph_dispatch` | `root`, `taskId`, `subtaskId` | `spec`, `sessionWaitMs` | `task.graph-dispatch` |
+| `coordinate_agents_task_graph_integrate` | `root`, `taskId` | `timeoutMs` | `task.graph-integrate` |
+| `coordinate_agents_task_graph_review` | `root`, `taskId`, `decision` | `feedback`, `evidence`, `timeoutMs` | `task.graph-review` |
 | `coordinate_agents_task_dispatch` | `root`, `taskId` | `spec` | `task.dispatch` |
 | `coordinate_agents_task_status` | `root`, `taskId` | — | `task.status` |
 | `coordinate_agents_task_inspect` | `root`, `taskId` | — | `task.inspect` |
@@ -119,6 +121,22 @@ uncommitted files in the user repository or mutating sibling subtasks. It captur
 the graph base commit, provisions a dedicated worktree and branch, resolves the
 configured Implementer, runs an isolated persistent Session, and updates the
 subtask and frontier state upon completion.
+
+`coordinate_agents_task_graph_integrate` is the explicit aggregate step after
+all required subtasks succeed. It verifies each exact Runtime branch/ref and
+completion commit, then applies source commits in sorted subtask-id order to
+`.agent-bus/worktrees/<parentTaskId>/__integration__`. The aggregate worktree
+and its durable base/source/applied/conflict facts are separate from every
+subtask worktree and from the current checkout. A conflict is returned as a
+bounded business failure with the in-progress Git state preserved for inspection.
+
+`coordinate_agents_task_graph_review` sends that aggregate through the existing
+review boundary. It rechecks source evidence, the exact integration source
+fingerprint, aggregate ownership, aggregate HEAD, and worktree cleanliness before
+recording `REVIEW_APPROVED` or `CHANGES_REQUESTED`; review never merges, pushes,
+tags, publishes, deploys, or releases. `graph-cleanup` and unscoped
+`graph-stop` clean only the Runtime-owned aggregate worktree and retain its
+branch, commits, conflict facts, and review evidence.
 
 `coordinate_agents_task_graph_recover` is the facts-first interruption path. It
 reads the durable graph, Session, worktree, and Event Journal records, verifies
@@ -222,6 +240,8 @@ The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are doc
 - `schemas/task-graph-v1-plan.schema.json`
 - `schemas/task-graph-v1-run.schema.json`
 - `schemas/task-graph-v1-recovery.schema.json`
+- `schemas/task-graph-v1-integration.schema.json`
+- `schemas/task-graph-v1-review.schema.json`
 - `schemas/runtime-error.schema.json`
 - `schemas/evidence.schema.json`
 

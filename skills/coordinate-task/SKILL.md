@@ -23,6 +23,8 @@ coordinate_agents_task_graph_recover
 coordinate_agents_task_graph_resume
 coordinate_agents_task_graph_stop
 coordinate_agents_task_graph_cleanup
+coordinate_agents_task_graph_integrate
+coordinate_agents_task_graph_review
 coordinate_agents_task_dispatch
 coordinate_agents_task_status
 coordinate_agents_task_inspect
@@ -65,6 +67,8 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-rec
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-resume --root "<repository>" --id task-... --subtask <subtaskId> --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-stop --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-cleanup --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-integrate --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-review --root "<repository>" --id task-... --decision REVIEW_APPROVED --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<task>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
@@ -146,5 +150,13 @@ Use `coordinate_agents_task_graph_stop` and
 `coordinate_agents_task_graph_cleanup` for bounded ownership-checked cleanup.
 They preserve user worktrees, refs, commits, and evidence, record cleanup
 failures, and are idempotent.
+After all required subtasks are verified successful, use
+`coordinate_agents_task_graph_integrate` (or `task graph-integrate`) to
+create the separate aggregate review worktree and apply source commits in
+deterministic subtask-id order. Use
+`coordinate_agents_task_graph_review` (or `task graph-review`) to inspect
+that aggregate and record `REVIEW_APPROVED` or `CHANGES_REQUESTED`.
+Integration conflicts are durable and bounded; they do not modify the user
+checkout or source worktrees and do not authorize release actions.
 See `../../docs/task-graph-v1.md` for the input shape and parent/subtask
 identity facts.

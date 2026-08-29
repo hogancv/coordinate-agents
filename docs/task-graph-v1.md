@@ -230,6 +230,58 @@ cleanup calls are idempotent and do not duplicate messages, input, commits, or
 worktrees. The shared output shape is
 `schemas/task-graph-v1-recovery.schema.json`.
 
+## Deterministic integration and aggregate review
+
+After every required subtask is SUCCEEDED, integrate the verified
+IMPLEMENTATION_DONE commits explicitly:
+
+```sh
+coordinate-agents task graph-integrate --root <repository> --id <parentTaskId> --json
+# equivalent nested form:
+coordinate-agents task graph integrate <parentTaskId> --root <repository> --json
+```
+
+The MCP equivalent is coordinate_agents_task_graph_integrate. Integration
+refuses any graph with an unresolved, failed, stopped, or unverified subtask.
+It captures one base commit, sorts source subtasks by identifier, verifies the
+exact Runtime branch/ref and commit reachability, then cherry-picks the
+verified commits into the separate Runtime-owned
+.agent-bus/worktrees/<parentTaskId>/__integration__ worktree and
+coordinate-agents/<parentTaskId>/__integration__ branch. The current user
+checkout, subtask worktrees, source branches, and source commits are not
+modified.
+
+The integration record is part of the atomic graph record and retains the
+base, source fingerprint, ordered source refs, applied refs and aggregate
+commit. A conflict is a bounded structured failure that leaves the aggregate
+worktree and Git conflict state inspectable; it never silently resolves,
+retries, resets, or deletes source work. graph-status reports the durable
+integration record, while graph-inspect additionally probes the aggregate
+worktree and aggregate diff. The result contract is
+schemas/task-graph-v1-integration.schema.json.
+
+Send the aggregate through the existing reviewer boundary explicitly:
+
+```sh
+coordinate-agents task graph-review --root <repository> --id <parentTaskId> \
+  --decision REVIEW_APPROVED --json
+# or:
+coordinate-agents task graph-review --root <repository> --id <parentTaskId> \
+  --decision CHANGES_REQUESTED --feedback "Bounded review notes" --json
+```
+
+The MCP equivalent is coordinate_agents_task_graph_review; task review also
+recognizes a persisted graph parent ID. The reviewer rechecks the subtask
+evidence/refs, exact integration source fingerprint, aggregate HEAD, and the
+Runtime-owned aggregate worktree before recording REVIEW_APPROVED or
+CHANGES_REQUESTED with bounded evidence. A stale-source or dirty aggregate is
+refused.
+REVIEW_APPROVED changes only the durable graph/review state: it is not merge,
+push, tag, release, deploy, or publish authorization. Integration cleanup is
+explicit through graph-cleanup or an unscoped graph-stop; it removes only the
+Runtime-owned aggregate worktree and retains the integration branch, commits,
+conflict facts, and review evidence.
+
 ## Subtask dispatch in an isolated Git worktree
 
 To execute one approved, dependency-ready subtask from a persisted graph, use

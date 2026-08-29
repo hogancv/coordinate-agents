@@ -85,6 +85,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 - 使用规范本地事实恢复中断的图执行，显式 resume、有限 stop 与所有权安全 cleanup；不从文件名/描述推断成功，也不自动重试。
 - 通过本地 Inspector 查看任务、Session 与事件时间线。
 - 严格区分审查门禁和发布门禁。
+- 所有必需子任务成功后，可在独立 Runtime-owned 聚合 worktree 中按确定性顺序执行 graph-integrate，再通过 graph-review 记录 REVIEW_APPROVED 或 CHANGES_REQUESTED；来源事实过期或聚合 worktree 有未提交改动时拒绝审查，冲突可检查且不会修改用户 checkout。
 
 ## 支持的代理与适配器
 
@@ -142,6 +143,7 @@ npx @hogancv/coordinate-agents@latest --help
 - 开始使用：[AI 安装契约](./AI_INSTALL.md)、[快速入门](./docs/getting-started.md)、[让 AI 安装](./docs/install-with-ai.md)、[常见问题](./docs/faq.md)、[变更记录](./CHANGELOG.md)
 - 核心 Runtime：[协议](./docs/protocol.md)、[Execution Session](./docs/session-runtime.md)、[Event Journal](./docs/event-journal.md)、[MCP](./docs/mcp.md)
 - Task Graph：[Task Graph v1 契约](./docs/task-graph-v1.md)
+- 聚合集成审查输出：[集成 schema](./schemas/task-graph-v1-integration.schema.json)、[审查 schema](./schemas/task-graph-v1-review.schema.json)
 - 运维与安全：[Inspector](./docs/inspector.md)、[故障排查](./docs/troubleshooting.md)、[MCP 故障排查](./docs/MCP_TROUBLESHOOTING.md)、[安全](./docs/security.md)
 - 代理与选型：[Codex CLI](./docs/codex-cli.md)、[Antigravity CLI](./docs/antigravity-cli.md)、[方案对比](./docs/comparison.md)
 - Adapter 作者：[作者指南](./docs/adapter-author-guide.md)、[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)

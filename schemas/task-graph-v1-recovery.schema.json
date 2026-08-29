@@ -15,6 +15,12 @@
     "before": { "type": "array", "items": { "$ref": "#/$defs/recoveryFact" } },
     "recovery": { "type": "array", "items": { "$ref": "#/$defs/recoveryFact" } },
     "cleanup": { "type": "array", "items": { "$ref": "#/$defs/cleanupFact" } },
+    "integrationCleanup": {
+      "anyOf": [
+        { "$ref": "#/$defs/integrationCleanupFact" },
+        { "type": "null" }
+      ]
+    },
     "outcomes": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/outcome" } },
     "dispatchRequired": { "type": "boolean" },
     "automaticRetry": { "const": false }
@@ -98,6 +104,25 @@
         "worktree": { "$ref": "#/$defs/worktree" },
         "session": { "$ref": "#/$defs/session" },
         "status": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "integrationCleanupFact": {
+      "type": "object",
+      "required": ["parentTaskId", "status", "integrationState", "worktree"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "parentTaskId": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+        "status": { "type": "string", "enum": ["CLEANED", "FAILED", "SKIPPED"] },
+        "idempotent": { "type": "boolean" },
+        "integrationState": { "type": "string", "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"] },
+        "worktree": { "$ref": "#/$defs/worktree" },
+        "error": {
+          "anyOf": [
+            { "$ref": "#/$defs/error" },
+            { "type": "null" }
+          ]
+        }
       },
       "additionalProperties": true
     },

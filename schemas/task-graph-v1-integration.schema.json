@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-integration.schema.json",
+  "title": "Coordinate Agents Task Graph v1 integration result",
+  "description": "Deterministic, isolated application of verified subtask commits to a Runtime-owned review worktree.",
+  "type": "object",
+  "required": ["ok", "command", "root", "graphId", "parentTaskId", "baseCommit", "sources", "integration", "graph"],
+  "properties": {
+    "ok": { "const": true },
+    "command": { "const": "task.graph-integrate" },
+    "root": { "type": "string", "minLength": 1 },
+    "graphId": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+    "parentTaskId": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+    "baseCommit": { "type": ["string", "null"], "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+    "sources": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/source" } },
+    "integration": { "$ref": "#/$defs/integration" },
+    "graph": { "$ref": "./task-graph-v1-record.schema.json" },
+    "idempotent": { "type": "boolean" },
+    "release": {
+      "type": "object",
+      "required": ["authorized"],
+      "properties": {
+        "authorized": { "const": false },
+        "required": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["order", "subtaskId", "implementer", "branch", "ref", "commit", "refCommit"],
+      "properties": {
+        "order": { "type": "integer", "minimum": 0 },
+        "subtaskId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "implementer": { "type": "string" },
+        "branch": { "type": "string" },
+        "ref": { "type": "string" },
+        "commit": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "refCommit": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "evidence": { "type": "array", "maxItems": 64 }
+      },
+      "additionalProperties": true
+    },
+    "integration": {
+      "type": "object",
+      "required": ["schemaVersion", "kind", "parentTaskId", "state", "status", "baseCommit", "worktreePath", "branch", "ref", "sourceRefs", "appliedRefs", "createdAt", "updatedAt"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "const": "task-graph-integration" },
+        "parentTaskId": { "type": "string" },
+        "state": { "type": "string", "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"] },
+        "status": { "type": "string", "enum": ["PENDING", "RUNNING", "SUCCEEDED", "FAILED"] },
+        "baseCommit": { "type": ["string", "null"], "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "worktreePath": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "ref": { "type": ["string", "null"] },
+        "worktreeHead": { "type": ["string", "null"], "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "aggregateCommit": { "type": ["string", "null"], "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+        "sourceFingerprint": { "type": ["string", "null"] },
+        "sourceRefs": { "type": "array", "maxItems": 256 },
+        "appliedRefs": { "type": "array", "maxItems": 256 },
+        "appliedCommits": { "type": "array", "maxItems": 256 },
+        "appliedSubtasks": { "type": "array", "maxItems": 256 },
+        "conflict": { "type": ["object", "null"] },
+        "cleanup": { "type": ["object", "null"] },
+        "evidence": { "type": "array", "maxItems": 64 },
+        "reason": { "type": ["string", "null"] },
+        "lastError": { "type": ["object", "string", "null"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

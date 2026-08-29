@@ -35,6 +35,10 @@ Typical workflow:
 2. Implementer (default: Antigravity) claims it, implements, tests, commits, and sends `IMPLEMENTATION_DONE` with evidence.
 3. Reviewer (default: Codex) validates the commit and evidence, then sends `CHANGES_REQUESTED` or `REVIEW_APPROVED`.
 4. Release work remains blocked until the user separately enters `RELEASE_APPROVED`.
+5. For a Task Graph, the Runtime then integrates verified subtask commits in a
+   separate aggregate worktree and sends that aggregate through the existing
+   reviewer boundary; integration and review never change the current checkout
+   or authorize release actions.
 
 Messages and state survive terminal restarts. Reinvoke the Skill and inspect `status` to resume. Recover a stale claim only after confirming no matching implementation, commit, or reply exists, because recovery may make the work eligible for delivery again.
 
