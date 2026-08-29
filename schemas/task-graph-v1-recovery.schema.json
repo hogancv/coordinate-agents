@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-recovery.schema.json",
+  "title": "Coordinate Agents Task Graph v1 recovery and cleanup result",
+  "description": "Shared result shape for facts-first graph recovery, explicit resume, stop, and ownership-safe cleanup.",
+  "type": "object",
+  "required": ["ok", "command", "root", "graphId", "parentTaskId", "graph", "outcomes"],
+  "properties": {
+    "ok": { "const": true },
+    "command": { "type": "string", "enum": ["task.graph-recover", "task.graph-resume", "task.graph-stop", "task.graph-cleanup"] },
+    "root": { "type": "string", "minLength": 1 },
+    "graphId": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+    "parentTaskId": { "type": "string", "pattern": "^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$" },
+    "graph": { "$ref": "./task-graph-v1-record.schema.json" },
+    "before": { "type": "array", "items": { "$ref": "#/$defs/recoveryFact" } },
+    "recovery": { "type": "array", "items": { "$ref": "#/$defs/recoveryFact" } },
+    "cleanup": { "type": "array", "items": { "$ref": "#/$defs/cleanupFact" } },
+    "outcomes": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/outcome" } },
+    "dispatchRequired": { "type": "boolean" },
+    "automaticRetry": { "const": false }
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message", "recoverable"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "recoverable": { "type": "boolean" },
+        "taskId": { "type": ["string", "null"] },
+        "subtaskId": { "type": ["string", "null"] },
+        "agent": { "type": ["string", "null"] },
+        "sessionId": { "type": ["string", "null"] },
+        "root": { "type": ["string", "null"] },
+        "stage": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "worktree": {
+      "type": ["object", "null"],
+      "properties": {
+        "path": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "ref": { "type": ["string", "null"] },
+        "exists": { "type": "boolean" },
+        "safe": { "type": "boolean" },
+        "registered": { "type": "boolean" },
+        "owned": { "type": "boolean" },
+        "ownershipKnown": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "session": {
+      "type": ["object", "null"],
+      "properties": {
+        "id": { "type": ["string", "null"] },
+        "agent": { "type": ["string", "null"] },
+        "state": { "type": ["string", "null"] },
+        "hostPid": { "type": ["integer", "null"] },
+        "hostAlive": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "recoveryFact": {
+      "type": "object",
+      "required": ["root", "parentTaskId", "subtaskId", "implementer", "state", "classification", "recoverable", "completionEvidence", "worktree", "session", "sessionOwned", "sessionHealthy"],
+      "properties": {
+        "root": { "type": "string", "minLength": 1 },
+        "parentTaskId": { "type": "string" },
+        "subtaskId": { "type": "string" },
+        "implementer": { "type": "string" },
+        "state": { "type": "string" },
+        "classification": { "type": "string" },
+        "recoverable": { "type": "boolean" },
+        "action": { "type": ["string", "null"] },
+        "reason": { "type": ["string", "null"] },
+        "lastError": {
+          "anyOf": [
+            { "type": "object" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "implementationCommit": { "type": ["string", "null"] },
+        "completionEvidence": { "type": "boolean" },
+        "worktree": { "$ref": "#/$defs/worktree" },
+        "session": { "$ref": "#/$defs/session" },
+        "sessionOwned": { "type": "boolean" },
+        "sessionHealthy": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "cleanupFact": {
+      "type": "object",
+      "required": ["subtaskId", "worktree", "session", "status"],
+      "properties": {
+        "subtaskId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "worktree": { "$ref": "#/$defs/worktree" },
+        "session": { "$ref": "#/$defs/session" },
+        "status": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["subtaskId"],
+      "properties": {
+        "subtaskId": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "state": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] },
+        "classification": { "type": ["string", "null"] },
+        "action": { "type": ["string", "null"] },
+        "changed": { "type": "boolean" },
+        "idempotent": { "type": "boolean" },
+        "recoverable": { "type": "boolean" },
+        "session": { "$ref": "#/$defs/session" },
+        "worktree": { "$ref": "#/$defs/worktree" },
+        "error": {
+          "anyOf": [
+            { "$ref": "#/$defs/error" },
+            { "type": "null" }
+          ]
+        },
+        "cleanup": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

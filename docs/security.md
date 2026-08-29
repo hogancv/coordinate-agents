@@ -32,7 +32,15 @@ retry/fallback or mutate unrelated subtasks, and dispatch never changes the user
 Parallel graph execution claims READY subtasks under the graph lock, atomically enforces the
 persisted concurrency limit, and gives every selected subtask a distinct worktree, branch/ref,
 message, and Session identity rooted at one exact graph base commit. Failures remain isolated and
-never trigger fallback or automatic retry.
+never trigger fallback or automatic retry. Graph recovery is facts-first: status and inspect expose
+durable Session/worktree/commit/evidence classifications, and recovery only promotes a verified
+`IMPLEMENTATION_DONE` commit or records an interrupted `FAILED` state. Explicit resume reuses a
+verified healthy Runtime-owned Session/worktree and otherwise returns `READY` for a separate
+dispatch; it never loops or infers success from filenames or prose. Explicit graph stop/cleanup
+close only matching Runtime-owned Sessions and remove only the exact Runtime-owned worktree after
+a bounded timeout. Ownership mismatches, symlinks, path escapes, and cleanup failures are
+preserved as durable bounded errors; branches, refs, commits, evidence, and the user's worktree
+remain intact.
 
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 

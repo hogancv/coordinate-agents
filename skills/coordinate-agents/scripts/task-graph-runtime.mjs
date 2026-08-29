@@ -30,6 +30,7 @@ import {
   sanitizeRuntimeEventData,
 } from './runtime-events.mjs';
 import { validateTaskId } from './task-runtime.mjs';
+import { EXECUTION_SESSION_STATES } from './session-manager.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
 export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
@@ -56,16 +57,18 @@ function now() {
 // spawnSync-compatible result shape preserves the distinction between a Git
 // command's non-zero exit (used for branch-not-found probes) and a process
 // start failure while avoiding shell-string execution.
-function runGit(args, cwd) {
+function runGit(args, cwd, { timeoutMs = null } = {}) {
   try {
+    const options = {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    };
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) options.timeout = Math.floor(timeoutMs);
     return {
       status: 0,
-      stdout: execFileSync('git', args, {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      }),
+      stdout: execFileSync('git', args, options),
       stderr: '',
       error: undefined,
     };
@@ -258,6 +261,177 @@ function pathMatches(left, right) {
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;
+}
+
+function processIsAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+function readWorktreeSessionRecord(worktreePath, sessionId) {
+  if (!sessionId || !existsSync(worktreePath)) return null;
+  try {
+    const worktree = repositoryRoot(worktreePath);
+    const bus = graphBusPath(worktree);
+    const sessions = join(bus, 'sessions');
+    const path = join(sessions, `${sessionId}.json`);
+    assertContained(sessions, path);
+    safeInternalStat(sessions, path);
+    const record = JSON.parse(readInternalFile(sessions, path));
+    if (!plainObject(record) || record.id !== sessionId) return null;
+    const state = EXECUTION_SESSION_STATES.includes(record.state) ? record.state : null;
+    if (!state) return null;
+    return {
+      id: record.id,
+      agent: record.agent || null,
+      command: record.command || null,
+      resolvedCommand: record.resolvedCommand || null,
+      cwd: record.cwd || worktree,
+      pid: Number.isInteger(record.pid) ? record.pid : null,
+      hostPid: Number.isInteger(record.hostPid) ? record.hostPid : null,
+      state,
+      exitCode: record.exitCode ?? null,
+      signal: record.signal || null,
+      error: boundedText(record.error),
+      createdAt: record.createdAt || null,
+      lastActivityAt: record.lastActivityAt || null,
+      taskId: record.taskId || null,
+      subtaskId: record.subtaskId || null,
+      hostAlive: processIsAlive(record.hostPid),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function verifyDurableImplementationCommit(repository, graph, subtask) {
+  const candidate = `${subtask.implementationCommit || ''}`.trim();
+  const base = `${graph.baseCommit || graph.parentTask?.baseCommit || subtask.baseCommit || ''}`.trim();
+  if (!COMMIT_SHA_PATTERN.test(candidate) || !COMMIT_SHA_PATTERN.test(base)) return false;
+  if (candidate.toLowerCase() === base.toLowerCase()) return false;
+  // A durable completion may outlive its worktree, but any recorded branch or
+  // ref must still be the exact Runtime identity for this subtask.  Never
+  // promote evidence attached to a user branch as a graph completion.
+  const expectedBranch = taskGraphBranchName(graph.parentTaskId, subtask.id);
+  const expectedRef = taskGraphBranchRef(graph.parentTaskId, subtask.id);
+  if (subtask.branch && subtask.branch !== expectedBranch) return false;
+  if (subtask.ref && subtask.ref !== expectedRef) return false;
+  const present = runGit(['rev-parse', '--verify', `${candidate}^{commit}`], repository);
+  if (present.error || present.status !== 0 || present.stdout.trim().toLowerCase() !== candidate.toLowerCase()) return false;
+  const ancestor = runGit(['merge-base', '--is-ancestor', base, candidate], repository);
+  if (ancestor.error || ancestor.status !== 0) return false;
+  const recordedRef = subtask.ref || (subtask.branch ? expectedRef : null);
+  if (recordedRef) {
+    const branch = runGit(['rev-parse', '--verify', `${recordedRef}^{commit}`], repository);
+    if (branch.error || branch.status !== 0) return false;
+    const reachable = runGit(['merge-base', '--is-ancestor', candidate, branch.stdout.trim()], repository);
+    if (reachable.error || reachable.status !== 0) return false;
+  }
+  return true;
+}
+
+function inspectGraphWorktree(root, parentTaskId, subtaskId, {
+  probeGit = false,
+  recordedPath = null,
+  recordedBranch = null,
+  recordedRef = null,
+  timeoutMs = null,
+} = {}) {
+  const repository = repositoryRoot(root);
+  // Derive the canonical identity before touching the filesystem.  If the
+  // worktree root is itself unsafe (for example a symlink), path construction
+  // must still return a bounded fact for status/recovery rather than throwing
+  // before the caller can record the refusal.
+  const expectedBranch = taskGraphBranchName(parentTaskId, subtaskId);
+  const expectedRef = taskGraphBranchRef(parentTaskId, subtaskId);
+  let expectedPath;
+  let pathError = null;
+  try {
+    expectedPath = taskGraphWorktreePath(repository, parentTaskId, subtaskId);
+  } catch (error) {
+    pathError = error;
+    expectedPath = join(repository, '.agent-bus', TASK_GRAPH_WORKTREES_DIRECTORY, parentTaskId, subtaskId);
+  }
+  let matchesRecord = null;
+  if (recordedPath || recordedBranch || recordedRef) {
+    try {
+      matchesRecord = (!recordedPath || pathMatches(recordedPath, expectedPath))
+        && (!recordedBranch || recordedBranch === taskGraphBranchName(parentTaskId, subtaskId))
+        && (!recordedRef || recordedRef === expectedRef);
+    } catch {
+      matchesRecord = false;
+    }
+  }
+  const worktree = {
+    path: expectedPath,
+    branch: expectedBranch,
+    ref: expectedRef,
+    recordedPath: recordedPath || null,
+    recordedBranch: recordedBranch || null,
+    recordedRef: recordedRef || null,
+    matchesRecord,
+    exists: false,
+    safe: false,
+    registered: false,
+    owned: false,
+    ownershipKnown: Boolean(probeGit && !pathError),
+    head: null,
+    registeredBranch: null,
+    error: pathError ? boundedText(pathError.message || pathError) : null,
+  };
+  if (pathError) return worktree;
+  try {
+    const metadata = lstatSync(expectedPath);
+    if (metadata.isSymbolicLink()) throw new Error('symbolic link or junction');
+    assertSafePath(repository, expectedPath);
+    worktree.exists = metadata.isDirectory();
+    worktree.safe = worktree.exists;
+    if (!worktree.exists) worktree.error = 'path is not a directory';
+  } catch (error) {
+    if (error?.code !== 'ENOENT') worktree.error = boundedText(error.message || error);
+  }
+  if (probeGit) {
+    const listed = runGit(['worktree', 'list', '--porcelain'], repository, { timeoutMs });
+    if (listed.error || listed.status !== 0) {
+      worktree.ownershipKnown = false;
+      worktree.error = boundedText(listed.stderr || listed.stdout || listed.error?.message || 'unable to inspect Git worktrees');
+    } else {
+      const canonical = resolve(expectedPath);
+      const entry = gitWorktreeEntries(listed.stdout).find(candidate => pathMatches(candidate.path || '', canonical));
+      if (entry) {
+        worktree.registered = true;
+        worktree.head = entry.head || null;
+        worktree.registeredBranch = entry.branch || null;
+        // A missing path can still be an owned stale Git registration. It is
+        // safe to attempt removal when the exact Runtime branch matches; an
+        // existing symlink, file, or path escape remains unowned and is never
+        // touched.
+        const missingSafePath = !worktree.exists && !worktree.error;
+        worktree.owned = matchesRecord !== false
+          && entry.branch === expectedRef
+          && (worktree.safe || missingSafePath);
+        if (matchesRecord === false) {
+          worktree.error = 'recorded worktree identity does not match the canonical Runtime path';
+        } else if (entry.branch !== expectedRef) {
+          worktree.error = `unexpected registered branch: ${entry.branch || '(detached)'}`;
+        }
+      } else {
+        worktree.owned = false;
+        if (worktree.safe && !worktree.error) worktree.error = 'worktree path is not registered with Git';
+      }
+    }
+  } else {
+    // A status-only read cannot prove Git registration. Keep ownership false
+    // until the explicit Git probe used by recovery/cleanup verifies the
+    // exact Runtime branch and path.
+    worktree.owned = false;
+  }
+  return worktree;
 }
 
 function graphWorktreeConflict(message, details = {}) {
@@ -608,20 +782,37 @@ function deriveFrontierState(subtask, byId) {
   return { state: 'WAITING', reason: derivedWaitingReason(dependencies) };
 }
 
-function reconcileSubtasks(subtasks) {
-  const byId = new Map(subtasks.map(subtask => [subtask.id, subtask]));
-  return subtasks
-    .map(subtask => {
-      if (!NON_EXECUTING_SUBTASK_STATES.has(subtask.state)) return { ...subtask };
+function reconcileSubtasks(subtasks, { recoverBlockedIds = null } = {}) {
+  const recoverBlocked = recoverBlockedIds instanceof Set
+    ? recoverBlockedIds
+    : new Set(Array.isArray(recoverBlockedIds) ? recoverBlockedIds : []);
+  const result = subtasks.map(subtask => ({ ...subtask }));
+  const byId = new Map(result.map(subtask => [subtask.id, subtask]));
+  // Reconcile in dependency order until stable. A recovered prerequisite can
+  // unblock a direct child, which must then unblock a grandchild in the same
+  // locked transition; a single map pass would leave the deeper descendant
+  // incorrectly BLOCKED until a second unrelated operation.
+  for (let pass = 0; pass <= result.length; pass += 1) {
+    let changed = false;
+    for (let index = 0; index < result.length; index += 1) {
+      const subtask = result[index];
+      if (!NON_EXECUTING_SUBTASK_STATES.has(subtask.state)
+        && !(subtask.state === 'BLOCKED' && recoverBlocked.has(subtask.id))) continue;
       const derived = deriveFrontierState(subtask, byId);
-      return {
+      if (subtask.state === derived.state && subtask.status === derived.state && subtask.reason === derived.reason) continue;
+      const updated = {
         ...subtask,
         state: derived.state,
         status: derived.state,
         reason: derived.reason,
       };
-    })
-    .sort((left, right) => compareIds(left.id, right.id));
+      result[index] = updated;
+      byId.set(updated.id, updated);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  return result.sort((left, right) => compareIds(left.id, right.id));
 }
 
 function frontierFor(subtasks, maxConcurrency) {
@@ -762,6 +953,11 @@ function validateStoredGraph(record, parentTaskId = null) {
     if (!plainObject(subtask) || typeof subtask.id !== 'string' || ids.has(subtask.id)) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has duplicate or malformed subtask records.`, { recoverable: false, taskId: id });
     }
+    try {
+      validateSubtaskId(subtask.id);
+    } catch {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid subtask identifier: ${subtask.id}.`, { recoverable: false, taskId: id });
+    }
     ids.add(subtask.id);
     if (subtask.subtaskId !== subtask.id || subtask.parentTaskId !== id || !SUBTASK_STATE_SET.has(subtask.state) || subtask.status !== subtask.state) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid subtask record: ${subtask.id}.`, { recoverable: false, taskId: id });
@@ -803,6 +999,215 @@ function readStoredGraph(root, parentTaskId) {
 export function readTaskGraph(root, parentTaskId) {
   ensureGraphStore(root);
   return readStoredGraph(root, parentTaskId);
+}
+
+/**
+ * Return facts that make a graph interruption/recovery decision explicit.
+ * This function never treats a filename, free-form message, or product file
+ * as proof of completion; only the durable subtask state, implementation
+ * commit, evidence, Session record, and Runtime-owned worktree facts are
+ * reported.
+ */
+export function inspectTaskGraphRecovery(root, record, { probeGit = false } = {}) {
+  const graph = validateStoredGraph(record);
+  const repository = repositoryRoot(root);
+  return graph.subtasks
+    .slice()
+    .sort((left, right) => compareIds(left.id, right.id))
+    .map(subtask => {
+      const worktree = inspectGraphWorktree(repository, graph.parentTaskId, subtask.id, {
+        probeGit,
+        recordedPath: subtask.worktreePath || null,
+        recordedBranch: subtask.branch || null,
+        recordedRef: subtask.ref || null,
+      });
+      const session = worktree.safe ? readWorktreeSessionRecord(worktree.path, subtask.sessionId) : null;
+      let sessionOwned = false;
+      if (session) {
+        try {
+          sessionOwned = typeof session.cwd === 'string'
+            && pathMatches(session.cwd, worktree.path)
+            && session.taskId === graph.parentTaskId
+            && session.subtaskId === subtask.id
+            && session.agent === subtask.implementer;
+        } catch {
+          sessionOwned = false;
+        }
+      }
+      const sessionHealthy = sessionOwned
+        && ['starting', 'running', 'idle', 'busy'].includes(session.state)
+        && Number.isInteger(session.hostPid)
+        && session.hostPid > 0
+        && session.hostAlive;
+      const durableCompletionEvidence = subtask.state === 'SUCCEEDED'
+        && typeof subtask.implementationCommit === 'string'
+        && COMMIT_SHA_PATTERN.test(subtask.implementationCommit.trim())
+        && Array.isArray(subtask.evidence)
+        && subtask.evidence.some(item => item?.type === 'IMPLEMENTATION_DONE'
+          && typeof item.relatedCommit === 'string'
+          && item.relatedCommit.toLowerCase() === subtask.implementationCommit.toLowerCase());
+      const commitVerified = durableCompletionEvidence && probeGit
+        ? verifyDurableImplementationCommit(repository, graph, subtask)
+        : (durableCompletionEvidence ? null : false);
+      const hasCompletionEvidence = durableCompletionEvidence && (probeGit ? commitVerified : true);
+      let classification = 'pending';
+      let action = null;
+      let recoverable = false;
+      if (subtask.state === 'SUCCEEDED') {
+        classification = hasCompletionEvidence ? 'completed' : 'completed-unverified';
+        recoverable = !hasCompletionEvidence;
+        action = recoverable ? 'inspect-evidence' : null;
+      } else if (subtask.state === 'RUNNING') {
+        if (sessionHealthy && worktree.safe && worktree.matchesRecord !== false && (probeGit ? worktree.owned : true)) {
+          classification = 'running';
+          action = 'resume-attach';
+          recoverable = true;
+        } else {
+          classification = 'interrupted';
+          action = 'resume-replace-session';
+          recoverable = true;
+        }
+      } else if (subtask.state === 'FAILED') {
+        classification = 'failed';
+        action = 'resume-after-review';
+        recoverable = true;
+      } else if (subtask.state === 'STOPPED') {
+        classification = 'stopped';
+        action = 'resume-after-review';
+        recoverable = true;
+      } else if (subtask.state === 'BLOCKED') {
+        classification = 'blocked';
+        action = 'recover-dependency-first';
+      } else if (subtask.state === 'READY' || subtask.state === 'WAITING' || subtask.state === 'PENDING') {
+        classification = subtask.state.toLowerCase();
+      }
+      return {
+        root: repository,
+        parentTaskId: graph.parentTaskId,
+        subtaskId: subtask.id,
+        implementer: subtask.implementer,
+        state: subtask.state,
+        classification,
+        recoverable,
+        action,
+        reason: boundedText(subtask.reason),
+        lastError: subtask.lastError ? sanitizeRuntimeEventData(subtask.lastError) : null,
+        implementationCommit: subtask.implementationCommit || null,
+        completionEvidence: hasCompletionEvidence,
+        commitVerified,
+        worktree,
+        session: sessionOwned ? session : (session ? { ...session, owned: false } : null),
+        sessionOwned,
+        sessionHealthy,
+      };
+    });
+}
+
+/**
+ * Remove exactly one Runtime-owned graph worktree. Git branch/ref objects are
+ * intentionally retained so successful commits and remote state are never
+ * destroyed by cleanup. Missing resources are an idempotent success; an
+ * ownership mismatch or failed Git removal is a durable cleanup failure.
+ */
+export function cleanupTaskGraphWorktree(root, parentTaskId, subtaskId, {
+  recordedPath = null,
+  recordedBranch = null,
+  recordedRef = null,
+  timeoutMs = 2_000,
+} = {}) {
+  const repository = repositoryRoot(root);
+  const boundedTimeoutMs = Math.max(100, Math.min(10_000, Number.isFinite(timeoutMs) ? Math.floor(timeoutMs) : 2_000));
+  const resource = inspectGraphWorktree(repository, parentTaskId, subtaskId, {
+    probeGit: true,
+    recordedPath,
+    recordedBranch,
+    recordedRef,
+    timeoutMs: boundedTimeoutMs,
+  });
+  const recorded = resource.worktree || resource;
+  const expectedPath = recorded.path || join(repository, '.agent-bus', TASK_GRAPH_WORKTREES_DIRECTORY, parentTaskId, subtaskId);
+  // Even when the canonical path is already absent, a persisted path/branch
+  // mismatch is an ownership failure rather than an idempotent success. Do
+  // not let a stale or user-supplied record silently pass cleanup.
+  if (recorded.matchesRecord === false) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Refusing to remove non-Runtime Task Graph worktree: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      stage: 'cleanup',
+      details: {
+        path: expectedPath,
+        registered: recorded.registered,
+        branch: recorded.registeredBranch || null,
+        matchesRecord: recorded.matchesRecord,
+      },
+    });
+    return { status: 'FAILED', idempotent: false, worktree: recorded, error: serializeCleanupError(error) };
+  }
+  if (!recorded.exists && !recorded.registered && !recorded.error) {
+    return { status: 'CLEANED', idempotent: true, worktree: recorded };
+  }
+  if (!recorded.owned) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Refusing to remove non-Runtime Task Graph worktree: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      stage: 'cleanup',
+      details: {
+        path: expectedPath,
+        registered: recorded.registered,
+        branch: recorded.registeredBranch || null,
+        matchesRecord: recorded.matchesRecord,
+      },
+    });
+    return { status: 'FAILED', idempotent: false, worktree: recorded, error: serializeCleanupError(error) };
+  }
+  const removed = runGit(['worktree', 'remove', '--force', expectedPath], repository, { timeoutMs: boundedTimeoutMs });
+  if (removed.error || removed.status !== 0) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Failed to remove Runtime-owned Task Graph worktree: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      stage: 'cleanup',
+      details: (removed.stderr || removed.stdout || removed.error?.message || '').trim(),
+    });
+    return { status: 'FAILED', idempotent: false, worktree: recorded, error: serializeCleanupError(error) };
+  }
+  const after = inspectGraphWorktree(repository, parentTaskId, subtaskId, {
+    probeGit: true,
+    recordedPath,
+    recordedBranch,
+    recordedRef,
+    timeoutMs: boundedTimeoutMs,
+  });
+  if (after.exists || after.registered) {
+    const error = runtimeError('TASK_STATE_CONFLICT', `Runtime-owned Task Graph worktree cleanup remains incomplete: ${expectedPath}`, {
+      recoverable: true,
+      taskId: parentTaskId,
+      subtaskId,
+      root: repository,
+      stage: 'cleanup',
+      details: { path: expectedPath, exists: after.exists, registered: after.registered },
+    });
+    return { status: 'FAILED', idempotent: false, worktree: after, error: serializeCleanupError(error) };
+  }
+  return { status: 'CLEANED', idempotent: false, worktree: after };
+}
+
+function serializeCleanupError(error) {
+  return {
+    code: error.code,
+    message: boundedText(error.message, 'Task Graph cleanup failed'),
+    recoverable: Boolean(error.recoverable),
+    taskId: error.taskId || null,
+    subtaskId: error.subtaskId || null,
+    root: error.root || null,
+    stage: error.stage || 'cleanup',
+    details: typeof error.details === 'string' ? boundedText(error.details) : error.details || null,
+  };
 }
 
 export function taskGraphSchedulingView(record) {
@@ -996,8 +1401,78 @@ export function taskGraphStatusPayload(root, record, { inspect = false, eventLim
     subtasks: record.subtasks,
     frontier: record.frontier,
     facts: graphFacts(record),
+    recovery: inspectTaskGraphRecovery(root, record),
     ...(inspect ? { events } : {}),
   };
+}
+
+/** Update only the explicit parent graph lifecycle state under the graph lock. */
+export function setTaskGraphState(root, parentTaskId, nextState, details = {}) {
+  if (!GRAPH_STATE_SET.has(nextState)) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Unsupported Task Graph state: ${nextState}`, {
+      recoverable: false,
+      taskId: parentTaskId,
+    });
+  }
+  const { repository, bus, tmp } = ensureGraphStore(root);
+  const path = taskGraphPath(repository, parentTaskId);
+  const release = acquireConfigLock(bus);
+  try {
+    const current = readStoredGraph(repository, parentTaskId);
+    if (details.expectedState !== undefined && current.state !== details.expectedState) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} is ${current.state}; expected ${details.expectedState}.`, {
+        recoverable: true,
+        taskId: parentTaskId,
+        stage: 'graph-recovery',
+        details: { expectedState: details.expectedState, actualState: current.state },
+      });
+    }
+    const reason = details.reason === undefined ? current.reason : boundedText(details.reason);
+    const evidence = details.evidence === undefined ? current.evidence : boundedEvidence(details.evidence);
+    const candidate = {
+      ...current,
+      state: nextState,
+      status: nextState,
+      reason,
+      evidence,
+      parentTask: {
+        ...current.parentTask,
+        state: nextState,
+        status: nextState,
+        reason,
+        evidence,
+      },
+    };
+    const changed = !sameJson({ ...current, updatedAt: null, parentTask: { ...current.parentTask, updatedAt: null } }, {
+      ...candidate,
+      updatedAt: null,
+      parentTask: { ...candidate.parentTask, updatedAt: null },
+    });
+    if (!changed) return { graph: current, changed: false, event: null };
+    const timestamp = now();
+    const next = {
+      ...candidate,
+      updatedAt: timestamp,
+      parentTask: { ...candidate.parentTask, updatedAt: timestamp },
+    };
+    atomicWrite(path, `${JSON.stringify(next, null, 2)}\n`, tmp);
+    const event = appendRuntimeEvent(repository, {
+      type: 'TASK_GRAPH_STATUS_CHANGED',
+      taskId: parentTaskId,
+      agentId: current.parentTask.planner,
+      role: 'planner',
+      data: {
+        from: current.state,
+        to: nextState,
+        reason,
+        evidence,
+        operation: details.operation || null,
+      },
+    });
+    return { graph: next, changed: true, event };
+  } finally {
+    release();
+  }
 }
 
 function sameJson(left, right) {
@@ -1066,6 +1541,8 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
       ...(details.implementationCommit !== undefined ? { implementationCommit: details.implementationCommit } : {}),
       ...(details.dispatch !== undefined ? { dispatch: details.dispatch } : {}),
       ...(details.lastError !== undefined ? { lastError: details.lastError } : {}),
+      ...(details.recovery !== undefined ? { recovery: sanitizeRuntimeEventData(details.recovery) } : {}),
+      ...(details.cleanup !== undefined ? { cleanup: sanitizeRuntimeEventData(details.cleanup) } : {}),
       ...(details.spec !== undefined ? { spec: details.spec } : {}),
       state: nextState,
       status: nextState,
@@ -1075,8 +1552,10 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
     const nextSubtasks = current.subtasks.map(subtask => subtask.id === subtaskId
       ? { ...candidateSubtask, updatedAt: current.updatedAt }
       : { ...subtask });
-    const reconciled = reconcileSubtasks(nextSubtasks);
-    const nextStateForParent = parentStateFor(current.state, reconciled);
+    const reconciled = reconcileSubtasks(nextSubtasks, { recoverBlockedIds: details.recoverBlockedIds });
+    const nextStateForParent = GRAPH_STATE_SET.has(details.parentStateOverride)
+      ? details.parentStateOverride
+      : parentStateFor(current.state, reconciled);
     const effectiveBaseCommit = suppliedBaseCommit || current.baseCommit || current.parentTask?.baseCommit || null;
     const candidateGraph = {
       ...current,
@@ -1155,6 +1634,10 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
           effectiveCommand: subtask.effectiveCommand || subtask.command || null,
           resolvedCommand: subtask.resolvedCommand || null,
           implementationCommit: subtask.implementationCommit || null,
+          lastError: subtask.lastError ? sanitizeRuntimeEventData(subtask.lastError) : null,
+          recovery: subtask.recovery ? sanitizeRuntimeEventData(subtask.recovery) : null,
+          cleanup: subtask.cleanup ? sanitizeRuntimeEventData(subtask.cleanup) : null,
+          dispatch: subtask.dispatch ? sanitizeRuntimeEventData(subtask.dispatch) : null,
         },
       });
     });

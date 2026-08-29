@@ -81,6 +81,7 @@ export function runtimeError(code, message, options = {}) {
   error.agent = options.agent ?? null;
   error.adapter = options.adapter ?? null;
   error.taskId = options.taskId ?? null;
+  error.subtaskId = options.subtaskId ?? null;
   error.stage = options.stage ?? null;
   error.sessionId = options.sessionId ?? null;
   error.root = options.root ?? null;
@@ -103,6 +104,7 @@ export function normalizeRuntimeError(error, fallback = 'AGENT_RUNTIME_ERROR') {
     agent: error?.agent,
     adapter: error?.adapter,
     taskId: error?.taskId,
+    subtaskId: error?.subtaskId,
     stage: error?.stage,
     sessionId: error?.sessionId,
     root: error?.root,
@@ -118,7 +120,7 @@ export function serializeRuntimeError(error, options = {}) {
     message: redactOutput(`${normalized.message || 'Runtime operation failed'}`, 2 * 1024),
     recoverable: Boolean(normalized.recoverable),
   };
-  for (const key of ['details', 'command', 'agent', 'adapter', 'taskId', 'stage', 'sessionId', 'root']) {
+  for (const key of ['details', 'command', 'agent', 'adapter', 'taskId', 'subtaskId', 'stage', 'sessionId', 'root']) {
     if (normalized[key] !== undefined && normalized[key] !== null && normalized[key] !== '') {
       if (key === 'details') {
         const details = typeof normalized[key] === 'string'

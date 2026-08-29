@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Task Graph v1 Contract
-description: Additive Task Graph input, identity facts, deterministic validation, and compatibility boundaries.
+description: Additive Task Graph input, deterministic execution, durable recovery, and ownership-safe cleanup.
 ---
 
 # Task Graph v1 Contract
@@ -160,6 +160,75 @@ unresolved prerequisites remain WAITING, while a failed or stopped prerequisite
 blocks only its downstream work. One selected failure is returned beside the
 independent sibling outcomes and never triggers fallback or automatic retry.
 The structured result contract is `schemas/task-graph-v1-run.schema.json`.
+
+## Durable recovery, explicit resume, stop, and cleanup
+
+`task graph-status` and `task graph-inspect` include a `recovery` array for
+every subtask. Each entry is derived from the persisted graph state, the
+parent/subtask/Agent identity, the Runtime-owned worktree path and branch, the
+Session record, and verified completion evidence. A product filename or a
+free-form message is never treated as proof of completion. The entry reports a
+bounded classification such as `running`, `completed`, `completed-unverified`,
+`interrupted`, `failed`, `stopped`, or `blocked`, plus `recoverable`,
+`sessionHealthy`, and worktree ownership facts.
+
+After a coordinator or Session host interruption, reconcile the durable facts
+explicitly:
+
+```sh
+coordinate-agents task graph-recover --root <repository> --id <parentTaskId> --json
+# one subtask only:
+coordinate-agents task graph-recover --root <repository> --id <parentTaskId> --subtask <subtaskId> --json
+# nested form:
+coordinate-agents task graph recover <parentTaskId> [<subtaskId>] --root <repository> --json
+```
+
+The MCP operation is `coordinate_agents_task_graph_recover`. Recovery verifies
+an existing `IMPLEMENTATION_DONE` message against the recorded worktree and
+captured base commit. If the Session and worktree are not healthy, it records a
+bounded `FAILED` transition with root, graph, subtask, Agent, Session, and
+worktree facts. It never launches a replacement, replays a message, or retries
+automatically. A verified completion is promoted to `SUCCEEDED`; no completion
+inference is made from files or prose.
+
+Resume is a separate, explicit operation and only clears the recovery gate:
+
+```sh
+coordinate-agents task graph-resume --root <repository> --id <parentTaskId> --subtask <subtaskId> --json
+# nested form:
+coordinate-agents task graph resume <parentTaskId> <subtaskId> --root <repository> --json
+```
+
+The MCP operation is `coordinate_agents_task_graph_resume`. A healthy,
+Runtime-owned Session/worktree is reused without a second input or launch. An
+exited or failed Session is marked for replacement and the selected subtask is
+returned to `READY`; dispatch remains an explicit later
+`task graph-dispatch`/`task graph-run` call. Dependents stay `BLOCKED` until
+their failed prerequisite is explicitly resumed, then are deterministically
+re-derived as `WAITING` or `READY`. Repeating resume is a no-op and never
+enters an automatic retry loop.
+
+Stop and cleanup are explicit and bounded:
+
+```sh
+coordinate-agents task graph-stop --root <repository> --id <parentTaskId> --reason "operator requested stop" --json
+coordinate-agents task graph-cleanup --root <repository> --id <parentTaskId> --json
+```
+
+The MCP operations are `coordinate_agents_task_graph_stop` and
+`coordinate_agents_task_graph_cleanup`; both accept an optional `subtaskId` and
+bounded `timeoutMs`. Stop transitions active subtasks to `STOPPED`, closes only
+matching Runtime-owned Sessions, and then removes only the exact
+`.agent-bus/worktrees/<parentTaskId>/<subtaskId>` worktree after bounded
+cleanup. Cleanup can be run independently for terminal subtasks; a still
+`RUNNING` subtask is recorded as `SKIPPED` until it is explicitly stopped.
+Unexpected paths, symlinks, unregistered worktrees, and Session ownership
+mismatches are refused and recorded as bounded cleanup errors. Branches/refs,
+successful implementation commits, evidence, and the user's checkout are
+preserved even when cleanup is incomplete. Repeated recovery, resume, stop, and
+cleanup calls are idempotent and do not duplicate messages, input, commits, or
+worktrees. The shared output shape is
+`schemas/task-graph-v1-recovery.schema.json`.
 
 ## Subtask dispatch in an isolated Git worktree
 

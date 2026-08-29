@@ -80,6 +80,17 @@ does not mutate state, restart a process, replay input, or resume a Task. An
 explicit user `task resume` followed by explicit dispatch is required after a
 terminal Task error or stop.
 
+Task Graph recovery uses the same durable Session records plus parent Task,
+subtask, Agent, worktree, commit, and evidence associations. `task graph-recover`
+never infers completion from filenames or prose; it either verifies an
+`IMPLEMENTATION_DONE` commit or records an interrupted `FAILED` subtask.
+`task graph-resume` reuses only a healthy Runtime-owned Session/worktree and
+returns an exited/failed Session to `READY` for a later explicit dispatch.
+`task graph-stop` and `task graph-cleanup` close only Runtime-owned Sessions
+and remove only their exact worktrees under a bounded timeout, preserving user
+worktrees, refs, commits, and evidence. All four graph operations are
+idempotent and never start an automatic retry loop.
+
 ## Executable identity and configuration
 
 Agent identity, adapter, and executable are separate fields. Resolution is:

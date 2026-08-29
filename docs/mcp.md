@@ -56,6 +56,10 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_task_graph_create` | `root`, `graph` | — | `task.graph-create` |
 | `coordinate_agents_task_graph_plan` | `root`, `taskId` | — | `task.graph-plan` |
 | `coordinate_agents_task_graph_run` | `root`, `taskId` | `sessionWaitMs` | `task.graph-run` |
+| `coordinate_agents_task_graph_recover` | `root`, `taskId` | `subtaskId` | `task.graph-recover` |
+| `coordinate_agents_task_graph_resume` | `root`, `taskId` | `subtaskId` | `task.graph-resume` |
+| `coordinate_agents_task_graph_stop` | `root`, `taskId` | `subtaskId`, `reason`, `timeoutMs` | `task.graph-stop` |
+| `coordinate_agents_task_graph_cleanup` | `root`, `taskId` | `subtaskId`, `timeoutMs` | `task.graph-cleanup` |
 | `coordinate_agents_task_graph_dispatch` | `root`, `taskId`, `subtaskId` | `spec`, `sessionWaitMs` | `task.graph-dispatch` |
 | `coordinate_agents_task_dispatch` | `root`, `taskId` | `spec` | `task.dispatch` |
 | `coordinate_agents_task_status` | `root`, `taskId` | — | `task.status` |
@@ -115,6 +119,32 @@ uncommitted files in the user repository or mutating sibling subtasks. It captur
 the graph base commit, provisions a dedicated worktree and branch, resolves the
 configured Implementer, runs an isolated persistent Session, and updates the
 subtask and frontier state upon completion.
+
+`coordinate_agents_task_graph_recover` is the facts-first interruption path. It
+reads the durable graph, Session, worktree, and Event Journal records, verifies
+any `IMPLEMENTATION_DONE` commit against the captured base commit, and returns a
+per-subtask recovery classification. It never treats filenames or free-form
+prose as completion evidence and never launches or retries an Implementer.
+Unhealthy `RUNNING` records become durable `FAILED` records with root, graph,
+subtask, Agent, Session, and worktree facts; dependents remain `BLOCKED`.
+
+`coordinate_agents_task_graph_resume` is an explicit recovery gate. A healthy
+Runtime-owned Session/worktree is reused without another launch or input. An
+exited or failed Session is cleared for replacement and the subtask becomes
+`READY`, but dispatch is still a separate explicit operation. Dependents are
+only re-derived after that valid prerequisite recovery. Repeated recovery and
+resume calls are idempotent.
+
+`coordinate_agents_task_graph_stop` and `coordinate_agents_task_graph_cleanup`
+are explicit bounded cleanup operations. Stop marks active subtasks `STOPPED`,
+closes only Runtime-owned Sessions, and removes only the exact Runtime-owned
+worktree after the bounded timeout. Cleanup may be run for terminal subtasks;
+it records `SKIPPED` for an active subtask until stop is requested. Ownership,
+symlink, path, or Session errors are returned as bounded Runtime errors and
+persisted with their graph facts. User worktrees, remote refs, branches,
+successful commits, and evidence are preserved, and repeated stop/cleanup calls
+do not duplicate side effects. Their shared output contract is
+`schemas/task-graph-v1-recovery.schema.json`.
 
 `coordinate_agents_setup_discover` returns an additive `adapters` snapshot.
 Each record exposes the registered Adapter Contract identity, contract version,
@@ -191,6 +221,7 @@ The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are doc
 - `schemas/task-graph-v1-record.schema.json`
 - `schemas/task-graph-v1-plan.schema.json`
 - `schemas/task-graph-v1-run.schema.json`
+- `schemas/task-graph-v1-recovery.schema.json`
 - `schemas/runtime-error.schema.json`
 - `schemas/evidence.schema.json`
 

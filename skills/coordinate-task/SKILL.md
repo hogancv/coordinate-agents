@@ -19,6 +19,10 @@ coordinate_agents_task_graph_create
 coordinate_agents_task_graph_plan
 coordinate_agents_task_graph_run
 coordinate_agents_task_graph_dispatch
+coordinate_agents_task_graph_recover
+coordinate_agents_task_graph_resume
+coordinate_agents_task_graph_stop
+coordinate_agents_task_graph_cleanup
 coordinate_agents_task_dispatch
 coordinate_agents_task_status
 coordinate_agents_task_inspect
@@ -57,6 +61,10 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-cre
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-plan --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-run --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-dispatch --root "<repository>" --id task-... --subtask <subtaskId> --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-recover --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-resume --root "<repository>" --id task-... --subtask <subtaskId> --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-stop --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-cleanup --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "<task>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
@@ -127,5 +135,16 @@ To dispatch one ready subtask, use `coordinate_agents_task_graph_dispatch` (or
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>`), which executes
 the subtask in an isolated Git worktree rooted at the exact graph base commit
 without touching uncommitted user files, and updates the frontier upon completion.
+If a coordinator or Session host is interrupted, use
+`coordinate_agents_task_graph_recover` (or `task graph-recover`) to inspect
+durable Session, worktree, commit, and evidence facts. It never infers success
+from filenames or prose, replays verified side effects, or retries automatically.
+Use `coordinate_agents_task_graph_resume` (or `task graph-resume`) only for an
+explicit recovery decision: a healthy Runtime-owned Session/worktree is reused;
+an exited or failed Session is returned to READY for a separate dispatch.
+Use `coordinate_agents_task_graph_stop` and
+`coordinate_agents_task_graph_cleanup` for bounded ownership-checked cleanup.
+They preserve user worktrees, refs, commits, and evidence, record cleanup
+failures, and are idempotent.
 See `../../docs/task-graph-v1.md` for the input shape and parent/subtask
 identity facts.

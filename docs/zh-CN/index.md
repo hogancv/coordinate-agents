@@ -91,5 +91,14 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 通过 `coordinate_agents_task_graph_run` 或 `task graph-run --id <parentTaskId>` 可对当前合格前沿执行一次
 有界并行派发：不超过 `maxConcurrency`，每个子任务使用独立 worktree、分支和 Runtime Session，
 新解锁的工作保持 READY，等待下一次显式执行。
+图状态和 inspect 结果同时返回每个子任务基于持久 Session、worktree、提交和证据的恢复事实，
+不会从文件名或描述推断成功。协调器或 Session host 中断后，可显式调用
+`coordinate_agents_task_graph_recover`（`task graph-recover`）验证已有
+`IMPLEMENTATION_DONE`，或把不健康的 RUNNING 记录为带完整 root/graph/subtask/Agent/Session/worktree
+事实的 FAILED；不会自动重试。调用 `coordinate_agents_task_graph_resume`（`task graph-resume`）
+只会复用已验证健康且由 Runtime 所有的 Session/worktree，或把已退出/失败的 Session 返回 READY，
+之后仍需单独 dispatch。`coordinate_agents_task_graph_stop` 与
+`coordinate_agents_task_graph_cleanup` 只关闭 Runtime 所有的 Session、在有界清理后移除精确的
+Runtime worktree，并保留用户工作区、分支、远端引用、提交和证据；失败也会持久化，重复操作幂等。
 
 `.agent-bus` 是本地明文数据，不要写入令牌、Cookie、密码或私钥。在默认参考工作流中，两个代理不得同时修改产品代码或并发执行 Git 写操作。

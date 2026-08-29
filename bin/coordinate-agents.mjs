@@ -91,18 +91,22 @@ import {
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
 import {
   captureGraphBaseCommit,
+  cleanupTaskGraphWorktree,
   createTaskGraph,
   ensureSubtaskWorktree,
   ensureSubtaskWorktreeBus,
   hasTaskGraph,
+  inspectTaskGraphRecovery,
   listTaskGraphs,
   readTaskGraph,
+  setTaskGraphState,
   setTaskGraphSubtaskState,
   taskGraphBranchName,
   taskGraphBranchRef,
   taskGraphStatusPayload,
   taskGraphSchedulingView,
   taskGraphWorktreePath,
+  verifyDurableImplementationCommit,
   verifyGraphImplementationCommit,
   validateSubtaskId,
 } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
@@ -147,7 +151,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-run, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-run, graph-recover, graph-resume, graph-stop, graph-cleanup, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -264,7 +268,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-plan、graph-run、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-plan、graph-run、graph-recover、graph-resume、graph-stop、graph-cleanup、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -1675,12 +1679,16 @@ function taskGraphOperation(options) {
   if (['graph-create', 'create-graph'].includes(subcommand)) return 'create';
   if (['graph-plan', 'plan-graph'].includes(subcommand)) return 'plan';
   if (['graph-run', 'run-graph'].includes(subcommand)) return 'run';
+  if (['graph-recover', 'recover-graph'].includes(subcommand)) return 'recover';
+  if (['graph-resume', 'resume-graph'].includes(subcommand)) return 'resume';
+  if (['graph-stop', 'stop-graph'].includes(subcommand)) return 'stop';
+  if (['graph-cleanup', 'cleanup-graph'].includes(subcommand)) return 'cleanup';
   if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
   if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
   if (['graph-dispatch', 'dispatch-graph'].includes(subcommand)) return 'dispatch';
   if (subcommand !== 'graph') return null;
   const nested = options.positionals?.[0];
-  return ['create', 'plan', 'run', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
+  return ['create', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
 }
 
 function graphInput(options) {
@@ -1730,7 +1738,7 @@ function graphTaskId(options, root) {
   if (direct) return direct;
   const isGraphSubcommand = options.subcommand === 'graph';
   const nestedPos0 = options.positionals?.[0];
-  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan', 'run'].includes(nestedPos0)
+  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan', 'run', 'recover', 'resume', 'stop', 'cleanup'].includes(nestedPos0)
     ? options.positionals?.[1]
     : options.positionals?.[0];
   if (nested) return nested;
@@ -1942,6 +1950,724 @@ async function taskGraphRunCommand(options, { json = false } = {}) {
     },
     graph: latestGraph,
     frontier: latestGraph.frontier,
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+const GRAPH_RECOVERY_OPERATIONS = new Set(['recover', 'resume', 'stop', 'cleanup']);
+
+function graphSubtaskOption(options) {
+  if (options.subtaskId) return options.subtaskId;
+  if (options.subcommand === 'graph' && GRAPH_RECOVERY_OPERATIONS.has(options.positionals?.[0])) return options.positionals?.[2] || null;
+  return options.positionals?.[1] || null;
+}
+
+function graphSubtaskSelection(options, graph, { includeTerminal = false } = {}) {
+  const requested = graphSubtaskOption(options);
+  if (requested) {
+    validateSubtaskId(requested);
+    const selected = graph.subtasks.find(subtask => subtask.id === requested);
+    if (!selected) throw runtimeError('TASK_NOT_FOUND', `Task Graph subtask not found: ${graph.parentTaskId}/${requested}`, {
+      recoverable: false,
+      taskId: graph.parentTaskId,
+      subtaskId: requested,
+      root: resolve(options.root),
+    });
+    return [selected];
+  }
+  return graph.subtasks
+    .filter(subtask => includeTerminal || !['SUCCEEDED', 'BLOCKED'].includes(subtask.state))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function graphDescendantIds(graph, subtaskId) {
+  const descendants = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const subtask of graph.subtasks) {
+      if (descendants.has(subtask.id) || !subtask.dependsOn.some(dependency => dependency === subtaskId || descendants.has(dependency))) continue;
+      descendants.add(subtask.id);
+      changed = true;
+    }
+  }
+  return descendants;
+}
+
+function graphRecoveryError(code, message, graph, subtask, recovery = null, details = null) {
+  return runtimeError(code, message, {
+    recoverable: true,
+    taskId: graph.parentTaskId,
+    subtaskId: subtask?.id || null,
+    agent: subtask?.implementer || null,
+    sessionId: subtask?.sessionId || recovery?.session?.id || null,
+    root: recovery?.root || null,
+    stage: 'graph-recovery',
+    details: details || {
+      parentTaskId: graph.parentTaskId,
+      subtaskId: subtask?.id || null,
+      worktreePath: recovery?.worktree?.path || subtask?.worktreePath || null,
+      sessionId: subtask?.sessionId || recovery?.session?.id || null,
+      classification: recovery?.classification || null,
+    },
+  });
+}
+
+function graphRecoverySummary(graph, options = {}) {
+  return inspectTaskGraphRecovery(options.root, graph, { probeGit: Boolean(options.probeGit) });
+}
+
+function graphCompletionForRecovery(repository, graph, subtask, recovery) {
+  const baseCommit = graph.baseCommit || graph.parentTask?.baseCommit || subtask.baseCommit || null;
+  if (!baseCommit) return { error: graphRecoveryError('TASK_STATE_CONFLICT', `No captured graph base commit exists for ${graph.parentTaskId}/${subtask.id}.`, graph, subtask, recovery) };
+
+  // Prefer completion facts already persisted on the subtask.  A coordinator
+  // can be interrupted after the Agent has committed and the Runtime has
+  // persisted evidence but before the normal message scan runs; re-reading
+  // those durable facts must promote the existing result rather than replaying
+  // a Bus message or dispatching another input.
+  const durableCommit = `${subtask.implementationCommit || ''}`.trim();
+  const durableEvidence = Array.isArray(subtask.evidence)
+    ? [...subtask.evidence].reverse().find(item => item?.type === 'IMPLEMENTATION_DONE'
+      && typeof item.relatedCommit === 'string'
+      && durableCommit
+      && item.relatedCommit.toLowerCase() === durableCommit.toLowerCase())
+    : null;
+  if (durableCommit && durableEvidence) {
+    try {
+      const worktreeAvailable = recovery?.worktree?.exists && recovery.worktree.safe && recovery.worktree.owned === true;
+      let commit;
+      if (worktreeAvailable) {
+        commit = verifyGraphImplementationCommit(recovery.worktree.path, baseCommit, durableCommit);
+      } else if (verifyDurableImplementationCommit(repository, graph, subtask)) {
+        // The exact Runtime record and IMPLEMENTATION_DONE evidence are
+        // durable even if interruption cleanup already removed the worktree;
+        // verify the captured commit/base/ref chain from the repository and
+        // retain the canonical full hash without replaying any message.
+        commit = durableCommit.toLowerCase();
+      } else {
+        throw runtimeError('AGENT_RUNTIME_ERROR', `Durable implementation commit cannot be verified for ${graph.parentTaskId}/${subtask.id}: ${durableCommit}`, {
+          recoverable: true,
+          taskId: graph.parentTaskId,
+          subtaskId: subtask.id,
+          agent: subtask.implementer,
+          root: repository,
+          stage: 'completion',
+        });
+      }
+      return { commit, evidence: [durableEvidence] };
+    } catch (error) {
+      return { error: graphRecoveryError(
+        error.code || 'AGENT_RUNTIME_ERROR',
+        error.message || String(error),
+        graph,
+        subtask,
+        recovery,
+        { parentTaskId: graph.parentTaskId, subtaskId: subtask.id, worktreePath: recovery?.worktree?.path || null, sessionId: subtask.sessionId || null, cause: serializeRuntimeError(error, { includeLegacy: true }) },
+      ) };
+    }
+  }
+
+  // Message bodies are only readable from the exact Runtime-owned worktree;
+  // an unregistered or mismatched user path must never promote a subtask. A
+  // verified durable commit/evidence pair above remains valid even when the
+  // worktree has already disappeared after a coordinator interruption.
+  if (!recovery?.worktree?.exists || !recovery.worktree.safe || recovery.worktree.owned !== true) return null;
+
+  const message = findSubtaskImplementationMessages(
+    recovery.worktree.path,
+    graph.parentTaskId,
+    subtask.id,
+    subtask.implementer,
+    graph.parentTask.planner,
+  ).at(-1);
+  if (!message) return null;
+  try {
+    return graphCompletionFromMessage(message, recovery.worktree.path, baseCommit);
+  } catch (error) {
+    return { error: graphRecoveryError(
+      error.code || 'AGENT_RUNTIME_ERROR',
+      error.message || String(error),
+      graph,
+      subtask,
+      recovery,
+      { parentTaskId: graph.parentTaskId, subtaskId: subtask.id, worktreePath: recovery?.worktree?.path || null, sessionId: subtask.sessionId || null, cause: serializeRuntimeError(error, { includeLegacy: true }) },
+    ) };
+  }
+}
+
+async function observeGraphSubtask(repository, graph, subtask, recovery, expectedState = 'RUNNING') {
+  const completion = graphCompletionForRecovery(repository, graph, subtask, recovery);
+  if (completion?.error) return { state: subtask.state, completed: false, error: completion.error };
+  if (!completion) return { state: subtask.state, completed: false, error: null };
+  const updated = setTaskGraphSubtaskState(repository, graph.parentTaskId, subtask.id, 'SUCCEEDED', {
+    expectedState,
+    implementationCommit: completion.commit,
+    evidence: completion.evidence,
+    worktreePath: recovery.worktree.path,
+    branch: recovery.worktree.branch,
+    ref: recovery.worktree.ref,
+    baseCommit: graph.baseCommit || graph.parentTask?.baseCommit,
+    sessionId: subtask.sessionId || null,
+    lastError: null,
+    // A verified completion is an explicit valid recovery path. Reconcile
+    // blocked descendants in the same locked transition so they cannot stay
+    // permanently BLOCKED after their prerequisite has succeeded.
+    recoverBlockedIds: [...graphDescendantIds(graph, subtask.id)],
+    recovery: {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      operation: 'graph-recover',
+      classification: 'completed',
+      completedAt: new Date().toISOString(),
+    },
+  });
+  return { state: updated.graph.subtasks.find(item => item.id === subtask.id)?.state || 'SUCCEEDED', completed: true, error: null, commit: completion.commit, evidence: completion.evidence };
+}
+
+function serializedGraphError(error, graph, subtask, recovery) {
+  const normalized = error?.code ? error : graphRecoveryError('TASK_STATE_CONFLICT', error?.message || String(error), graph, subtask, recovery);
+  const output = serializeRuntimeError(normalized, { includeLegacy: true });
+  if (!output.taskId) output.taskId = graph.parentTaskId;
+  if (!output.subtaskId) output.subtaskId = subtask?.id || null;
+  if (!output.agent) output.agent = subtask?.implementer || null;
+  if (!output.sessionId && (subtask?.sessionId || recovery?.session?.id)) output.sessionId = subtask?.sessionId || recovery.session.id;
+  if (!output.root) output.root = recovery?.root || null;
+  if (!output.worktreePath && (subtask?.worktreePath || recovery?.worktree?.path)) output.worktreePath = subtask?.worktreePath || recovery.worktree.path;
+  if (!output.branch && (subtask?.branch || recovery?.worktree?.branch)) output.branch = subtask?.branch || recovery.worktree.branch;
+  if (!output.ref && (subtask?.ref || recovery?.worktree?.ref)) output.ref = subtask?.ref || recovery.worktree.ref;
+  return output;
+}
+
+function graphIdentityFacts(repository, graph, subtask, recovery = null) {
+  return {
+    root: repository,
+    parentTaskId: graph.parentTaskId,
+    subtaskId: subtask?.id || null,
+    agent: subtask?.implementer || null,
+    sessionId: subtask?.sessionId || recovery?.session?.id || null,
+    worktreePath: subtask?.worktreePath || recovery?.worktree?.path || null,
+    branch: subtask?.branch || recovery?.worktree?.branch || null,
+    ref: subtask?.ref || recovery?.worktree?.ref || null,
+  };
+}
+
+function scopedStopParentState(graph, subtaskId) {
+  const remaining = graph.subtasks.filter(subtask => subtask.id !== subtaskId);
+  if (remaining.some(subtask => ['FAILED', 'BLOCKED'].includes(subtask.state))) return 'ERROR';
+  if (remaining.some(subtask => ['RUNNING', 'READY', 'WAITING'].includes(subtask.state))) {
+    return graph.state === 'CREATED' ? 'CREATED' : 'RUNNING';
+  }
+  return 'STOPPED';
+}
+
+async function taskGraphRecoverCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  let graph = readTaskGraph(repository, parentTaskId);
+  const selected = graphSubtaskSelection(options, graph);
+  const before = graphRecoverySummary(graph, { root: repository, probeGit: true });
+  const outcomes = [];
+  for (const original of selected) {
+    let currentGraph = readTaskGraph(repository, parentTaskId);
+    const subtask = currentGraph.subtasks.find(item => item.id === original.id);
+    const recovery = inspectTaskGraphRecovery(repository, currentGraph, { probeGit: true }).find(item => item.subtaskId === original.id);
+    if (!subtask || !recovery) continue;
+    if (!['RUNNING', 'FAILED', 'STOPPED'].includes(subtask.state)) {
+      outcomes.push({ ...graphIdentityFacts(repository, currentGraph, subtask, recovery), state: subtask.state, classification: recovery.classification, recoverable: recovery.recoverable, changed: false, session: recovery.session, worktree: recovery.worktree, error: subtask.lastError ? serializedGraphError(subtask.lastError, currentGraph, subtask, recovery) : null });
+      continue;
+    }
+    const observed = await observeGraphSubtask(repository, currentGraph, subtask, recovery, subtask.state);
+    if (observed.completed) {
+      outcomes.push({ ...graphIdentityFacts(repository, currentGraph, subtask, recovery), state: 'SUCCEEDED', classification: 'completed', recoverable: false, changed: true, session: recovery.session, worktree: recovery.worktree, implementationCommit: observed.commit, evidence: observed.evidence, error: null });
+      continue;
+    }
+    if (subtask.state !== 'RUNNING') {
+      outcomes.push({ ...graphIdentityFacts(repository, currentGraph, subtask, recovery), state: subtask.state, classification: recovery.classification, recoverable: recovery.recoverable, changed: false, session: recovery.session, worktree: recovery.worktree, error: observed.error ? serializedGraphError(observed.error, currentGraph, subtask, recovery) : (subtask.lastError ? serializedGraphError(subtask.lastError, currentGraph, subtask, recovery) : null) });
+      continue;
+    }
+    const latestRecovery = inspectTaskGraphRecovery(repository, readTaskGraph(repository, parentTaskId), { probeGit: true }).find(item => item.subtaskId === subtask.id) || recovery;
+    const healthy = latestRecovery.sessionHealthy && latestRecovery.worktree.safe && latestRecovery.worktree.owned;
+    if (healthy) {
+      outcomes.push({ ...graphIdentityFacts(repository, currentGraph, subtask, latestRecovery), state: 'RUNNING', classification: 'running', recoverable: true, changed: false, session: latestRecovery.session, worktree: latestRecovery.worktree, error: observed.error ? serializedGraphError(observed.error, currentGraph, subtask, latestRecovery) : null });
+      continue;
+    }
+    const failure = latestRecovery.session?.error
+      ? graphRecoveryError('AGENT_RUNTIME_ERROR', `Subtask ${parentTaskId}/${subtask.id} was interrupted: ${latestRecovery.session.error}`, currentGraph, subtask, latestRecovery)
+      : graphRecoveryError('TASK_STATE_CONFLICT', `Subtask ${parentTaskId}/${subtask.id} has no healthy Runtime Session after interruption.`, currentGraph, subtask, latestRecovery);
+    const failed = setTaskGraphSubtaskState(repository, parentTaskId, subtask.id, 'FAILED', {
+      expectedState: 'RUNNING',
+      reason: failure.message,
+      lastError: serializeRuntimeError(failure, { includeLegacy: true }),
+      worktreePath: latestRecovery.worktree.path,
+      branch: latestRecovery.worktree.branch,
+      ref: latestRecovery.worktree.ref,
+      ...(subtask.sessionId ? { sessionId: subtask.sessionId } : {}),
+      recovery: {
+        ...graphIdentityFacts(repository, currentGraph, subtask, latestRecovery),
+        operation: 'graph-recover',
+        classification: 'interrupted',
+        recoveredAt: new Date().toISOString(),
+      },
+    });
+    const stored = failed.graph.subtasks.find(item => item.id === subtask.id);
+    outcomes.push({ ...graphIdentityFacts(repository, currentGraph, subtask, latestRecovery), state: stored?.state || 'FAILED', classification: 'interrupted', recoverable: true, changed: true, session: latestRecovery.session, worktree: latestRecovery.worktree, error: stored?.lastError || serializeRuntimeError(failure, { includeLegacy: true }) });
+  }
+  graph = readTaskGraph(repository, parentTaskId);
+  const payload = jsonSuccess('task.graph-recover', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    graph,
+    before,
+    outcomes,
+    recovery: inspectTaskGraphRecovery(repository, graph, { probeGit: true }),
+    automaticRetry: false,
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+async function taskGraphResumeCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  let graph = readTaskGraph(repository, parentTaskId);
+  if (graph.state === 'APPROVED') throw runtimeError('TASK_STATE_CONFLICT', `Approved Task Graph cannot be resumed: ${parentTaskId}`, { recoverable: false, taskId: parentTaskId, root: repository });
+  const selected = graphSubtaskSelection(options, graph);
+  const outcomes = [];
+  for (const original of selected) {
+    graph = readTaskGraph(repository, parentTaskId);
+    const subtask = graph.subtasks.find(item => item.id === original.id);
+    const recovery = inspectTaskGraphRecovery(repository, graph, { probeGit: true }).find(item => item.subtaskId === original.id);
+    if (!subtask || !recovery) continue;
+    if (['RUNNING', 'FAILED', 'STOPPED'].includes(subtask.state)) {
+      const observed = await observeGraphSubtask(repository, graph, subtask, recovery, subtask.state);
+      if (observed.completed) {
+        outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: 'SUCCEEDED', action: 'completed-existing-session', changed: true, session: recovery.session, worktree: recovery.worktree, implementationCommit: observed.commit, evidence: observed.evidence, error: null });
+        continue;
+      }
+      if (subtask.state === 'RUNNING' && recovery.sessionHealthy && recovery.worktree.safe && recovery.worktree.owned) {
+        outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: 'RUNNING', action: 'reused-healthy-session', changed: false, session: recovery.session, worktree: recovery.worktree, error: observed.error ? serializedGraphError(observed.error, graph, subtask, recovery) : null });
+        continue;
+      }
+    }
+    const activeSession = recovery.session
+      && ['starting', 'running', 'idle', 'busy'].includes(recovery.session.state);
+    if (activeSession && !(recovery.session.state === 'exited' || recovery.session.state === 'failed')) {
+      const error = graphRecoveryError('SESSION_NOT_HEALTHY', `Subtask ${parentTaskId}/${subtask.id} still references an active but unverified Session; close or reconcile that Session before replacement.`, graph, subtask, recovery, {
+        parentTaskId,
+        subtaskId: subtask.id,
+        sessionId: recovery.session.id,
+        sessionState: recovery.session.state,
+        sessionHealthy: recovery.sessionHealthy,
+        worktree: recovery.worktree,
+        replacementAllowed: false,
+      });
+      outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: subtask.state, action: 'reconcile-session-first', changed: false, session: recovery.session, worktree: recovery.worktree, error: serializedGraphError(error, graph, subtask, recovery) });
+      continue;
+    }
+    // A RUNNING record without a durable terminal Session is ambiguous: the
+    // coordinator may have been interrupted before Session creation, or a
+    // record may have been lost. Never create replacement state from that
+    // unknown condition; an explicit recover pass must first classify it as
+    // FAILED (or the operator must restore a verifiable Session record).
+    if (subtask.state === 'RUNNING' && (!recovery.session || !['exited', 'failed'].includes(recovery.session.state))) {
+      const error = graphRecoveryError('SESSION_NOT_HEALTHY', `Subtask ${parentTaskId}/${subtask.id} has no durable exited or failed Session to replace; reconcile recovery facts first.`, graph, subtask, recovery, {
+        parentTaskId,
+        subtaskId: subtask.id,
+        sessionId: recovery.session?.id || null,
+        sessionState: recovery.session?.state || null,
+        replacementAllowed: false,
+      });
+      outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: subtask.state, action: 'reconcile-session-first', changed: false, session: recovery.session, worktree: recovery.worktree, error: serializedGraphError(error, graph, subtask, recovery) });
+      continue;
+    }
+    if (!['FAILED', 'STOPPED', 'RUNNING'].includes(subtask.state)) {
+      const error = graphRecoveryError('TASK_STATE_CONFLICT', `Subtask ${parentTaskId}/${subtask.id} is ${subtask.state}; explicit resume requires FAILED, STOPPED, or interrupted RUNNING state.`, graph, subtask, recovery);
+      outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: subtask.state, action: 'none', changed: false, session: recovery.session, worktree: recovery.worktree, error: serializedGraphError(error, graph, subtask, recovery) });
+      continue;
+    }
+    const dependencies = subtask.dependsOn.map(id => graph.subtasks.find(item => item.id === id));
+    if (dependencies.some(dependency => dependency?.state !== 'SUCCEEDED')) {
+      const error = graphRecoveryError('TASK_STATE_CONFLICT', `Subtask ${parentTaskId}/${subtask.id} cannot resume until every dependency succeeds.`, graph, subtask, recovery, {
+        parentTaskId,
+        subtaskId: subtask.id,
+        dependencies: dependencies.map(dependency => ({ id: dependency?.id || null, state: dependency?.state || 'MISSING' })),
+      });
+      outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: subtask.state, action: 'recover-dependency-first', changed: false, session: recovery.session, worktree: recovery.worktree, error: serializedGraphError(error, graph, subtask, recovery) });
+      continue;
+    }
+    const blockedIds = graphDescendantIds(graph, subtask.id);
+    const resumed = setTaskGraphSubtaskState(repository, parentTaskId, subtask.id, 'READY', {
+      expectedState: subtask.state,
+      reason: `Explicit recovery approved for subtask ${subtask.id}; dispatch is required separately.`,
+      lastError: null,
+      sessionId: null,
+      recoverBlockedIds: [...blockedIds],
+      recovery: {
+        ...graphIdentityFacts(repository, graph, subtask, recovery),
+        operation: 'graph-resume',
+        priorState: subtask.state,
+        priorSessionId: subtask.sessionId || null,
+        priorWorktreePath: subtask.worktreePath || recovery.worktree.path,
+        resumedAt: new Date().toISOString(),
+        replacementSessionRequired: recovery.session?.state === 'failed' || recovery.session?.state === 'exited' || !recovery.session,
+      },
+    });
+    graph = resumed.graph;
+    const stored = graph.subtasks.find(item => item.id === subtask.id);
+    outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: stored?.state || 'READY', action: 'ready-for-explicit-dispatch', changed: Boolean(resumed.changed), session: recovery.session, worktree: recovery.worktree, error: null });
+  }
+  if (graph.state === 'STOPPED' || graph.state === 'ERROR') {
+    const active = graph.subtasks.some(subtask => ['RUNNING', 'READY', 'WAITING'].includes(subtask.state));
+    const unrecovered = graph.subtasks.some(subtask => ['FAILED', 'BLOCKED', 'STOPPED'].includes(subtask.state));
+    if (active && !unrecovered) graph = setTaskGraphState(repository, parentTaskId, 'RUNNING', { expectedState: graph.state, operation: 'graph-resume', reason: 'Task Graph explicitly resumed; dispatch remains a separate operation.' }).graph;
+  }
+  const payload = jsonSuccess('task.graph-resume', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    graph,
+    outcomes,
+    recovery: inspectTaskGraphRecovery(repository, graph, { probeGit: true }),
+    dispatchRequired: true,
+    automaticRetry: false,
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+function cleanupTimeout(options) {
+  const value = Number.isInteger(options.timeoutMs) ? options.timeoutMs : 2_000;
+  return Math.max(100, Math.min(10_000, value));
+}
+
+function cleanupFactsChanged(previous, recovery) {
+  const worktree = value => value && {
+    path: value.path || null,
+    recordedPath: value.recordedPath || null,
+    branch: value.branch || null,
+    ref: value.ref || null,
+    recordedBranch: value.recordedBranch || null,
+    recordedRef: value.recordedRef || null,
+    matchesRecord: value.matchesRecord ?? null,
+    exists: Boolean(value.exists),
+    safe: Boolean(value.safe),
+    registered: Boolean(value.registered),
+    owned: Boolean(value.owned),
+    ownershipKnown: Boolean(value.ownershipKnown),
+    head: value.head || null,
+    registeredBranch: value.registeredBranch || null,
+    error: value.error || null,
+  };
+  const session = value => value && {
+    id: value.id || null,
+    state: value.state || null,
+    error: value.error || null,
+  };
+  const previousSession = session(previous?.session) || null;
+  const currentSession = session(recovery?.session) || null;
+  // A successful cleanup removes the worktree (and therefore its local
+  // Session record). Treat that missing record as the same terminal Session
+  // fact that was persisted in the cleanup result; otherwise a repeated
+  // cleanup would look like a changed resource and re-run forever.
+  const comparableCurrentSession = currentSession || (
+    previousSession && ['exited', 'failed'].includes(previousSession.state)
+      ? previousSession
+      : null
+  );
+  return JSON.stringify({ worktree: worktree(previous?.worktree) || null, session: previousSession })
+    !== JSON.stringify({ worktree: worktree(recovery?.worktree) || null, session: comparableCurrentSession });
+}
+
+function graphCleanupSummary(repository, graph) {
+  const recovery = inspectTaskGraphRecovery(repository, graph, { probeGit: true });
+  return recovery.map(item => ({
+    subtaskId: item.subtaskId,
+    worktree: item.worktree,
+    session: item.session,
+    status: graph.subtasks.find(subtask => subtask.id === item.subtaskId)?.cleanup?.status || null,
+    error: graph.subtasks.find(subtask => subtask.id === item.subtaskId)?.cleanup?.error || null,
+  }));
+}
+
+async function cleanupGraphSubtask(repository, graph, subtask, {
+  timeoutMs = 2_000,
+  allowRunning = false,
+  retry = false,
+  parentStateOverride = null,
+} = {}) {
+  const recovery = inspectTaskGraphRecovery(repository, graph, { probeGit: true }).find(item => item.subtaskId === subtask.id);
+  const prior = subtask.cleanup;
+  if (prior?.status === 'CLEANED' && !cleanupFactsChanged(prior, recovery)) {
+    return { ...graphIdentityFacts(repository, graph, subtask, recovery), status: 'CLEANED', idempotent: true, session: recovery?.session || prior.session || null, worktree: recovery?.worktree || prior.worktree || null, error: null };
+  }
+  if (prior?.status === 'FAILED' && !retry && !cleanupFactsChanged(prior, recovery)) {
+    return {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'FAILED',
+      idempotent: true,
+      session: prior.session || recovery?.session || null,
+      worktree: prior.worktree || recovery?.worktree || null,
+      error: prior.error || null,
+    };
+  }
+  // A cleanup attempt against a still-running subtask is deliberately skipped
+  // rather than destructive.  Repeating that observation must not rewrite the
+  // aggregate record or append another event until an explicit stop changes
+  // the subtask state and makes cleanup safe to retry.
+  if (prior?.status === 'SKIPPED' && subtask.state === 'RUNNING' && !allowRunning && !retry && !cleanupFactsChanged(prior, recovery)) {
+    return {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'SKIPPED',
+      idempotent: true,
+      session: prior.session || recovery?.session || null,
+      worktree: prior.worktree || recovery?.worktree || null,
+      error: prior.error || null,
+    };
+  }
+  if (subtask.state === 'RUNNING' && !allowRunning) {
+    const error = graphRecoveryError('TASK_STATE_CONFLICT', `Subtask ${graph.parentTaskId}/${subtask.id} is RUNNING; stop the graph before cleanup.`, graph, subtask, recovery);
+    const cleanup = {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'SKIPPED',
+      attemptedAt: prior?.attemptedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      session: recovery?.session || null,
+      worktree: recovery?.worktree || null,
+      error: serializedGraphError(error, graph, subtask, recovery),
+    };
+    try {
+      setTaskGraphSubtaskState(repository, graph.parentTaskId, subtask.id, subtask.state, {
+        expectedState: subtask.state,
+        cleanup,
+        ...(parentStateOverride ? { parentStateOverride } : {}),
+      });
+    } catch (persistError) {
+      const persistence = serializedGraphError(persistError, graph, subtask, recovery);
+      return {
+        ...graphIdentityFacts(repository, graph, subtask, recovery),
+        status: 'FAILED',
+        idempotent: false,
+        session: recovery?.session || null,
+        worktree: recovery?.worktree || null,
+        error: persistence,
+      };
+    }
+    return { ...graphIdentityFacts(repository, graph, subtask, recovery), status: 'SKIPPED', idempotent: false, session: recovery?.session || null, worktree: recovery?.worktree || null, error: cleanup.error };
+  }
+  // A subtask that still names a Session but has no readable durable Session
+  // record is an ownership ambiguity. Preserve the worktree until an
+  // operator/runtime reconciliation restores terminal facts; never remove a
+  // path while an unknown host may still be attached to it.
+  const hasWorktreeResource = Boolean(recovery?.worktree?.exists || recovery?.worktree?.registered);
+  if (subtask.sessionId && !recovery?.session && hasWorktreeResource) {
+    const error = graphRecoveryError('SESSION_STATE_CONFLICT', `Session record is unavailable for ${graph.parentTaskId}/${subtask.id}; refusing cleanup until ownership is reconciled.`, graph, subtask, recovery, {
+      parentTaskId: graph.parentTaskId,
+      subtaskId: subtask.id,
+      sessionId: subtask.sessionId,
+      sessionRecord: 'missing-or-invalid',
+      worktree: recovery?.worktree || null,
+    });
+    const cleanup = {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'FAILED',
+      attemptedAt: prior?.attemptedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      session: null,
+      worktree: recovery?.worktree || null,
+      error: serializedGraphError(error, graph, subtask, recovery),
+    };
+    try {
+      setTaskGraphSubtaskState(repository, graph.parentTaskId, subtask.id, subtask.state, {
+        expectedState: subtask.state,
+        cleanup,
+        ...(parentStateOverride ? { parentStateOverride } : {}),
+      });
+    } catch (persistError) {
+      cleanup.persistenceError = serializedGraphError(persistError, graph, subtask, recovery);
+    }
+    return {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'FAILED',
+      idempotent: false,
+      session: null,
+      worktree: recovery?.worktree || null,
+      error: cleanup.persistenceError || cleanup.error,
+    };
+  }
+  let sessionResult = { status: 'ABSENT', session: recovery?.session || null };
+  const activeSession = recovery?.session && ['starting', 'running', 'idle', 'busy'].includes(recovery.session.state);
+  // Session Hosts are detached child processes. Never let a forged or stale
+  // record identify the coordinator itself as the host that cleanup may kill.
+  const runtimeOwnedSession = recovery?.sessionOwned === true
+    && recovery?.worktree?.owned === true
+    && recovery.session.hostPid !== process.pid;
+  if (activeSession && !runtimeOwnedSession) {
+    const error = graphRecoveryError(
+      'SESSION_STATE_CONFLICT',
+      `Refusing to close an active Session that is not proven Runtime-owned for ${graph.parentTaskId}/${subtask.id}.`,
+      graph,
+      subtask,
+      recovery,
+      {
+        parentTaskId: graph.parentTaskId,
+        subtaskId: subtask.id,
+        sessionId: recovery.session.id,
+        sessionOwned: recovery.sessionOwned,
+        worktreeOwned: recovery.worktree?.owned === true,
+      },
+    );
+    sessionResult = { status: 'FAILED', session: recovery.session, error: serializedGraphError(error, graph, subtask, recovery) };
+  } else if (activeSession) {
+    try {
+      const closed = await getExecutionSessionManager().close(recovery.worktree.path, recovery.session.id, { graceful: false, timeoutMs });
+      sessionResult = { status: ['starting', 'running', 'idle', 'busy'].includes(closed.state) ? 'FAILED' : 'CLOSED', session: closed };
+    } catch (error) {
+      sessionResult = { status: 'FAILED', session: recovery.session, error: serializedGraphError(error, graph, subtask, recovery) };
+    }
+  } else if (recovery?.session) {
+    sessionResult = { status: 'CLOSED', session: recovery.session };
+  }
+  if (sessionResult.status === 'FAILED') {
+    const cleanup = {
+      ...graphIdentityFacts(repository, graph, subtask, recovery),
+      status: 'FAILED',
+      attemptedAt: prior?.attemptedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      session: sessionResult.session || null,
+      worktree: recovery?.worktree || null,
+      error: sessionResult.error || { code: 'SESSION_CLOSE_FAILED', message: 'Runtime Session did not close.', recoverable: true },
+    };
+    try {
+      setTaskGraphSubtaskState(repository, graph.parentTaskId, subtask.id, subtask.state, {
+        expectedState: subtask.state,
+        cleanup,
+        ...(parentStateOverride ? { parentStateOverride } : {}),
+      });
+    } catch (persistError) {
+      cleanup.persistenceError = serializedGraphError(persistError, graph, subtask, recovery);
+    }
+    return { ...graphIdentityFacts(repository, graph, subtask, recovery), status: 'FAILED', idempotent: false, session: sessionResult.session, worktree: recovery?.worktree || null, error: cleanup.persistenceError || cleanup.error };
+  }
+  const worktreeResult = cleanupTaskGraphWorktree(repository, graph.parentTaskId, subtask.id, {
+    recordedPath: subtask.worktreePath || null,
+    recordedBranch: subtask.branch || null,
+    recordedRef: subtask.ref || null,
+    timeoutMs,
+  });
+  const worktreeError = worktreeResult.error
+    ? serializedGraphError(worktreeResult.error, graph, subtask, recovery)
+    : null;
+  const cleanup = {
+    ...graphIdentityFacts(repository, graph, subtask, recovery),
+    status: worktreeResult.status,
+    attemptedAt: prior?.attemptedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    session: sessionResult.session || null,
+    worktree: worktreeResult.worktree || recovery?.worktree || null,
+    error: worktreeError,
+  };
+  try {
+    setTaskGraphSubtaskState(repository, graph.parentTaskId, subtask.id, subtask.state, {
+      expectedState: subtask.state,
+      cleanup,
+      ...(parentStateOverride ? { parentStateOverride } : {}),
+    });
+  } catch (persistError) {
+    cleanup.persistenceError = serializedGraphError(persistError, graph, subtask, recovery);
+  }
+  return {
+    ...graphIdentityFacts(repository, graph, subtask, recovery),
+    status: cleanup.persistenceError ? 'FAILED' : worktreeResult.status,
+    idempotent: cleanup.persistenceError ? false : Boolean(worktreeResult.idempotent),
+    session: sessionResult.session || null,
+    worktree: worktreeResult.worktree || recovery?.worktree || null,
+    error: cleanup.persistenceError || worktreeError,
+  };
+}
+
+async function taskGraphCleanupCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  const graph = readTaskGraph(repository, parentTaskId);
+  const selected = graphSubtaskSelection(options, graph, { includeTerminal: true });
+  const outcomes = [];
+  for (const subtask of selected) {
+    const currentGraph = readTaskGraph(repository, parentTaskId);
+    outcomes.push(await cleanupGraphSubtask(repository, currentGraph, currentGraph.subtasks.find(item => item.id === subtask.id) || subtask, {
+      timeoutMs: cleanupTimeout(options),
+      parentStateOverride: currentGraph.state,
+    }));
+  }
+  const latestGraph = readTaskGraph(repository, parentTaskId);
+  const payload = jsonSuccess('task.graph-cleanup', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    graph: latestGraph,
+    outcomes,
+    cleanup: graphCleanupSummary(repository, latestGraph),
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+async function taskGraphStopCommand(options, { json = false } = {}) {
+  const repository = assertGitRepository(options.root, messages.en);
+  const parentTaskId = graphTaskId(options, repository);
+  let graph = readTaskGraph(repository, parentTaskId);
+  if (graph.state === 'APPROVED') throw runtimeError('TASK_STATE_CONFLICT', `Approved Task Graph cannot be stopped: ${parentTaskId}`, { recoverable: false, taskId: parentTaskId, root: repository });
+  const scopedSubtask = Boolean(graphSubtaskOption(options));
+  const selected = graphSubtaskSelection(options, graph, { includeTerminal: true });
+  const outcomes = [];
+  for (const original of selected) {
+    graph = readTaskGraph(repository, parentTaskId);
+    const subtask = graph.subtasks.find(item => item.id === original.id);
+    if (!subtask || ['SUCCEEDED', 'FAILED', 'BLOCKED', 'STOPPED'].includes(subtask.state)) {
+      const recovery = inspectTaskGraphRecovery(repository, graph, { probeGit: true }).find(item => item.subtaskId === original.id);
+      const cleaned = subtask ? await cleanupGraphSubtask(repository, graph, subtask, {
+        timeoutMs: cleanupTimeout(options),
+        parentStateOverride: scopedSubtask ? scopedStopParentState(graph, subtask.id) : graph.state,
+      }) : null;
+      outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: subtask?.state || null, changed: false, cleanup: cleaned, session: recovery?.session || null, worktree: recovery?.worktree || null, error: cleaned?.error || null });
+      continue;
+    }
+    const recovery = inspectTaskGraphRecovery(repository, graph, { probeGit: true }).find(item => item.subtaskId === subtask.id);
+    const stopped = setTaskGraphSubtaskState(repository, parentTaskId, subtask.id, 'STOPPED', {
+      expectedState: subtask.state,
+      reason: options.reason || `Explicitly stopped subtask ${subtask.id}.`,
+      lastError: null,
+      recovery: {
+        ...graphIdentityFacts(repository, graph, subtask, recovery),
+        operation: 'graph-stop',
+        priorState: subtask.state,
+        priorSessionId: subtask.sessionId || recovery?.session?.id || null,
+        priorWorktreePath: subtask.worktreePath || recovery?.worktree?.path || null,
+        stoppedAt: new Date().toISOString(),
+      },
+      ...(scopedSubtask ? { parentStateOverride: scopedStopParentState(graph, subtask.id) } : {}),
+    });
+    graph = stopped.graph;
+    const stoppedSubtask = graph.subtasks.find(item => item.id === subtask.id);
+    const cleaned = await cleanupGraphSubtask(repository, graph, stoppedSubtask, {
+      timeoutMs: cleanupTimeout(options),
+      allowRunning: false,
+      parentStateOverride: graph.state,
+    });
+    outcomes.push({ ...graphIdentityFacts(repository, graph, subtask, recovery), state: 'STOPPED', changed: Boolean(stopped.changed), cleanup: cleaned, session: recovery?.session || null, worktree: recovery?.worktree || null, error: cleaned.error || null });
+  }
+  graph = readTaskGraph(repository, parentTaskId);
+  if (!scopedSubtask && graph.state !== 'STOPPED') {
+    graph = setTaskGraphState(repository, parentTaskId, 'STOPPED', { operation: 'graph-stop', reason: options.reason || 'Task Graph explicitly stopped.' }).graph;
+  }
+  const payload = jsonSuccess('task.graph-stop', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    graph,
+    outcomes,
+    cleanup: graphCleanupSummary(repository, graph),
   });
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
@@ -2416,6 +3142,14 @@ async function taskGraphDispatchCommand(options, { json = false } = {}) {
       taskId: parentTaskId,
       subtaskId,
     });
+    // Some Session/Adapter errors are already canonical but were created
+    // below the graph layer. Enrich them in place so the durable graph error
+    // always retains the complete parent/subtask/Agent/Session/root identity.
+    if (!normalized.taskId) normalized.taskId = parentTaskId;
+    if (!normalized.subtaskId) normalized.subtaskId = subtaskId;
+    if (!normalized.agent) normalized.agent = agentId || subtask.implementer;
+    if (!normalized.root) normalized.root = repository;
+    if (!normalized.sessionId && session?.id) normalized.sessionId = session.id;
     if (claimed) try {
       setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'FAILED', {
         expectedState: 'RUNNING',
@@ -2477,6 +3211,10 @@ async function taskCommand(options, { json = false } = {}) {
   if (graphOperation === 'create') return await taskGraphCreateCommand(options, { json });
   if (graphOperation === 'plan') return await taskGraphPlanCommand(options, { json });
   if (graphOperation === 'run') return await taskGraphRunCommand(options, { json });
+  if (graphOperation === 'recover') return await taskGraphRecoverCommand(options, { json });
+  if (graphOperation === 'resume') return await taskGraphResumeCommand(options, { json });
+  if (graphOperation === 'stop') return await taskGraphStopCommand(options, { json });
+  if (graphOperation === 'cleanup') return await taskGraphCleanupCommand(options, { json });
   if (graphOperation === 'dispatch') return await taskGraphDispatchCommand(options, { json });
   if (graphOperation === 'status' || graphOperation === 'inspect') {
     return taskGraphViewCommand(options, graphOperation, { json });
@@ -4216,6 +4954,53 @@ export async function runtimeTaskGraphRun(input = {}) {
     subcommand: 'graph-run',
     taskId: input.taskId || input.parentTaskId || input.id || null,
     sessionWaitMs: input.sessionWaitMs ?? null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphRecover(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-recover',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphResume(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-resume',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphStop(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-stop',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    timeoutMs: input.timeoutMs ?? null,
+    reason: input.reason || '',
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphCleanup(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-cleanup',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    subtaskId: input.subtaskId || input.subtask || null,
+    timeoutMs: input.timeoutMs ?? null,
     positionals: [],
   }), { json: true });
 }

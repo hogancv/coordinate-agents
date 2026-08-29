@@ -81,6 +81,16 @@
         "effectiveCommand": { "type": "string", "minLength": 1 },
         "resolvedCommand": { "type": "string", "minLength": 1 },
         "implementationCommit": { "type": "string", "minLength": 1 },
+        "lastError": {
+          "anyOf": [
+            { "type": "object" },
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        },
+        "recovery": { "type": ["object", "null"] },
+        "cleanup": { "type": ["object", "null"] },
+        "dispatch": { "type": ["object", "null"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

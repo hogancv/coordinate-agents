@@ -81,6 +81,18 @@ Runtime Session; newly unlocked work remains READY for a later explicit run.
 an isolated Git worktree rooted at the exact graph base commit without touching
 uncommitted files in the user repository or mutating sibling subtasks, unlocking
 dependent subtasks on completion.
+`coordinate_agents_task_graph_recover` is facts-first and inspects durable
+Session/worktree/commit/evidence records. It verifies `IMPLEMENTATION_DONE` or
+records an interrupted FAILED subtask; filenames and prose never prove success,
+and no automatic retry occurs. `coordinate_agents_task_graph_resume` is an
+explicit gate that reuses only a healthy Runtime-owned Session/worktree or
+returns an exited/failed Session to READY for a later dispatch. Dependents stay
+BLOCKED until valid recovery. `coordinate_agents_task_graph_stop` and
+`coordinate_agents_task_graph_cleanup` close only Runtime-owned Sessions and
+remove only their exact worktrees after bounded cleanup, preserving user files,
+refs, commits, and evidence. Failures are durable and repeated recovery,
+resume, stop, and cleanup calls are idempotent. Their shared output shape is
+`schemas/task-graph-v1-recovery.schema.json`.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.
 

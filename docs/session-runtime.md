@@ -57,6 +57,16 @@ Runtime reports that fact; replacement requires the normal explicit dispatch
 path and never an infinite retry loop. `recover inspect` is facts-only and does
 not restart, replay input, resume a Task, or attach to an arbitrary PID.
 
+For Task Graph execution, `task graph-status`/`graph-inspect` expose the same
+Session facts together with the parent Task, subtask, Agent, worktree, and
+verified completion evidence. `graph-recover` records an interrupted subtask
+when its Session host is no longer healthy and never treats a filename or prose
+message as proof. `graph-resume` reuses only a verified healthy Session rooted
+at the matching Runtime-owned worktree; an exited/failed Session is returned to
+`READY` for an explicit replacement dispatch. `graph-stop` and `graph-cleanup`
+close only Runtime-owned graph Sessions under a bounded timeout and preserve
+user worktrees, branches, refs, commits, and evidence when cleanup fails.
+
 ## Executable and platform rules
 
 Resolution is exact and fail-closed:

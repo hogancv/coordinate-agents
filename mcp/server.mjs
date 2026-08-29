@@ -258,6 +258,73 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_recover',
+    description: 'Inspect and reconcile interrupted Task Graph subtasks from durable Session, worktree, and completion evidence without automatic retry.',
+    operation: 'taskGraphRecover',
+    command: 'task.graph-recover',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        subtaskId: stringProperty('Optional interrupted subtask to reconcile.'),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_task_graph_resume',
+    description: 'Explicitly recover selected failed, stopped, or interrupted Task Graph subtasks; this clears the recovery gate but does not dispatch.',
+    operation: 'taskGraphResume',
+    command: 'task.graph-resume',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        subtaskId: stringProperty('Optional failed, stopped, or interrupted subtask to resume.'),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_task_graph_stop',
+    description: 'Explicitly stop a Task Graph, close only Runtime-owned Sessions, and clean only Runtime-owned worktrees with bounded cleanup.',
+    operation: 'taskGraphStop',
+    command: 'task.graph-stop',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        subtaskId: stringProperty('Optional subtask to stop; omitted means all non-terminal subtasks.'),
+        reason: { type: 'string', description: 'Optional bounded stop reason.' },
+        timeoutMs: integerProperty('Bounded Session/worktree cleanup timeout.', { minimum: 100, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'coordinate_agents_task_graph_cleanup',
+    description: 'Explicitly clean Runtime-owned Task Graph Sessions and worktrees while preserving user files, branches, remote refs, commits, and evidence.',
+    operation: 'taskGraphCleanup',
+    command: 'task.graph-cleanup',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        subtaskId: stringProperty('Optional subtask to clean.'),
+        timeoutMs: integerProperty('Bounded Session/worktree cleanup timeout.', { minimum: 100, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_graph_dispatch',
     description: 'Validate and explicitly dispatch one selected READY subtask from a persisted Task Graph in an isolated Git worktree.',
     operation: 'taskGraphDispatch',

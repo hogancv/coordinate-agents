@@ -68,6 +68,16 @@ it before sharing diagnostics.
   graph base commit but have distinct worktree, branch/ref, message, and Session identities. A
   subtask failure blocks only its dependents and never triggers fallback or automatic retry.
 
+- Graph recovery is facts-first and durable. Status/inspect report each subtask's root, graph,
+  Agent, Session, worktree, state, and verified completion-evidence facts; filenames and prose are
+  never completion proof. `graph-recover` either verifies an implementation commit or records an
+  interrupted `FAILED` state. Explicit `graph-resume` reuses only a healthy Runtime-owned
+  Session/worktree; an exited or failed Session is returned to `READY` for a separate dispatch,
+  with no automatic retry loop. `graph-stop` and `graph-cleanup` close only Runtime-owned Sessions
+  and remove only the exact Runtime-owned worktree after bounded cleanup. Ownership mismatches and
+  cleanup failures remain durable bounded errors, while user worktrees, refs, commits, and evidence
+  are preserved. Repeating these operations is idempotent.
+
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.

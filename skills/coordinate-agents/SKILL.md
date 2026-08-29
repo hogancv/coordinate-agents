@@ -75,7 +75,7 @@ remains a fallback for hosts without direct App skill execution.
 | "Which coding CLIs are installed?" | `coordinate-setup` | `coordinate_agents_setup_discover` |
 | "Configure the implementation agent." | `coordinate-setup` | `coordinate_agents_setup_configure` |
 | "Build this feature with Coordinate Agents." | `coordinate-task` | `coordinate_agents_task_create`, `coordinate_agents_task_dispatch` |
-| "Validate, persist, plan, or run subtasks in a Task Graph." | `coordinate-task` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create`, `coordinate_agents_task_graph_plan`, `coordinate_agents_task_graph_run`, `coordinate_agents_task_graph_dispatch` |
+| "Validate, persist, plan, run, recover, resume, stop, or clean up subtasks in a Task Graph." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create`, `coordinate_agents_task_graph_plan`, `coordinate_agents_task_graph_run`, `coordinate_agents_task_graph_dispatch`, `coordinate_agents_task_graph_recover`, `coordinate_agents_task_graph_resume`, `coordinate_agents_task_graph_stop`, `coordinate_agents_task_graph_cleanup` |
 | "Review the implementation." | `coordinate-review` | `coordinate_agents_task_inspect`, `coordinate_agents_task_review` |
 | "Continue the last task." | `coordinate-recover` | `coordinate_agents_recover_inspect`, `coordinate_agents_task_resume`, `coordinate_agents_task_dispatch` |
 | "Inspect or control the Implementer session." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_session_open`, `coordinate_agents_session_status`, `coordinate_agents_session_inspect`, `coordinate_agents_session_write`, `coordinate_agents_session_read`, `coordinate_agents_session_close` |
@@ -107,9 +107,18 @@ dispatch the current eligible prefix concurrently without exceeding the
 persisted limit; each selected subtask receives its own worktree and Session,
 and newly unlocked work remains READY for a later explicit run. Call
 `coordinate_agents_task_graph_dispatch` to execute one READY subtask in an
-isolated Git worktree rooted at the exact graph base commit. Existing Task status
-and inspect tools recognize a graph parent ID and return its durable graph
-view.
+isolated Git worktree rooted at the exact graph base commit. On interruption,
+call `coordinate_agents_task_graph_recover` to inspect durable Session,
+worktree, commit, and evidence facts; it never treats filenames or prose as
+completion proof and never retries automatically. Call
+`coordinate_agents_task_graph_resume` only after an explicit recovery
+decision: healthy Runtime-owned Session/worktree state is reused, while
+exited/failed Sessions are returned to READY for a separate dispatch. Call
+`coordinate_agents_task_graph_stop` or
+`coordinate_agents_task_graph_cleanup` for bounded, ownership-checked
+cleanup. These operations preserve user worktrees, refs, commits, and
+evidence and are idempotent. Existing Task status and inspect tools recognize
+a graph parent ID and return its durable graph view.
 
 Session operations are explicit and bounded: `session_open` resolves the
 configured executable and starts or reuses one Session; `status` and `inspect`
