@@ -63,6 +63,11 @@ it before sharing diagnostics.
   unchanged, and fails the selected subtask without automatic retry or sibling mutation when launch
   or completion validation fails.
 
+- Parallel graph execution claims every selected READY subtask under the graph lock and checks the
+  current RUNNING count before any worktree or process launch. All selected subtasks share the exact
+  graph base commit but have distinct worktree, branch/ref, message, and Session identities. A
+  subtask failure blocks only its dependents and never triggers fallback or automatic retry.
+
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.

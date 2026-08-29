@@ -29,6 +29,10 @@ repository-contained, non-symlinked worktree and branch for the selected READY s
 persistent Session is rooted at that worktree; exact Adapter command precedence, bounded I/O, and
 non-zero exit semantics remain in force. Launch or completion failures do not trigger automatic
 retry/fallback or mutate unrelated subtasks, and dispatch never changes the user's checkout.
+Parallel graph execution claims READY subtasks under the graph lock, atomically enforces the
+persisted concurrency limit, and gives every selected subtask a distinct worktree, branch/ref,
+message, and Session identity rooted at one exact graph base commit. Failures remain isolated and
+never trigger fallback or automatic retry.
 
 Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
 

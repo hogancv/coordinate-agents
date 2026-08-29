@@ -15,6 +15,10 @@ executable is part of the reuse key. The project-local record is persisted at
 `.agent-bus/sessions/<sessionId>.json`; the live host is a detached Runtime
 child, not a daemon or an external CAO service.
 
+Task Graph Sessions also persist `taskId` and `subtaskId`. Every Session
+lifecycle event inherits those associations, so messages, evidence, failures,
+and cleanup remain attributable when independent subtasks run concurrently.
+
 ## Lifecycle
 
 The Session and PTY states are:

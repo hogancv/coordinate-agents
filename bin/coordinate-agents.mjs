@@ -147,7 +147,7 @@ Commands:
   launch        Start one CLI with its generated collaboration prompt
   setup         Discover coding CLIs and show configuration guidance
   status        Show the project Agent Bus and Task status
-  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
+  task          Manage durable tasks and Task Graphs (create, graph-validate, graph-create, graph-plan, graph-run, graph-dispatch, graph-status, graph-inspect, dispatch, status, list, inspect, resume, stop, review, error)
   agent         Manage registered agents (add, list, doctor)
   adapter       Manage trusted local Contract v1 adapters (register, list, remove)
   inspector     Start the local read-only Web UI Inspector
@@ -174,7 +174,7 @@ Options:
   --feedback <text>       Review feedback preserved for the next implementation round
   --input <path>          Task Graph v1 JSON input for graph-validate/graph-create
   --subtask <id>          Selected READY subtask identifier for graph-dispatch
-  --session-wait-ms <ms>  Bounded graph-dispatch observation window (0-10000)
+  --session-wait-ms <ms>  Bounded graph dispatch/run observation window (0-10000)
   --template <type>       Task template: bug, feature, or refactor
   --task <text>           Task summary included in the launch prompt
   --lang <en|zh-CN>       Override output language
@@ -264,7 +264,7 @@ Examples:
   doctor        检查依赖和安装，并输出对应修复命令
   setup         检测 Coding CLI 并展示配置引导
   status        显示项目 Agent Bus 和 Task 状态
-  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-plan、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
+  task          管理持久化任务和 Task Graph（create、graph-validate、graph-create、graph-plan、graph-run、graph-dispatch、graph-status、graph-inspect、dispatch、status、list、inspect、resume、stop、review、error）
   inspector     启动本地只读 Web UI Inspector
   uninstall     删除由本 npm 包创建的安装
   help          显示帮助
@@ -287,7 +287,7 @@ Examples:
   --feedback <文本>       保存给下一轮实现的审查反馈
   --input <路径>          graph-validate/graph-create 使用的 Task Graph v1 JSON 输入
   --subtask <id>          graph-dispatch 使用的已就绪子任务标识符
-  --session-wait-ms <毫秒> graph-dispatch 的有界观察窗口（0-10000）
+  --session-wait-ms <毫秒> graph dispatch/run 的有界观察窗口（0-10000）
   --template <类型>       任务模板：bug、feature 或 refactor
   --task <文本>           写入启动提示词的任务摘要
   --lang <en|zh-CN>       指定输出语言
@@ -1674,12 +1674,13 @@ function taskGraphOperation(options) {
   const subcommand = options.subcommand || '';
   if (['graph-create', 'create-graph'].includes(subcommand)) return 'create';
   if (['graph-plan', 'plan-graph'].includes(subcommand)) return 'plan';
+  if (['graph-run', 'run-graph'].includes(subcommand)) return 'run';
   if (['graph-status', 'status-graph'].includes(subcommand)) return 'status';
   if (['graph-inspect', 'inspect-graph'].includes(subcommand)) return 'inspect';
   if (['graph-dispatch', 'dispatch-graph'].includes(subcommand)) return 'dispatch';
   if (subcommand !== 'graph') return null;
   const nested = options.positionals?.[0];
-  return ['create', 'plan', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
+  return ['create', 'plan', 'run', 'status', 'inspect', 'dispatch'].includes(nested) ? nested : null;
 }
 
 function graphInput(options) {
@@ -1729,7 +1730,7 @@ function graphTaskId(options, root) {
   if (direct) return direct;
   const isGraphSubcommand = options.subcommand === 'graph';
   const nestedPos0 = options.positionals?.[0];
-  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan'].includes(nestedPos0)
+  const nested = isGraphSubcommand && ['status', 'inspect', 'dispatch', 'create', 'validate', 'plan', 'run'].includes(nestedPos0)
     ? options.positionals?.[1]
     : options.positionals?.[0];
   if (nested) return nested;
@@ -1873,6 +1874,74 @@ async function taskGraphPlanCommand(options, { json = false } = {}) {
       capacityLimited: decisions.filter(item => item.decision === 'CAPACITY_LIMITED'),
       decisions,
     },
+  });
+  if (!json) console.log(JSON.stringify(payload, null, 2));
+  return payload;
+}
+
+async function taskGraphRunCommand(options, { json = false } = {}) {
+  const planned = await taskGraphPlanCommand(options, { json: true });
+  const repository = planned.root;
+  const parentTaskId = planned.parentTaskId;
+  const selected = planned.plan.eligible.map(item => item.subtaskId);
+  const graphBaseCommit = selected.length > 0
+    ? (planned.graph.baseCommit || planned.graph.parentTask?.baseCommit || captureGraphBaseCommit(repository))
+    : (planned.graph.baseCommit || planned.graph.parentTask?.baseCommit || null);
+
+  const settled = await Promise.allSettled(selected.map(subtaskId => taskGraphDispatchCommand({
+    ...options,
+    root: repository,
+    taskId: parentTaskId,
+    subtaskId,
+    graphBaseCommit,
+    positionals: [],
+  }, { json: true })));
+
+  const outcomes = settled.map((result, index) => {
+    const subtaskId = selected[index];
+    if (result.status === 'fulfilled') {
+      const dispatched = result.value;
+      return {
+        ok: true,
+        subtaskId,
+        state: dispatched.subtask.state,
+        worktree: dispatched.worktree,
+        session: dispatched.session,
+        agent: dispatched.agent,
+        implementationCommit: dispatched.implementationCommit,
+        evidence: dispatched.evidence,
+      };
+    }
+    let subtask = null;
+    try { subtask = readTaskGraph(repository, parentTaskId).subtasks.find(item => item.id === subtaskId) || null; } catch { /* Preserve the dispatch error. */ }
+    return {
+      ok: false,
+      subtaskId,
+      state: subtask?.state || null,
+      sessionId: subtask?.sessionId || null,
+      worktreePath: subtask?.worktreePath || null,
+      error: serializeRuntimeError(result.reason, { includeLegacy: true }),
+      evidence: subtask?.evidence || [],
+    };
+  });
+  const latestGraph = readTaskGraph(repository, parentTaskId);
+  const counts = state => outcomes.filter(outcome => outcome.state === state).length;
+  const payload = jsonSuccess('task.graph-run', {
+    root: repository,
+    graphId: parentTaskId,
+    parentTaskId,
+    baseCommit: graphBaseCommit,
+    selected,
+    initialPlan: planned.plan,
+    outcomes,
+    summary: {
+      selected: selected.length,
+      succeeded: counts('SUCCEEDED'),
+      running: counts('RUNNING'),
+      failed: outcomes.filter(outcome => !outcome.ok || outcome.state === 'FAILED').length,
+    },
+    graph: latestGraph,
+    frontier: latestGraph.frontier,
   });
   if (!json) console.log(JSON.stringify(payload, null, 2));
   return payload;
@@ -2104,9 +2173,13 @@ async function taskGraphDispatchCommand(options, { json = false } = {}) {
     // Session side effect.  The expected-state check is performed under the
     // graph lock, so a concurrent dispatch cannot launch the same subtask or
     // accidentally fail the first caller's RUNNING record.
-    baseCommit = currentGraph.baseCommit || currentGraph.parentTask?.baseCommit || captureGraphBaseCommit(repository);
+    baseCommit = options.graphBaseCommit
+      || currentGraph.baseCommit
+      || currentGraph.parentTask?.baseCommit
+      || captureGraphBaseCommit(repository);
     setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
       expectedState: 'READY',
+      requireAvailableSlot: true,
       baseCommit,
       spec: effectiveSpec,
       reason: `Dispatching subtask ${subtaskId}.`,
@@ -2207,10 +2280,11 @@ async function taskGraphDispatchCommand(options, { json = false } = {}) {
       initialPrompt: body,
       language: options.language || 'en',
       taskId: parentTaskId,
+      subtaskId,
     });
     session = opened.session;
     if (!opened.initialInputConsumed) {
-      session = await sessionManager.write(worktreeInfo.worktreePath, session.id, body, { taskId: parentTaskId });
+      session = await sessionManager.write(worktreeInfo.worktreePath, session.id, body, { taskId: parentTaskId, subtaskId });
     }
 
     setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
@@ -2402,6 +2476,7 @@ async function taskCommand(options, { json = false } = {}) {
   }
   if (graphOperation === 'create') return await taskGraphCreateCommand(options, { json });
   if (graphOperation === 'plan') return await taskGraphPlanCommand(options, { json });
+  if (graphOperation === 'run') return await taskGraphRunCommand(options, { json });
   if (graphOperation === 'dispatch') return await taskGraphDispatchCommand(options, { json });
   if (graphOperation === 'status' || graphOperation === 'inspect') {
     return taskGraphViewCommand(options, graphOperation, { json });
@@ -4130,6 +4205,17 @@ export async function runtimeTaskGraphPlan(input = {}) {
     command: 'task',
     subcommand: 'graph-plan',
     taskId: input.taskId || input.parentTaskId || input.id || null,
+    positionals: [],
+  }), { json: true });
+}
+
+export async function runtimeTaskGraphRun(input = {}) {
+  return taskCommand(serviceOptions({
+    ...input,
+    command: 'task',
+    subcommand: 'graph-run',
+    taskId: input.taskId || input.parentTaskId || input.id || null,
+    sessionWaitMs: input.sessionWaitMs ?? null,
     positionals: [],
   }), { json: true });
 }

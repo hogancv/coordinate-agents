@@ -195,6 +195,8 @@ function publicRecord(record) {
     exitCode: record.exitCode ?? null,
     signal: record.signal || null,
     error: record.error ? redactOutput(record.error, 2 * 1024) : null,
+    taskId: record.taskId || null,
+    subtaskId: record.subtaskId || null,
   };
 }
 
@@ -218,6 +220,8 @@ function writeRecord(root, record) {
     error: record.error ? redactOutput(record.error, 2 * 1024) : null,
     endpoint: record.endpoint,
     hostPid: Number.isInteger(record.hostPid) ? record.hostPid : null,
+    taskId: record.taskId || null,
+    subtaskId: record.subtaskId || null,
   }, null, 2)}\n`, join(bus, 'tmp'));
   return record;
 }
@@ -237,7 +241,8 @@ function appendSessionEvent(root, record, type, data = {}, associations = {}) {
   if (!record || !type) return null;
   return appendRuntimeEvent(root, {
     type,
-    taskId: associations.taskId,
+    taskId: associations.taskId || record.taskId,
+    subtaskId: associations.subtaskId || record.subtaskId,
     sessionId: record.id,
     agentId: record.agent,
     data: {
@@ -502,7 +507,7 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null } = {}) {
     const repository = sessionRoot(root);
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
@@ -526,8 +531,14 @@ export class ExecutionSessionManager {
       resolved?.resolvedCommand || null,
     );
     if (existing) {
-      appendSessionEvent(repository, existing, 'SESSION_REUSED', {}, { taskId });
-      return { session: publicRecord(existing), reused: true, initialInputConsumed: false };
+      const associated = {
+        ...existing,
+        taskId: existing.taskId || taskId,
+        subtaskId: existing.subtaskId || subtaskId,
+      };
+      if (associated.taskId !== existing.taskId || associated.subtaskId !== existing.subtaskId) writeRecord(repository, associated);
+      appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
+      return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
     let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
@@ -564,9 +575,11 @@ export class ExecutionSessionManager {
       error: null,
       endpoint,
       hostPid: null,
+      taskId,
+      subtaskId,
     };
     writeRecord(repository, record);
-    appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId });
+    appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId, subtaskId });
     let host;
     try {
       host = fork(this.hostPath, [], {
@@ -618,7 +631,7 @@ export class ExecutionSessionManager {
       try { host?.kill(); } catch { /* Only the host process created above is eligible. */ }
       const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
       writeRecord(repository, failed);
-      appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId });
+      appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId, subtaskId });
       throw runtimeError('SESSION_START_FAILED', `Failed to start execution session ${id}: ${error.message || error}`, { recoverable: true, agent, command: resolved.command, root: repository, sessionId: id, details: { agent, command: resolved.command, root: repository } });
     }
 
@@ -673,9 +686,9 @@ export class ExecutionSessionManager {
       await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
     if (HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
-      appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId });
+      appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId, subtaskId });
     } else if (!ACTIVE_STATES.has(current.state) && current.state !== 'starting') {
-      ensureSessionStateEvent(repository, current, { taskId });
+      ensureSessionStateEvent(repository, current, { taskId, subtaskId });
     }
     return { session: publicRecord(current), reused: false, initialInputConsumed: Boolean(launch.initialInputConsumed) };
   }
@@ -714,7 +727,7 @@ export class ExecutionSessionManager {
     return { session: publicRecord(current), ...result, output: redactOutput(result.output || '', MAX_READ_BYTES) };
   }
 
-  async write(root, id, input, { submit = true, taskId = null } = {}) {
+  async write(root, id, input, { submit = true, taskId = null, subtaskId = null } = {}) {
     const repository = sessionRoot(root);
     if (typeof input !== 'string' || input.length === 0) throw runtimeError('SESSION_WRITE_FAILED', 'Session input must be a non-empty string.', { recoverable: false, sessionId: id, root: repository });
     if (input.length > 256 * 1024) throw runtimeError('SESSION_WRITE_FAILED', 'Session input exceeds the size limit.', { recoverable: false, sessionId: id, root: repository });
@@ -726,7 +739,7 @@ export class ExecutionSessionManager {
     writeRecord(repository, updated);
     if (updated.state !== current.state) {
       const type = sessionStateEventType(updated.state);
-      appendSessionEvent(repository, updated, type, {}, { taskId });
+      appendSessionEvent(repository, updated, type, {}, { taskId, subtaskId });
     }
     return publicRecord(updated);
   }

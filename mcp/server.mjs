@@ -242,6 +242,22 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_run',
+    description: 'Dispatch the current deterministic READY frontier concurrently up to the persisted maxConcurrency, with one isolated worktree and Runtime-owned Session per selected subtask.',
+    operation: 'taskGraphRun',
+    command: 'task.graph-run',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        sessionWaitMs: integerProperty('Bounded observation window for each parallel dispatch.', { minimum: 0, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_graph_dispatch',
     description: 'Validate and explicitly dispatch one selected READY subtask from a persisted Task Graph in an isolated Git worktree.',
     operation: 'taskGraphDispatch',

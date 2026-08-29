@@ -1032,6 +1032,22 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
         details: { expectedState: details.expectedState, actualState: target.state },
       });
     }
+    if (details.requireAvailableSlot === true && nextState === 'RUNNING' && target.state !== 'RUNNING') {
+      const runningCount = current.subtasks.filter(subtask => subtask.state === 'RUNNING').length;
+      if (runningCount >= current.maxConcurrency) {
+        throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} has no available concurrency slot for ${subtaskId}.`, {
+          recoverable: true,
+          taskId: parentTaskId,
+          subtaskId,
+          stage: 'graph-scheduling',
+          details: {
+            maxConcurrency: current.maxConcurrency,
+            runningCount,
+            availableSlots: 0,
+          },
+        });
+      }
+    }
     const reason = details.reason === undefined ? target.reason : boundedText(details.reason);
     const evidence = details.evidence === undefined ? target.evidence : boundedEvidence(details.evidence);
     const suppliedBaseCommit = details.baseCommit === undefined || details.baseCommit === null

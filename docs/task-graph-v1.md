@@ -134,6 +134,33 @@ idempotent: unchanged durable state produces the same plan and creates no
 worktree, Bus message, Session, lifecycle event, or child process. The output
 contract is `schemas/task-graph-v1-plan.schema.json`.
 
+## Bounded parallel frontier execution
+
+Execute the current eligible frontier concurrently:
+
+```sh
+coordinate-agents task graph-run --root <repository> --id <parentTaskId> --json
+# equivalent nested form:
+coordinate-agents task graph run <parentTaskId> --root <repository> --json
+```
+
+The MCP equivalent is `coordinate_agents_task_graph_run`; an optional
+`sessionWaitMs` bounds the observation window for each selected subtask. The
+Scheduler snapshots the deterministic plan once and launches only its eligible
+prefix. Newly unlocked work is left READY for a later explicit run rather than
+being launched recursively.
+
+All selected subtasks share one exact graph base commit but use distinct
+Runtime-owned worktree roots, branches/refs, Bus messages, and Session IDs.
+The graph lock atomically checks both READY state and remaining concurrency
+capacity, so concurrent callers cannot double-dispatch a subtask or exceed
+`maxConcurrency`. Session records and events retain both `parentTaskId` and
+`subtaskId`. Verified `IMPLEMENTATION_DONE` evidence unlocks dependents;
+unresolved prerequisites remain WAITING, while a failed or stopped prerequisite
+blocks only its downstream work. One selected failure is returned beside the
+independent sibling outcomes and never triggers fallback or automatic retry.
+The structured result contract is `schemas/task-graph-v1-run.schema.json`.
+
 ## Subtask dispatch in an isolated Git worktree
 
 To execute one approved, dependency-ready subtask from a persisted graph, use

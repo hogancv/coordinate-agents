@@ -73,6 +73,10 @@ durable graph without launching an Adapter, Session, or Implementer process.
 max-concurrency decisions with bounded reasons and exact configured Agent,
 Adapter, executable, and command-source facts. It does not create a worktree,
 Bus message, Session, event, or process.
+`coordinate_agents_task_graph_run` dispatches one deterministic eligible
+frontier concurrently up to the persisted maxConcurrency. Each subtask receives
+an isolated worktree, branch/ref, Bus handoff, and parent/subtask-associated
+Runtime Session; newly unlocked work remains READY for a later explicit run.
 `coordinate_agents_task_graph_dispatch` dispatches one selected READY subtask in
 an isolated Git worktree rooted at the exact graph base commit without touching
 uncommitted files in the user repository or mutating sibling subtasks, unlocking

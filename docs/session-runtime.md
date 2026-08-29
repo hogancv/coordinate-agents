@@ -9,6 +9,9 @@ description: Persistent project-scoped coding-agent sessions, bounded PTY I/O, r
 The Plugin Task API uses an independent `Execution Session` for a long-lived
 coding-agent process. A Task stores a non-owning `sessionId`; the Session
 Manager owns lifecycle and the PTY Runtime owns bounded interactive I/O.
+Task Graph Sessions additionally persist `taskId` and `subtaskId`, and their
+Session events carry both associations so parallel worktree-local journals
+cannot be misattributed across sibling subtasks.
 
 ```text
 Task --sessionId--> Session Manager --owns--> PTY Session Host --owns--> Implementer CLI

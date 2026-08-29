@@ -88,5 +88,8 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>` 可在完全隔离的 Git worktree
 （`.agent-bus/worktrees/<parentTaskId>/<subtaskId>`）和独立分支中派发单项 READY 子任务，安全捕获基准提交
 且不修改用户工作区中未提交的文件，并在完成后自动解锁依赖前沿。详见[Task Graph v1 契约](../task-graph-v1.html)。
+通过 `coordinate_agents_task_graph_run` 或 `task graph-run --id <parentTaskId>` 可对当前合格前沿执行一次
+有界并行派发：不超过 `maxConcurrency`，每个子任务使用独立 worktree、分支和 Runtime Session，
+新解锁的工作保持 READY，等待下一次显式执行。
 
 `.agent-bus` 是本地明文数据，不要写入令牌、Cookie、密码或私钥。在默认参考工作流中，两个代理不得同时修改产品代码或并发执行 Git 写操作。
