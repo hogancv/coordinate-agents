@@ -255,9 +255,19 @@ function gitWorktreeEntries(output) {
   return entries;
 }
 
+function canonicalPathForComparison(value) {
+  const normalized = resolve(`${value || ''}`);
+  // Git may print a different but equivalent spelling than Node receives
+  // (for example a Windows 8.3 short path versus its long form, or /var
+  // versus /private/var on macOS).  Canonicalize existing paths before
+  // comparing identities; callers still perform the separate lstat/safety
+  // checks that refuse symlinks and path escapes.
+  try { return realpathSync(normalized); } catch { return normalized; }
+}
+
 function pathMatches(left, right) {
-  const normalizedLeft = resolve(left);
-  const normalizedRight = resolve(right);
+  const normalizedLeft = canonicalPathForComparison(left);
+  const normalizedRight = canonicalPathForComparison(right);
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;

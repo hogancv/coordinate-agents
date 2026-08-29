@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -35,7 +36,11 @@ import {
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 function repository(prefix = 'coordinate-agents-graph-recovery-') {
-  const root = mkdtempSync(join(tmpdir(), prefix));
+  // Keep fixture roots in the same canonical namespace as the Runtime.  macOS
+  // exposes temporary directories through /var -> /private/var, while Windows
+  // runners may return an 8.3 alias from tmpdir(); comparing the lexical alias
+  // with Runtime's realpath would make otherwise valid recovery facts fail.
+  const root = realpathSync(mkdtempSync(join(realpathSync(tmpdir()), prefix)));
   execFileSync('git', ['init', root], { stdio: 'ignore', windowsHide: true });
   execFileSync('git', ['config', 'user.name', 'Coordinate Test'], { cwd: root, stdio: 'ignore', windowsHide: true });
   execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd: root, stdio: 'ignore', windowsHide: true });
@@ -75,7 +80,7 @@ async function removeRepository(root) {
 
 test('graph recovery reports durable interruption facts, blocks dependents, and requires explicit resume', async () => {
   const root = repository('coordinate-agents-graph-interrupted-');
-  const parentTaskId = 'task-graph-interrupted';
+  const parentTaskId = 'task-gd-interrupted';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
     const baseCommit = captureGraphBaseCommit(root);
@@ -133,7 +138,7 @@ test('graph recovery reports durable interruption facts, blocks dependents, and 
 
 test('recovery promotes a durable commit/evidence pair even after the worktree is gone', async () => {
   const root = repository('coordinate-agents-graph-durable-completion-');
-  const parentTaskId = 'task-graph-durable-completion';
+  const parentTaskId = 'task-gd-durable-completion';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
     const baseCommit = captureGraphBaseCommit(root);
@@ -165,7 +170,7 @@ test('recovery promotes a durable commit/evidence pair even after the worktree i
 
 test('explicit resume reuses a verified healthy Session and does not relaunch or duplicate state', async () => {
   const root = repository('coordinate-agents-graph-healthy-');
-  const parentTaskId = 'task-graph-healthy';
+  const parentTaskId = 'task-gd-healthy';
   const subtaskId = 'backend';
   let worktreePath = null;
   try {
@@ -227,7 +232,7 @@ test('explicit resume reuses a verified healthy Session and does not relaunch or
 
 test('stop and cleanup preserve successful commits, refs, evidence, and user worktree while remaining idempotent', async () => {
   const root = repository('coordinate-agents-graph-stop-');
-  const parentTaskId = 'task-graph-stop';
+  const parentTaskId = 'task-gd-stop';
   const subtaskId = 'backend';
   let worktreePath = null;
   try {
@@ -277,7 +282,7 @@ test('stop and cleanup preserve successful commits, refs, evidence, and user wor
 
 test('scoped stop leaves unrelated running subtasks and the graph lifecycle intact', async () => {
   const root = repository('coordinate-agents-graph-scoped-stop-');
-  const parentTaskId = 'task-graph-scoped-stop';
+  const parentTaskId = 'task-gd-scoped-stop';
   try {
     await runtimeTaskGraphCreate({
       root,
@@ -310,7 +315,7 @@ test('scoped stop leaves unrelated running subtasks and the graph lifecycle inta
 
 test('cleanup remains idempotent after closing a persisted terminal Session and removing its worktree', async () => {
   const root = repository('coordinate-agents-graph-cleaned-session-');
-  const parentTaskId = 'task-graph-cleaned-session';
+  const parentTaskId = 'task-gd-cleaned-session';
   const subtaskId = 'backend';
   let worktreePath = null;
   try {
@@ -367,7 +372,7 @@ test('cleanup remains idempotent after closing a persisted terminal Session and 
 
 test('cleanup refuses an unowned worktree, records the bounded error, and is idempotent', async () => {
   const root = repository('coordinate-agents-graph-unowned-');
-  const parentTaskId = 'task-graph-unowned';
+  const parentTaskId = 'task-gd-unowned';
   const subtaskId = 'backend';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
@@ -424,7 +429,7 @@ test('cleanup refuses an unowned worktree, records the bounded error, and is ide
 
 test('cleanup refuses a stale recorded path even when the canonical worktree is already absent', async () => {
   const root = repository('coordinate-agents-graph-stale-record-');
-  const parentTaskId = 'task-graph-stale-record';
+  const parentTaskId = 'task-gd-stale-record';
   const subtaskId = 'backend';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
@@ -446,7 +451,7 @@ test('cleanup refuses a stale recorded path even when the canonical worktree is 
 
 test('recovery/stop/cleanup commands expose the same durable graph record through MCP', async () => {
   const root = repository('coordinate-agents-graph-mcp-recovery-');
-  const parentTaskId = 'task-graph-mcp-recovery';
+  const parentTaskId = 'task-gd-mcp-recovery';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
     const statusPath = taskGraphPath(root, parentTaskId);

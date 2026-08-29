@@ -32,7 +32,7 @@ function repository(prefix = 'coordinate-agents-graph-plan-') {
   return root;
 }
 
-function schedulerGraph(parentTaskId = 'task-graph-scheduler') {
+function schedulerGraph(parentTaskId = 'task-gd-scheduler') {
   return {
     schemaVersion: 1,
     parentTask: {
@@ -79,8 +79,8 @@ test('Task Graph plan is deterministic, capacity-bounded, Agent-explicit, and re
     await withIsolatedHome(home, async () => {
       await runtimeTaskGraphCreate({ root, graph: schedulerGraph() });
       const before = fileSnapshot(join(root, '.agent-bus'));
-      const first = await runtimeTaskGraphPlan({ root, taskId: 'task-graph-scheduler' });
-      const second = await runtimeTaskGraphPlan({ root, taskId: 'task-graph-scheduler' });
+      const first = await runtimeTaskGraphPlan({ root, taskId: 'task-gd-scheduler' });
+      const second = await runtimeTaskGraphPlan({ root, taskId: 'task-gd-scheduler' });
 
       assert.deepEqual(second, first);
       assert.equal(first.command, 'task.graph-plan');
@@ -108,7 +108,7 @@ test('Task Graph plan is deterministic, capacity-bounded, Agent-explicit, and re
       assert.deepEqual(fileSnapshot(join(root, '.agent-bus')), before);
       assert.equal(existsSync(join(root, '.agent-bus', 'worktrees')), false);
       assert.equal(existsSync(join(root, '.agent-bus', 'sessions')), false);
-      assert.deepEqual(readRuntimeEvents(root, { taskId: 'task-graph-scheduler', limit: 20 }).map(event => event.type), ['TASK_GRAPH_CREATED']);
+      assert.deepEqual(readRuntimeEvents(root, { taskId: 'task-gd-scheduler', limit: 20 }).map(event => event.type), ['TASK_GRAPH_CREATED']);
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -121,10 +121,10 @@ test('Task Graph plan explains running, failed dependency, blocked, and remainin
   const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-graph-plan-home-'));
   try {
     await withIsolatedHome(home, async () => {
-      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-graph-plan-states') });
-      setTaskGraphSubtaskState(root, 'task-graph-plan-states', 'alpha', 'RUNNING');
-      setTaskGraphSubtaskState(root, 'task-graph-plan-states', 'beta', 'FAILED', { reason: 'fixture conflict' });
-      const plan = await runtimeTaskGraphPlan({ root, taskId: 'task-graph-plan-states' });
+      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-gd-plan-states') });
+      setTaskGraphSubtaskState(root, 'task-gd-plan-states', 'alpha', 'RUNNING');
+      setTaskGraphSubtaskState(root, 'task-gd-plan-states', 'beta', 'FAILED', { reason: 'fixture conflict' });
+      const plan = await runtimeTaskGraphPlan({ root, taskId: 'task-gd-plan-states' });
       const decisions = Object.fromEntries(plan.plan.decisions.map(item => [item.subtaskId, item]));
 
       assert.equal(plan.plan.runningCount, 1);
@@ -150,9 +150,9 @@ test('CLI and MCP expose the same no-process graph plan and reject unsupported s
   const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-graph-plan-home-'));
   try {
     await withIsolatedHome(home, async () => {
-      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-graph-plan-transport') });
+      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-gd-plan-transport') });
       const cliResult = spawnSync(process.execPath, [
-        cli, 'task', 'graph-plan', '--root', root, '--id', 'task-graph-plan-transport', '--json',
+        cli, 'task', 'graph-plan', '--root', root, '--id', 'task-gd-plan-transport', '--json',
       ], {
         encoding: 'utf8',
         windowsHide: true,
@@ -167,7 +167,7 @@ test('CLI and MCP expose the same no-process graph plan and reject unsupported s
         jsonrpc: '2.0', id: 1, method: 'tools/call',
         params: {
           name: 'coordinate_agents_task_graph_plan',
-          arguments: { root, taskId: 'task-graph-plan-transport' },
+          arguments: { root, taskId: 'task-gd-plan-transport' },
         },
       });
       assert.equal(mcp.result.isError, false);
@@ -177,12 +177,12 @@ test('CLI and MCP expose the same no-process graph plan and reject unsupported s
         jsonrpc: '2.0', id: 2, method: 'tools/call',
         params: {
           name: 'coordinate_agents_task_graph_plan',
-          arguments: { root, taskId: 'task-graph-plan-transport', maxConcurrency: 99 },
+          arguments: { root, taskId: 'task-gd-plan-transport', maxConcurrency: 99 },
         },
       });
       assert.equal(rejected.error.code, -32602);
       assert.match(rejected.error.message, /maxConcurrency|unknown|additional/i);
-      assert.equal(readTaskGraph(root, 'task-graph-plan-transport').frontier.maxConcurrency, 2);
+      assert.equal(readTaskGraph(root, 'task-gd-plan-transport').frontier.maxConcurrency, 2);
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -195,14 +195,14 @@ test('Task Graph plan rejects contradictory persisted scheduling facts without r
   const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-graph-plan-home-'));
   try {
     await withIsolatedHome(home, async () => {
-      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-graph-plan-conflict') });
-      const path = taskGraphPath(root, 'task-graph-plan-conflict');
+      await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-gd-plan-conflict') });
+      const path = taskGraphPath(root, 'task-gd-plan-conflict');
       const record = JSON.parse(readFileSync(path, 'utf8'));
       record.frontier.maxConcurrency = 3;
       writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
       const before = fileSnapshot(join(root, '.agent-bus'));
 
-      const error = await runtimeTaskGraphPlan({ root, taskId: 'task-graph-plan-conflict' }).catch(value => value);
+      const error = await runtimeTaskGraphPlan({ root, taskId: 'task-gd-plan-conflict' }).catch(value => value);
       assert.equal(error.code, 'TASK_STATE_CONFLICT');
       assert.equal(error.stage, 'graph-scheduling');
       assert.match(error.message, /contradictory persisted scheduling facts/);

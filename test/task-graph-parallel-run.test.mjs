@@ -102,7 +102,7 @@ const marker = path.join(shared, subtaskId + '.started');
 try { fs.writeFileSync(marker, String(Date.now()), { encoding: 'utf8', flag: 'wx' }); }
 catch { process.stderr.write('duplicate launch: ' + subtaskId); process.exit(11); }
 const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-const deadline = Date.now() + 5000;
+const deadline = Date.now() + 8000;
 while (Date.now() < deadline && fs.readdirSync(shared).filter(name => name.endsWith('.started')).length < 2) sleep(25);
 if (fs.readdirSync(shared).filter(name => name.endsWith('.started')).length < 2) {
   process.stderr.write('parallel barrier was not reached');
@@ -116,6 +116,17 @@ if (!dependent || dependent.state !== 'WAITING') {
   process.exit(13);
 }
 fs.writeFileSync(path.join(shared, subtaskId + '.waiting-ok'), dependent.state, 'utf8');
+// Both agents must observe the prerequisite state before either one is
+// allowed to fail or commit.  Without this second barrier, a deliberately
+// failing sibling can transition the dependent to BLOCKED while the healthy
+// sibling is still reading the graph, making the concurrency fixture flaky on
+// slower Node/runner combinations.
+const observationDeadline = Date.now() + 8000;
+while (Date.now() < observationDeadline && fs.readdirSync(shared).filter(name => name.endsWith('.waiting-ok')).length < 2) sleep(25);
+if (fs.readdirSync(shared).filter(name => name.endsWith('.waiting-ok')).length < 2) {
+  process.stderr.write('prerequisite observation barrier was not reached');
+  process.exit(14);
+}
 if (process.env.PARALLEL_FAIL_SUBTASK === subtaskId) {
   process.stderr.write('fixture failure for ' + subtaskId);
   process.exit(17);
