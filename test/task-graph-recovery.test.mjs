@@ -40,7 +40,7 @@ function repository(prefix = 'coordinate-agents-graph-recovery-') {
   // exposes temporary directories through /var -> /private/var, while Windows
   // runners may return an 8.3 alias from tmpdir(); comparing the lexical alias
   // with Runtime's realpath would make otherwise valid recovery facts fail.
-  const root = realpathSync(mkdtempSync(join(realpathSync(tmpdir()), prefix)));
+  const root = realpathSync.native(mkdtempSync(join(realpathSync.native(tmpdir()), prefix)));
   execFileSync('git', ['init', root], { stdio: 'ignore', windowsHide: true });
   execFileSync('git', ['config', 'user.name', 'Coordinate Test'], { cwd: root, stdio: 'ignore', windowsHide: true });
   execFileSync('git', ['config', 'user.email', 'test@example.invalid'], { cwd: root, stdio: 'ignore', windowsHide: true });

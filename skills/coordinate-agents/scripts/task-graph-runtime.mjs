@@ -262,7 +262,7 @@ function canonicalPathForComparison(value) {
   // versus /private/var on macOS).  Canonicalize existing paths before
   // comparing identities; callers still perform the separate lstat/safety
   // checks that refuse symlinks and path escapes.
-  try { return realpathSync(normalized); } catch { return normalized; }
+  try { return realpathSync.native(normalized); } catch { return normalized; }
 }
 
 function pathMatches(left, right) {
