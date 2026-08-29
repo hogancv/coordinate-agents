@@ -138,7 +138,7 @@ test('graph recovery reports durable interruption facts, blocks dependents, and 
 
 test('recovery promotes a durable commit/evidence pair even after the worktree is gone', async () => {
   const root = repository('coordinate-agents-graph-durable-completion-');
-  const parentTaskId = 'task-gd-durable-completion';
+  const parentTaskId = 'task-gd-durable';
   try {
     await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
     const baseCommit = captureGraphBaseCommit(root);
