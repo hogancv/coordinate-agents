@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-integration.schema.json",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-integrate.schema.json",
   "title": "Coordinate Agents Task Graph v1 integration result",
   "description": "Deterministic, isolated application of verified subtask commits to a Runtime-owned review worktree.",
   "type": "object",

@@ -107,7 +107,7 @@ aggregate HEAD, Runtime ownership, and worktree cleanliness before recording
 `REVIEW_APPROVED` or `CHANGES_REQUESTED` through the existing reviewer
 boundary. Stale or dirty aggregates are refused. Review approval is not release
 authorization. The output contracts
-are `schemas/task-graph-v1-integration.schema.json` and
+are `schemas/task-graph-v1-integrate.schema.json` and
 `schemas/task-graph-v1-review.schema.json`.
 
 Use this project for structured multi-agent software engineering where workflow roles (such as planner, implementer, and reviewer) coordinate across distinct CLI or adapter-extended agents via durable local messaging, explicit leases, and human release authorization. The default reference workflow pairs Codex as planner/reviewer with Antigravity as exclusive implementer. Do not use it for single-agent coding tasks or concurrent conflicting worktree writes.

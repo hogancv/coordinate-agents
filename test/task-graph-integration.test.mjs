@@ -225,7 +225,7 @@ test('Task Graph integration refuses unresolved subtasks before creating aggrega
 
 test('Task Graph review refuses an aggregate after the verified source commit changes', async () => {
   const root = repository('coordinate-graph-integration-stale-review-');
-  const parentTaskId = 'task-integration-stale-review';
+  const parentTaskId = 'task-stale-review';
   try {
     const { seeded } = await seedGraph(root, parentTaskId, [
       { id: 'alpha', implementer: 'antigravity', spec: 'Implement alpha.' },
@@ -267,7 +267,7 @@ test('Task Graph review refuses an aggregate after the verified source commit ch
 
 test('Task Graph integration preserves bounded conflict facts and source work when cherry-pick conflicts', async () => {
   const root = repository('coordinate-graph-integration-conflict-');
-  const parentTaskId = 'task-integration-conflict';
+  const parentTaskId = 'task-conflict';
   try {
     const { baseCommit, seeded } = await seedGraph(root, parentTaskId, [
       { id: 'alpha', implementer: 'antigravity', spec: 'Implement alpha.', file: 'shared.txt', contents: 'alpha\n' },

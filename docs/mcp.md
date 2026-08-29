@@ -240,7 +240,7 @@ The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are doc
 - `schemas/task-graph-v1-plan.schema.json`
 - `schemas/task-graph-v1-run.schema.json`
 - `schemas/task-graph-v1-recovery.schema.json`
-- `schemas/task-graph-v1-integration.schema.json`
+- `schemas/task-graph-v1-integrate.schema.json`
 - `schemas/task-graph-v1-review.schema.json`
 - `schemas/runtime-error.schema.json`
 - `schemas/evidence.schema.json`

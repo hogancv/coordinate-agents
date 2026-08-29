@@ -258,7 +258,7 @@ worktree and Git conflict state inspectable; it never silently resolves,
 retries, resets, or deletes source work. graph-status reports the durable
 integration record, while graph-inspect additionally probes the aggregate
 worktree and aggregate diff. The result contract is
-schemas/task-graph-v1-integration.schema.json.
+schemas/task-graph-v1-integrate.schema.json.
 
 Send the aggregate through the existing reviewer boundary explicitly:
 
