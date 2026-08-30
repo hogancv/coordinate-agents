@@ -259,7 +259,7 @@ const TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'coordinate_agents_task_graph_plan',
-    description: 'Read a deterministic, concurrency-bounded scheduling plan for a persisted Task Graph without creating a worktree, Bus message, Session, or process.',
+    description: 'Read a deterministic dependency-, capacity-, and write-intent-aware scheduling wave without creating a worktree, Bus message, Session, or process.',
     operation: 'taskGraphPlan',
     command: 'task.graph-plan',
     inputSchema: {
@@ -274,7 +274,7 @@ const TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'coordinate_agents_task_graph_run',
-    description: 'Dispatch the current deterministic READY frontier concurrently up to the persisted maxConcurrency, with one isolated worktree and Runtime-owned Session per selected subtask.',
+    description: 'Dispatch the current deterministic non-conflicting READY wave up to maxConcurrency, with one isolated worktree and Runtime-owned Session per selected subtask.',
     operation: 'taskGraphRun',
     command: 'task.graph-run',
     inputSchema: {

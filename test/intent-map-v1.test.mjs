@@ -7,8 +7,11 @@ import test from 'node:test';
 
 import {
   intentCoverageFacts,
+  intentSchedulingWave,
   normalizeWriteIntentPattern,
   validateIntentMapV1,
+  writeIntentConflictBetween,
+  writeIntentPatternsMayOverlap,
 } from '../skills/coordinate-agents/scripts/intent-map-contract.mjs';
 import {
   readTaskGraph,
@@ -89,6 +92,73 @@ test('Intent Map v1 defaults policy, sorts coverage, normalizes separators, and 
     ],
   });
   assert.equal(normalizeWriteIntentPattern('src\\feature//./file.js'), 'src/feature/file.js');
+});
+
+test('write-intent overlap is deterministic, literal-disjoint when provable, and conservative after glob syntax', () => {
+  assert.equal(writeIntentPatternsMayOverlap('src/alpha/**', 'src/beta/**'), false);
+  assert.equal(writeIntentPatternsMayOverlap('src/shared/**', 'src/shared/file.js'), true);
+  assert.equal(writeIntentPatternsMayOverlap('src/*/index.js', 'src/*/other.js'), true);
+  assert.equal(writeIntentPatternsMayOverlap('README.md', 'README.zh-CN.md'), false);
+
+  const normalized = validateIntentMapV1({
+    schemaVersion: 1,
+    parentTaskId: 'task-intent-map',
+    subtasks: [
+      { id: 'backend', writeIntent: ['src/shared/**'] },
+      { id: 'docs', writeIntent: ['src/shared/file.js'] },
+    ],
+  }, validatedGraph());
+  const graphWithIntent = { ...validatedGraph(), intentMap: normalized };
+  assert.deepEqual(writeIntentConflictBetween(graphWithIntent, 'docs', 'backend'), {
+    code: 'WRITE_INTENT_CONFLICT',
+    subtasks: ['backend', 'docs'],
+    patterns: [
+      { subtaskId: 'backend', pattern: 'src/shared/**' },
+      { subtaskId: 'docs', pattern: 'src/shared/file.js' },
+    ],
+    conservative: true,
+  });
+});
+
+test('Intent Map scheduling greedily selects one deterministic non-conflicting READY wave', () => {
+  const schedulingGraph = {
+    parentTaskId: 'task-wave',
+    subtasks: [{ id: 'alpha' }, { id: 'beta' }, { id: 'gamma' }, { id: 'running' }],
+    intentMap: {
+      schemaVersion: 1,
+      parentTaskId: 'task-wave',
+      scopePolicy: 'warn',
+      subtasks: [
+        { id: 'alpha', writeIntent: ['src/shared/**'] },
+        { id: 'beta', writeIntent: ['src/shared/file.js'] },
+        { id: 'gamma', writeIntent: ['docs/**'] },
+        { id: 'running', writeIntent: ['config/**'] },
+      ],
+    },
+  };
+  const frontier = {
+    ready: ['alpha', 'beta', 'gamma'],
+    running: ['running'],
+    eligible: ['alpha', 'beta'],
+    capacityLimited: ['gamma'],
+    runningCount: 1,
+    availableSlots: 2,
+    maxConcurrency: 3,
+  };
+  const first = intentSchedulingWave(schedulingGraph, frontier);
+  const second = intentSchedulingWave(schedulingGraph, frontier);
+  assert.deepEqual(first, second);
+  assert.deepEqual(first.selected, ['alpha', 'gamma']);
+  assert.deepEqual(first.conflictDeferred, ['beta']);
+  assert.deepEqual(first.capacityLimited, []);
+  assert.equal(first.conflicts[0].code, 'WRITE_INTENT_CONFLICT');
+  assert.deepEqual(first.conflicts[0].subtasks, ['alpha', 'beta']);
+  assert.match(first.reasons.beta, /deferred from this wave/);
+
+  const legacy = intentSchedulingWave({ ...schedulingGraph, intentMap: null }, frontier);
+  assert.equal(legacy.intentCoverageAvailable, false);
+  assert.deepEqual(legacy.selected, frontier.eligible);
+  assert.deepEqual(legacy.capacityLimited, frontier.capacityLimited);
 });
 
 test('Intent Map v1 rejects unsupported, contradictory, duplicate, unsafe, malformed, and oversized input', () => {

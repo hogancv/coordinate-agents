@@ -32,7 +32,12 @@ import {
 } from './runtime-events.mjs';
 import { validateTaskId } from './task-runtime.mjs';
 import { EXECUTION_SESSION_STATES } from './session-manager.mjs';
-import { intentCoverageFacts, validateIntentMapV1 } from './intent-map-contract.mjs';
+import {
+  intentCoverageFacts,
+  intentSchedulingWave,
+  validateIntentMapV1,
+  writeIntentConflictBetween,
+} from './intent-map-contract.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
 export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
@@ -1687,7 +1692,19 @@ export function taskGraphSchedulingView(record) {
       stage: 'graph-scheduling',
     });
   }
-  return { subtasks, frontier };
+  return { subtasks, frontier, wave: intentSchedulingWave(validated, frontier) };
+}
+
+/** Read one immutable scheduling snapshot while serialized with graph writers. */
+export function readTaskGraphSchedulingSnapshot(root, parentTaskId) {
+  const { repository, bus } = ensureGraphStore(root);
+  const release = acquireConfigLock(bus);
+  try {
+    const graph = readStoredGraph(repository, parentTaskId);
+    return { graph, scheduling: taskGraphSchedulingView(graph) };
+  } finally {
+    release();
+  }
 }
 
 export function hasTaskGraph(root, parentTaskId) {
@@ -2668,6 +2685,19 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
             runningCount,
             availableSlots: 0,
           },
+        });
+      }
+    }
+    if (details.requireIntentCompatible === true && nextState === 'RUNNING' && target.state !== 'RUNNING') {
+      for (const running of current.subtasks.filter(subtask => subtask.state === 'RUNNING').sort((left, right) => compareIds(left.id, right.id))) {
+        const conflict = writeIntentConflictBetween(current, target.id, running.id);
+        if (!conflict) continue;
+        throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} cannot run ${subtaskId} concurrently with ${running.id} because their write intents conflict.`, {
+          recoverable: true,
+          taskId: parentTaskId,
+          subtaskId,
+          stage: 'graph-scheduling',
+          details: { conflict },
         });
       }
     }

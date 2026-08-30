@@ -128,13 +128,16 @@ existing `task status`/`task inspect` operations, or the explicit
 `task graph-status`/`task graph-inspect` aliases, to read the durable graph.
 Use `coordinate_agents_task_graph_plan` (or `task graph-plan`) to preview the
 deterministic dependency and capacity decisions with explicit configured
-Agent, Adapter, and executable facts. Planning creates no worktree, Bus
-message, Session, event, or process.
+Agent, Adapter, and executable facts. If Intent Map coverage is available, the
+plan greedily derives a stable non-conflicting READY wave and bounded
+`WRITE_INTENT_CONFLICT` facts. Conflict deferral never rewrites `dependsOn`.
+Planning creates no worktree, Bus message, Session, event, or process.
 Use `coordinate_agents_task_graph_run` (or `task graph-run`) to execute the
-current eligible prefix concurrently up to `maxConcurrency`. Each selected
+current selected wave concurrently up to `maxConcurrency`. Each selected
 subtask gets an isolated worktree, branch/ref, Bus message, and Runtime-owned
 Session; the operation does not recursively launch work unlocked during the
-same run.
+same run. The graph lock rechecks write-intent compatibility against RUNNING
+subtasks before any worktree, Session, or Implementer launch.
 To dispatch one ready subtask, use `coordinate_agents_task_graph_dispatch` (or
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>`), which executes
 the subtask in an isolated Git worktree rooted at the exact graph base commit

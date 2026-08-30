@@ -75,6 +75,13 @@ repository-relative `writeIntent` declaration per subtask. It is normalized
 and validated before side effects, persisted in the same graph record, and
 reported by status/inspect/plan as unavailable, explicit-empty, or declared
 coverage. Schema: `schemas/intent-map-v1.schema.json`.
+With available Intent Map coverage, graph plan/run derive a deterministic
+non-conflicting READY wave in stable subtask-ID order. Conservatively
+intersecting normalized patterns defer the later item with bounded
+`WRITE_INTENT_CONFLICT` facts; dependency and capacity decisions remain
+separate. Dispatch rechecks conflicts with RUNNING work under the graph lock
+before launch. Missing coverage preserves v2.3 scheduling and is reported as
+unavailable. No dependency edge is inferred and this is not diff audit.
 `coordinate_agents_task_graph_plan` returns deterministic dependency and
 max-concurrency decisions with bounded reasons and exact configured Agent,
 Adapter, executable, and command-source facts. It does not create a worktree,

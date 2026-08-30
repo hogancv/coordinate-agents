@@ -107,10 +107,12 @@ and contain only normalized repository-relative patterns; an empty
 `writeIntent` is explicit coverage, while a missing map remains unavailable.
 Invalid maps stop creation before Runtime side effects. Call
 `coordinate_agents_task_graph_plan` to read the deterministic dependency and
-capacity decisions with explicit Agent, Adapter, and executable facts; planning
-never creates execution state. Call `coordinate_agents_task_graph_run` to
-dispatch the current eligible prefix concurrently without exceeding the
-persisted limit; each selected subtask receives its own worktree and Session,
+capacity decisions with explicit Agent, Adapter, and executable facts. When an
+Intent Map exists, planning also returns one stable non-conflicting READY wave,
+bounded `WRITE_INTENT_CONFLICT` facts, and explicit deferred reasons without
+changing `dependsOn`; planning never creates execution state. Call
+`coordinate_agents_task_graph_run` to dispatch the selected wave concurrently
+without exceeding the persisted limit; each selected subtask receives its own worktree and Session,
 and newly unlocked work remains READY for a later explicit run. Call
 `coordinate_agents_task_graph_dispatch` to execute one READY subtask in an
 isolated Git worktree rooted at the exact graph base commit. On interruption,

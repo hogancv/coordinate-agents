@@ -62,6 +62,11 @@ it before sharing diagnostics.
   Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle
   event, or child process.
 
+- With Intent Map coverage, planning treats any unprovable pattern separation conservatively,
+  emits bounded `WRITE_INTENT_CONFLICT` facts, and defers the later READY subtask in stable ID
+  order. Dispatch rechecks conflicts with RUNNING subtasks under the graph lock before launch.
+  This never adds dependency edges, executes patterns in a shell, or substitutes for diff audit.
+
 - Graph subtask dispatch captures one exact base commit, creates only a Runtime-owned worktree and
   branch under the repository graph area, and roots the persistent Session there. It rejects unsafe
   paths and branch inputs, preserves exact Adapter command precedence, keeps the user's checkout

@@ -116,6 +116,13 @@ Adapter, command, and command-source facts. It rejects unknown arguments and
 invalid Agent/Adapter/executable configuration without creating a worktree,
 Bus message, Session, event, or child process.
 
+With Intent Map coverage, the plan additionally returns a deterministic
+`wave`, `conflictDeferred`, and bounded `WRITE_INTENT_CONFLICT` facts. Stable
+subtask-ID order greedily selects non-conflicting READY work up to capacity;
+unprovable glob separation is treated conservatively. Missing coverage keeps
+the v2.3 selection and reports `intentCoverageAvailable: false`. Dependency,
+capacity, and intent decisions remain distinct and no `dependsOn` edge changes.
+
 `coordinate_agents_task_graph_run` executes only the eligible prefix from one
 deterministic scheduling snapshot, up to the persisted `maxConcurrency` after
 counting existing RUNNING subtasks. Every selected subtask is claimed under the
@@ -123,6 +130,9 @@ graph lock, uses the same captured graph base commit, and receives its own
 Runtime-owned worktree, branch/ref, Bus handoff, and Session. Results and errors
 remain parent/subtask-associated; the operation waits for all selected bounded
 dispatch observations without recursively launching newly unlocked work.
+The locked claim rechecks write-intent compatibility against RUNNING subtasks;
+a conflict fails before launch without fallback, retry, sibling mutation, or
+user-checkout mutation.
 
 `coordinate_agents_task_graph_dispatch` dispatches one selected `READY` subtask
 from a persisted Task Graph in an isolated Git worktree without modifying

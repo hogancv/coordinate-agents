@@ -138,8 +138,9 @@ Status, inspect, and plan return additive `intentCoverage` facts.
 `available: false` and `writeIntent: null` mean no companion map exists;
 `coverage: "explicit-empty"` and `writeIntent: []` mean the subtask was
 deliberately declared with no write pattern. Intent Map v1 is declaration and
-visibility only; conflict scheduling and implementation-diff auditing are
-separate contracts.
+visibility input for conflict-aware scheduling; it does not prove that an
+implementation respected the declaration. Implementation-diff auditing is a
+separate contract.
 
 The established `task status` and `task inspect` operations recognize a graph
 parent ID without changing the single-Task response for ordinary Tasks. The
@@ -163,15 +164,23 @@ coordinate-agents task graph plan <parentTaskId> --root <repository> --json
 ```
 
 The MCP equivalent is `coordinate_agents_task_graph_plan`. The plan sorts all
-subtasks by identifier, exposes the concurrency-eligible prefix and any
-capacity-limited READY subtasks, and gives every decision a bounded reason plus
-its dependency outcomes. Each decision carries the explicitly assigned Agent,
+subtasks by identifier and derives one deterministic READY wave. Without an
+Intent Map it preserves the v2.3 concurrency-eligible prefix and visibly marks
+intent coverage unavailable. With a map it greedily selects non-conflicting
+READY subtasks up to capacity. A normalized literal-prefix mismatch proves two
+patterns disjoint; once glob syntax prevents proof, intersection is treated
+conservatively. A later conflicting subtask is returned in `conflictDeferred`
+with a bounded `WRITE_INTENT_CONFLICT` fact naming both subtasks and the first
+relevant normalized pattern pair. Capacity-limited and dependency decisions
+remain separate. Each decision carries the explicitly assigned Agent,
 registered Adapter, effective configured command, and `project`, `user`, or
 `adapter-default` command source. No fallback Agent is selected. Missing or
 contradictory registry facts fail before execution.
 
-Planning reads the persisted `maxConcurrency` and current RUNNING count. It is
-idempotent: unchanged durable state produces the same plan and creates no
+Planning reads one graph snapshot under the existing graph lock, including the
+persisted `maxConcurrency`, current RUNNING count, and normalized Intent Map.
+Execution uses the same wave derivation and rechecks the claim under that lock.
+Planning is idempotent: unchanged durable state produces the same plan and creates no
 worktree, Bus message, Session, lifecycle event, or child process. The output
 contract is `schemas/task-graph-v1-plan.schema.json`.
 
@@ -187,15 +196,20 @@ coordinate-agents task graph run <parentTaskId> --root <repository> --json
 
 The MCP equivalent is `coordinate_agents_task_graph_run`; an optional
 `sessionWaitMs` bounds the observation window for each selected subtask. The
-Scheduler snapshots the deterministic plan once and launches only its eligible
-prefix. Newly unlocked work is left READY for a later explicit run rather than
+Scheduler snapshots the deterministic plan once and launches only its selected
+wave. Newly unlocked work is left READY for a later explicit run rather than
 being launched recursively.
 
 All selected subtasks share one exact graph base commit but use distinct
 Runtime-owned worktree roots, branches/refs, Bus messages, and Session IDs.
 The graph lock atomically checks both READY state and remaining concurrency
 capacity, so concurrent callers cannot double-dispatch a subtask or exceed
-`maxConcurrency`. Session records and events retain both `parentTaskId` and
+`maxConcurrency`. When an Intent Map exists, the same locked claim also rejects
+a selected subtask that conflicts with a currently RUNNING subtask before any
+worktree, Bus message, Adapter, Session, or Implementer launch. Conflict
+constraints never add, remove, or infer a dependency edge, never mutate a
+sibling, and never trigger fallback or automatic retry. Session records and
+events retain both `parentTaskId` and
 `subtaskId`. Verified `IMPLEMENTATION_DONE` evidence unlocks dependents;
 unresolved prerequisites remain WAITING, while a failed or stopped prerequisite
 blocks only its downstream work. One selected failure is returned beside the

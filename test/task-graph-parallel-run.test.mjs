@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -163,7 +164,7 @@ process.exit(0);
   return command;
 }
 
-async function configuredFixture(root, home, parentTaskId, { failSubtask = '' } = {}) {
+async function configuredFixture(root, home, parentTaskId, { failSubtask = '', intentMap = null } = {}) {
   const shared = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-parallel-shared-'));
   process.env.COORDINATE_AGENTS_HOME = home;
   process.env.PARALLEL_SHARED = shared;
@@ -179,7 +180,7 @@ async function configuredFixture(root, home, parentTaskId, { failSubtask = '' } 
     args: ['{prompt}'],
     role: 'implementer',
   });
-  await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
+  await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId), intentMap });
   return shared;
 }
 
@@ -247,6 +248,54 @@ test('graph-run executes only the bounded READY prefix in distinct worktrees and
   }
 });
 
+test('graph-run launches one deterministic non-conflicting write-intent wave', async () => {
+  const root = repository('coordinate-agents-parallel-intent-');
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-parallel-home-'));
+  const oldHome = process.env.COORDINATE_AGENTS_HOME;
+  let shared;
+  let result;
+  try {
+    const parentTaskId = 'task-parallel-intent';
+    shared = await configuredFixture(root, home, parentTaskId, {
+      intentMap: {
+        schemaVersion: 1,
+        parentTaskId,
+        scopePolicy: 'warn',
+        subtasks: [
+          { id: 'alpha', writeIntent: ['src/shared/**'] },
+          { id: 'beta', writeIntent: ['src/shared/file.js'] },
+          { id: 'gamma', writeIntent: ['docs/**'] },
+          { id: 'dependent', writeIntent: [] },
+        ],
+      },
+    });
+    result = await runtimeTaskGraphRun({ root, taskId: parentTaskId, sessionWaitMs: 10_000 });
+    assert.deepEqual(result.selected, ['alpha', 'gamma']);
+    assert.deepEqual(result.initialPlan.wave.selected, ['alpha', 'gamma']);
+    assert.deepEqual(result.initialPlan.wave.conflictDeferred, ['beta']);
+    assert.equal(result.initialPlan.conflicts[0].code, 'WRITE_INTENT_CONFLICT');
+    assert.equal(result.summary.selected, 2);
+    assert.equal(result.summary.succeeded, 2);
+    assert.equal(existsSync(join(shared, 'alpha.started')), true);
+    assert.equal(existsSync(join(shared, 'gamma.started')), true);
+    assert.equal(existsSync(join(shared, 'beta.started')), false);
+    assert.deepEqual(
+      readTaskGraph(root, parentTaskId).subtasks.find(item => item.id === 'dependent').dependsOn,
+      ['alpha', 'beta'],
+    );
+  } finally {
+    await closeOutcomes(result?.outcomes);
+    await removeTree(root);
+    rmSync(home, { recursive: true, force: true });
+    if (shared) rmSync(shared, { recursive: true, force: true });
+    delete process.env.PARALLEL_SHARED;
+    delete process.env.PARALLEL_PARENT_ROOT;
+    delete process.env.PARALLEL_FAIL_SUBTASK;
+    if (oldHome === undefined) delete process.env.COORDINATE_AGENTS_HOME;
+    else process.env.COORDINATE_AGENTS_HOME = oldHome;
+  }
+});
+
 test('graph-run isolates one failing subtask while preserving its successful sibling and blocking only dependents', async () => {
   const root = repository('coordinate-agents-parallel-failure-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-parallel-home-'));
@@ -300,6 +349,57 @@ test('atomic graph dispatch rejects a third RUNNING subtask at maxConcurrency be
     assert.equal(error.stage, 'graph-scheduling');
     assert.equal(readTaskGraph(root, 'task-parallel-capacity').subtasks.find(item => item.id === 'gamma').state, 'READY');
     assert.equal(existsSync(join(root, '.agent-bus', 'worktrees')), false);
+  } finally {
+    await removeTree(root);
+    rmSync(home, { recursive: true, force: true });
+    if (oldHome === undefined) delete process.env.COORDINATE_AGENTS_HOME;
+    else process.env.COORDINATE_AGENTS_HOME = oldHome;
+  }
+});
+
+test('atomic graph dispatch rejects a running write-intent conflict before worktree or Session launch', async () => {
+  const root = repository('coordinate-agents-parallel-conflict-');
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-parallel-home-'));
+  const oldHome = process.env.COORDINATE_AGENTS_HOME;
+  try {
+    process.env.COORDINATE_AGENTS_HOME = home;
+    const parentTaskId = 'task-parallel-conflict';
+    await runtimeTaskGraphCreate({
+      root,
+      graph: graph(parentTaskId),
+      intentMap: {
+        schemaVersion: 1,
+        parentTaskId,
+        subtasks: [
+          { id: 'alpha', writeIntent: ['src/shared/**'] },
+          { id: 'beta', writeIntent: ['src/shared/file.js'] },
+          { id: 'gamma', writeIntent: ['docs/**'] },
+          { id: 'dependent', writeIntent: [] },
+        ],
+      },
+    });
+    setTaskGraphSubtaskState(root, parentTaskId, 'alpha', 'RUNNING', {
+      expectedState: 'READY',
+      requireAvailableSlot: true,
+      requireIntentCompatible: true,
+    });
+    const error = await runtimeTaskGraphDispatch({
+      root,
+      taskId: parentTaskId,
+      subtaskId: 'beta',
+      sessionWaitMs: 0,
+    }).catch(value => value);
+    assert.equal(error.code, 'TASK_STATE_CONFLICT');
+    assert.equal(error.stage, 'graph-scheduling');
+    assert.equal(error.details.conflict.code, 'WRITE_INTENT_CONFLICT');
+    const stored = readTaskGraph(root, parentTaskId);
+    assert.equal(stored.subtasks.find(item => item.id === 'alpha').state, 'RUNNING');
+    assert.equal(stored.subtasks.find(item => item.id === 'beta').state, 'READY');
+    assert.equal(stored.subtasks.find(item => item.id === 'gamma').state, 'READY');
+    assert.equal(existsSync(join(root, '.agent-bus', 'worktrees', parentTaskId, 'beta')), false);
+    const sessionsPath = join(root, '.agent-bus', 'sessions');
+    assert.equal(!existsSync(sessionsPath) || readdirSync(sessionsPath).length === 0, true);
+    assert.deepEqual(stored.subtasks.find(item => item.id === 'dependent').dependsOn, ['alpha', 'beta']);
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });

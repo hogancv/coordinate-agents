@@ -28,6 +28,11 @@ Write-intent patterns are structured data and are never evaluated through a shel
 Graph planning reports deterministic dependency, capacity, and exact configured
 Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle event,
 or child process.
+When Intent Map coverage exists, literal prefix mismatches prove separation and all unresolved glob
+relationships are treated conservatively. The later READY item is deferred with a bounded
+`WRITE_INTENT_CONFLICT` fact. Dispatch repeats the same compatibility check against RUNNING items
+under the graph lock before any worktree, Session, or process launch. No dependency edge is added,
+patterns are never executed through a shell, and declaration-based scheduling is not diff audit.
 The graph-dispatch operation captures one exact base commit and uses only a Runtime-owned,
 repository-contained, non-symlinked worktree and branch for the selected READY subtask. Its
 persistent Session is rooted at that worktree; exact Adapter command precedence, bounded I/O, and

@@ -107,6 +107,7 @@ import {
   integrateTaskGraph,
   listTaskGraphs,
   readTaskGraph,
+  readTaskGraphSchedulingSnapshot,
   setTaskGraphIntegration,
   setTaskGraphReview,
   setTaskGraphState,
@@ -114,7 +115,6 @@ import {
   taskGraphBranchName,
   taskGraphBranchRef,
   taskGraphStatusPayload,
-  taskGraphSchedulingView,
   taskGraphWorktreePath,
   verifyDurableImplementationCommit,
   verifyGraphImplementationCommit,
@@ -1787,7 +1787,7 @@ function taskGraphViewCommand(options, operation, { json = false, commandName = 
   return payload;
 }
 
-function schedulingDecision(graph, subtask, agent, eligibleIds, capacityLimitedIds) {
+function schedulingDecision(graph, subtask, agent, eligibleIds, capacityLimitedIds, conflictById, waveReasons, intentCoverageAvailable) {
   const dependencies = subtask.dependsOn.map(id => {
     const dependency = graph.subtasks.find(candidate => candidate.id === id);
     return { id, state: dependency.state };
@@ -1796,12 +1796,20 @@ function schedulingDecision(graph, subtask, agent, eligibleIds, capacityLimitedI
   let reason = subtask.reason;
   if (eligibleIds.has(subtask.id)) {
     decision = 'ELIGIBLE';
-    reason = subtask.dependsOn.length === 0
-      ? 'Eligible: no dependencies and a concurrency slot is available.'
-      : 'Eligible: all dependencies succeeded and a concurrency slot is available.';
+    reason = intentCoverageAvailable
+      ? (subtask.dependsOn.length === 0
+        ? 'Eligible: no dependencies, no selected write-intent conflict, and a concurrency slot is available.'
+        : 'Eligible: all dependencies succeeded, no selected write-intent conflict exists, and a concurrency slot is available.')
+      : (subtask.dependsOn.length === 0
+        ? 'Eligible: no dependencies and a concurrency slot is available.'
+        : 'Eligible: all dependencies succeeded and a concurrency slot is available.');
+  } else if (conflictById.has(subtask.id)) {
+    decision = 'WRITE_INTENT_CONFLICT';
+    reason = waveReasons[subtask.id];
   } else if (capacityLimitedIds.has(subtask.id)) {
     decision = 'CAPACITY_LIMITED';
-    reason = `Capacity-limited: ${graph.frontier.runningCount} of ${graph.maxConcurrency} slots are running and earlier READY subtasks consume the remaining slots.`;
+    reason = waveReasons[subtask.id]
+      || `Capacity-limited: ${graph.frontier.runningCount} of ${graph.maxConcurrency} slots are running and earlier READY subtasks consume the remaining slots.`;
   } else if (subtask.state === 'RUNNING') {
     reason = 'Running: this subtask already consumes one concurrency slot.';
   } else if (subtask.state === 'SUCCEEDED') {
@@ -1823,14 +1831,14 @@ function schedulingDecision(graph, subtask, agent, eligibleIds, capacityLimitedI
     reason: redactOutput(reason || 'Not schedulable.', 2 * 1024),
     dependencies,
     agent,
+    ...(conflictById.has(subtask.id) ? { conflict: conflictById.get(subtask.id) } : {}),
   };
 }
 
 async function taskGraphPlanCommand(options, { json = false } = {}) {
   const root = assertGitRepositoryWithoutProcess(options.root, messages.en);
   const taskId = graphTaskId(options, root);
-  const graph = readTaskGraph(root, taskId);
-  const scheduling = taskGraphSchedulingView(graph);
+  const { graph, scheduling } = readTaskGraphSchedulingSnapshot(root, taskId);
   const userConfig = readUserConfig();
   const adapterRegistry = await loadConfiguredAdaptersForRuntime(userConfig);
   const busConfig = readConfig(join(root, '.agent-bus'));
@@ -1884,8 +1892,12 @@ async function taskGraphPlanCommand(options, { json = false } = {}) {
     });
   }
 
-  const eligibleIds = new Set(scheduling.frontier.eligible);
-  const capacityLimitedIds = new Set(scheduling.frontier.capacityLimited);
+  const eligibleIds = new Set(scheduling.wave.selected);
+  const capacityLimitedIds = new Set(scheduling.wave.capacityLimited);
+  const conflictById = new Map(scheduling.wave.conflicts.map(conflict => {
+    const deferred = conflict.subtasks.find(id => scheduling.wave.conflictDeferred.includes(id));
+    return [deferred, conflict];
+  }));
   const decisions = [...scheduling.subtasks]
     .sort((left, right) => (left.id < right.id ? -1 : (left.id > right.id ? 1 : 0)))
     .map(subtask => schedulingDecision(
@@ -1894,6 +1906,9 @@ async function taskGraphPlanCommand(options, { json = false } = {}) {
       agentFacts.get(subtask.implementer),
       eligibleIds,
       capacityLimitedIds,
+      conflictById,
+      scheduling.wave.reasons,
+      scheduling.wave.intentCoverageAvailable,
     ));
   const payload = jsonSuccess('task.graph-plan', {
     root,
@@ -1910,6 +1925,9 @@ async function taskGraphPlanCommand(options, { json = false } = {}) {
       availableSlots: scheduling.frontier.availableSlots,
       eligible: decisions.filter(item => item.decision === 'ELIGIBLE'),
       capacityLimited: decisions.filter(item => item.decision === 'CAPACITY_LIMITED'),
+      conflictDeferred: decisions.filter(item => item.decision === 'WRITE_INTENT_CONFLICT'),
+      conflicts: scheduling.wave.conflicts,
+      wave: scheduling.wave,
       decisions,
       intentCoverage: intentCoverageFacts(graph),
     },
@@ -3182,6 +3200,7 @@ async function taskGraphDispatchCommand(options, { json = false } = {}) {
     setTaskGraphSubtaskState(repository, parentTaskId, subtaskId, 'RUNNING', {
       expectedState: 'READY',
       requireAvailableSlot: true,
+      requireIntentCompatible: true,
       baseCommit,
       spec: effectiveSpec,
       reason: `Dispatching subtask ${subtaskId}.`,

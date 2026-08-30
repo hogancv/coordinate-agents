@@ -92,6 +92,9 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 它必须使用相同父 Task ID、恰好覆盖每个子任务一次，并仅包含标准化的仓库相对写入模式；
 `scopePolicy` 默认为 `warn`。status、inspect 和 plan 会区分旧图的覆盖不可用
 （`writeIntent: null`）与显式空声明（`writeIntent: []`）。无效或超限映射会在任何运行时副作用前拒绝。
+存在 Intent Map 时，plan 会按稳定子任务 ID 顺序贪心选择非冲突 READY 波次；无法证明分离的 glob
+模式会保守返回 `WRITE_INTENT_CONFLICT` 并延后后续项。依赖、容量与意图决策保持独立，
+不会改写 `dependsOn`。dispatch 会在图锁内针对 RUNNING 子任务重复检查，然后才允许启动。
 通过 `coordinate_agents_task_graph_run` 或 `task graph-run --id <parentTaskId>` 可对当前合格前沿执行一次
 有界并行派发：不超过 `maxConcurrency`，每个子任务使用独立 worktree、分支和 Runtime Session，
 新解锁的工作保持 READY，等待下一次显式执行。

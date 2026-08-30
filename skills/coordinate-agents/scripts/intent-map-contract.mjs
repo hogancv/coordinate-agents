@@ -6,6 +6,7 @@ export const INTENT_MAP_DEFAULT_SCOPE_POLICY = 'warn';
 export const INTENT_MAP_MAX_INPUT_BYTES = 1024 * 1024;
 export const INTENT_MAP_MAX_PATTERNS = 4096;
 export const INTENT_MAP_MAX_PATTERN_BYTES = 4096;
+export const INTENT_MAP_MAX_CONFLICT_PATTERN_DISPLAY = INTENT_MAP_MAX_PATTERN_BYTES;
 
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
 const WINDOWS_DRIVE = /^[A-Za-z]:/;
@@ -183,5 +184,136 @@ export function intentCoverageFacts(graph) {
         writeIntent,
       };
     }),
+  };
+}
+
+function patternLiteralPrefix(pattern) {
+  const prefix = [];
+  let wildcard = false;
+  for (const segment of pattern.split('/')) {
+    if (/[*?\[\]{}]/.test(segment)) {
+      wildcard = true;
+      break;
+    }
+    prefix.push(segment);
+  }
+  return { prefix, wildcard };
+}
+
+/**
+ * Return whether two normalized repository-relative patterns can intersect.
+ * Literal mismatches prove disjointness. Once either side introduces glob
+ * syntax, the result is deliberately conservative rather than pretending to
+ * implement a filesystem-specific glob engine.
+ */
+export function writeIntentPatternsMayOverlap(left, right) {
+  if (left === right) return true;
+  const leftFacts = patternLiteralPrefix(left);
+  const rightFacts = patternLiteralPrefix(right);
+  if (!leftFacts.wildcard && !rightFacts.wildcard) return false;
+  const shared = Math.min(leftFacts.prefix.length, rightFacts.prefix.length);
+  for (let index = 0; index < shared; index += 1) {
+    if (leftFacts.prefix[index] !== rightFacts.prefix[index]) return false;
+  }
+  return true;
+}
+
+function conflictPattern(value) {
+  return value.length <= INTENT_MAP_MAX_CONFLICT_PATTERN_DISPLAY
+    ? value
+    : `${value.slice(0, INTENT_MAP_MAX_CONFLICT_PATTERN_DISPLAY - 1)}…`;
+}
+
+/** Return the first deterministic conflict fact between two subtasks. */
+export function writeIntentConflictBetween(graph, leftSubtaskId, rightSubtaskId) {
+  if (!graph.intentMap) return null;
+  const declarations = new Map(graph.intentMap.subtasks.map(item => [item.id, item.writeIntent]));
+  const leftPatterns = declarations.get(leftSubtaskId) || [];
+  const rightPatterns = declarations.get(rightSubtaskId) || [];
+  for (const leftPattern of leftPatterns) {
+    for (const rightPattern of rightPatterns) {
+      if (!writeIntentPatternsMayOverlap(leftPattern, rightPattern)) continue;
+      const ordered = leftSubtaskId < rightSubtaskId
+        ? [
+          { subtaskId: leftSubtaskId, pattern: conflictPattern(leftPattern) },
+          { subtaskId: rightSubtaskId, pattern: conflictPattern(rightPattern) },
+        ]
+        : [
+          { subtaskId: rightSubtaskId, pattern: conflictPattern(rightPattern) },
+          { subtaskId: leftSubtaskId, pattern: conflictPattern(leftPattern) },
+        ];
+      return Object.freeze({
+        code: 'WRITE_INTENT_CONFLICT',
+        subtasks: Object.freeze(ordered.map(item => item.subtaskId)),
+        patterns: Object.freeze(ordered.map(item => Object.freeze(item))),
+        conservative: leftPattern !== rightPattern,
+      });
+    }
+  }
+  return null;
+}
+
+/**
+ * Derive one deterministic conflict-aware READY wave from a validated graph
+ * and its dependency/capacity frontier. No graph or dependency fact changes.
+ */
+export function intentSchedulingWave(graph, frontier) {
+  const availableSlots = Math.max(0, frontier.availableSlots);
+  const ready = [...frontier.ready];
+  if (!graph.intentMap) {
+    return {
+      schemaVersion: 1,
+      deterministic: true,
+      intentCoverageAvailable: false,
+      selected: [...frontier.eligible],
+      conflictDeferred: [],
+      capacityLimited: [...frontier.capacityLimited],
+      conflicts: [],
+      reasons: Object.fromEntries(frontier.capacityLimited.map(id => [
+        id,
+        `Capacity-limited: ${frontier.runningCount} of ${frontier.maxConcurrency} slots are running and earlier READY subtasks consume the remaining slots.`,
+      ])),
+    };
+  }
+
+  const selected = [];
+  const conflictDeferred = [];
+  const capacityLimited = [];
+  const conflicts = [];
+  const reasons = {};
+  const running = [...frontier.running];
+  for (const candidate of ready) {
+    const blockers = [...running, ...selected];
+    let conflict = null;
+    for (const blocker of blockers) {
+      conflict = writeIntentConflictBetween(graph, candidate, blocker);
+      if (conflict) break;
+    }
+    if (conflict) {
+      conflictDeferred.push(candidate);
+      conflicts.push(conflict);
+      const other = conflict.subtasks.find(id => id !== candidate);
+      const candidatePattern = conflict.patterns.find(item => item.subtaskId === candidate)?.pattern || '';
+      const otherPattern = conflict.patterns.find(item => item.subtaskId === other)?.pattern || '';
+      reasons[candidate] = `Write-intent conflict: ${candidate} pattern "${candidatePattern}" conservatively intersects ${other} pattern "${otherPattern}"; deferred from this wave.`.slice(0, 2048);
+      continue;
+    }
+    if (selected.length < availableSlots) {
+      selected.push(candidate);
+      continue;
+    }
+    capacityLimited.push(candidate);
+    reasons[candidate] = `Capacity-limited: ${frontier.runningCount} of ${frontier.maxConcurrency} slots are running and earlier non-conflicting READY subtasks consume the remaining slots.`;
+  }
+
+  return {
+    schemaVersion: 1,
+    deterministic: true,
+    intentCoverageAvailable: true,
+    selected,
+    conflictDeferred,
+    capacityLimited,
+    conflicts,
+    reasons,
   };
 }
