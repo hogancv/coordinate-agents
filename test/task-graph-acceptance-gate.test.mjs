@@ -35,3 +35,12 @@ test('Task Graph gate documentation keeps review and release authorization separ
   assert.match(documentation, /Node\.js 18 and Node\.js 22/);
   assert.match(documentation, /does not authorize merge, push, tag, publish, deploy, or release/i);
 });
+
+test('Plugin security scan runs for pull requests and manual checks but not push events', () => {
+  const workflow = readFileSync(join(root, '.github', 'workflows', 'plugin-security-scan.yml'), 'utf8');
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /^\s*push:/m);
+  assert.match(workflow, /hashgraph-online\/ai-plugin-scanner-action@[0-9a-f]{40}/);
+  assert.match(workflow, /fail_on_severity: high/);
+});
