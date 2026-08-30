@@ -223,6 +223,39 @@ test('Task Graph integration refuses unresolved subtasks before creating aggrega
   }
 });
 
+test('Task Graph integration refuses a missing Runtime source ref without creating aggregate state', async () => {
+  const root = repository('coordinate-graph-integration-missing-ref-');
+  const parentTaskId = 'task-missing-ref';
+  try {
+    const { seeded } = await seedGraph(root, parentTaskId, [
+      { id: 'alpha', implementer: 'antigravity', spec: 'Implement alpha.' },
+    ]);
+    const beforeHead = git(root, ['rev-parse', 'HEAD']);
+    execFileSync('git', ['worktree', 'remove', '--force', seeded[0].worktreePath], {
+      cwd: root,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    execFileSync('git', ['update-ref', '-d', taskGraphBranchRef(parentTaskId, 'alpha')], {
+      cwd: root,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+
+    await assert.rejects(
+      runtimeTaskGraphIntegrate({ root, taskId: parentTaskId }),
+      error => error.code === 'TASK_STATE_CONFLICT'
+        && error.stage === 'graph-integration'
+        && /source ref is missing/.test(error.message),
+    );
+    assert.equal(readTaskGraph(root, parentTaskId).integration, null);
+    assert.equal(existsSync(taskGraphIntegrationWorktreePath(root, parentTaskId)), false);
+    assert.equal(git(root, ['rev-parse', 'HEAD']), beforeHead);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('Task Graph review refuses an aggregate after the verified source commit changes', async () => {
   const root = repository('coordinate-graph-integration-stale-review-');
   const parentTaskId = 'task-stale-review';

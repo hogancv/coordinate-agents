@@ -282,6 +282,37 @@ explicit through graph-cleanup or an unscoped graph-stop; it removes only the
 Runtime-owned aggregate worktree and retains the integration branch, commits,
 conflict facts, and review evidence.
 
+## Repository acceptance gate
+
+The repository acceptance gate exercises one complete deterministic graph from
+creation and read-only planning through bounded parallel execution, dependency
+unlocking, integration, explicit review, and ownership-safe cleanup. Every
+subtask must produce an isolated worktree, Runtime-owned Session, implementation
+commit, and matching evidence. The fixture also keeps tracked and untracked user
+changes in the checked-out worktree unchanged at every major stage.
+
+Focused negative controls cover malformed DAGs and Agent assignments, unsafe
+paths and refs, symlink or junction boundaries, missing executables, Session and
+dependency failures, cleanup ownership failures, stale integration sources,
+cherry-pick conflicts, and dirty or stale aggregate review. CLI and MCP calls
+must expose the same durable graph facts; MCP stdio remains JSON-RPC-pure and
+returns domain failures through structured content rather than protocol errors.
+
+Run the local gate from a clean checkout:
+
+```sh
+npm ci
+npm run check
+npm run demo
+npm pack --dry-run
+```
+
+The authoritative matrix is defined in
+`.github/workflows/adapter-sdk-acceptance.yml`. It runs the complete regression
+suite on Windows, macOS, and Linux with Node.js 18 and Node.js 22. Local results
+prove only the current host. Passing the gate or recording `REVIEW_APPROVED`
+does not authorize merge, push, tag, publish, deploy, or release.
+
 ## Subtask dispatch in an isolated Git worktree
 
 To execute one approved, dependency-ready subtask from a persisted graph, use
