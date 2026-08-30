@@ -792,6 +792,93 @@ test('MCP domain failures are structured and do not become protocol errors', asy
   }
 });
 
+test('MCP stdio Task Graph operations preserve CLI facts and keep graph failures inside structured content', async () => {
+  const repository = tempRepository('coordinate-agents-mcp-graph-gate-');
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-mcp-graph-home-'));
+  const env = isolatedEnvironment(home);
+  const client = new StdioMcpClient(env);
+  const parentTaskId = 'task-mcp-graph-gate';
+  const graph = {
+    schemaVersion: 1,
+    parentTask: {
+      id: parentTaskId,
+      title: 'Prove MCP Task Graph protocol purity',
+      planner: 'codex',
+      reviewer: 'codex',
+    },
+    subtasks: [
+      { id: 'alpha', implementer: 'antigravity', spec: 'Implement alpha.' },
+      { id: 'dependent', implementer: 'antigravity', spec: 'Implement dependent.', dependsOn: ['alpha'] },
+    ],
+    maxConcurrency: 1,
+  };
+  try {
+    const initialized = await client.request('initialize', {
+      protocolVersion: '2025-06-18',
+      clientInfo: { name: 'task-graph-gate', version: '1' },
+      capabilities: {},
+    });
+    assert.equal(initialized.result.protocolVersion, '2025-06-18');
+
+    const created = await client.request('tools/call', {
+      name: 'coordinate_agents_task_graph_create',
+      arguments: { root: repository, graph },
+    });
+    assert.equal(created.error, undefined);
+    assert.equal(created.result.isError, false);
+    assert.equal(created.result.structuredContent.command, 'task.graph-create');
+    assert.equal(created.result.structuredContent.graph.parentTaskId, parentTaskId);
+
+    const planned = await client.request('tools/call', {
+      name: 'coordinate_agents_task_graph_plan',
+      arguments: { root: repository, taskId: parentTaskId },
+    });
+    assert.equal(planned.error, undefined);
+    assert.equal(planned.result.isError, false);
+    assert.equal(planned.result.structuredContent.command, 'task.graph-plan');
+    assert.deepEqual(planned.result.structuredContent.plan.eligible.map(item => item.subtaskId), ['alpha']);
+
+    const cliStatus = invokeCli(['task', 'graph-status', '--root', repository, '--id', parentTaskId, '--json'], env);
+    assert.equal(cliStatus.status, 0, cliStatus.stderr || cliStatus.stdout);
+    const cliGraph = JSON.parse(cliStatus.stdout).graph;
+    const mcpStatus = await client.request('tools/call', {
+      name: 'coordinate_agents_task_status',
+      arguments: { root: repository, taskId: parentTaskId },
+    });
+    assert.deepEqual(
+      mcpStatus.result.structuredContent.graph.subtasks.map(item => ({ id: item.id, state: item.state, dependsOn: item.dependsOn })),
+      cliGraph.subtasks.map(item => ({ id: item.id, state: item.state, dependsOn: item.dependsOn })),
+    );
+    assert.deepEqual(mcpStatus.result.structuredContent.graph.frontier, cliGraph.frontier);
+
+    const invalid = await client.request('tools/call', {
+      name: 'coordinate_agents_task_graph_validate',
+      arguments: {
+        root: repository,
+        graph: {
+          ...graph,
+          parentTask: { ...graph.parentTask, id: 'task-mcp-cycle' },
+          subtasks: [
+            { id: 'alpha', implementer: 'antigravity', spec: 'Alpha.', dependsOn: ['beta'] },
+            { id: 'beta', implementer: 'antigravity', spec: 'Beta.', dependsOn: ['alpha'] },
+          ],
+        },
+      },
+    });
+    assert.equal(invalid.error, undefined);
+    assert.equal(invalid.result.isError, true);
+    assert.equal(invalid.result.structuredContent.ok, false);
+    assert.equal(invalid.result.structuredContent.error.code, 'TASK_GRAPH_INVALID');
+    assert.equal(invalid.result.structuredContent.error.stage, 'graph-validation');
+    assert.equal(existsSync(join(repository, '.agent-bus', 'worktrees')), false);
+    assert.equal(existsSync(join(repository, '.agent-bus', 'sessions')), false);
+  } finally {
+    await client.close();
+    rmSync(repository, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
