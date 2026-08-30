@@ -111,6 +111,7 @@ test('Plugin runtime resolves the cached canonical bin without a global CLI', ()
   const repository = tempRepository('coordinate-agents-plugin-runtime-repo-');
   try {
     cpSync(join(root, 'bin'), join(pluginRoot, 'bin'), { recursive: true });
+    cpSync(join(root, 'lib'), join(pluginRoot, 'lib'), { recursive: true });
     cpSync(join(root, 'skills'), join(pluginRoot, 'skills'), { recursive: true });
     cpSync(join(root, '.codex-plugin'), join(pluginRoot, '.codex-plugin'), { recursive: true });
     cpSync(join(root, 'package.json'), join(pluginRoot, 'package.json'));

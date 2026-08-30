@@ -98,6 +98,7 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
   assert.ok(packageJson.files.includes('adapter-sdk.mjs'), 'public Adapter SDK entry must be in package.json files');
   assert.ok(packageJson.files.includes('.codex-plugin'), '.codex-plugin must be in package.json files');
   assert.ok(packageJson.files.includes('skills'), 'skills must be in package.json files');
+  assert.ok(packageJson.files.includes('lib'), 'modular CLI implementation must be in package.json files');
   assert.ok(packageJson.files.includes('examples'), 'external Adapter examples must be in package.json files');
   assert.ok(packageJson.files.includes('docs/adapter-author-guide.md'), 'Adapter author guide must be in package.json files');
 
@@ -113,6 +114,9 @@ test('npm pack payload includes plugin manifest and canonical skill tree', () =>
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/SKILL.md')), 'Pack must contain skills/coordinate-agents/SKILL.md');
       assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/scripts/agent-bus.mjs')), 'Pack must contain skills/coordinate-agents/scripts/agent-bus.mjs');
       assert.ok(filenames.some(f => f === 'bin/coordinate-agents.mjs'), 'Pack must contain the canonical Runtime bin');
+      assert.ok(filenames.some(f => f === 'lib/cli-core.mjs'), 'Pack must contain the CLI core');
+      assert.ok(filenames.some(f => f === 'lib/cli/parse-args.mjs'), 'Pack must contain the argument parser');
+      assert.ok(filenames.some(f => f === 'lib/commands/index.mjs'), 'Pack must contain the command dispatcher');
       assert.ok(filenames.some(f => f === 'adapter-sdk.mjs'), 'Pack must contain the public Adapter SDK entry');
       assert.ok(filenames.some(f => f === 'skills/coordinate-agents/adapters/contract-v1.mjs'), 'Pack must contain Adapter Contract v1');
       assert.ok(filenames.some(f => f === 'skills/coordinate-agents/scripts/runtime-entry.mjs'), 'Pack must contain the Plugin Runtime resolver');

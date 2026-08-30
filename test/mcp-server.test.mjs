@@ -318,7 +318,7 @@ test('MCP stdio is protocol-pure, debuggable on stderr, cwd-independent, and pat
 
   const pluginRoot = mkdtempSync(join(canonicalTmpdir, 'Coordinate Agents Plugin Fixture '));
   try {
-    for (const entry of ['mcp', 'skills', 'bin', '.codex-plugin']) {
+    for (const entry of ['mcp', 'skills', 'bin', 'lib', '.codex-plugin']) {
       cpSync(join(root, entry), join(pluginRoot, entry), { recursive: true });
     }
     cpSync(join(root, 'package.json'), join(pluginRoot, 'package.json'));

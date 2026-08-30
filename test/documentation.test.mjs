@@ -197,7 +197,7 @@ test('npm package carries machine installation and security documentation', () =
 });
 
 test('doctor never pipes a downloaded Antigravity installer directly into a shell', () => {
-  const cli = read(join('bin', 'coordinate-agents.mjs'));
+  const cli = `${read(join('bin', 'coordinate-agents.mjs'))}\n${read(join('lib', 'cli-core.mjs'))}`;
   assert.doesNotMatch(cli, /install\.(?:sh|ps1)['"]?\s*\|\s*(?:bash|sh|iex)/i);
   assert.match(cli, /Review the downloaded official script/);
 });
@@ -330,7 +330,8 @@ test('repository-wide invariant: zero deprecated CLI --role alias across reposit
     // reject the historical role alias.
     if (
       relPath === join('test', 'cli.test.mjs')
-      || relPath === join('bin', 'coordinate-agents.mjs')
+      || relPath === join('lib', 'cli', 'parse-args.mjs')
+      || relPath === join('lib', 'cli-core.mjs')
       || relPath === join('skills', 'coordinate-setup', 'SKILL.md')
     ) continue;
     if (fullPath === thisFile) continue;
@@ -363,9 +364,9 @@ test('repository-wide invariant: zero {role} placeholder in generic CLI or docs'
 });
 
 test('repository-wide invariant: adapter resolveLaunch contracts use agent, not role', () => {
-  const binContent = read('bin/coordinate-agents.mjs');
-  assert.match(binContent, /adapter\.resolveLaunch\(\{\s*root,\s*prompt:\s*activationPrompt,\s*agent:\s*agentId,/);
-  assert.doesNotMatch(binContent, /adapter\.resolveLaunch\([^)]*role:\s*agentId/);
+  const cliContent = `${read('bin/coordinate-agents.mjs')}\n${read('lib/cli-core.mjs')}`;
+  assert.match(cliContent, /adapter\.resolveLaunch\(\{\s*root,\s*prompt:\s*activationPrompt,\s*agent:\s*agentId,/);
+  assert.doesNotMatch(cliContent, /adapter\.resolveLaunch\([^)]*role:\s*agentId/);
 
   const genericAdapterContent = read('skills/coordinate-agents/adapters/generic-cli.mjs');
   assert.match(genericAdapterContent, /resolveLaunch\(\{\s*root,\s*prompt,\s*agent,\s*language\s*\}\)/);

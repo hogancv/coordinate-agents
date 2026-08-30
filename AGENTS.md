@@ -15,7 +15,10 @@ fixtures, logs, documentation, or release artifacts.
 
 ## Repository map
 
-- `bin/coordinate-agents.mjs`: installer, updater, doctor, quickstart, launch, agent management, and uninstall CLI.
+- `bin/coordinate-agents.mjs`: thin executable and compatibility export surface. Argument parsing
+  lives in `lib/cli/`; top-level command execution lives in `lib/commands/`; shared
+  legacy-compatible domain operations remain in `lib/cli-core.mjs` while they are incrementally
+  extracted.
 - `.codex-plugin/plugin.json`: Codex Plugin manifest.
 - `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`). The Session implementation is `scripts/pty-runtime.mjs`, `scripts/session-host.mjs`, `scripts/session-manager.mjs`, and `scripts/session-service.mjs`; `references/session-runtime.md` is the detailed protocol reference.
 - `scripts/`: repository development and release tooling (`demo.mjs`, `sync-llms.mjs`).

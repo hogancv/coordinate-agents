@@ -48,8 +48,16 @@ The cached layout is expected to be equivalent to:
 <CODEX_HOME>/plugins/cache/<marketplace>/coordinate-agents/<version>/
 ├── .codex-plugin/plugin.json
 ├── bin/coordinate-agents.mjs
+├── lib/
+│   ├── cli/parse-args.mjs
+│   ├── commands/
+│   └── cli-core.mjs
 └── skills/
 ```
+
+The canonical bin is intentionally a thin executable and compatibility export
+surface. Argument parsing and top-level command execution live under `lib/`,
+while the public Runtime functions remain import-compatible through the bin.
 
 The resolver uses safe child-process argument arrays, so the Plugin path and
 Implementer commands remain usable on Windows with spaces in the Plugin root,
