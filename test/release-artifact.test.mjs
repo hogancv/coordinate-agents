@@ -25,8 +25,8 @@ function sourceCommit() {
   return result.stdout.trim();
 }
 
-test('release candidate metadata and notes cover the Adapter SDK scope', () => {
-  assert.equal(packageJson.version, '2.2.0');
+test('release candidate metadata and notes cover the Task Graph v1 scope', () => {
+  assert.equal(packageJson.version, '2.3.0');
   assert.equal(pluginJson.version, packageJson.version);
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
   assert.equal(pluginJson.name, 'coordinate-agents');
@@ -34,12 +34,13 @@ test('release candidate metadata and notes cover the Adapter SDK scope', () => {
 
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   for (const phrase of [
-    'Adapter SDK Contract v1',
-    'Adapter Conformance Kit',
-    'trusted-local',
-    'built-in Codex CLI, Antigravity CLI, and generic CLI adapters',
-    'Setup and MCP integration',
-    'Minimal external Adapter example',
+    'Multi-Agent Task Graph v1',
+    'Bounded parallel execution',
+    'Runtime-owned Git worktree',
+    'Deterministic READY frontier',
+    'explicit recovery, stop, and cleanup',
+    'isolated integration and review',
+    'single-Task',
     'Windows/macOS/Linux and Node.js 18/22',
     '--expected-source-commit',
     '--expected-tag',

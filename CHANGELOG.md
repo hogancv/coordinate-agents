@@ -1,5 +1,61 @@
 # Changelog
 
+## 2.3.0 — Multi-Agent Task Graph v1
+
+This is the release-candidate change set after `v2.2.0`. Publication remains
+subject to the repository's separate `RELEASE_APPROVED` and `PUBLISH` gates.
+
+### Added
+
+- Additive Task Graph v1 validation and durable graph creation, status, and
+  inspection while preserving the existing single-Task contract.
+- Deterministic READY frontier planning with explicit dependency reasons and a
+  bounded `maxConcurrency` limit.
+- One Runtime-owned Git worktree and Runtime-owned Session per running subtask,
+  with exact executable resolution and no mutation of the user's checkout.
+- Bounded parallel execution with durable per-subtask commits, evidence,
+  failures, and dependency outcomes.
+- Durable interruption inspection plus explicit recovery, stop, and cleanup
+  operations without automatic retries or destructive recovery.
+- Deterministic isolated integration and review with structured conflict facts,
+  `REVIEW_APPROVED`/`CHANGES_REQUESTED`, and no implicit merge or release
+  authority.
+- Additive CLI and MCP graph operations, stable JSON schemas, protocol-pure MCP
+  stdio behavior, and end-to-end acceptance coverage.
+
+### Changed
+
+- Expanded Task, Session, security, protocol, MCP, and installation
+  documentation for dependency-aware local orchestration.
+- Synchronized the npm package and Codex Plugin to version `2.3.0` for this
+  co-release; their version fields remain independently evolvable.
+- Limited Plugin Security Scan automation to pull requests and explicit manual
+  runs; the full acceptance matrix continues to run on `main` pushes and tags.
+
+### Verification
+
+The candidate is intended to be checked from one exact source commit with:
+
+```sh
+npm ci
+npm run check
+npm run demo
+npm pack --dry-run
+uv run --with pyyaml python "$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py" skills/coordinate-agents
+uv run --with pyyaml python "$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py" .
+```
+
+The complete acceptance suite covers Windows/macOS/Linux and Node.js 18/22.
+After creating the candidate tarball, run
+`npm run release:verify -- <artifact> --expected-version 2.3.0
+--expected-source-commit <candidate-commit> --expected-tag v2.3.0`. The verifier
+records the exact source commit, tag, package/Plugin identity, payload
+completeness, offline external Adapter example, and isolated Plugin/runtime
+discovery and doctor path.
+
+The manually gated npm workflow repeats this isolated verification from the
+exact `release_tag` before the OIDC trusted-publisher step.
+
 ## 2.2.0 — Adapter SDK Contract v1
 
 This is the release-candidate change set after `v2.1.3`. Publication remains
