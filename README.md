@@ -132,6 +132,8 @@ Adapter example](./examples/minimal-external-adapter/README.md) remains outside
 the built-in registry and requires no provider access.
 
 The repository [Adapter SDK acceptance gate](./docs/adapter-conformance.md#repository-acceptance-gate)
+automatically runs its full cross-platform matrix only when the package version changes. Tag and
+explicit manual runs remain available for release and maintenance verification. The gate
 runs built-in and external descriptors through the same kit and covers the
 Windows/macOS/Linux × Node.js 18/22 matrix without changing Task, Bus, Event
 Journal, Inspector, MCP, review, or release ownership.

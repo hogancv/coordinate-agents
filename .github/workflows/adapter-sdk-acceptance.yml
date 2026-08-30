@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths: [package.json]
   pull_request:
+    paths: [package.json]
   workflow_dispatch:
 
 concurrency:
@@ -15,7 +17,60 @@ permissions:
   contents: read
 
 jobs:
+  version-change:
+    name: Detect package version change
+    runs-on: ubuntu-latest
+    outputs:
+      run_acceptance: ${{ steps.version.outputs.run_acceptance }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare package versions
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$REF_TYPE" == "tag" ]]; then
+            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          compare_sha="$BEFORE_SHA"
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            compare_sha="$BASE_SHA"
+          fi
+          if [[ -z "$compare_sha" || "$compare_sha" =~ ^0+$ ]]; then
+            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current_version="$(node -p "require('./package.json').version")"
+          if ! previous_package="$(git show "$compare_sha:package.json")"; then
+            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          previous_version="$(printf '%s' "$previous_package" | node -e '
+            let input = "";
+            process.stdin.setEncoding("utf8");
+            process.stdin.on("data", (chunk) => { input += chunk; });
+            process.stdin.on("end", () => { console.log(JSON.parse(input).version); });
+          ')"
+          if [[ "$current_version" == "$previous_version" ]]; then
+            echo "run_acceptance=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_acceptance=true" >> "$GITHUB_OUTPUT"
+          fi
+
   acceptance:
+    needs: version-change
+    if: needs.version-change.outputs.run_acceptance == 'true'
     name: ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -40,6 +95,8 @@ jobs:
         run: npm run demo
 
   package-payload:
+    needs: version-change
+    if: needs.version-change.outputs.run_acceptance == 'true'
     name: Package payload
     runs-on: ubuntu-latest
     steps:
@@ -57,7 +114,8 @@ jobs:
         run: npm pack --dry-run --ignore-scripts
 
   release-artifact:
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: version-change
+    if: startsWith(github.ref, 'refs/tags/v') && needs.version-change.outputs.run_acceptance == 'true'
     name: Release artifact / Node 22
     runs-on: ubuntu-latest
     steps:

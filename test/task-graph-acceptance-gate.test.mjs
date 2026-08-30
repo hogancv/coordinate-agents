@@ -22,6 +22,9 @@ test('Task Graph acceptance gate is part of the complete cross-platform matrix w
   assert.match(workflow, /fail-fast: false/);
   assert.match(workflow, /cancel-in-progress: true/);
   assert.match(workflow, /branches: \[main\]/);
+  assert.match(workflow, /paths: \[package\.json\]/);
+  assert.match(workflow, /version-change:/);
+  assert.match(workflow, /if: needs\.version-change\.outputs\.run_acceptance == 'true'/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.match(workflow, /if: startsWith\(github\.ref, 'refs\/tags\/v'\)/);

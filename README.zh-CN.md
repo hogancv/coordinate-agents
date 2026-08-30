@@ -117,7 +117,7 @@ npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边�
 
 面向第三方作者的[外部 Adapter 作者指南](./docs/adapter-author-guide.md)说明了公共导入、Contract v1 方法、离线 fixture、显式 trusted-local 注册和包内容校验。完整的[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)位于内置 registry 之外，不需要访问 Provider。
 
-仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)会让内置与外部 descriptor 通过同一套 kit，并在 Windows/macOS/Linux × Node.js 18/22 矩阵中运行；Task、Bus、Event Journal、Inspector、MCP、审查和发布权责保持不变。
+仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)只在包版本变化时自动运行完整矩阵；标签和显式手动触发仍可用于发布与维护校验。门禁会让内置与外部 descriptor 通过同一套 kit，并在 Windows/macOS/Linux × Node.js 18/22 矩阵中运行；Task、Bus、Event Journal、Inspector、MCP、审查和发布权责保持不变。
 
 Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼容的
 `adapters` registry snapshot，其中包含已注册外部适配器的身份和 Contract

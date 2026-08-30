@@ -47,6 +47,14 @@ test('Adapter SDK acceptance matrix is explicit and runs the required release-sa
   assert.match(workflow, /package-payload:/);
   assert.match(workflow, /branches: \[main\]/);
   assert.match(workflow, /tags: \['v\*'\]/);
+  assert.match(workflow, /paths: \[package\.json\]/);
+  assert.match(workflow, /version-change:/);
+  assert.match(workflow, /Compare package versions/);
+  assert.match(workflow, /current_version.*package\.json.*version/);
+  assert.match(workflow, /previous_package.*git show/);
+  assert.match(workflow, /previous_version.*previous_package/);
+  assert.match(workflow, /if: needs\.version-change\.outputs\.run_acceptance == 'true'/);
+  assert.match(workflow, /EVENT_NAME.*workflow_dispatch/);
   assert.match(workflow, /release-artifact:/);
   assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/v'\)/);
   assert.match(workflow, /npm run release:verify/);

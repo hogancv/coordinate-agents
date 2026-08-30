@@ -188,4 +188,7 @@ npm pack --dry-run
 The authoritative matrix is defined in
 `.github/workflows/adapter-sdk-acceptance.yml` and runs these checks on
 Windows, macOS, and Linux with Node.js 18 and Node.js 22. Local results prove
-only the current host; the matrix workflow is the cross-platform evidence.
+only the current host; the matrix workflow is the cross-platform evidence. Automatic pull-request
+and `main` runs are limited to `package.json` changes and proceed only when its `version` differs
+from the base revision. Version tags and explicit manual dispatches remain available for release
+and maintenance verification.

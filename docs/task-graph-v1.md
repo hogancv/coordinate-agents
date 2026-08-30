@@ -364,7 +364,8 @@ npm pack --dry-run
 
 The authoritative matrix is defined in
 `.github/workflows/adapter-sdk-acceptance.yml`. It runs the complete regression
-suite on Windows, macOS, and Linux with Node.js 18 and Node.js 22. Local results
+suite on Windows, macOS, and Linux with Node.js 18 and Node.js 22 when the package
+version changes; version tags and explicit manual dispatches remain available. Local results
 prove only the current host. Passing the gate or recording `REVIEW_APPROVED`
 does not authorize merge, push, tag, publish, deploy, or release.
 
