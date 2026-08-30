@@ -21,6 +21,10 @@ worktree or Session creation, and child-process spawn. Invalid DAGs return the b
 `TASK_GRAPH_INVALID` Runtime error without initializing `.agent-bus` or persisting graph state.
 The separate graph-create operation persists only an already validated graph record and its
 append-only lifecycle event; it does not launch an Adapter, Session, or Implementer process.
+An optional Intent Map v1 companion is size-bounded and normalized before that boundary. Unknown,
+missing, or duplicate subtask coverage; duplicate patterns; absolute, drive-relative, escaping, or
+control-bearing paths; unsupported policies; and contradictory durable map facts fail closed.
+Write-intent patterns are structured data and are never evaluated through a shell.
 Graph planning reports deterministic dependency, capacity, and exact configured
 Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle event,
 or child process.

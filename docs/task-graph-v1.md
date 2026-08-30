@@ -100,6 +100,47 @@ and a deterministic `frontier`. It writes a `TASK_GRAPH_CREATED` Event Journal
 entry and never resolves an Adapter, opens a Session, sends a Bus handoff, or
 launches a child Implementer process.
 
+### Optional Intent Map v1 companion
+
+Graph creation may receive a separate Intent Map without changing the Task
+Graph v1 input schema:
+
+```json
+{
+  "schemaVersion": 1,
+  "parentTaskId": "task-product-slice",
+  "scopePolicy": "warn",
+  "subtasks": [
+    { "id": "backend", "writeIntent": ["src/server/**"] },
+    { "id": "frontend", "writeIntent": [] }
+  ]
+}
+```
+
+Use `--intent-map <intent-map.json>` beside CLI `--input`, or pass `intentMap`
+to `coordinate_agents_task_graph_create`. `scopePolicy` is `observe`, `warn`,
+or `strict` and defaults to `warn`. Every graph subtask must appear exactly
+once. `writeIntent` may be empty; that is explicit empty coverage rather than
+missing information. Patterns are bounded repository-relative path/glob data.
+The Runtime normalizes backslash separators, repeated separators, and dot
+segments, then sorts declarations and patterns deterministically.
+
+Unknown, missing, or duplicate subtask declarations; duplicate normalized
+patterns; absolute POSIX, UNC, drive-absolute, or drive-relative paths;
+parent-directory escapes; control characters; negation; unsupported policies;
+and oversized input fail with `TASK_GRAPH_INVALID` at
+`intent-map-validation` before Agent Bus initialization or any worktree,
+message, Adapter, Session, or process side effect. The normalized map is
+published in the same graph record and graph lock transaction. Persisted maps
+are revalidated on read; legacy records without a map remain valid.
+
+Status, inspect, and plan return additive `intentCoverage` facts.
+`available: false` and `writeIntent: null` mean no companion map exists;
+`coverage: "explicit-empty"` and `writeIntent: []` mean the subtask was
+deliberately declared with no write pattern. Intent Map v1 is declaration and
+visibility only; conflict scheduling and implementation-diff auditing are
+separate contracts.
+
 The established `task status` and `task inspect` operations recognize a graph
 parent ID without changing the single-Task response for ordinary Tasks. The
 explicit aliases `task graph-status` and `task graph-inspect` are also

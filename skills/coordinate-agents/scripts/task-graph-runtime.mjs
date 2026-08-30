@@ -32,6 +32,7 @@ import {
 } from './runtime-events.mjs';
 import { validateTaskId } from './task-runtime.mjs';
 import { EXECUTION_SESSION_STATES } from './session-manager.mjs';
+import { intentCoverageFacts, validateIntentMapV1 } from './intent-map-contract.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
 export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
@@ -1147,7 +1148,7 @@ function parentStateFor(previous, subtasks) {
   return previous || 'CREATED';
 }
 
-function graphRecordFromValidated(validated) {
+function graphRecordFromValidated(validated, intentMap = null) {
   const timestamp = now();
   const subtasks = validated.subtasks.map(subtask => ({
     id: subtask.id,
@@ -1185,6 +1186,7 @@ function graphRecordFromValidated(validated) {
     reason: null,
     evidence: [],
     maxConcurrency: validated.maxConcurrency,
+    ...(intentMap ? { intentMap } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
     subtasks: reconciled,
@@ -1342,6 +1344,23 @@ function validateStoredGraph(record, parentTaskId = null) {
   for (const subtask of record.subtasks) {
     if (subtask.dependsOn.some(dependency => !ids.has(dependency) || dependency === subtask.id)) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid dependency edge for ${subtask.id}.`, { recoverable: false, taskId: id });
+    }
+  }
+  if (record.intentMap !== undefined) {
+    let normalized;
+    try {
+      normalized = validateIntentMapV1(record.intentMap, { parentTaskId: id, subtasks: record.subtasks });
+    } catch (error) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid Intent Map: ${error.message || error}`, {
+        recoverable: false,
+        taskId: id,
+      });
+    }
+    if (JSON.stringify(normalized) !== JSON.stringify(record.intentMap)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has a non-normalized or contradictory Intent Map.`, {
+        recoverable: false,
+        taskId: id,
+      });
     }
   }
   return record;
@@ -1719,11 +1738,12 @@ function graphInputFromRecord(record) {
   };
 }
 
-export function createTaskGraph(root, input, { configuredAgents = [], validated = false } = {}) {
+export function createTaskGraph(root, input, { configuredAgents = [], validated = false, intentMap = null } = {}) {
   const graph = validated ? graphInputFromRecord(input) : input;
   const normalized = validated
     ? input
     : validateTaskGraphV1(graph, { configuredAgents });
+  const normalizedIntentMap = validateIntentMapV1(intentMap, normalized);
   const { repository, bus, store, tmp } = ensureGraphStore(root, { create: true });
   const path = taskGraphPath(repository, normalized.parentTask.id);
   const taskPath = join(bus, 'tasks', `${normalized.parentTask.id}.json`);
@@ -1737,7 +1757,7 @@ export function createTaskGraph(root, input, { configuredAgents = [], validated 
         root: repository,
       });
     }
-    const record = graphRecordFromValidated(normalized);
+    const record = graphRecordFromValidated(normalized, normalizedIntentMap);
     // atomicWrite publishes one aggregate record containing the durable parent
     // and all parent-scoped subtasks. No partially written graph is visible.
     atomicWrite(path, `${JSON.stringify(record, null, 2)}\n`, tmp);
@@ -1795,6 +1815,7 @@ function graphFacts(record) {
     integration: record.integration || null,
     review: record.review || null,
     reviewHistory: Array.isArray(record.reviewHistory) ? record.reviewHistory : [],
+    intentCoverage: intentCoverageFacts(record),
   };
 }
 
@@ -1847,6 +1868,7 @@ export function taskGraphStatusPayload(root, record, { inspect = false, eventLim
     integrationFacts: integration,
     review: record.review || null,
     reviewHistory: Array.isArray(record.reviewHistory) ? record.reviewHistory : [],
+    intentCoverage: intentCoverageFacts(record),
     ...(inspect ? { events } : {}),
   };
 }

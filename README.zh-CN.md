@@ -77,7 +77,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 ## 核心能力
 
 - 持久化本地任务、消息、审查结论和运行时事件。
-- 在任何执行副作用之前校验显式 DAG，并支持确定性只读调度、跨隔离 worktree/Session 的有界并行执行与基于事实的恢复。
+- 在任何执行副作用之前校验显式 DAG 与可选 Intent Map v1 写入范围，并支持确定性只读调度、跨隔离 worktree/Session 的有界并行执行与基于事实的恢复。
 - 明确区分 Planner、Implementer 与 Reviewer 角色。
 - 通过适配器精确执行已配置的 CLI 命令。
 - 提供持久、有限输出且可检查的 Execution Session。
@@ -86,6 +86,11 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 - 通过本地 Inspector 查看任务、Session 与事件时间线。
 - 严格区分审查门禁和发布门禁。
 - 所有必需子任务成功后，可在独立 Runtime-owned 聚合 worktree 中按确定性顺序执行 graph-integrate，再通过 graph-review 记录 REVIEW_APPROVED 或 CHANGES_REQUESTED；来源事实过期或聚合 worktree 有未提交改动时拒绝审查，冲突可检查且不会修改用户 checkout。
+
+创建图时可通过 CLI 的 `--intent-map <intent-map.json>` 或 MCP 的 `intentMap`
+对象附加写入意图。配套映射必须恰好覆盖每个子任务一次，默认采用
+`scopePolicy: "warn"`，并持久化标准化的仓库相对模式。status、inspect 与 plan
+会区分旧图的“覆盖不可用”和显式空 `writeIntent`。
 
 ## 支持的代理与适配器
 

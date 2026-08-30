@@ -101,6 +101,11 @@ After validation, call `coordinate_agents_task_graph_create` to persist the
 validated parent and subtasks atomically. It computes deterministic READY,
 WAITING, and BLOCKED frontier facts and writes a `TASK_GRAPH_CREATED` event;
 it never launches an Adapter, Session, or Implementer. Call
+it with the optional `intentMap` companion when write-scope declarations are
+available. Intent Map v1 must use the same parent ID, cover each subtask once,
+and contain only normalized repository-relative patterns; an empty
+`writeIntent` is explicit coverage, while a missing map remains unavailable.
+Invalid maps stop creation before Runtime side effects. Call
 `coordinate_agents_task_graph_plan` to read the deterministic dependency and
 capacity decisions with explicit Agent, Adapter, and executable facts; planning
 never creates execution state. Call `coordinate_agents_task_graph_run` to

@@ -53,7 +53,7 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_setup_configure` | `root`, `agent`, `command` | `adapter`, `args`, `role` | `setup.configure` |
 | `coordinate_agents_task_create` | `root`, `title` | `id`, `spec`, `planner`, `implementer`, `reviewer` | `task.create` |
 | `coordinate_agents_task_graph_validate` | `root`, `graph` | — | `task.graph-validate` |
-| `coordinate_agents_task_graph_create` | `root`, `graph` | — | `task.graph-create` |
+| `coordinate_agents_task_graph_create` | `root`, `graph` | `intentMap` | `task.graph-create` |
 | `coordinate_agents_task_graph_plan` | `root`, `taskId` | — | `task.graph-plan` |
 | `coordinate_agents_task_graph_run` | `root`, `taskId` | `sessionWaitMs` | `task.graph-run` |
 | `coordinate_agents_task_graph_recover` | `root`, `taskId` | `subtaskId` | `task.graph-recover` |
@@ -98,6 +98,15 @@ but does not resolve an Adapter, open a Session, hand off a Bus message, or
 launch a child process. Existing `coordinate_agents_task_status` and
 `coordinate_agents_task_inspect` calls recognize a graph parent ID; inspect
 also returns bounded graph lifecycle events.
+
+Creation also accepts an optional `intentMap` object with `schemaVersion: 1`,
+the same `parentTaskId`, optional `scopePolicy` (`observe`, `warn`, or
+`strict`, default `warn`), and exactly one `{ id, writeIntent }` declaration
+per graph subtask. The Runtime normalizes repository-relative separators and
+rejects incomplete, duplicate, absolute, escaping, malformed, or oversized
+input before graph persistence. Status, inspect, and plan expose bounded
+`intentCoverage` facts that distinguish unavailable legacy coverage from an
+explicitly empty declaration.
 
 `coordinate_agents_task_graph_plan` is a read-only scheduler view over the
 persisted graph. It returns every subtask in deterministic identifier order,

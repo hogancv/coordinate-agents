@@ -53,6 +53,36 @@ const rootProperty = {
   description: 'Absolute or repository-relative Git repository root.',
 };
 
+const intentMapProperty = {
+  type: 'object',
+  description: 'Optional Intent Map v1 companion covering every graph subtask exactly once.',
+  required: ['schemaVersion', 'parentTaskId', 'subtasks'],
+  properties: {
+    schemaVersion: { const: 1 },
+    parentTaskId: { type: 'string', pattern: '^task-[A-Za-z0-9][A-Za-z0-9_-]{1,127}$' },
+    scopePolicy: { type: 'string', enum: ['observe', 'warn', 'strict'], default: 'warn' },
+    subtasks: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 256,
+      items: {
+        type: 'object',
+        required: ['id', 'writeIntent'],
+        properties: {
+          id: { type: 'string', pattern: '^[a-z][a-z0-9_-]{0,63}$' },
+          writeIntent: {
+            type: 'array',
+            maxItems: 4096,
+            items: { type: 'string', minLength: 1, maxLength: 4096 },
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  additionalProperties: false,
+};
+
 const taskIdentityProperties = {
   root: rootProperty,
   taskId: stringProperty('Existing Task identifier.'),
@@ -221,6 +251,7 @@ const TOOL_DEFINITIONS = Object.freeze([
           },
           additionalProperties: false,
         },
+        intentMap: intentMapProperty,
       },
       required: ['root', 'graph'],
       additionalProperties: false,

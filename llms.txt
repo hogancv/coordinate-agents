@@ -69,6 +69,12 @@ schema-version-1 operations remain unchanged. After validation,
 subtasks with deterministic READY/WAITING/BLOCKED frontier facts and a
 `TASK_GRAPH_CREATED` event; existing Task status/inspect views expose the
 durable graph without launching an Adapter, Session, or Implementer process.
+Graph creation optionally accepts an Intent Map v1 companion with the same
+parent ID, `observe`/`warn`/`strict` policy, and exactly one bounded
+repository-relative `writeIntent` declaration per subtask. It is normalized
+and validated before side effects, persisted in the same graph record, and
+reported by status/inspect/plan as unavailable, explicit-empty, or declared
+coverage. Schema: `schemas/intent-map-v1.schema.json`.
 `coordinate_agents_task_graph_plan` returns deterministic dependency and
 max-concurrency decisions with bounded reasons and exact configured Agent,
 Adapter, executable, and command-source facts. It does not create a worktree,

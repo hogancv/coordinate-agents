@@ -88,6 +88,10 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>` 可在完全隔离的 Git worktree
 （`.agent-bus/worktrees/<parentTaskId>/<subtaskId>`）和独立分支中派发单项 READY 子任务，安全捕获基准提交
 且不修改用户工作区中未提交的文件，并在完成后自动解锁依赖前沿。详见[Task Graph v1 契约](../task-graph-v1.html)。
+创建图时还可通过 `--intent-map <intent-map.json>` 或 MCP 的 `intentMap` 附加 Intent Map v1。
+它必须使用相同父 Task ID、恰好覆盖每个子任务一次，并仅包含标准化的仓库相对写入模式；
+`scopePolicy` 默认为 `warn`。status、inspect 和 plan 会区分旧图的覆盖不可用
+（`writeIntent: null`）与显式空声明（`writeIntent: []`）。无效或超限映射会在任何运行时副作用前拒绝。
 通过 `coordinate_agents_task_graph_run` 或 `task graph-run --id <parentTaskId>` 可对当前合格前沿执行一次
 有界并行派发：不超过 `maxConcurrency`，每个子任务使用独立 worktree、分支和 Runtime Session，
 新解锁的工作保持 READY，等待下一次显式执行。

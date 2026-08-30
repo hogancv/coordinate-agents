@@ -53,6 +53,11 @@ it before sharing diagnostics.
   read-only; the separate graph-create operation persists only the validated graph record and
   append-only lifecycle event, without launching an Adapter, Session, or Implementer process.
 
+- Optional Intent Map v1 input is bounded and validated before graph-create side effects. It
+  rejects unknown or duplicate subtask declarations, missing coverage, duplicate normalized
+  patterns, absolute or escaping paths, control characters, unsupported policies, and malformed
+  durable facts. Patterns remain data and are never interpolated into a shell command.
+
 - Task Graph planning reports deterministic dependency, capacity, and exact configured
   Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle
   event, or child process.

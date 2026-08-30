@@ -90,6 +90,11 @@ import {
   validateTaskGraphV1,
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
 import {
+  INTENT_MAP_MAX_INPUT_BYTES,
+  intentCoverageFacts,
+  validateIntentMapV1,
+} from '../skills/coordinate-agents/scripts/intent-map-contract.mjs';
+import {
   captureGraphBaseCommit,
   cleanupTaskGraphIntegrationWorktree,
   cleanupTaskGraphWorktree,
@@ -183,6 +188,7 @@ Options:
   --decision <decision>   Task review decision: REVIEW_APPROVED or CHANGES_REQUESTED
   --feedback <text>       Review feedback preserved for the next implementation round
   --input <path>          Task Graph v1 JSON input for graph-validate/graph-create
+  --intent-map <path>     Optional Intent Map v1 JSON companion for graph-create
   --subtask <id>          Selected READY subtask identifier for graph-dispatch
   --session-wait-ms <ms>  Bounded graph dispatch/run observation window (0-10000)
   --template <type>       Task template: bug, feature, or refactor
@@ -296,6 +302,7 @@ Examples:
   --decision <decision>   Task 审查决策：REVIEW_APPROVED 或 CHANGES_REQUESTED
   --feedback <文本>       保存给下一轮实现的审查反馈
   --input <路径>          graph-validate/graph-create 使用的 Task Graph v1 JSON 输入
+  --intent-map <路径>     graph-create 使用的可选 Intent Map v1 JSON 配套输入
   --subtask <id>          graph-dispatch 使用的已就绪子任务标识符
   --session-wait-ms <毫秒> graph dispatch/run 的有界观察窗口（0-10000）
   --template <类型>       任务模板：bug、feature 或 refactor
@@ -414,6 +421,7 @@ function parseArgs(argv) {
     decision: null,
     feedback: '',
     input: null,
+    intentMapInput: null,
     template: 'feature',
     task: '',
     language: null,
@@ -460,7 +468,7 @@ function parseArgs(argv) {
       '--adapter', '--command', '--args', '--template', '--task', '--title', '--spec',
       '--id', '--task-id', '--parent-task-id', '--subtask', '--subtask-id',
       '--reason', '--error-code', '--timeout', '--timeout-ms', '--session-wait-ms', '--lang',
-      '--role', '--decision', '--feedback', '--port', '--input',
+      '--role', '--decision', '--feedback', '--port', '--input', '--intent-map',
     ].includes(option)) {
       if (!args.length || args[0].startsWith('-')) throw new Error(`MISSING_VALUE:${option}`);
       const value = args.shift();
@@ -489,6 +497,7 @@ function parseArgs(argv) {
       if (option === '--decision') result.decision = value.toUpperCase();
       if (option === '--feedback') result.feedback = value;
       if (option === '--input') result.input = value;
+      if (option === '--intent-map') result.intentMapInput = value;
       if (option === '--template') result.template = value.toLowerCase();
       if (option === '--task') result.task = value;
       if (option === '--title') result.title = value;
@@ -1704,6 +1713,18 @@ function graphInput(options) {
   return hasInlineGraph ? options.graph : readTaskGraphInput(options.input);
 }
 
+function intentMapInput(options) {
+  if (Object.prototype.hasOwnProperty.call(options, 'intentMap') && options.intentMap !== undefined) {
+    return options.intentMap;
+  }
+  if (!options.intentMapInput) return null;
+  return readBoundedJsonInput(options.intentMapInput, {
+    label: 'Intent Map v1',
+    maxBytes: INTENT_MAP_MAX_INPUT_BYTES,
+    stage: 'intent-map-validation',
+  });
+}
+
 function configuredGraphAgents(root) {
   const busPath = join(resolve(root), '.agent-bus');
   try {
@@ -1728,10 +1749,11 @@ async function taskGraphCreateCommand(options, { json = false } = {}) {
   // any Adapter, Session, or child process.
   const configured = configuredGraphAgents(repository);
   const validated = validateTaskGraphV1(input, { configuredAgents: configured.agents });
+  const validatedIntentMap = validateIntentMapV1(intentMapInput(options), validated);
   ensureGraphBus(repository);
   const afterInit = configuredGraphAgents(repository);
   const effective = validateTaskGraphV1(input, { configuredAgents: afterInit.agents });
-  const created = createTaskGraph(repository, effective, { validated: true });
+  const created = createTaskGraph(repository, effective, { validated: true, intentMap: validatedIntentMap });
   const payload = jsonSuccess('task.graph-create', {
     ...taskGraphStatusPayload(repository, created.graph),
     event: created.event,
@@ -1889,6 +1911,7 @@ async function taskGraphPlanCommand(options, { json = false } = {}) {
       eligible: decisions.filter(item => item.decision === 'ELIGIBLE'),
       capacityLimited: decisions.filter(item => item.decision === 'CAPACITY_LIMITED'),
       decisions,
+      intentCoverage: intentCoverageFacts(graph),
     },
   });
   if (!json) console.log(JSON.stringify(payload, null, 2));
@@ -3560,26 +3583,32 @@ function readTaskGraphInput(path) {
       stage: 'graph-validation',
     });
   }
+  return readBoundedJsonInput(path, {
+    label: 'Task Graph v1',
+    maxBytes: TASK_GRAPH_MAX_INPUT_BYTES,
+    stage: 'graph-validation',
+  });
+}
+
+function readBoundedJsonInput(path, { label, maxBytes, stage }) {
   const inputPath = resolve(path);
   let content;
   try {
     const metadata = lstatSync(inputPath);
-    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > TASK_GRAPH_MAX_INPUT_BYTES) {
-      throw new Error(`input must be a regular, non-symlink JSON file no larger than ${TASK_GRAPH_MAX_INPUT_BYTES / 1024 / 1024} MiB`);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > maxBytes) {
+      throw new Error(`input must be a regular, non-symlink JSON file no larger than ${maxBytes} bytes`);
     }
     content = readFileSync(inputPath, 'utf8');
   } catch (error) {
-    throw runtimeError('TASK_GRAPH_INVALID', `Unable to read Task Graph v1 input: ${error.message || error}`, {
+    throw runtimeError('TASK_GRAPH_INVALID', `Unable to read ${label} input: ${error.message || error}`, {
       recoverable: false,
-      stage: 'graph-validation',
+      stage,
     });
   }
-  try {
-    return JSON.parse(content);
-  } catch (error) {
-    throw runtimeError('TASK_GRAPH_INVALID', `Task Graph v1 input is not valid JSON: ${error.message}`, {
+  try { return JSON.parse(content); } catch (error) {
+    throw runtimeError('TASK_GRAPH_INVALID', `${label} input is not valid JSON: ${error.message}`, {
       recoverable: false,
-      stage: 'graph-validation',
+      stage,
     });
   }
 }
@@ -5094,6 +5123,7 @@ function serviceOptions(input = {}) {
     decision: null,
     feedback: '',
     input: null,
+    intentMapInput: null,
     evidence: null,
     positionals: [],
     ...input,
@@ -5164,6 +5194,7 @@ export async function runtimeTaskGraphCreate(input = {}) {
     graph: input.graph !== undefined
       ? input.graph
       : (input.input && typeof input.input === 'object' ? input.input : undefined),
+    intentMap: input.intentMap,
   }), { json: true });
 }
 
