@@ -38,6 +38,7 @@ import {
   validateIntentMapV1,
   writeIntentConflictBetween,
 } from './intent-map-contract.mjs';
+import { validateScopeAuditEvidence } from './scope-audit.mjs';
 
 export const TASK_GRAPH_STORE_DIRECTORY = 'task-graphs';
 export const TASK_GRAPH_WORKTREES_DIRECTORY = 'worktrees';
@@ -1278,6 +1279,26 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+  if (subtask.scopeEvidence === undefined) return;
+  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
+  const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
+  if (!declaration
+    || subtask.scopeEvidence.scopePolicy !== expectedPolicy
+    || subtask.scopeEvidence.coverage !== (declaration.writeIntent.length === 0 ? 'explicit-empty' : 'declared')
+    || !sameJson(subtask.scopeEvidence.writeIntent, declaration.writeIntent)
+    || !expectedBase || subtask.scopeEvidence.graphBaseCommit !== `${expectedBase}`.toLowerCase()
+    || !subtask.implementationCommit
+    || subtask.scopeEvidence.implementationCommit !== `${subtask.implementationCommit}`.toLowerCase()) {
+    throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${graph.parentTaskId} has contradictory Scope Audit facts for ${subtask.id}.`, {
+      recoverable: false,
+      taskId: graph.parentTaskId,
+      subtaskId: subtask.id,
+    });
+  }
+}
+
 function validateStoredGraph(record, parentTaskId = null) {
   if (!plainObject(record)) {
     throw runtimeError('TASK_STATE_CONFLICT', 'Persisted Task Graph record must be a JSON object.', { recoverable: false, taskId: parentTaskId });
@@ -1338,6 +1359,21 @@ function validateStoredGraph(record, parentTaskId = null) {
     if (subtask.baseCommit !== undefined && subtask.baseCommit !== null && !COMMIT_SHA_PATTERN.test(`${subtask.baseCommit}`)) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid base commit for ${subtask.id}.`, { recoverable: false, taskId: id });
     }
+    if (subtask.implementationCommit !== undefined && subtask.implementationCommit !== null
+      && !COMMIT_SHA_PATTERN.test(`${subtask.implementationCommit}`)) {
+      throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid implementation commit for ${subtask.id}.`, { recoverable: false, taskId: id });
+    }
+    if (subtask.scopeEvidence !== undefined) {
+      try {
+        validateScopeAuditEvidence(subtask.scopeEvidence, { parentTaskId: id, subtaskId: subtask.id });
+      } catch (error) {
+        throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has invalid Scope Audit evidence for ${subtask.id}: ${error.message || error}`, {
+          recoverable: false,
+          taskId: id,
+          subtaskId: subtask.id,
+        });
+      }
+    }
     if (!Array.isArray(subtask.dependsOn) || new Set(subtask.dependsOn).size !== subtask.dependsOn.length || subtask.dependsOn.some(dependency => !ids.has(dependency) && dependency !== subtask.id)) {
       // Dependency existence is checked in a second pass because records are
       // allowed to be persisted in any deterministic order.
@@ -1368,6 +1404,7 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
   return record;
 }
 
@@ -2706,6 +2743,12 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
     const suppliedBaseCommit = details.baseCommit === undefined || details.baseCommit === null
       ? details.baseCommit
       : normalizeCommitSha(details.baseCommit, 'graph base commit');
+    const suppliedImplementationCommit = details.implementationCommit === undefined || details.implementationCommit === null
+      ? details.implementationCommit
+      : normalizeCommitSha(details.implementationCommit, 'implementation commit');
+    const suppliedScopeEvidence = details.scopeEvidence === undefined
+      ? undefined
+      : validateScopeAuditEvidence(details.scopeEvidence, { parentTaskId, subtaskId });
     const candidateSubtask = {
       ...target,
       ...(details.worktreePath !== undefined ? { worktreePath: details.worktreePath } : {}),
@@ -2716,17 +2759,22 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
       ...(details.effectiveCommand !== undefined ? { effectiveCommand: details.effectiveCommand } : {}),
       ...(details.resolvedCommand !== undefined ? { resolvedCommand: details.resolvedCommand } : {}),
       ...(details.command !== undefined ? { command: details.command } : {}),
-      ...(details.implementationCommit !== undefined ? { implementationCommit: details.implementationCommit } : {}),
+      ...(details.implementationCommit !== undefined ? { implementationCommit: suppliedImplementationCommit } : {}),
       ...(details.dispatch !== undefined ? { dispatch: details.dispatch } : {}),
       ...(details.lastError !== undefined ? { lastError: details.lastError } : {}),
       ...(details.recovery !== undefined ? { recovery: sanitizeRuntimeEventData(details.recovery) } : {}),
       ...(details.cleanup !== undefined ? { cleanup: sanitizeRuntimeEventData(details.cleanup) } : {}),
       ...(details.spec !== undefined ? { spec: details.spec } : {}),
+      ...(details.scopeEvidence !== undefined ? { scopeEvidence: suppliedScopeEvidence } : {}),
       state: nextState,
       status: nextState,
       reason,
       evidence,
     };
+    validateSubtaskScopeEvidenceAgainstGraph({
+      ...current,
+      baseCommit: suppliedBaseCommit || current.baseCommit || current.parentTask?.baseCommit || null,
+    }, candidateSubtask);
     const nextSubtasks = current.subtasks.map(subtask => subtask.id === subtaskId
       ? { ...candidateSubtask, updatedAt: current.updatedAt }
       : { ...subtask });
@@ -2816,6 +2864,7 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
           recovery: subtask.recovery ? sanitizeRuntimeEventData(subtask.recovery) : null,
           cleanup: subtask.cleanup ? sanitizeRuntimeEventData(subtask.cleanup) : null,
           dispatch: subtask.dispatch ? sanitizeRuntimeEventData(subtask.dispatch) : null,
+          scopeEvidence: subtask.scopeEvidence ? sanitizeRuntimeEventData(subtask.scopeEvidence) : null,
         },
       });
     });

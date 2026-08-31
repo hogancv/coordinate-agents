@@ -279,10 +279,68 @@ test('graph-run launches one deterministic non-conflicting write-intent wave', a
     assert.equal(existsSync(join(shared, 'alpha.started')), true);
     assert.equal(existsSync(join(shared, 'gamma.started')), true);
     assert.equal(existsSync(join(shared, 'beta.started')), false);
+    const audited = readTaskGraph(root, parentTaskId);
+    for (const subtaskId of ['alpha', 'gamma']) {
+      const subtask = audited.subtasks.find(item => item.id === subtaskId);
+      assert.equal(subtask.state, 'SUCCEEDED');
+      assert.match(subtask.reason, /INTENT_SCOPE_DRIFT/);
+      assert.equal(subtask.scopeEvidence.scopePolicy, 'warn');
+      assert.equal(subtask.scopeEvidence.drift, true);
+      assert.ok(subtask.scopeEvidence.outsideIntentPaths.includes(`product-${subtaskId}.txt`));
+    }
     assert.deepEqual(
-      readTaskGraph(root, parentTaskId).subtasks.find(item => item.id === 'dependent').dependsOn,
+      audited.subtasks.find(item => item.id === 'dependent').dependsOn,
       ['alpha', 'beta'],
     );
+  } finally {
+    await closeOutcomes(result?.outcomes);
+    await removeTree(root);
+    rmSync(home, { recursive: true, force: true });
+    if (shared) rmSync(shared, { recursive: true, force: true });
+    delete process.env.PARALLEL_SHARED;
+    delete process.env.PARALLEL_PARENT_ROOT;
+    delete process.env.PARALLEL_FAIL_SUBTASK;
+    if (oldHome === undefined) delete process.env.COORDINATE_AGENTS_HOME;
+    else process.env.COORDINATE_AGENTS_HOME = oldHome;
+  }
+});
+
+test('strict scope audit blocks real dispatch completion and preserves implementation facts', async () => {
+  const root = repository('coordinate-agents-parallel-strict-scope-');
+  const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-parallel-home-'));
+  const oldHome = process.env.COORDINATE_AGENTS_HOME;
+  let shared;
+  let result;
+  try {
+    const parentTaskId = 'task-parallel-strict-scope';
+    shared = await configuredFixture(root, home, parentTaskId, {
+      intentMap: {
+        schemaVersion: 1,
+        parentTaskId,
+        scopePolicy: 'strict',
+        subtasks: [
+          { id: 'alpha', writeIntent: ['allowed/alpha/**'] },
+          { id: 'beta', writeIntent: ['allowed/beta/**'] },
+          { id: 'gamma', writeIntent: ['allowed/gamma/**'] },
+          { id: 'dependent', writeIntent: [] },
+        ],
+      },
+    });
+    result = await runtimeTaskGraphRun({ root, taskId: parentTaskId, sessionWaitMs: 10_000 });
+    assert.deepEqual(result.selected, ['alpha', 'beta']);
+    assert.equal(result.summary.failed, 2);
+    assert.equal(result.outcomes.every(outcome => outcome.error?.code === 'INTENT_SCOPE_DRIFT'), true);
+    const stored = readTaskGraph(root, parentTaskId);
+    for (const subtaskId of ['alpha', 'beta']) {
+      const subtask = stored.subtasks.find(item => item.id === subtaskId);
+      assert.equal(subtask.state, 'FAILED');
+      assert.equal(subtask.lastError.code, 'INTENT_SCOPE_DRIFT');
+      assert.equal(subtask.scopeEvidence.scopePolicy, 'strict');
+      assert.equal(subtask.scopeEvidence.drift, true);
+      assert.match(subtask.implementationCommit, /^[0-9a-f]{40}$/);
+      assert.equal(existsSync(subtask.worktreePath), true);
+    }
+    assert.equal(stored.subtasks.find(item => item.id === 'dependent').state, 'BLOCKED');
   } finally {
     await closeOutcomes(result?.outcomes);
     await removeTree(root);

@@ -108,6 +108,17 @@ input before graph persistence. Status, inspect, and plan expose bounded
 `intentCoverage` facts that distinguish unavailable legacy coverage from an
 explicitly empty declaration.
 
+After a verified graph-dispatch completion, available Intent Map coverage also
+drives Scope Audit v1 before dependent eligibility is recomputed. Dispatch,
+run, status, and inspect expose durable per-subtask `scopeEvidence`: committed
+plus staged/unstaged/untracked changes, both rename paths, declared patterns,
+outside-intent paths, policy, counts, truncation facts, and bounded
+`INTENT_SCOPE_DRIFT` evidence. `observe` records only, `warn` keeps success with
+a visible warning, and `strict` returns a recoverable `INTENT_SCOPE_DRIFT`
+failure while preserving the implementation commit and worktree. Missing
+Intent Map coverage preserves legacy behavior without scope evidence. The
+evidence schema is `schemas/scope-audit-v1.schema.json`.
+
 `coordinate_agents_task_graph_plan` is a read-only scheduler view over the
 persisted graph. It returns every subtask in deterministic identifier order,
 the dependency outcome and bounded reason for each decision, the concurrency-

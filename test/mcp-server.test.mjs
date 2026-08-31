@@ -894,7 +894,7 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   assert.equal(existsSync(join(root, 'mcp', 'self-test.mjs')), true);
   assert.equal(packageJson.scripts['mcp:self-test'], 'node mcp/self-test.mjs');
   assert.equal(packageJson.files.includes('docs/MCP_TROUBLESHOOTING.md'), true);
-  for (const name of ['task.schema.json', 'task-graph-v1.schema.json', 'task-graph-v1-record.schema.json', 'task-graph-v1-plan.schema.json', 'task-graph-v1-run.schema.json', 'task-graph-v1-recovery.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
+  for (const name of ['task.schema.json', 'task-graph-v1.schema.json', 'task-graph-v1-record.schema.json', 'task-graph-v1-plan.schema.json', 'task-graph-v1-run.schema.json', 'task-graph-v1-recovery.schema.json', 'scope-audit-v1.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
     const schema = JSON.parse(readFileSync(join(root, 'schemas', name), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
   }

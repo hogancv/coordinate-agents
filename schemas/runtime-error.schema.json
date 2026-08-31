@@ -22,6 +22,7 @@
         "TASK_ALREADY_RUNNING",
         "TASK_STATE_CONFLICT",
         "TASK_GRAPH_INVALID",
+        "INTENT_SCOPE_DRIFT",
         "STALE_CLAIM",
         "DIRTY_WORKTREE",
         "WORKTREE_CONFLICT",
