@@ -496,7 +496,9 @@ test('auditSubtaskScope: paths with spaces and shell metacharacters are handled 
     // Create a file with spaces, a tab, and shell metacharacters. Argument
     // arrays plus NUL-delimited Git output must preserve it exactly.
     mkdirSync(join(root, 'src'), { recursive: true });
-    const unusualPath = 'src/path with space\t$value;[x].js';
+    const unusualPath = process.platform === 'win32'
+      ? 'src/path with space $value;[x].js'
+      : 'src/path with space\t$value;[x].js';
     writeFileSync(join(root, unusualPath), 'impl\n', 'utf8');
     execFileSync('git', ['add', unusualPath], { cwd: root, stdio: 'ignore', windowsHide: true });
     execFileSync('git', ['commit', '-m', 'Add product'], { cwd: root, stdio: 'ignore', windowsHide: true });

@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -19,6 +20,14 @@ import {
   recordReviewDecision,
   setTaskStatus,
 } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
+import {
+  createTaskGraph,
+  setTaskGraphIntegration,
+  setTaskGraphReview,
+  setTaskGraphState,
+  setTaskGraphSubtaskState,
+  taskGraphPath,
+} from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import { startInspector } from '../inspector/server/server.mjs';
 import { appendRuntimeEvent } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
@@ -89,6 +98,13 @@ function writeSession(repositoryRoot, taskId) {
     endpoint: 'fixture-endpoint',
     hostPid: null,
   }, null, 2)}\n`, 'utf8');
+  appendRuntimeEvent(repositoryRoot, {
+    type: 'SESSION_EXITED',
+    sessionId,
+    agentId: 'antigravity',
+    taskId,
+    data: { state: 'exited', exitCode: 0 },
+  });
   return { sessionId, taskId };
 }
 
@@ -110,12 +126,11 @@ async function closeServer(server) {
 
 function fixture() {
   const repositoryRoot = repository();
-  const session = writeSession(repositoryRoot, 'task-inspector');
   const task = createTask(repositoryRoot, {
     id: 'task-inspector',
     title: 'Build Inspector fixture',
     spec: 'Show the coordination loop without changing runtime state.',
-    sessionId: session.sessionId,
+    sessionId: 'session_fixture123',
   });
   setTaskStatus(repositoryRoot, task.id, 'PLANNING');
   setTaskStatus(repositoryRoot, task.id, 'SPEC_READY');
@@ -134,10 +149,111 @@ function fixture() {
     feedback: 'Evidence is complete.',
     evidence: { tests: 'passed' },
   });
+  writeSession(repositoryRoot, 'task-inspector');
   writeAgentState(repositoryRoot, 'codex', 'APPROVED', 'Task task-inspector reviewed.', '2026-08-23T00:05:00.000Z');
   writeAgentState(repositoryRoot, 'antigravity', 'WAITING', 'Task task-inspector implementation complete.', '2026-08-23T00:04:00.000Z');
   writeBusMessage(repositoryRoot);
   return repositoryRoot;
+}
+
+function graphFixture(repositoryRoot) {
+  const baseCommit = '1111111111111111111111111111111111111111';
+  const implCommit1 = '2222222222222222222222222222222222222222';
+  const aggCommit = '3333333333333333333333333333333333333333';
+
+  const graphInput = {
+    schemaVersion: 1,
+    parentTask: {
+      id: 'task-graph-inspector',
+      title: 'Build Graph Inspector fixture',
+      spec: 'Demonstrate Task Graph visualization with subtasks and topology.',
+      planner: 'codex',
+      reviewer: 'codex',
+    },
+    subtasks: [
+      { id: 'backend', implementer: 'antigravity', spec: 'Implement backend service.', dependsOn: [] },
+      { id: 'frontend', implementer: 'codex', spec: 'Implement frontend UI.', dependsOn: ['backend'] },
+      { id: 'docs', implementer: 'codex', spec: 'Write documentation.', dependsOn: ['backend'] },
+    ],
+    maxConcurrency: 2,
+  };
+
+  const intentMap = {
+    schemaVersion: 1,
+    parentTaskId: 'task-graph-inspector',
+    scopePolicy: 'strict',
+    subtasks: [
+      { id: 'backend', writeIntent: ['src/server/**'] },
+      { id: 'frontend', writeIntent: ['src/client/**'] },
+      { id: 'docs', writeIntent: ['docs/**'] },
+    ],
+  };
+
+  createTaskGraph(repositoryRoot, graphInput, {
+    configuredAgents: [{ id: 'codex', adapter: 'codex-cli' }, { id: 'antigravity', adapter: 'generic-cli' }],
+    intentMap,
+  });
+
+  setTaskGraphSubtaskState(repositoryRoot, 'task-graph-inspector', 'backend', 'RUNNING', {
+    sessionId: 'session_backend123',
+    worktreePath: join(repositoryRoot, '.agent-bus', 'worktrees', 'task-graph-inspector', 'backend'),
+    branch: 'coordinate-agents/task-graph-inspector/backend',
+    ref: 'refs/heads/coordinate-agents/task-graph-inspector/backend',
+    baseCommit,
+  });
+
+  setTaskGraphSubtaskState(repositoryRoot, 'task-graph-inspector', 'backend', 'SUCCEEDED', {
+    implementationCommit: implCommit1,
+    evidence: [{
+      type: 'IMPLEMENTATION_DONE',
+      relatedCommit: implCommit1,
+      details: 'Backend implementation complete with unit tests.',
+      createdAt: '2026-08-23T00:03:00.000Z',
+    }],
+    scopeEvidence: {
+      schemaVersion: 1,
+      parentTaskId: 'task-graph-inspector',
+      subtaskId: 'backend',
+      graphBaseCommit: baseCommit,
+      implementationCommit: implCommit1,
+      scopePolicy: 'strict',
+      coverage: 'declared',
+      writeIntent: ['src/server/**'],
+      actualPathCount: 1,
+      actualPaths: ['src/server/index.js'],
+      actualPathsTruncated: false,
+      outsideIntentPathCount: 0,
+      outsideIntentPaths: [],
+      outsideIntentPathsTruncated: false,
+      committedChangeCount: 1,
+      committedChanges: [{ status: 'A', path: 'src/server/index.js' }],
+      committedChangesTruncated: false,
+      dirtyChangeCount: 0,
+      dirtyChanges: [],
+      dirtyChangesTruncated: false,
+      dirtyWorktreeAvailable: false,
+      hasDirty: false,
+      drift: false,
+      driftEvidence: null,
+    },
+  });
+
+  setTaskGraphState(repositoryRoot, 'task-graph-inspector', 'RUNNING');
+
+  setTaskGraphIntegration(repositoryRoot, 'task-graph-inspector', 'SUCCEEDED', {
+    aggregateCommit: aggCommit,
+    worktreePath: join(repositoryRoot, '.agent-bus', 'worktrees', 'task-graph-inspector', '__integration__'),
+    branch: 'coordinate-agents/task-graph-inspector/__integration__',
+    ref: 'refs/heads/coordinate-agents/task-graph-inspector/__integration__',
+    appliedCommits: [implCommit1],
+    appliedSubtasks: ['backend'],
+  });
+
+  setTaskGraphReview(repositoryRoot, 'task-graph-inspector', 'REVIEW_APPROVED', {
+    feedback: 'Graph topology executed correctly and integration verified.',
+  });
+
+  return { baseCommit, implCommit1, aggCommit };
 }
 
 test('Inspector API reads fixture Tasks, Sessions, Agent topology, events, and dashboard assets', async () => {
@@ -153,12 +269,14 @@ test('Inspector API reads fixture Tasks, Sessions, Agent topology, events, and d
     const tasks = await tasksResponse.json();
     assert.equal(tasks.length, 1);
     assert.deepEqual(tasks[0], {
+      kind: 'task',
+      graph: false,
       id: 'task-inspector',
       title: 'Build Inspector fixture',
       status: 'APPROVED',
       round: 1,
-      updatedAt: tasks[0].updatedAt,
       createdAt: tasks[0].createdAt,
+      updatedAt: tasks[0].updatedAt,
       planner: 'codex',
       implementer: 'antigravity',
       reviewer: 'codex',
@@ -311,4 +429,349 @@ test('Inspector metadata is included in the package payload and CLI help', () =>
   assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);
   assert.match(help.stdout, /--port <port>/);
   assert.equal(existsSync(join(root, 'inspector', 'web', 'index.html')), true);
+});
+
+test('Inspector mixed listing discovers both ordinary Tasks and Task Graph parents with distinct summaries and sorting', async () => {
+  const repositoryRoot = fixture();
+  graphFixture(repositoryRoot);
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const tasksResponse = await fetch(`${started.url}/api/tasks`);
+    assert.equal(tasksResponse.status, 200);
+    const tasks = await tasksResponse.json();
+    assert.equal(tasks.length, 2);
+
+    const graphEntry = tasks.find(item => item.graph === true);
+    assert.ok(graphEntry, 'Task Graph parent must appear in tasks list');
+    assert.equal(graphEntry.kind, 'task-graph-parent');
+    assert.equal(graphEntry.id, 'task-graph-inspector');
+    assert.equal(graphEntry.parentTaskId, 'task-graph-inspector');
+    assert.equal(graphEntry.title, 'Build Graph Inspector fixture');
+    assert.equal(graphEntry.status, 'APPROVED');
+    assert.equal(graphEntry.maxConcurrency, 2);
+    assert.equal(graphEntry.subtaskCount, 3);
+    assert.equal(graphEntry.reviewDecision, 'REVIEW_APPROVED');
+    assert.deepEqual(graphEntry.counts, {
+      ready: 2,
+      waiting: 0,
+      running: 0,
+      succeeded: 1,
+      failed: 0,
+      blocked: 0,
+      stopped: 0,
+    });
+
+    const ordinaryEntry = tasks.find(item => item.graph === false);
+    assert.ok(ordinaryEntry, 'Ordinary task must appear in tasks list');
+    assert.equal(ordinaryEntry.kind, 'task');
+    assert.equal(ordinaryEntry.id, 'task-inspector');
+    assert.equal(ordinaryEntry.round, 1);
+
+    for (let i = 0; i < tasks.length - 1; i += 1) {
+      assert.ok(tasks[i].updatedAt >= tasks[i + 1].updatedAt);
+    }
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector returns exhaustive bounded Task Graph detail across subtasks, topology, frontier, wave, integration, recovery, and review', async () => {
+  const repositoryRoot = repository();
+  const { implCommit1, aggCommit } = graphFixture(repositoryRoot);
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const detailResponse = await fetch(`${started.url}/api/tasks/task-graph-inspector`);
+    assert.equal(detailResponse.status, 200);
+    const detail = await detailResponse.json();
+
+    assert.equal(detail.graph, true);
+    assert.equal(detail.kind, 'task-graph-parent');
+    assert.equal(detail.id, 'task-graph-inspector');
+    assert.equal(detail.parentTaskId, 'task-graph-inspector');
+    assert.equal(detail.title, 'Build Graph Inspector fixture');
+    assert.equal(detail.status, 'APPROVED');
+    assert.equal(detail.maxConcurrency, 2);
+    assert.equal(detail.subtaskCount, 3);
+    assert.equal(detail.schemaVersion, 1);
+    assert.equal(detail.spec, 'Demonstrate Task Graph visualization with subtasks and topology.');
+    assert.equal(detail.historySource, 'recorded');
+
+    // Subtasks and topology
+    assert.equal(detail.subtasks.length, 3);
+    const backend = detail.subtasks.find(s => s.id === 'backend');
+    assert.ok(backend);
+    assert.equal(backend.title, 'backend');
+    assert.equal(backend.spec, 'Implement backend service.');
+    assert.equal(backend.state, 'SUCCEEDED');
+    assert.equal(backend.implementer, 'antigravity');
+    assert.deepEqual(backend.agent, { id: 'antigravity', registered: true, adapter: 'antigravity-cli' });
+    assert.equal(backend.sessionId, 'session_backend123');
+    assert.equal(backend.worktree.branch, 'coordinate-agents/task-graph-inspector/backend');
+    assert.equal(backend.implementationCommit, implCommit1);
+    assert.equal(backend.evidence.length, 1);
+    assert.equal(backend.evidence[0].type, 'IMPLEMENTATION_DONE');
+    assert.equal(backend.scopeAudit.schemaVersion, 1);
+    assert.equal(backend.scopeAudit.drift, false);
+    assert.equal(backend.scopeAudit.scopePolicy, 'strict');
+    assert.deepEqual(backend.scopeAudit.actualPaths, ['src/server/index.js']);
+    assert.deepEqual(backend.scopeAudit.outsideIntentPaths, []);
+    assert.ok(backend.recovery);
+    assert.equal(backend.recovery.classification, 'completed');
+
+    const frontend = detail.subtasks.find(s => s.id === 'frontend');
+    assert.ok(frontend);
+    assert.deepEqual(frontend.dependsOn, ['backend']);
+    assert.equal(frontend.state, 'READY');
+
+    const docs = detail.subtasks.find(s => s.id === 'docs');
+    assert.ok(docs);
+    assert.deepEqual(docs.dependsOn, ['backend']);
+    assert.equal(docs.state, 'READY');
+
+    // Dependencies edges
+    assert.deepEqual(detail.dependencies, [
+      { from: 'backend', to: 'docs' },
+      { from: 'backend', to: 'frontend' },
+    ]);
+
+    // Frontier & wave
+    assert.deepEqual(detail.frontier.ready, ['docs', 'frontend']);
+    assert.deepEqual(detail.frontier.waiting, []);
+    assert.deepEqual(detail.frontier.running, []);
+    assert.deepEqual(detail.frontier.succeeded, ['backend']);
+    assert.ok(detail.wave);
+    assert.deepEqual(detail.wave.selected, ['docs', 'frontend']);
+    assert.deepEqual(detail.wave.conflicts, []);
+
+    // Conflicts and Intent coverage
+    assert.deepEqual(detail.conflicts, []);
+    assert.ok(detail.intentCoverage);
+    assert.equal(detail.intentCoverage.schemaVersion, 1);
+    assert.equal(detail.intentCoverage.subtasks.length, 3);
+
+    // Integration facts
+    assert.ok(detail.integration);
+    assert.equal(detail.integration.state, 'SUCCEEDED');
+    assert.equal(detail.integration.aggregateCommit, aggCommit);
+    assert.ok(detail.integrationFacts);
+    assert.equal(detail.integrationFacts.branch, 'coordinate-agents/task-graph-inspector/__integration__');
+
+    // Review facts
+    assert.ok(detail.review);
+    assert.equal(detail.review.decision, 'REVIEW_APPROVED');
+    assert.equal(detail.review.feedback, 'Graph topology executed correctly and integration verified.');
+    assert.equal(detail.reviewHistory.length, 1);
+
+    // Timeline and events
+    assert.ok(Array.isArray(detail.events));
+    assert.ok(detail.events.some(e => e.type === 'TASK_GRAPH_CREATED'));
+    assert.ok(detail.events.some(e => e.type === 'REVIEW_APPROVED'));
+    assert.ok(Array.isArray(detail.timeline));
+
+    // Agent flow
+    assert.deepEqual(detail.agentFlow, [
+      { role: 'planner', agent: 'codex' },
+      { role: 'implementer', agent: 'antigravity' },
+      { role: 'implementer', agent: 'codex' },
+      { role: 'reviewer', agent: 'codex' },
+    ]);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector direct /api/graphs and /api/graphs/:id endpoints provide dedicated Task Graph access', async () => {
+  const repositoryRoot = repository();
+  graphFixture(repositoryRoot);
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const listRes = await fetch(`${started.url}/api/graphs`);
+    assert.equal(listRes.status, 200);
+    const list = await listRes.json();
+    assert.equal(list.length, 1);
+    assert.equal(list[0].id, 'task-graph-inspector');
+    assert.equal(list[0].graph, true);
+    assert.equal(list[0].subtaskCount, 3);
+
+    const itemRes = await fetch(`${started.url}/api/graphs/task-graph-inspector`);
+    assert.equal(itemRes.status, 200);
+    const item = await itemRes.json();
+    assert.equal(item.id, 'task-graph-inspector');
+    assert.equal(item.graph, true);
+    assert.equal(item.subtasks.length, 3);
+
+    const notFoundRes = await fetch(`${started.url}/api/graphs/task-nonexistent`);
+    assert.equal(notFoundRes.status, 404);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector SSE streams Task Graph events and filters/resumes from Last-Event-ID', async () => {
+  const repositoryRoot = repository();
+  const first = appendRuntimeEvent(repositoryRoot, {
+    type: 'TASK_GRAPH_CREATED',
+    taskId: 'task-graph-sse',
+    agentId: 'codex',
+    role: 'planner',
+    data: { parentTaskId: 'task-graph-sse', maxConcurrency: 2 },
+  });
+  const second = appendRuntimeEvent(repositoryRoot, {
+    type: 'TASK_GRAPH_STATUS_CHANGED',
+    taskId: 'task-graph-sse',
+    agentId: 'codex',
+    role: 'planner',
+    data: { from: 'CREATED', to: 'RUNNING' },
+  });
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${started.url}/api/events/stream`, {
+      headers: { 'Last-Event-ID': `${first.sequence}` },
+      signal: controller.signal,
+    });
+    assert.equal(response.status, 200);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let body = '';
+
+    const third = appendRuntimeEvent(repositoryRoot, {
+      type: 'TASK_GRAPH_STATUS_CHANGED',
+      taskId: 'task-graph-sse',
+      agentId: 'codex',
+      role: 'planner',
+      data: { from: 'RUNNING', to: 'APPROVED' },
+    });
+
+    const deadline = Date.now() + 4_000;
+    while (Date.now() < deadline && (!body.includes(`id: ${second.sequence}\n`) || !body.includes(`id: ${third.sequence}\n`))) {
+      const result = await Promise.race([
+        reader.read(),
+        new Promise(resolvePromise => setTimeout(() => resolvePromise({ timeout: true }), 700)),
+      ]);
+      if (result.timeout) continue;
+      if (result.done) break;
+      body += decoder.decode(result.value, { stream: true });
+    }
+    assert.match(body, new RegExp(`id: ${second.sequence}\\n`));
+    assert.match(body, new RegExp(`id: ${third.sequence}\\n`));
+    assert.equal(body.includes(`id: ${first.sequence}\n`), false);
+  } finally {
+    controller.abort();
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector dashboard assets include Task Graph topology, frontier, conflict, and integration elements', async () => {
+  const repositoryRoot = fixture();
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const html = await (await fetch(`${started.url}/index.html`)).text();
+    assert.match(html, /id="graph-detail"/);
+    assert.match(html, /id="graph-topology"/);
+    assert.match(html, /id="graph-frontier"/);
+    assert.match(html, /id="graph-conflicts"/);
+    assert.match(html, /id="graph-integration"/);
+
+    const js = await (await fetch(`${started.url}/app.js`)).text();
+    assert.match(js, /renderGraphDetail/);
+    assert.match(js, /graph-card/);
+    assert.match(js, /graph-topology/);
+    assert.match(js, /graph-frontier/);
+    assert.match(js, /graph-conflicts/);
+    assert.match(js, /graph-integration/);
+
+    const css = await (await fetch(`${started.url}/styles.css`)).text();
+    assert.match(css, /\.graph-card/);
+    assert.match(css, /\.graph-detail/);
+    assert.match(css, /\.graph-overview-grid/);
+    assert.match(css, /\.graph-topology/);
+    assert.match(css, /\.graph-facts/);
+    assert.match(css, /\.graph-node/);
+    assert.match(css, /\.graph-fact/);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Inspector fails closed for malformed IDs, non-GET methods, symlinks, and path escapes without side effects', async () => {
+  const repositoryRoot = fixture();
+  graphFixture(repositoryRoot);
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    // Non-GET methods must be rejected with 405 and Allow: GET header
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      for (const endpoint of ['/api/tasks', '/api/graphs', '/api/tasks/task-inspector', '/api/graphs/task-graph-inspector', '/api/events']) {
+        const res = await fetch(`${started.url}${endpoint}`, { method });
+        assert.equal(res.status, 405, `${method} ${endpoint} must be rejected with 405`);
+        assert.equal(res.headers.get('allow'), 'GET');
+      }
+    }
+
+    // Malformed task and graph IDs must return 400 or 404 fail closed
+    const malformed = ['task-$invalid', 'invalid-id', 'task-123%2F..%2F..%2Fetc', 'task-with-space '];
+    for (const id of malformed) {
+      const taskRes = await fetch(`${started.url}/api/tasks/${id}`);
+      assert.ok([400, 404].includes(taskRes.status), `Malformed task id ${id} must fail closed`);
+      const graphRes = await fetch(`${started.url}/api/graphs/${id}`);
+      assert.ok([400, 404].includes(graphRes.status), `Malformed graph id ${id} must fail closed`);
+    }
+
+    // Path escapes
+    const escapeRes = await fetch(`${started.url}/api/tasks/%2E%2E%2F%2E%2E%2Fpackage.json`);
+    assert.ok([400, 404].includes(escapeRes.status));
+
+    // Nonexistent IDs
+    const notFoundTask = await fetch(`${started.url}/api/tasks/task-doesnotexist`);
+    assert.equal(notFoundTask.status, 404);
+    const notFoundGraph = await fetch(`${started.url}/api/graphs/task-doesnotexist`);
+    assert.equal(notFoundGraph.status, 404);
+
+    // Snapshot repository before and after inspector calls to prove NO side-effects
+    function snapshotDir(dir) {
+      const entries = [];
+      function walk(current) {
+        if (!existsSync(current)) return;
+        for (const name of readdirSync(current).sort()) {
+          const full = join(current, name);
+          entries.push(full.slice(dir.length));
+          try {
+            const stat = readFileSync(full);
+            entries.push(stat.byteLength);
+          } catch {
+            walk(full);
+          }
+        }
+      }
+      walk(dir);
+      return entries;
+    }
+
+    const beforeSnapshot = snapshotDir(join(repositoryRoot, '.agent-bus'));
+
+    // Perform multiple read operations
+    await fetch(`${started.url}/api/tasks`);
+    await fetch(`${started.url}/api/graphs`);
+    await fetch(`${started.url}/api/tasks/task-graph-inspector`);
+    await fetch(`${started.url}/api/graphs/task-graph-inspector`);
+    await fetch(`${started.url}/api/tasks/task-inspector`);
+    await fetch(`${started.url}/api/agents`);
+    await fetch(`${started.url}/api/sessions`);
+    await fetch(`${started.url}/api/events?limit=100`);
+
+    const afterSnapshot = snapshotDir(join(repositoryRoot, '.agent-bus'));
+    assert.deepEqual(beforeSnapshot, afterSnapshot, 'Inspector reads must produce zero mutations, events, or bus files');
+
+    // Verify git status unchanged
+    const gitStatus = spawnSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
+    assert.equal(gitStatus.status, 0);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
 });

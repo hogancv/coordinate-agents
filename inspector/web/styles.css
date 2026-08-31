@@ -76,6 +76,8 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .75rem; }
 .task-card { display: flex; min-height: 9.5rem; flex-direction: column; align-items: flex-start; gap: .55rem; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; color: var(--text); background: rgba(255, 255, 255, .025); text-align: left; cursor: pointer; transition: border-color .18s, transform .18s, background .18s; }
 .task-card:hover, .task-card.selected { border-color: rgba(140, 169, 255, .7); background: rgba(97, 124, 255, .13); transform: translateY(-2px); }
+.task-card.graph-card { border-left: 3px solid var(--accent); }
+.graph-card-meta { color: var(--accent); font-size: .7rem; font-weight: 600; }
 .task-card-top { display: flex; width: 100%; justify-content: space-between; color: var(--muted); font-size: .7rem; }
 .task-card strong { min-height: 2.5rem; font-size: .98rem; line-height: 1.3; }
 .task-id, .round, .task-updated, .adapter, .session-meta, .session-tasks, .timeline-meta { color: var(--muted); font-size: .72rem; }
@@ -98,6 +100,24 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 
 .task-detail-panel { scroll-margin-top: 1rem; }
 .detail-summary { flex-wrap: wrap; gap: .65rem 1rem; margin: -0.4rem 0 1.5rem; color: var(--muted); font-size: .76rem; }
+.graph-detail { margin-bottom: 2rem; }
+.graph-overview-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 2rem; margin-bottom: 1.5rem; }
+.graph-topology { display: grid; gap: .75rem; }
+.graph-edge-list { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; padding: .6rem .8rem; border: 1px solid var(--line); border-radius: .55rem; background: rgba(255, 255, 255, .02); font-size: .74rem; color: var(--muted); }
+.graph-edge-list strong { color: var(--text); }
+.graph-edge-list code { color: var(--accent); font-size: .72rem; }
+.graph-node { padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(255, 255, 255, .025); }
+.graph-node-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .6rem; }
+.graph-node-heading strong { font-size: .92rem; }
+.graph-dependencies { margin-bottom: .6rem; color: var(--muted); font-size: .72rem; }
+.graph-dependencies code { color: var(--accent); }
+.graph-node-meta { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-bottom: .6rem; color: var(--muted); font-size: .72rem; }
+.graph-node-meta strong, .graph-node-meta code { color: var(--text); }
+.graph-facts { display: grid; gap: .75rem; }
+.graph-fact { padding: .75rem .85rem; border: 1px solid var(--line); border-radius: .55rem; background: rgba(255, 255, 255, .02); }
+.graph-fact > span { display: block; margin-bottom: .35rem; color: var(--accent); font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.graph-fact pre { margin: 0; padding: .6rem; max-height: 12rem; overflow: auto; border: 1px solid var(--line); border-radius: .45rem; background: rgba(0, 0, 0, .25); font: .7rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #cdd8f7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.graph-fact code { font-size: .74rem; color: var(--text); }
 .detail-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 2rem; }
 .lower-grid { margin-top: 2rem; }
 .timeline-item { display: grid; grid-template-columns: 1.2rem minmax(0, 1fr); min-height: 4rem; }
@@ -155,7 +175,7 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 
 @media (max-width: 900px) {
   .topbar, .footer { align-items: flex-start; flex-direction: column; }
-  .hero-grid, .detail-grid { grid-template-columns: 1fr; }
+  .hero-grid, .detail-grid, .graph-overview-grid { grid-template-columns: 1fr; }
   .agent-flow { min-height: 0; flex-direction: column; align-items: stretch; }
   .flow-arrow { transform: rotate(90deg); align-self: center; }
 }

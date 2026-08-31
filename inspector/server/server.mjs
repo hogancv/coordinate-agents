@@ -98,7 +98,13 @@ function streamEvents(request, response, data, url) {
 
 function apiError(response, error) {
   const code = error?.code || '';
-  const status = code === 'TASK_NOT_FOUND' ? 404 : 500;
+  const status = code === 'TASK_NOT_FOUND'
+    ? 404
+    : code === 'TASK_GRAPH_INVALID'
+      ? 400
+      : code === 'TASK_STATE_CONFLICT'
+        ? 409
+        : 500;
   json(response, status, {
     error: redactOutput(error?.message || 'Inspector request failed.', 2 * 1024),
     code: code || 'INSPECTOR_READ_FAILED',
@@ -132,6 +138,15 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
       if (pathname.startsWith('/api/tasks/')) {
         const id = decodeURIComponent(pathname.slice('/api/tasks/'.length));
         json(response, 200, data.readTask(id));
+        return;
+      }
+      if (pathname === '/api/graphs') {
+        json(response, 200, data.readGraphs());
+        return;
+      }
+      if (pathname.startsWith('/api/graphs/')) {
+        const id = decodeURIComponent(pathname.slice('/api/graphs/'.length));
+        json(response, 200, data.readGraph(id));
         return;
       }
       if (pathname === '/api/agents') {
