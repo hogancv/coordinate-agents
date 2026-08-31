@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
@@ -259,12 +259,11 @@ test('CLI companion file and MCP object create the same normalized durable Inten
   try {
     writeFileSync(graphPath, `${JSON.stringify(graph('task-intent-cli'))}\n`, 'utf8');
     writeFileSync(intentPath, `${JSON.stringify(intentMap('task-intent-cli'))}\n`, 'utf8');
-    const cli = spawnSync(process.execPath, [
+    const cliOutput = execFileSync(process.execPath, [
       join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-create',
       '--root', root, '--input', graphPath, '--intent-map', intentPath, '--json',
     ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: '' } });
-    assert.equal(cli.status, 0, cli.stderr || cli.stdout);
-    const cliMap = JSON.parse(cli.stdout).graph.intentMap;
+    const cliMap = JSON.parse(cliOutput).graph.intentMap;
 
     const server = createMcpServer();
     const mcp = await server.handle({
