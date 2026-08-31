@@ -28,6 +28,7 @@ Inspector Server
 Existing Coordinate Agents Runtime State
    ├── .agent-bus/events/runtime.jsonl
    ├── .agent-bus/tasks/*.json
+   ├── .agent-bus/task-graphs/*.json
    ├── .agent-bus/config.json
    ├── .agent-bus/state/<agent>/*.json
    ├── .agent-bus/inbox/<agent>/{new,processing,processed}/*.md
@@ -62,15 +63,25 @@ accept GET requests only. Stop it with `Ctrl-C`.
 
 ## Pages and panels
 
-- **Tasks** — current Task title, status, round, and update time.
+- **Tasks** — current Task title, status, round, and update time for ordinary Tasks, plus distinguishable Task Graph parent entries with subtask count, max concurrency, and subtask state tallies.
 - **Agent flow** — the configured Planner → Implementer → Reviewer topology,
   including each Agent’s current Agent Bus state.
-- **Task detail** — sequence-ordered recorded event timeline, role assignments, specification,
-  implementation commit, evidence, review history, and last error.
+- **Task detail & Task Graph topology** — for ordinary Tasks: sequence-ordered recorded event timeline, role assignments, specification, implementation commit, evidence, review history, and last error. For Task Graphs: subtask nodes, dependency edges, frontier decisions, preflight waves, assigned Agent/Adapter/executable facts, worktree and commit facts, Scope Audit findings, recovery classifications, integration facts, and review decisions.
 - **Sessions** — Session state, timestamps, linked Tasks, bounded recent output,
   and recorded Session event history.
 - **Recent events** — timestamp, sequence, event type, Task, Session, Agent, and
   a bounded summary from the append-only journal.
+
+## Endpoints (Read-Only)
+
+- `GET /api/tasks` — mixed listing of ordinary Tasks and Task Graph parents.
+- `GET /api/tasks/:id` — task detail or Task Graph detail by ID.
+- `GET /api/graphs` — listing of persisted Task Graph parent summaries.
+- `GET /api/graphs/:id` — exhaustive bounded Task Graph detail.
+- `GET /api/agents` — configured Agents and current Agent Bus observation.
+- `GET /api/sessions` — persistent Execution Sessions and recent bounded logs.
+- `GET /api/events` — Event Journal records with query filtering.
+- `GET /api/events/stream` — SSE event stream with `Last-Event-ID` resume support.
 
 The dashboard receives new records through the localhost-only read-only
 `GET /api/events/stream` SSE endpoint, resumes from `Last-Event-ID`, refreshes

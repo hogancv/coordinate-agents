@@ -23,12 +23,24 @@ import { runtimeSessionFacts } from '../../skills/coordinate-agents/scripts/sess
 import { observeAgentBus } from '../../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
+import {
+  inspectTaskGraphIntegration,
+  inspectTaskGraphRecovery,
+  listTaskGraphs,
+  readTaskGraph,
+  taskGraphPath,
+  taskGraphSchedulingView,
+} from '../../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 
 const TASK_ID_PATTERN = /\btask-[A-Za-z0-9][A-Za-z0-9_-]{1,127}\b/;
 const MAX_EVENT_SCAN = 600;
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_SPEC_BYTES = 16 * 1024;
 const MAX_SESSION_OUTPUT = 8 * 1024;
+const MAX_GRAPH_ITEMS = 256;
+const MAX_NESTED_ITEMS = 256;
+const MAX_NESTED_KEYS = 64;
+const MAX_NESTED_DEPTH = 8;
 const EMPTY_ARRAY = Object.freeze([]);
 
 function canonicalRoot(root) {
@@ -54,6 +66,31 @@ function busFor(root) {
 function bounded(value, limit = MAX_EVENT_DETAILS) {
   if (value === null || value === undefined) return '';
   return redactOutput(`${value}`, limit);
+}
+
+function sanitizeNested(value, {
+  depth = 0,
+  stringLimit = MAX_EVENT_DETAILS,
+  itemLimit = MAX_NESTED_ITEMS,
+} = {}) {
+  if (value === null || value === undefined || typeof value === 'boolean') return value ?? null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') return bounded(value, stringLimit);
+  if (typeof value !== 'object' || depth >= MAX_NESTED_DEPTH) return bounded(value, stringLimit);
+  if (Array.isArray(value)) {
+    return value.slice(0, itemLimit).map(item => sanitizeNested(item, {
+      depth: depth + 1,
+      stringLimit,
+      itemLimit,
+    }));
+  }
+  return Object.fromEntries(Object.entries(value)
+    .slice(0, MAX_NESTED_KEYS)
+    .map(([key, item]) => [bounded(key, 256), sanitizeNested(item, {
+      depth: depth + 1,
+      stringLimit,
+      itemLimit,
+    })]));
 }
 
 function validTimestamp(value, fallback = Date.now()) {
@@ -163,6 +200,8 @@ function readTaskRecords(root) {
 
 function taskSummary(task) {
   return {
+    kind: 'task',
+    graph: false,
     id: task.id,
     title: task.title,
     status: task.status,
@@ -174,6 +213,33 @@ function taskSummary(task) {
     reviewer: task.reviewer,
     sessionId: task.sessionId || null,
     reviewDecision: task.reviewDecision || null,
+  };
+}
+
+function graphSummary(graph) {
+  const parent = graph.parentTask;
+  const counts = Object.fromEntries([
+    'READY', 'WAITING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'BLOCKED', 'STOPPED',
+  ].map(state => [state.toLowerCase(), graph.subtasks.filter(item => item.state === state).length]));
+  return {
+    kind: 'task-graph-parent',
+    graph: true,
+    id: graph.parentTaskId,
+    parentTaskId: graph.parentTaskId,
+    title: parent.title,
+    status: graph.state,
+    state: graph.state,
+    round: 1,
+    createdAt: graph.createdAt,
+    updatedAt: graph.updatedAt,
+    planner: parent.planner,
+    implementer: parent.implementer || null,
+    reviewer: parent.reviewer,
+    sessionId: null,
+    reviewDecision: graph.review?.decision || null,
+    maxConcurrency: graph.maxConcurrency,
+    subtaskCount: graph.subtasks.length,
+    counts,
   };
 }
 
@@ -237,10 +303,100 @@ function inspectorJournalEvent(event) {
     event: event.type,
     type: event.type,
     details: journalDetails(event),
-    data: event.data || {},
+    data: sanitizeNested(event.data || {}, { stringLimit: MAX_EVENT_DETAILS }),
     source: 'journal',
     recorded: true,
   };
+}
+
+function graphAgentFacts(config, implementer) {
+  const agent = config.agents.find(item => item.id === implementer);
+  if (!agent) return { id: implementer, registered: false, adapter: null };
+  return {
+    id: agent.id,
+    registered: true,
+    adapter: bounded(agent.adapter, 512),
+  };
+}
+
+function graphSubtaskView(config, subtask, recovery) {
+  return {
+    id: subtask.id,
+    subtaskId: subtask.id,
+    title: bounded(subtask.title || subtask.id, 2 * 1024),
+    spec: bounded(subtask.spec, MAX_SPEC_BYTES),
+    state: subtask.state,
+    status: subtask.status,
+    reason: bounded(subtask.reason, 8 * 1024) || null,
+    dependsOn: subtask.dependsOn.slice(0, MAX_GRAPH_ITEMS),
+    implementer: subtask.implementer,
+    agent: graphAgentFacts(config, subtask.implementer),
+    executable: {
+      effectiveCommand: bounded(subtask.effectiveCommand || subtask.command, 2 * 1024) || null,
+      resolvedCommand: bounded(subtask.resolvedCommand, 2 * 1024) || null,
+      source: subtask.effectiveCommand || subtask.command || subtask.resolvedCommand ? 'persisted-graph' : null,
+    },
+    sessionId: subtask.sessionId || null,
+    worktree: {
+      path: bounded(subtask.worktreePath, 4 * 1024) || null,
+      branch: bounded(subtask.branch, 2 * 1024) || null,
+      ref: bounded(subtask.ref, 2 * 1024) || null,
+      baseCommit: bounded(subtask.baseCommit, 256) || null,
+    },
+    implementationCommit: bounded(subtask.implementationCommit, 256) || null,
+    evidence: sanitizeNested(subtask.evidence || [], { stringLimit: 8 * 1024, itemLimit: 64 }),
+    scopeAudit: sanitizeNested(subtask.scopeEvidence || null, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    dispatch: sanitizeNested(subtask.dispatch || null, { stringLimit: 4 * 1024 }),
+    recovery: sanitizeNested(recovery || subtask.recovery || null, { stringLimit: 4 * 1024 }),
+    cleanup: sanitizeNested(subtask.cleanup || null, { stringLimit: 4 * 1024 }),
+    lastError: sanitizeNested(subtask.lastError || null, { stringLimit: 4 * 1024 }),
+    createdAt: subtask.createdAt || null,
+    updatedAt: subtask.updatedAt || null,
+  };
+}
+
+function graphDetail(root, graph) {
+  const bus = busFor(root);
+  const config = bus ? readConfig(bus) : { agents: [] };
+  const scheduling = taskGraphSchedulingView(graph);
+  const recovery = inspectTaskGraphRecovery(root, graph, { probeGit: false });
+  const recoveryById = new Map(recovery.map(item => [item.subtaskId, item]));
+  const events = recordedEvents(root, { taskId: graph.parentTaskId, limit: 300 });
+  const parent = graph.parentTask;
+  const subtasks = graph.subtasks.slice(0, MAX_GRAPH_ITEMS)
+    .map(item => graphSubtaskView(config, item, recoveryById.get(item.id)));
+  const detail = {
+    ...graphSummary(graph),
+    schemaVersion: graph.schemaVersion,
+    spec: bounded(parent.spec, MAX_SPEC_BYTES),
+    baseCommit: bounded(graph.baseCommit || parent.baseCommit, 256) || null,
+    reason: bounded(graph.reason || parent.reason, 8 * 1024) || null,
+    maxConcurrency: graph.maxConcurrency,
+    frontier: sanitizeNested(scheduling.frontier, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    wave: sanitizeNested(scheduling.wave, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    dependencies: subtasks.flatMap(item => item.dependsOn.map(dependency => ({
+      from: dependency,
+      to: item.id,
+    }))).slice(0, MAX_GRAPH_ITEMS * MAX_GRAPH_ITEMS),
+    subtasks,
+    intentCoverage: sanitizeNested(graph.intentMap || null, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    conflicts: sanitizeNested(scheduling.wave?.conflicts || [], { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    recovery: sanitizeNested(recovery, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    integration: sanitizeNested(graph.integration || null, { stringLimit: 8 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    integrationFacts: sanitizeNested(inspectTaskGraphIntegration(root, graph, { probeGit: false }), { stringLimit: 8 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
+    evidence: sanitizeNested(parent.evidence || graph.evidence || [], { stringLimit: 8 * 1024, itemLimit: 64 }),
+    review: sanitizeNested(graph.review || null, { stringLimit: 8 * 1024, itemLimit: 64 }),
+    reviewHistory: sanitizeNested(graph.reviewHistory || [], { stringLimit: 8 * 1024, itemLimit: 64 }),
+    events,
+    timeline: events.map(event => ({ ...event, status: null })).sort((a, b) => a.sequence - b.sequence),
+    historySource: 'recorded',
+    agentFlow: [
+      { role: 'planner', agent: parent.planner },
+      ...[...new Set(graph.subtasks.map(item => item.implementer))].map(agent => ({ role: 'implementer', agent })),
+      { role: 'reviewer', agent: parent.reviewer },
+    ],
+  };
+  return detail;
 }
 
 function recordedEvents(root, options = {}) {
@@ -496,9 +652,14 @@ export function createInspectorData(root) {
   return {
     root: repository,
     readTasks() {
-      return readTaskRecords(repository).map(taskSummary);
+      return [
+        ...readTaskRecords(repository).map(taskSummary),
+        ...listTaskGraphs(repository).map(graphSummary),
+      ].sort((left, right) => `${right.updatedAt || ''}`.localeCompare(`${left.updatedAt || ''}`));
     },
     readTask(id) {
+      const graphPath = taskGraphPath(repository, id);
+      if (existsSync(graphPath)) return graphDetail(repository, readTaskGraph(repository, id));
       const task = sanitizeTask(readTask(repository, id));
       let events = recordedEvents(repository, { taskId: task.id, limit: 300 });
       if (events.length > 0 && task.sessionId) {
@@ -520,6 +681,12 @@ export function createInspectorData(root) {
           { role: 'reviewer', agent: task.reviewer },
         ],
       };
+    },
+    readGraphs() {
+      return listTaskGraphs(repository).map(graphSummary);
+    },
+    readGraph(id) {
+      return graphDetail(repository, readTaskGraph(repository, id));
     },
     readAgents() {
       return readAgents(repository);

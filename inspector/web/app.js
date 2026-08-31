@@ -22,7 +22,8 @@ const state = {
 const elements = Object.fromEntries([
   'tasks', 'task-count', 'agent-flow', 'task-detail', 'detail-title', 'detail-summary',
   'timeline', 'detail-agent-flow', 'evidence', 'spec', 'sessions', 'session-count',
-  'events', 'refresh-button', 'close-detail',
+  'events', 'refresh-button', 'close-detail', 'graph-detail', 'graph-topology',
+  'graph-frontier', 'graph-conflicts', 'graph-integration',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -66,10 +67,11 @@ function renderTasks() {
     return;
   }
   elements.tasks.innerHTML = state.tasks.map(task => `
-    <button class="task-card ${state.selectedTask === task.id ? 'selected' : ''}" data-task-id="${escapeHtml(task.id)}" type="button">
-      <span class="task-card-top"><span class="task-id">${escapeHtml(shortId(task.id))}</span><span class="round">R${escapeHtml(task.round)}</span></span>
+    <button class="task-card ${task.graph ? 'graph-card' : ''} ${state.selectedTask === task.id ? 'selected' : ''}" data-task-id="${escapeHtml(task.id)}" type="button">
+      <span class="task-card-top"><span class="task-id">${escapeHtml(shortId(task.id))}</span><span class="round">${task.graph ? 'GRAPH' : `R${escapeHtml(task.round)}`}</span></span>
       <strong>${escapeHtml(task.title)}</strong>
       <span class="status-pill ${statusClass(task.status)}">${escapeHtml(statusLabel(task.status))}</span>
+      ${task.graph ? `<span class="graph-card-meta">${escapeHtml(task.subtaskCount)} subtasks · concurrency ${escapeHtml(task.maxConcurrency)}</span>` : ''}
       <span class="task-updated">Updated ${formatDate(task.updatedAt)}</span>
     </button>
   `).join('');
@@ -164,6 +166,66 @@ function renderTimeline(timeline = []) {
   `).join('');
 }
 
+function compactJson(value) {
+  return escapeHtml(JSON.stringify(value ?? null, null, 2));
+}
+
+function factBlock(label, value) {
+  if (value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) return '';
+  const rendered = typeof value === 'object' ? `<pre>${compactJson(value)}</pre>` : `<code>${escapeHtml(value)}</code>`;
+  return `<div class="graph-fact"><span>${escapeHtml(label)}</span>${rendered}</div>`;
+}
+
+function renderGraphDetail(task) {
+  const graph = Boolean(task?.graph);
+  elements['graph-detail'].hidden = !graph;
+  if (!graph) {
+    for (const id of ['graph-topology', 'graph-frontier', 'graph-conflicts', 'graph-integration']) elements[id].innerHTML = '';
+    return;
+  }
+  const dependencies = task.dependencies || [];
+  elements['graph-topology'].innerHTML = (task.subtasks || []).map(subtask => `
+    <article class="graph-node">
+      <div class="graph-node-heading">
+        <div><span class="eyebrow">${escapeHtml(subtask.id)}</span><strong>${escapeHtml(subtask.title || subtask.id)}</strong></div>
+        <span class="status-pill ${statusClass(subtask.state)}">${escapeHtml(statusLabel(subtask.state))}</span>
+      </div>
+      <div class="graph-dependencies">Depends on: ${subtask.dependsOn?.length ? subtask.dependsOn.map(item => `<code>${escapeHtml(item)}</code>`).join(' ') : '<span>none</span>'}</div>
+      <div class="graph-node-meta">
+        <span>Agent <strong>${escapeHtml(subtask.implementer)}</strong></span>
+        <span>Adapter <strong>${escapeHtml(subtask.agent?.adapter || '—')}</strong></span>
+        <span>Session <code>${escapeHtml(shortId(subtask.sessionId) || '—')}</code></span>
+      </div>
+      ${factBlock('Executable', subtask.executable)}
+      ${factBlock('Worktree / branch / commit', { ...subtask.worktree, implementationCommit: subtask.implementationCommit })}
+      ${factBlock('Evidence', subtask.evidence)}
+      ${factBlock('Scope audit', subtask.scopeAudit)}
+      ${factBlock('Recovery', subtask.recovery)}
+      ${factBlock('Last error', subtask.lastError)}
+    </article>
+  `).join('') || '<div class="empty-state">No persisted subtasks.</div>';
+  const edgeList = dependencies.length
+    ? dependencies.map(edge => `<code>${escapeHtml(edge.from)} → ${escapeHtml(edge.to)}</code>`).join(' ')
+    : '<span>none</span>';
+  elements['graph-topology'].insertAdjacentHTML('afterbegin', `<div class="graph-edge-list"><strong>Dependency edges</strong>${edgeList}</div>`);
+  elements['graph-frontier'].innerHTML = [
+    factBlock('Max concurrency', task.maxConcurrency),
+    factBlock('Current frontier', task.frontier),
+    factBlock('Selected preflight wave', task.wave),
+  ].join('');
+  elements['graph-conflicts'].innerHTML = [
+    factBlock('Write-intent conflicts', task.conflicts),
+    factBlock('Intent coverage', task.intentCoverage),
+    factBlock('Recovery classifications', task.recovery),
+  ].join('') || '<div class="empty-state">No conflict or scope facts recorded.</div>';
+  elements['graph-integration'].innerHTML = [
+    factBlock('Integration', task.integration),
+    factBlock('Integration facts', task.integrationFacts),
+    factBlock('Review', task.review),
+    factBlock('Review history', task.reviewHistory),
+  ].join('') || '<div class="empty-state">Integration and review have not been recorded.</div>';
+}
+
 function renderTaskDetail(task) {
   if (!task) {
     elements['task-detail'].hidden = true;
@@ -173,10 +235,11 @@ function renderTaskDetail(task) {
   elements['detail-title'].textContent = task.title;
   elements['detail-summary'].innerHTML = `
     <span class="status-pill ${statusClass(task.status)}">${escapeHtml(statusLabel(task.status))}</span>
-    <span>Round ${escapeHtml(task.round)}</span>
+    <span>${task.graph ? 'Task Graph' : `Round ${escapeHtml(task.round)}`}</span>
     <span>${escapeHtml(task.id)}</span>
     <span>Updated ${formatDate(task.updatedAt)}</span>
   `;
+  renderGraphDetail(task);
   renderTimeline(task.timeline);
   elements['detail-agent-flow'].innerHTML = (task.agentFlow || []).map((item, index) => {
     const agent = agentFor(item.agent);
@@ -192,7 +255,7 @@ function renderTaskDetail(task) {
   const evidence = task.evidence || [];
   const reviews = task.reviewHistory || [];
   elements.evidence.innerHTML = `
-    <div class="evidence-row"><span>Commit</span><code>${escapeHtml(task.implementationCommit || '—')}</code></div>
+    <div class="evidence-row"><span>${task.graph ? 'Base commit' : 'Commit'}</span><code>${escapeHtml(task.graph ? (task.baseCommit || '—') : (task.implementationCommit || '—'))}</code></div>
     <div class="evidence-row"><span>Evidence records</span><strong>${evidence.length}</strong></div>
     ${evidence.map(item => `<div class="evidence-block"><strong>${escapeHtml(item.type || 'Evidence')}</strong><p>${escapeHtml(item.details || item.relatedCommit || '—')}</p></div>`).join('')}
     ${reviews.map(item => `<div class="review-block"><span class="status-pill ${statusClass(item.decision)}">${escapeHtml(statusLabel(item.decision))}</span><p>${escapeHtml(item.feedback || 'No feedback')}</p></div>`).join('')}
