@@ -77,7 +77,7 @@ Codex turns that into a durable task, selects the configured Implementer adapter
 ## Key Capabilities
 
 - Durable local tasks, messages, review decisions, and runtime events.
-- Additive Task Graph v1 validation with optional Intent Map v1 write-scope declarations, deterministic conflict-aware READY waves, bounded parallel execution, isolated aggregate integration/review, and facts-first recovery across worktrees and Sessions.
+- Additive Task Graph v1 validation with optional Intent Map v1 write-scope declarations, deterministic conflict-aware READY waves, post-execution scope auditing, bounded parallel execution, isolated aggregate integration/review, and facts-first recovery across worktrees and Sessions.
 - Explicit Planner, Implementer, and Reviewer role boundaries.
 - Adapter-based execution for exact configured CLI commands.
 - Persistent, bounded, and inspectable execution sessions.
@@ -101,9 +101,12 @@ write patterns. Status, inspect, and plan distinguish legacy unavailable
 coverage from an explicitly empty `writeIntent` declaration.
 When coverage is available, planning greedily selects the stable subtask-ID
 order up to `maxConcurrency`, skips conservatively overlapping write intents,
-and returns bounded `WRITE_INTENT_CONFLICT` facts. These scheduling constraints
-never create dependency edges or claim that an implementation respected its
-declared scope.
+and returns bounded `WRITE_INTENT_CONFLICT` facts. After verified completion,
+the Runtime compares committed and uncommitted changes with the declaration
+before unlocking dependents. `observe` records drift, `warn` also exposes an
+`INTENT_SCOPE_DRIFT` warning while keeping success, and `strict` preserves the
+commit/worktree but records a recoverable failure. These checks never create
+dependency edges or mutate the user checkout.
 
 ## Supported Agents and Adapters
 

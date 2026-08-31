@@ -115,7 +115,12 @@ changing `dependsOn`; planning never creates execution state. Call
 without exceeding the persisted limit; each selected subtask receives its own worktree and Session,
 and newly unlocked work remains READY for a later explicit run. Call
 `coordinate_agents_task_graph_dispatch` to execute one READY subtask in an
-isolated Git worktree rooted at the exact graph base commit. On interruption,
+isolated Git worktree rooted at the exact graph base commit. When Intent Map
+coverage exists, verified completion runs Scope Audit v1 before dependents are
+eligible: `observe` records drift, `warn` preserves success with a visible
+warning, and `strict` preserves the commit/worktree as a recoverable
+`INTENT_SCOPE_DRIFT` failure. Missing coverage stores no invented evidence.
+On interruption,
 call `coordinate_agents_task_graph_recover` to inspect durable Session,
 worktree, commit, and evidence facts; it never treats filenames or prose as
 completion proof and never retries automatically. Call

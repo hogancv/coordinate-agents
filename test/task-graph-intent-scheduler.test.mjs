@@ -92,8 +92,8 @@ test('plan exposes deterministic conflict-aware wave facts without changing depe
 test('missing Intent Map preserves v2.3 eligibility and visibly reports unavailable conflict coverage', async () => {
   const root = repository('coordinate-agents-intent-legacy-scheduler-');
   try {
-    await runtimeTaskGraphCreate({ root, graph: graph('task-intent-legacy-scheduler') });
-    const plan = await runtimeTaskGraphPlan({ root, taskId: 'task-intent-legacy-scheduler' });
+    await runtimeTaskGraphCreate({ root, graph: graph('task-legacy') });
+    const plan = await runtimeTaskGraphPlan({ root, taskId: 'task-legacy' });
     assert.deepEqual(plan.plan.eligible.map(item => item.subtaskId), ['alpha', 'beta']);
     assert.deepEqual(plan.plan.capacityLimited.map(item => item.subtaskId), ['gamma']);
     assert.deepEqual(plan.plan.conflictDeferred, []);

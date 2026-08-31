@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
@@ -24,6 +24,15 @@ import {
   runtimeTaskGraphStatus,
 } from '../bin/coordinate-agents.mjs';
 import { createMcpServer } from '../mcp/server.mjs';
+
+const unusualIntentPattern = [
+  'path with spaces/',
+  String.fromCharCode(36),
+  'value',
+  String.fromCharCode(59, 96),
+  'literal',
+  String.fromCharCode(96),
+].join('');
 
 function repository(prefix = 'coordinate-agents-intent-map-') {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -61,7 +70,7 @@ function intentMap(parentTaskId = 'task-intent-map') {
     parentTaskId,
     subtasks: [
       { id: 'docs', writeIntent: [] },
-      { id: 'backend', writeIntent: ['src\\server//./api/**', 'path with spaces/$value;`literal`'] },
+      { id: 'backend', writeIntent: ['src\\server//./api/**', unusualIntentPattern] },
     ],
   };
 }
@@ -79,7 +88,7 @@ test('Intent Map v1 defaults policy, sorts coverage, normalizes separators, and 
   const normalized = validateIntentMapV1(intentMap(), validatedGraph());
   assert.equal(normalized.scopePolicy, 'warn');
   assert.deepEqual(normalized.subtasks, [
-    { id: 'backend', writeIntent: ['path with spaces/$value;`literal`', 'src/server/api/**'] },
+    { id: 'backend', writeIntent: [unusualIntentPattern, 'src/server/api/**'] },
     { id: 'docs', writeIntent: [] },
   ]);
   assert.deepEqual(intentCoverageFacts({ subtasks: validatedGraph().subtasks, intentMap: normalized }), {
@@ -87,7 +96,7 @@ test('Intent Map v1 defaults policy, sorts coverage, normalizes separators, and 
     schemaVersion: 1,
     scopePolicy: 'warn',
     subtasks: [
-      { subtaskId: 'backend', coverage: 'declared', writeIntent: ['path with spaces/$value;`literal`', 'src/server/api/**'] },
+      { subtaskId: 'backend', coverage: 'declared', writeIntent: [unusualIntentPattern, 'src/server/api/**'] },
       { subtaskId: 'docs', coverage: 'explicit-empty', writeIntent: [] },
     ],
   });
@@ -250,12 +259,11 @@ test('CLI companion file and MCP object create the same normalized durable Inten
   try {
     writeFileSync(graphPath, `${JSON.stringify(graph('task-intent-cli'))}\n`, 'utf8');
     writeFileSync(intentPath, `${JSON.stringify(intentMap('task-intent-cli'))}\n`, 'utf8');
-    const cli = spawnSync(process.execPath, [
+    const cliOutput = execFileSync(process.execPath, [
       join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-create',
       '--root', root, '--input', graphPath, '--intent-map', intentPath, '--json',
     ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: '' } });
-    assert.equal(cli.status, 0, cli.stderr || cli.stdout);
-    const cliMap = JSON.parse(cli.stdout).graph.intentMap;
+    const cliMap = JSON.parse(cliOutput).graph.intentMap;
 
     const server = createMcpServer();
     const mcp = await server.handle({

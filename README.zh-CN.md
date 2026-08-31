@@ -77,7 +77,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 ## 核心能力
 
 - 持久化本地任务、消息、审查结论和运行时事件。
-- 在任何执行副作用之前校验显式 DAG 与可选 Intent Map v1 写入范围，并支持确定性冲突感知 READY 波次、跨隔离 worktree/Session 的有界并行执行与基于事实的恢复。
+- 在任何执行副作用之前校验显式 DAG 与可选 Intent Map v1 写入范围，并支持确定性冲突感知 READY 波次、执行后范围审计、跨隔离 worktree/Session 的有界并行执行与基于事实的恢复。
 - 明确区分 Planner、Implementer 与 Reviewer 角色。
 - 通过适配器精确执行已配置的 CLI 命令。
 - 提供持久、有限输出且可检查的 Execution Session。
@@ -93,7 +93,10 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 会区分旧图的“覆盖不可用”和显式空 `writeIntent`。
 存在覆盖信息时，调度器会按稳定子任务 ID 顺序选择不超过 `maxConcurrency` 的
 非冲突波次，对保守相交的写入模式返回有界 `WRITE_INTENT_CONFLICT` 事实并延后执行。
-该调度约束不会创建依赖边，也不会推断实现是否遵守了声明范围。
+实现完成并通过提交证据校验后，Runtime 会在解锁依赖项之前，将基线到实现提交的
+变更以及仍未提交的 worktree 变更与声明范围比较。`observe` 仅记录偏移，`warn`
+在保持成功的同时显示 `INTENT_SCOPE_DRIFT` 警告，`strict` 则保留实现提交和
+worktree 并记录可恢复失败。该审计不会创建依赖边，也不会修改用户 checkout。
 
 ## 支持的代理与适配器
 

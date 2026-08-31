@@ -138,9 +138,29 @@ Status, inspect, and plan return additive `intentCoverage` facts.
 `available: false` and `writeIntent: null` mean no companion map exists;
 `coverage: "explicit-empty"` and `writeIntent: []` mean the subtask was
 deliberately declared with no write pattern. Intent Map v1 is declaration and
-visibility input for conflict-aware scheduling; it does not prove that an
-implementation respected the declaration. Implementation-diff auditing is a
-separate contract.
+visibility input for conflict-aware scheduling and post-execution Scope Audit
+v1.
+
+After `IMPLEMENTATION_DONE` evidence and its implementation commit are
+verified, but before dependent eligibility is derived, Scope Audit v1 compares
+the graph base to that commit and also inspects staged, unstaged, and untracked
+worktree changes. Additions, modifications, deletions, copies, and both sides
+of renames are matched against the subtask's normalized `writeIntent`.
+Evidence is persisted on the subtask with parent/subtask identity, both
+commits, declared patterns, actual and outside-intent paths, change counts,
+truncation flags, dirty-worktree availability, policy, and bounded
+`INTENT_SCOPE_DRIFT` details. Git output is NUL-delimited and argument-vector
+based, so spaces and shell metacharacters do not become shell input. An audit
+that cannot inspect its required facts fails closed at `scope-audit`.
+
+Policy behavior is additive: `observe` records findings without changing a
+verified success; `warn` keeps success and adds a visible warning; `strict`
+records a recoverable `INTENT_SCOPE_DRIFT` failure before prerequisites become
+eligible, while preserving the implementation commit and Runtime-owned
+worktree. Explicit empty `writeIntent` audits every actual write as outside
+scope. A legacy graph with no Intent Map performs no audit and stores no
+invented scope evidence. Scope Audit never checks out, resets, retries, removes
+work, mutates the user checkout, or changes dependency edges.
 
 The established `task status` and `task inspect` operations recognize a graph
 parent ID without changing the single-Task response for ordinary Tasks. The

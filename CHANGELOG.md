@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — v2.4 planning
+
+- Added deterministic post-execution Scope Audit v1 for Task Graphs with an
+  Intent Map. Durable evidence covers committed and dirty changes, both rename
+  paths, bounded drift facts, and `observe`/`warn`/`strict` policy behavior
+  before dependent eligibility is derived.
+
 ## 2.3.0 — Multi-Agent Task Graph v1
 
 This is the release-candidate change set after `v2.2.0`. Publication remains
