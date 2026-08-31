@@ -245,6 +245,34 @@ blocks only its downstream work. One selected failure is returned beside the
 independent sibling outcomes and never triggers fallback or automatic retry.
 The structured result contract is `schemas/task-graph-v1-run.schema.json`.
 
+## Explicit bounded multi-wave advance
+
+Move through a caller-authorized number of freshly planned waves:
+
+```sh
+coordinate-agents task graph-advance --root <repository> --id <parentTaskId> --max-waves 3 --json
+# equivalent nested form:
+coordinate-agents task graph advance <parentTaskId> --root <repository> --max-waves 3 --json
+```
+
+The MCP equivalent is `coordinate_agents_task_graph_advance`. `maxWaves` is a
+required integer from 1–32. Before each wave, advance reads a fresh Graph
+Preflight and uses that exact plan through the existing graph-run claim path;
+the graph lock still rechecks READY state, capacity, and write-intent safety.
+The result contains each executed plan, selected subtask IDs, bounded outcomes,
+wave summary, final graph/frontier, and an explicit stop code.
+
+Advance stops before dispatch when Preflight reports a write-intent conflict.
+It stops after a wave when an outcome fails or remains RUNNING after the bounded
+observation window. Existing failed, blocked, stopped, or RUNNING work,
+integration failure/conflict, and `CHANGES_REQUESTED` also stop progress rather
+than invoking recovery or retry. Reaching the caller limit returns
+`MAX_WAVES_REACHED`; all successful subtasks return `COMPLETED`. A completed
+repeat executes zero waves. The operation never rewrites dependencies,
+recursively dispatches, retries, integrates, reviews, changes the user checkout,
+or authorizes merge, push, tag, publish, deploy, or release. The structured
+contract is `schemas/task-graph-v1-advance.schema.json`.
+
 ## Durable recovery, explicit resume, stop, and cleanup
 
 `task graph-status` and `task graph-inspect` include a `recovery` array for

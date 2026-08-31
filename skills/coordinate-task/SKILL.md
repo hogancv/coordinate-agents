@@ -18,6 +18,7 @@ coordinate_agents_task_graph_validate
 coordinate_agents_task_graph_create
 coordinate_agents_task_graph_plan
 coordinate_agents_task_graph_run
+coordinate_agents_task_graph_advance
 coordinate_agents_task_graph_dispatch
 coordinate_agents_task_graph_recover
 coordinate_agents_task_graph_resume
@@ -62,6 +63,7 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-val
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-create --root "<repository>" --input "<graph.json>" --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-plan --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-run --root "<repository>" --id task-... --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-advance --root "<repository>" --id task-... --max-waves 3 --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-dispatch --root "<repository>" --id task-... --subtask <subtaskId> --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-recover --root "<repository>" --id task-... --json
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task graph-resume --root "<repository>" --id task-... --subtask <subtaskId> --json
@@ -141,6 +143,10 @@ subtask gets an isolated worktree, branch/ref, Bus message, and Runtime-owned
 Session; the operation does not recursively launch work unlocked during the
 same run. The graph lock rechecks write-intent compatibility against RUNNING
 subtasks before any worktree, Session, or Implementer launch.
+Use `coordinate_agents_task_graph_advance` (or `task graph-advance`) only with
+an explicit `maxWaves` from 1–32. It re-plans before every wave and stops on
+conflict, failure, blocked/stopped/running work, integration/review boundaries,
+or the caller limit. It never recovers, retries, integrates, reviews, or releases.
 To dispatch one ready subtask, use `coordinate_agents_task_graph_dispatch` (or
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>`), which executes
 the subtask in an isolated Git worktree rooted at the exact graph base commit

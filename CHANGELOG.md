@@ -6,6 +6,9 @@
   Intent Map. Durable evidence covers committed and dirty changes, both rename
   paths, bounded drift facts, and `observe`/`warn`/`strict` policy behavior
   before dependent eligibility is derived.
+- Added explicit bounded `graph-advance` for 1–32 freshly planned waves with
+  deterministic stop reasons and no automatic retry, recovery, integration,
+  review, dependency mutation, or release authority.
 
 ## 2.3.0 — Multi-Agent Task Graph v1
 

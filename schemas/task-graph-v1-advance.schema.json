@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-advance.schema.json",
+  "title": "Coordinate Agents bounded Task Graph advance result",
+  "type": "object",
+  "required": ["ok", "command", "root", "graphId", "parentTaskId", "maxWaves", "wavesExecuted", "waves", "finalPlan", "stop", "graph", "frontier", "boundaries"],
+  "properties": {
+    "ok": { "const": true },
+    "command": { "const": "task.graph-advance" },
+    "root": { "type": "string", "minLength": 1 },
+    "graphId": { "type": "string", "minLength": 1 },
+    "parentTaskId": { "type": "string", "minLength": 1 },
+    "maxWaves": { "type": "integer", "minimum": 1, "maximum": 32 },
+    "wavesExecuted": { "type": "integer", "minimum": 0, "maximum": 32 },
+    "waves": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": ["waveNumber", "plan", "selected", "outcomes", "summary"],
+        "properties": {
+          "waveNumber": { "type": "integer", "minimum": 1, "maximum": 32 },
+          "plan": { "$ref": "task-graph-v1-plan.schema.json" },
+          "selected": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" } },
+          "outcomes": { "type": "array", "maxItems": 32, "items": { "type": "object" } },
+          "summary": {
+            "type": "object",
+            "required": ["selected", "succeeded", "running", "failed"],
+            "properties": {
+              "selected": { "type": "integer", "minimum": 0, "maximum": 32 },
+              "succeeded": { "type": "integer", "minimum": 0, "maximum": 32 },
+              "running": { "type": "integer", "minimum": 0, "maximum": 32 },
+              "failed": { "type": "integer", "minimum": 0, "maximum": 32 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "finalPlan": { "anyOf": [{ "$ref": "task-graph-v1-plan.schema.json" }, { "type": "null" }] },
+    "stop": {
+      "type": "object",
+      "required": ["code", "reason", "waveNumber", "subtaskIds"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["COMPLETED", "MAX_WAVES_REACHED", "WRITE_INTENT_CONFLICT", "WAVE_FAILED", "SUBTASK_FAILED", "SUBTASK_BLOCKED", "SUBTASK_STOPPED", "SUBTASKS_RUNNING", "GRAPH_STOPPED", "INTEGRATION_CONFLICT", "INTEGRATION_FAILED", "CHANGES_REQUESTED", "NO_ELIGIBLE_WORK"]
+        },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "waveNumber": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "subtaskIds": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" } }
+      },
+      "additionalProperties": false
+    },
+    "graph": { "type": "object" },
+    "frontier": { "type": "object" },
+    "boundaries": {
+      "type": "object",
+      "required": ["automaticRetry", "recursiveDispatch", "mutatesDependencies", "integrates", "reviews", "authorizesRelease"],
+      "properties": {
+        "automaticRetry": { "const": false },
+        "recursiveDispatch": { "const": false },
+        "mutatesDependencies": { "const": false },
+        "integrates": { "const": false },
+        "reviews": { "const": false },
+        "authorizesRelease": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

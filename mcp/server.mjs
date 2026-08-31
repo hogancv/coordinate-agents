@@ -289,6 +289,23 @@ const TOOL_DEFINITIONS = Object.freeze([
     },
   },
   {
+    name: 'coordinate_agents_task_graph_advance',
+    description: 'Explicitly execute at most maxWaves freshly planned Task Graph waves, stopping on conflicts, failures, blocked/running work, integration/review state, or the caller limit without automatic retry or release authority.',
+    operation: 'taskGraphAdvance',
+    command: 'task.graph-advance',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: rootProperty,
+        taskId: stringProperty('Existing Task Graph parent identifier.'),
+        maxWaves: integerProperty('Maximum number of freshly planned waves to execute.', { minimum: 1, maximum: 32 }),
+        sessionWaitMs: integerProperty('Bounded observation window for each parallel dispatch.', { minimum: 0, maximum: 10_000 }),
+      },
+      required: ['root', 'taskId', 'maxWaves'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'coordinate_agents_task_graph_recover',
     description: 'Inspect and reconcile interrupted Task Graph subtasks from durable Session, worktree, and completion evidence without automatic retry.',
     operation: 'taskGraphRecover',

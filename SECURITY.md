@@ -69,6 +69,11 @@ it before sharing diagnostics.
   order. Dispatch rechecks conflicts with RUNNING subtasks under the graph lock before launch.
   This never adds dependency edges, executes patterns in a shell, or substitutes for diff audit.
 
+- Bounded graph advance requires an explicit 1–32 wave limit and obtains a fresh Preflight before
+  each wave. Conflicts, non-success, recovery state, integration failure, and requested changes stop
+  progress. It never retries, invokes recovery, rewrites dependencies, integrates, reviews, or
+  authorizes release, and every dispatch still crosses the existing graph lock.
+
 - Graph subtask dispatch captures one exact base commit, creates only a Runtime-owned worktree and
   branch under the repository graph area, and roots the persistent Session there. It rejects unsafe
   paths and branch inputs, preserves exact Adapter command precedence, keeps the user's checkout

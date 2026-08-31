@@ -16,6 +16,7 @@ const expectedTools = [
   'coordinate_agents_task_graph_create',
   'coordinate_agents_task_graph_plan',
   'coordinate_agents_task_graph_run',
+  'coordinate_agents_task_graph_advance',
   'coordinate_agents_task_graph_recover',
   'coordinate_agents_task_graph_resume',
   'coordinate_agents_task_graph_stop',

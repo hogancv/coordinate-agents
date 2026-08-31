@@ -99,6 +99,10 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 通过 `coordinate_agents_task_graph_run` 或 `task graph-run --id <parentTaskId>` 可对当前合格前沿执行一次
 有界并行派发：不超过 `maxConcurrency`，每个子任务使用独立 worktree、分支和 Runtime Session，
 新解锁的工作保持 READY，等待下一次显式执行。
+通过 `coordinate_agents_task_graph_advance` 或 `task graph-advance --max-waves <1-32>` 可显式授权有限波次。
+每一波都会重新执行 Preflight，并返回计划、选择、结果和最终停止原因；遇到写入意图冲突、失败、阻塞、停止、
+仍在运行的任务、集成冲突或 `CHANGES_REQUESTED` 时停止。它不会自动恢复、重试、集成、审查或授权发布，
+也不会改写依赖或修改用户 checkout。
 图状态和 inspect 结果同时返回每个子任务基于持久 Session、worktree、提交和证据的恢复事实，
 不会从文件名或描述推断成功。协调器或 Session host 中断后，可显式调用
 `coordinate_agents_task_graph_recover`（`task graph-recover`）验证已有
