@@ -119,7 +119,7 @@ failure while preserving the implementation commit and worktree. Missing
 Intent Map coverage preserves legacy behavior without scope evidence. The
 evidence schema is `schemas/scope-audit-v1.schema.json`.
 
-`coordinate_agents_task_graph_plan` is a read-only scheduler view over the
+`coordinate_agents_task_graph_plan` is a read-only Graph Preflight over the
 persisted graph. It returns every subtask in deterministic identifier order,
 the dependency outcome and bounded reason for each decision, the concurrency-
 eligible prefix, capacity-limited READY subtasks, and exact configured Agent,
@@ -131,8 +131,12 @@ With Intent Map coverage, the plan additionally returns a deterministic
 `wave`, `conflictDeferred`, and bounded `WRITE_INTENT_CONFLICT` facts. Stable
 subtask-ID order greedily selects non-conflicting READY work up to capacity;
 unprovable glob separation is treated conservatively. Missing coverage keeps
-the v2.3 selection and reports `intentCoverageAvailable: false`. Dependency,
-capacity, and intent decisions remain distinct and no `dependsOn` edge changes.
+the v2.3 selection, reports `intentCoverageAvailable: false`, marks concurrent
+write safety `UNVERIFIED`, and emits a bounded risk rather than claiming the
+wave is safe. The additive `preflight` object includes scope policy,
+selected-wave worktree/branch/message/Session/process estimates, bounded risks,
+and explicit no-dispatch/no-review/no-release boundaries. Dependency, capacity,
+and intent decisions remain distinct and no `dependsOn` edge changes.
 
 `coordinate_agents_task_graph_run` executes only the eligible prefix from one
 deterministic scheduling snapshot, up to the persisted `maxConcurrency` after

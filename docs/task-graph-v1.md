@@ -173,7 +173,7 @@ a deterministic reason. `TASK_GRAPH_SUBTASK_STATE_CHANGED` and
 `TASK_GRAPH_STATUS_CHANGED` events record later durable transitions; repeated
 identical transitions are idempotent.
 
-## Read-only scheduling plan
+## Read-only Graph Preflight
 
 Preview the next bounded scheduling decision without executing it:
 
@@ -183,10 +183,13 @@ coordinate-agents task graph-plan --root <repository> --id <parentTaskId> --json
 coordinate-agents task graph plan <parentTaskId> --root <repository> --json
 ```
 
-The MCP equivalent is `coordinate_agents_task_graph_plan`. The plan sorts all
-subtasks by identifier and derives one deterministic READY wave. Without an
+The MCP equivalent is `coordinate_agents_task_graph_plan`. This additive Graph
+Preflight preserves every v2.3 plan field, sorts all subtasks by identifier,
+and derives one deterministic READY wave. Without an
 Intent Map it preserves the v2.3 concurrency-eligible prefix and visibly marks
-intent coverage unavailable. With a map it greedily selects non-conflicting
+intent coverage unavailable. Its `concurrentWriteSafety` is `UNVERIFIED` and a
+bounded `INTENT_COVERAGE_UNAVAILABLE` risk explicitly says that the selected
+wave is not proof of safe concurrent writes. With a map it greedily selects non-conflicting
 READY subtasks up to capacity. A normalized literal-prefix mismatch proves two
 patterns disjoint; once glob syntax prevents proof, intersection is treated
 conservatively. A later conflicting subtask is returned in `conflictDeferred`
@@ -200,6 +203,12 @@ contradictory registry facts fail before execution.
 Planning reads one graph snapshot under the existing graph lock, including the
 persisted `maxConcurrency`, current RUNNING count, and normalized Intent Map.
 Execution uses the same wave derivation and rechecks the claim under that lock.
+The additive `preflight` object reports the effective scope policy, selected-wave
+worktree, branch, Bus message, Session, and process estimates, plus at most
+three bounded risk summaries. Its boundary facts state that planning does not
+change dependencies, dispatch an Agent, authorize review or release, or replace
+the explicit `graph-run` operation and exact human `RELEASE_APPROVED` gate.
+
 Planning is idempotent: unchanged durable state produces the same plan and creates no
 worktree, Bus message, Session, lifecycle event, or child process. The output
 contract is `schemas/task-graph-v1-plan.schema.json`.

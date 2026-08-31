@@ -83,8 +83,9 @@ Task Graph v1 是向后兼容的新增契约。通过 MCP 的
 `TASK_GRAPH_CREATED` 事件；它不会启动 Adapter、Session 或 Implementer。既有 `task status`、
 `task inspect` 以及 `task graph-status`、`task graph-inspect` 别名可读取 READY/WAITING/BLOCKED
 前沿和有界生命周期事件。通过 `coordinate_agents_task_graph_plan` 或
-`task graph-plan --id <parentTaskId>` 可只读预览确定性依赖、Agent/Adapter/可执行文件与并发容量决策，
-不会创建 worktree、Bus 消息、Session、事件或子进程。通过 `coordinate_agents_task_graph_dispatch` 或
+`task graph-plan --id <parentTaskId>` 可执行只读 Graph Preflight，预览确定性依赖、Agent/Adapter/可执行文件、
+并发容量、范围策略、当前波次资源估算、有界风险以及不派发/不审查/不发布边界。缺少 Intent Map 时并发写入安全性
+标记为 `UNVERIFIED`，不会宣称并发写入安全；该操作不会创建 worktree、Bus 消息、Session、事件或子进程。通过 `coordinate_agents_task_graph_dispatch` 或
 `task graph-dispatch --id <parentTaskId> --subtask <subtaskId>` 可在完全隔离的 Git worktree
 （`.agent-bus/worktrees/<parentTaskId>/<subtaskId>`）和独立分支中派发单项 READY 子任务，安全捕获基准提交
 且不修改用户工作区中未提交的文件，并在完成后自动解锁依赖前沿。详见[Task Graph v1 契约](../task-graph-v1.html)。
