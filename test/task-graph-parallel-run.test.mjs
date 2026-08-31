@@ -312,7 +312,7 @@ test('strict scope audit blocks real dispatch completion and preserves implement
   let shared;
   let result;
   try {
-    const parentTaskId = 'task-parallel-strict-scope';
+    const parentTaskId = 'task-policy';
     shared = await configuredFixture(root, home, parentTaskId, {
       intentMap: {
         schemaVersion: 1,
