@@ -80,6 +80,11 @@ test('plan exposes deterministic conflict-aware wave facts without changing depe
     ]);
     assert.match(first.plan.conflictDeferred[0].reason, /deferred from this wave/);
     assert.match(first.plan.eligible[0].reason, /no selected write-intent conflict/);
+    assert.equal(first.plan.preflight.scopePolicy, 'warn');
+    assert.equal(first.plan.preflight.concurrentWriteSafety, 'DECLARED_NON_CONFLICTING');
+    assert.equal(first.plan.preflight.estimates.worktreeCount, 2);
+    assert.deepEqual(first.plan.preflight.risks.map(item => item.code), ['WRITE_INTENT_CONFLICT']);
+    assert.deepEqual(first.plan.preflight.risks[0].affectedSubtasks, ['beta']);
     assert.deepEqual(
       readTaskGraph(root, 'task-intent-scheduler').subtasks.map(item => item.dependsOn),
       before.subtasks.map(item => item.dependsOn),

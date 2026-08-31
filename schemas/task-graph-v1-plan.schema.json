@@ -3,7 +3,7 @@
   "$id": "https://github.com/hogancv/coordinate-agents/schemas/task-graph-v1-plan.schema.json",
   "title": "Coordinate Agents Task Graph v1 scheduling plan",
   "type": "object",
-  "required": ["schemaVersion", "deterministic", "sideEffects", "maxConcurrency", "runningCount", "availableSlots", "eligible", "capacityLimited", "conflictDeferred", "conflicts", "wave", "decisions", "intentCoverage"],
+  "required": ["schemaVersion", "deterministic", "sideEffects", "maxConcurrency", "runningCount", "availableSlots", "eligible", "capacityLimited", "conflictDeferred", "conflicts", "wave", "decisions", "intentCoverage", "preflight"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "deterministic": { "const": true },
@@ -17,7 +17,8 @@
     "conflicts": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/conflict" } },
     "wave": { "$ref": "#/$defs/wave" },
     "decisions": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/decision" } },
-    "intentCoverage": { "$ref": "#/$defs/intentCoverage" }
+    "intentCoverage": { "$ref": "#/$defs/intentCoverage" },
+    "preflight": { "$ref": "#/$defs/preflight" }
   },
   "$defs": {
     "dependency": {
@@ -70,6 +71,60 @@
             },
             "additionalProperties": false
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "preflight": {
+      "type": "object",
+      "required": ["schemaVersion", "deterministic", "sideEffects", "scopePolicy", "concurrentWriteSafety", "estimates", "risks", "boundaries"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "deterministic": { "const": true },
+        "sideEffects": { "const": false },
+        "scopePolicy": { "type": ["string", "null"], "enum": ["observe", "warn", "strict", null] },
+        "concurrentWriteSafety": { "type": "string", "enum": ["DECLARED_NON_CONFLICTING", "UNVERIFIED"] },
+        "estimates": {
+          "type": "object",
+          "required": ["basis", "selectedSubtaskCount", "worktreeCount", "branchCount", "busMessageCount", "sessionCount", "processCount"],
+          "properties": {
+            "basis": { "const": "current-selected-wave" },
+            "selectedSubtaskCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "worktreeCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "branchCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "busMessageCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "sessionCount": { "type": "integer", "minimum": 0, "maximum": 32 },
+            "processCount": { "type": "integer", "minimum": 0, "maximum": 32 }
+          },
+          "additionalProperties": false
+        },
+        "risks": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["code", "severity", "affectedSubtasks", "message"],
+            "properties": {
+              "code": { "type": "string", "enum": ["INTENT_COVERAGE_UNAVAILABLE", "WRITE_INTENT_CONFLICT", "CAPACITY_LIMITED"] },
+              "severity": { "type": "string", "enum": ["info", "warning"] },
+              "affectedSubtasks": { "type": "array", "maxItems": 256, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" } },
+              "message": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "boundaries": {
+          "type": "object",
+          "required": ["changesDependencies", "dispatchesAgents", "authorizesReview", "authorizesRelease", "requiresExplicitGraphRun", "releaseApproval"],
+          "properties": {
+            "changesDependencies": { "const": false },
+            "dispatchesAgents": { "const": false },
+            "authorizesReview": { "const": false },
+            "authorizesRelease": { "const": false },
+            "requiresExplicitGraphRun": { "const": true },
+            "releaseApproval": { "const": "RELEASE_APPROVED" }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

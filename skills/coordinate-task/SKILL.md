@@ -126,12 +126,15 @@ atomically persists the parent, subtasks, dependency frontier, reasons,
 evidence, and lifecycle event without launching an Implementer. Use the
 existing `task status`/`task inspect` operations, or the explicit
 `task graph-status`/`task graph-inspect` aliases, to read the durable graph.
-Use `coordinate_agents_task_graph_plan` (or `task graph-plan`) to preview the
-deterministic dependency and capacity decisions with explicit configured
-Agent, Adapter, and executable facts. If Intent Map coverage is available, the
-plan greedily derives a stable non-conflicting READY wave and bounded
-`WRITE_INTENT_CONFLICT` facts. Conflict deferral never rewrites `dependsOn`.
-Planning creates no worktree, Bus message, Session, event, or process.
+Use `coordinate_agents_task_graph_plan` (or `task graph-plan`) as a Graph
+Preflight for deterministic dependency/capacity decisions, configured
+Agent/Adapter/executable facts, scope policy, selected-wave Runtime resource
+estimates, bounded risks, and explicit graph-run/review/release boundaries. If
+Intent Map coverage is available, the plan greedily derives a stable
+non-conflicting READY wave and bounded `WRITE_INTENT_CONFLICT` facts. Missing
+coverage is `UNVERIFIED` and does not prove concurrent writes are safe.
+Conflict deferral never rewrites `dependsOn`. Planning creates no worktree,
+Bus message, Session, event, or process.
 Use `coordinate_agents_task_graph_run` (or `task graph-run`) to execute the
 current selected wave concurrently up to `maxConcurrency`. Each selected
 subtask gets an isolated worktree, branch/ref, Bus message, and Runtime-owned

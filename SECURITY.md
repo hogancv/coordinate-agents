@@ -58,9 +58,11 @@ it before sharing diagnostics.
   patterns, absolute or escaping paths, control characters, unsupported policies, and malformed
   durable facts. Patterns remain data and are never interpolated into a shell command.
 
-- Task Graph planning reports deterministic dependency, capacity, and exact configured
-  Agent/Adapter/executable facts without creating a worktree, Bus message, Session, lifecycle
-  event, or child process.
+- Task Graph Preflight reports deterministic dependency, capacity, exact configured
+  Agent/Adapter/executable facts, bounded risks, selected-wave resource estimates, and explicit
+  no-dispatch/no-review/no-release boundaries without creating a worktree, Bus message, Session,
+  lifecycle event, or child process. Missing Intent Map coverage is `UNVERIFIED` and never claims
+  that concurrent writes are safe.
 
 - With Intent Map coverage, planning treats any unprovable pattern separation conservatively,
   emits bounded `WRITE_INTENT_CONFLICT` facts, and defers the later READY subtask in stable ID

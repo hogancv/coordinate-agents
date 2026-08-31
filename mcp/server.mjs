@@ -259,7 +259,7 @@ const TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'coordinate_agents_task_graph_plan',
-    description: 'Read a deterministic dependency-, capacity-, and write-intent-aware scheduling wave without creating a worktree, Bus message, Session, or process.',
+    description: 'Read a deterministic dependency-, capacity-, and write-intent-aware Graph Preflight with bounded risks, resource estimates, and explicit execution/release boundaries, without creating a worktree, Bus message, Session, or process.',
     operation: 'taskGraphPlan',
     command: 'task.graph-plan',
     inputSchema: {

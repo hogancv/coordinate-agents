@@ -106,11 +106,14 @@ available. Intent Map v1 must use the same parent ID, cover each subtask once,
 and contain only normalized repository-relative patterns; an empty
 `writeIntent` is explicit coverage, while a missing map remains unavailable.
 Invalid maps stop creation before Runtime side effects. Call
-`coordinate_agents_task_graph_plan` to read the deterministic dependency and
-capacity decisions with explicit Agent, Adapter, and executable facts. When an
-Intent Map exists, planning also returns one stable non-conflicting READY wave,
-bounded `WRITE_INTENT_CONFLICT` facts, and explicit deferred reasons without
-changing `dependsOn`; planning never creates execution state. Call
+`coordinate_agents_task_graph_plan` to read the deterministic Graph Preflight:
+dependency and capacity decisions, explicit Agent/Adapter/executable facts,
+scope policy, current-wave Runtime resource estimates, bounded risks, and the
+unchanged graph-run/review/release boundaries. When an Intent Map exists,
+planning also returns one stable non-conflicting READY wave, bounded
+`WRITE_INTENT_CONFLICT` facts, and explicit deferred reasons without changing
+`dependsOn`. Missing coverage is marked `UNVERIFIED` and never presented as
+proof that concurrent writes are safe; planning never creates execution state. Call
 `coordinate_agents_task_graph_run` to dispatch the selected wave concurrently
 without exceeding the persisted limit; each selected subtask receives its own worktree and Session,
 and newly unlocked work remains READY for a later explicit run. Call

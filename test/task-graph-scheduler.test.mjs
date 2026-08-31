@@ -91,6 +91,27 @@ test('Task Graph plan is deterministic, capacity-bounded, Agent-explicit, and re
       assert.equal(first.plan.availableSlots, 2);
       assert.deepEqual(first.plan.eligible.map(item => item.subtaskId), ['alpha', 'beta']);
       assert.deepEqual(first.plan.capacityLimited.map(item => item.subtaskId), ['gamma']);
+      assert.deepEqual(first.plan.preflight.estimates, {
+        basis: 'current-selected-wave',
+        selectedSubtaskCount: 2,
+        worktreeCount: 2,
+        branchCount: 2,
+        busMessageCount: 2,
+        sessionCount: 2,
+        processCount: 2,
+      });
+      assert.equal(first.plan.preflight.scopePolicy, null);
+      assert.equal(first.plan.preflight.concurrentWriteSafety, 'UNVERIFIED');
+      assert.equal(first.plan.preflight.risks[0].code, 'INTENT_COVERAGE_UNAVAILABLE');
+      assert.match(first.plan.preflight.risks[0].message, /does not prove.*safe/);
+      assert.deepEqual(first.plan.preflight.boundaries, {
+        changesDependencies: false,
+        dispatchesAgents: false,
+        authorizesReview: false,
+        authorizesRelease: false,
+        requiresExplicitGraphRun: true,
+        releaseApproval: 'RELEASE_APPROVED',
+      });
       assert.deepEqual(first.plan.decisions.map(item => item.subtaskId), [
         'after-alpha', 'after-beta', 'alpha', 'beta', 'gamma',
       ]);
@@ -145,12 +166,16 @@ test('Task Graph plan explains running, failed dependency, blocked, and remainin
   }
 });
 
-test('CLI and MCP expose the same no-process graph plan and reject unsupported scheduling input', async () => {
+test('CLI and MCP expose the same no-process graph plan with unavailable executables and reject unsupported input', async () => {
   const root = repository('coordinate-agents-graph-plan-transport-');
   const home = mkdtempSync(join(tmpdir(), 'coordinate-agents-graph-plan-home-'));
   try {
     await withIsolatedHome(home, async () => {
       await runtimeTaskGraphCreate({ root, graph: schedulerGraph('task-gd-plan-transport') });
+      const configPath = join(root, '.agent-bus', 'config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      for (const agent of config.agents) agent.command = `unavailable-preflight-${agent.id}`;
+      writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
       const cliResult = spawnSync(process.execPath, [
         cli, 'task', 'graph-plan', '--root', root, '--id', 'task-gd-plan-transport', '--json',
       ], {
@@ -161,6 +186,11 @@ test('CLI and MCP expose the same no-process graph plan and reject unsupported s
       assert.equal(cliResult.status, 0, cliResult.stderr || cliResult.stdout);
       const cliPlan = JSON.parse(cliResult.stdout);
       assert.deepEqual(cliPlan.plan.eligible.map(item => item.subtaskId), ['alpha', 'beta']);
+      assert.equal(cliPlan.plan.preflight.estimates.processCount, 2);
+      assert.equal(cliPlan.plan.preflight.concurrentWriteSafety, 'UNVERIFIED');
+      assert.equal(cliPlan.plan.eligible[0].agent.command, 'unavailable-preflight-codex');
+      assert.equal(existsSync(join(root, '.agent-bus', 'worktrees')), false);
+      assert.equal(existsSync(join(root, '.agent-bus', 'sessions')), false);
 
       const server = createMcpServer();
       const mcp = await server.handle({
