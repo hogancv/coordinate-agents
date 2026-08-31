@@ -41,7 +41,10 @@ retry/fallback or mutate unrelated subtasks, and dispatch never changes the user
 Parallel graph execution claims READY subtasks under the graph lock, atomically enforces the
 persisted concurrency limit, and gives every selected subtask a distinct worktree, branch/ref,
 message, and Session identity rooted at one exact graph base commit. Failures remain isolated and
-never trigger fallback or automatic retry. Graph recovery is facts-first: status and inspect expose
+never trigger fallback or automatic retry. Bounded graph advance requires an explicit 1–32 wave
+limit, reads a fresh Preflight before each wave, and stops on conflicts, non-success, recovery state,
+integration failure, or requested changes. It never invokes recovery, retries, changes dependencies,
+integrates, reviews, or authorizes release. Graph recovery is facts-first: status and inspect expose
 durable Session/worktree/commit/evidence classifications, and recovery only promotes a verified
 `IMPLEMENTATION_DONE` commit or records an interrupted `FAILED` state. Explicit resume reuses a
 verified healthy Runtime-owned Session/worktree and otherwise returns `READY` for a separate

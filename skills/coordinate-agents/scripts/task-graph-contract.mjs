@@ -5,6 +5,7 @@ import { validateTaskId } from './task-runtime.mjs';
 export const TASK_GRAPH_SCHEMA_VERSION = 1;
 export const TASK_GRAPH_MAX_SUBTASKS = 256;
 export const TASK_GRAPH_MAX_CONCURRENCY = 32;
+export const TASK_GRAPH_MAX_ADVANCE_WAVES = 32;
 export const TASK_GRAPH_MAX_SPEC_BYTES = 256 * 1024;
 export const TASK_GRAPH_MAX_INPUT_BYTES = 64 * 1024 * 1024;
 export const TASK_GRAPH_STATES = Object.freeze(['CREATED', 'RUNNING', 'REVIEWING', 'APPROVED', 'ERROR', 'STOPPED']);

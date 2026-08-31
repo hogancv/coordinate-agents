@@ -35,6 +35,11 @@ test('extracted argument parser preserves nested commands and aliases', () => {
   assert.equal(graph.subtaskId, 'child-1');
   assert.equal(graph.json, true);
 
+  const advance = parseArgs(['task', 'graph', 'advance', 'parent-1', '--max-waves', '3', '--session-wait-ms', '100']);
+  assert.deepEqual(advance.positionals, ['advance', 'parent-1']);
+  assert.equal(advance.maxWaves, 3);
+  assert.equal(advance.sessionWaitMs, 100);
+
   const adapter = parseArgs(['adapter', 'register', './adapter.mjs']);
   assert.equal(adapter.command, 'adapter');
   assert.equal(adapter.subcommand, 'register');

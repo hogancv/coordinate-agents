@@ -77,7 +77,7 @@ Codex turns that into a durable task, selects the configured Implementer adapter
 ## Key Capabilities
 
 - Durable local tasks, messages, review decisions, and runtime events.
-- Additive Task Graph v1 validation with optional Intent Map v1 write-scope declarations, deterministic conflict-aware Graph Preflight with bounded risks and resource estimates, post-execution scope auditing, bounded parallel execution, isolated aggregate integration/review, and facts-first recovery across worktrees and Sessions.
+- Additive Task Graph v1 validation with optional Intent Map v1 write-scope declarations, deterministic conflict-aware Graph Preflight with bounded risks and resource estimates, explicit bounded multi-wave advance, post-execution scope auditing, isolated aggregate integration/review, and facts-first recovery across worktrees and Sessions.
 - Explicit Planner, Implementer, and Reviewer role boundaries.
 - Adapter-based execution for exact configured CLI commands.
 - Persistent, bounded, and inspectable execution sessions.

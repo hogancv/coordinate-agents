@@ -77,7 +77,7 @@ Codex 会把要求转成持久任务，选择已配置的 Implementer 适配器�
 ## 核心能力
 
 - 持久化本地任务、消息、审查结论和运行时事件。
-- 在任何执行副作用之前校验显式 DAG 与可选 Intent Map v1 写入范围，并支持带有界风险和资源估算的确定性冲突感知 Graph Preflight、执行后范围审计、跨隔离 worktree/Session 的有界并行执行与基于事实的恢复。
+- 在任何执行副作用之前校验显式 DAG 与可选 Intent Map v1 写入范围，并支持带有界风险和资源估算的确定性冲突感知 Graph Preflight、显式有界多波次 advance、执行后范围审计、跨隔离 worktree/Session 的并行执行与基于事实的恢复。
 - 明确区分 Planner、Implementer 与 Reviewer 角色。
 - 通过适配器精确执行已配置的 CLI 命令。
 - 提供持久、有限输出且可检查的 Execution Session。

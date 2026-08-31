@@ -75,7 +75,7 @@ remains a fallback for hosts without direct App skill execution.
 | "Which coding CLIs are installed?" | `coordinate-setup` | `coordinate_agents_setup_discover` |
 | "Configure the implementation agent." | `coordinate-setup` | `coordinate_agents_setup_configure` |
 | "Build this feature with Coordinate Agents." | `coordinate-task` | `coordinate_agents_task_create`, `coordinate_agents_task_dispatch` |
-| "Validate, persist, plan, run, recover, resume, stop, clean up, or integrate subtasks in a Task Graph." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create`, `coordinate_agents_task_graph_plan`, `coordinate_agents_task_graph_run`, `coordinate_agents_task_graph_dispatch`, `coordinate_agents_task_graph_recover`, `coordinate_agents_task_graph_resume`, `coordinate_agents_task_graph_stop`, `coordinate_agents_task_graph_cleanup`, `coordinate_agents_task_graph_integrate` |
+| "Validate, persist, plan, run, advance, recover, resume, stop, clean up, or integrate subtasks in a Task Graph." | `coordinate-task` / `coordinate-recover` | `coordinate_agents_task_graph_validate`, `coordinate_agents_task_graph_create`, `coordinate_agents_task_graph_plan`, `coordinate_agents_task_graph_run`, `coordinate_agents_task_graph_advance`, `coordinate_agents_task_graph_dispatch`, `coordinate_agents_task_graph_recover`, `coordinate_agents_task_graph_resume`, `coordinate_agents_task_graph_stop`, `coordinate_agents_task_graph_cleanup`, `coordinate_agents_task_graph_integrate` |
 | "Review an integrated Task Graph aggregate." | `coordinate-review` | `coordinate_agents_task_graph_review` |
 | "Review the implementation." | `coordinate-review` | `coordinate_agents_task_inspect`, `coordinate_agents_task_review` |
 | "Continue the last task." | `coordinate-recover` | `coordinate_agents_recover_inspect`, `coordinate_agents_task_resume`, `coordinate_agents_task_dispatch` |
@@ -117,6 +117,9 @@ proof that concurrent writes are safe; planning never creates execution state. C
 `coordinate_agents_task_graph_run` to dispatch the selected wave concurrently
 without exceeding the persisted limit; each selected subtask receives its own worktree and Session,
 and newly unlocked work remains READY for a later explicit run. Call
+`coordinate_agents_task_graph_advance` only with an explicit 1–32 `maxWaves`
+limit to re-plan between bounded waves; it stops on conflict, non-success,
+recovery, integration, or review boundaries and never retries or releases. Call
 `coordinate_agents_task_graph_dispatch` to execute one READY subtask in an
 isolated Git worktree rooted at the exact graph base commit. When Intent Map
 coverage exists, verified completion runs Scope Audit v1 before dependents are

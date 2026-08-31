@@ -92,6 +92,11 @@ not create a worktree, Bus message, Session, event, or process.
 frontier concurrently up to the persisted maxConcurrency. Each subtask receives
 an isolated worktree, branch/ref, Bus handoff, and parent/subtask-associated
 Runtime Session; newly unlocked work remains READY for a later explicit run.
+`coordinate_agents_task_graph_advance` requires an explicit `maxWaves` from
+1–32 and re-plans before each bounded wave. It returns each plan, selection,
+outcome, and a final stop reason, stopping on conflicts, non-success, existing
+recovery state, integration failure, or requested changes. It never retries,
+recovers, integrates, reviews, changes dependencies, or authorizes release.
 `coordinate_agents_task_graph_dispatch` dispatches one selected READY subtask in
 an isolated Git worktree rooted at the exact graph base commit without touching
 uncommitted files in the user repository or mutating sibling subtasks, unlocking

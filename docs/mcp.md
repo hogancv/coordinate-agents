@@ -56,6 +56,7 @@ Agent Bus transport is not Codex App Terminal UI automation.
 | `coordinate_agents_task_graph_create` | `root`, `graph` | `intentMap` | `task.graph-create` |
 | `coordinate_agents_task_graph_plan` | `root`, `taskId` | — | `task.graph-plan` |
 | `coordinate_agents_task_graph_run` | `root`, `taskId` | `sessionWaitMs` | `task.graph-run` |
+| `coordinate_agents_task_graph_advance` | `root`, `taskId`, `maxWaves` | `sessionWaitMs` | `task.graph-advance` |
 | `coordinate_agents_task_graph_recover` | `root`, `taskId` | `subtaskId` | `task.graph-recover` |
 | `coordinate_agents_task_graph_resume` | `root`, `taskId` | `subtaskId` | `task.graph-resume` |
 | `coordinate_agents_task_graph_stop` | `root`, `taskId` | `subtaskId`, `reason`, `timeoutMs` | `task.graph-stop` |
@@ -148,6 +149,16 @@ dispatch observations without recursively launching newly unlocked work.
 The locked claim rechecks write-intent compatibility against RUNNING subtasks;
 a conflict fails before launch without fallback, retry, sibling mutation, or
 user-checkout mutation.
+
+`coordinate_agents_task_graph_advance` is a separately invoked bounded control
+loop. It accepts `maxWaves` from 1–32, obtains a fresh Graph Preflight before
+each wave, and returns every executed plan, selection, outcome, summary, and a
+final stop reason. It stops before dispatch on intent conflicts and stops after
+a wave on failed or still-running outcomes. Failed, blocked, stopped, or
+already-running work, integration conflict/failure, and `CHANGES_REQUESTED`
+remain explicit boundaries; advance never calls recovery, retries a subtask,
+integrates, reviews, or authorizes release. Its contract is
+`schemas/task-graph-v1-advance.schema.json`.
 
 `coordinate_agents_task_graph_dispatch` dispatches one selected `READY` subtask
 from a persisted Task Graph in an isolated Git worktree without modifying
@@ -273,6 +284,7 @@ The stable Task, Task Graph v1 input, Runtime error, and evidence shapes are doc
 - `schemas/task-graph-v1-record.schema.json`
 - `schemas/task-graph-v1-plan.schema.json`
 - `schemas/task-graph-v1-run.schema.json`
+- `schemas/task-graph-v1-advance.schema.json`
 - `schemas/task-graph-v1-recovery.schema.json`
 - `schemas/task-graph-v1-integrate.schema.json`
 - `schemas/task-graph-v1-review.schema.json`
