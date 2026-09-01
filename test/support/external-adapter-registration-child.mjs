@@ -10,16 +10,16 @@ import {
   runtimeSetupConfigure,
   runtimeTaskCreate,
   runtimeTaskOperation,
-} from '../bin/coordinate-agents.mjs';
+} from '../../bin/coordinate-agents.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,
   runtimeSessionOpen,
   runtimeSessionRead,
   runtimeSessionWrite,
-} from '../skills/coordinate-agents/scripts/session-service.mjs';
-import { resolveConfiguredSessionAgent } from '../skills/coordinate-agents/scripts/session-manager.mjs';
-import { listAdapters } from '../skills/coordinate-agents/adapters/index.mjs';
+} from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import { resolveConfiguredSessionAgent } from '../../skills/coordinate-agents/scripts/session-manager.mjs';
+import { listAdapters } from '../../skills/coordinate-agents/adapters/index.mjs';
 
 const rootDirectory = process.cwd();
 const busTool = join(rootDirectory, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
