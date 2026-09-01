@@ -9,7 +9,7 @@ test('Task Graph acceptance gate is part of the complete cross-platform matrix w
   const workflow = readFileSync(join(root, '.github', 'workflows', 'adapter-sdk-acceptance.yml'), 'utf8');
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 
-  assert.equal(packageJson.scripts.test, 'node --test --test-concurrency=1');
+  assert.equal(packageJson.scripts.test, 'node --test --test-concurrency=4');
   for (const os of ['ubuntu-latest', 'macos-latest', 'windows-latest']) {
     assert.match(workflow, new RegExp(`\\b${os}\\b`));
   }
