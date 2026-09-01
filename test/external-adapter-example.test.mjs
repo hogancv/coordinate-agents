@@ -18,7 +18,7 @@ import {
 const exampleRoot = join(process.cwd(), 'examples', 'minimal-external-adapter');
 const exampleModule = join(exampleRoot, 'adapter.mjs');
 const builtinRegistrySource = join(process.cwd(), 'skills', 'coordinate-agents', 'adapters', 'index.mjs');
-const registrationChild = join(process.cwd(), 'test-support', 'external-adapter-registration-child.mjs');
+const registrationChild = join(process.cwd(), 'test', 'support', 'external-adapter-registration-child.mjs');
 
 test('minimal external Adapter uses only the public SDK and passes offline conformance', () => {
   assert.equal(listAdapters().includes(MINIMAL_EXTERNAL_ADAPTER_ID), false);
