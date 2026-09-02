@@ -155,6 +155,18 @@ npx @hogancv/coordinate-agents@latest --help
 
 该路径适用于旧版 standalone Skill 安装、外部自动化或协议调试。完整命令工作流见[快速入门](./docs/getting-started.md)与 [MCP 集成](./docs/mcp.md)。
 
+## 本地开发
+
+日常快速回归请运行精简核心测试（约 20 秒），覆盖 CLI 分发、Web Workspace、
+Inspector、文档、仓库布局与共享 Runtime 契约：
+
+```sh
+npm run test:core
+```
+
+发布前再运行完整 `npm test`（数分钟，包含 Task Graph、Session、Plugin 与 MCP
+集成守卫）。
+
 ## 文档导航
 
 - 开始使用：[AI 安装契约](./AI_INSTALL.md)、[快速入门](./docs/getting-started.md)、[让 AI 安装](./docs/install-with-ai.md)、[常见问题](./docs/faq.md)、[变更记录](./CHANGELOG.md)

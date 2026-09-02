@@ -177,6 +177,19 @@ npx @hogancv/coordinate-agents@latest --help
 
 Use this path for legacy standalone Skill installation, external automation, or protocol debugging. The full command workflows are maintained in [Getting Started](./docs/getting-started.md) and [MCP integration](./docs/mcp.md).
 
+## Local Development
+
+For fast daily regressions run the focused core suite (~20 seconds), which
+covers the CLI dispatcher, Web Workspace, Inspector, documentation, repository
+layout, and shared Runtime contracts:
+
+```sh
+npm run test:core
+```
+
+Run the full `npm test` suite (several minutes, including Task Graph, Session,
+Plugin, and MCP integration guards) before proposing a release.
+
 ## Documentation
 
 - Start here: [AI installation contract](./AI_INSTALL.md), [Getting Started](./docs/getting-started.md), [Install with AI](./docs/install-with-ai.md), [FAQ](./docs/faq.md), [Changelog](./CHANGELOG.md)
