@@ -70,8 +70,9 @@ the guarded action endpoint below. Stop it with `Ctrl-C`.
 The Workspace exposes exactly one additive, guarded action endpoint for later
 controls: `POST /api/action`. It routes an explicit allow-list of structured
 operations to the same shared Runtime services used by CLI and MCP
-(`taskCreate`, `taskStatus`, `taskInspect`, `taskGraphStatus`,
-`taskGraphInspect`, `taskGraphPlan`, `taskGraphValidate`, `recoverInspect`).
+(`setupDiscover`, `setupConfigure`, `taskCreate`, `taskStatus`, `taskInspect`,
+`taskGraphStatus`, `taskGraphInspect`, `taskGraphPlan`, `taskGraphValidate`,
+`recoverInspect`).
 The gateway never shells out, parses CLI output, proxies MCP, accepts an
 arbitrary operation name, or lets a request choose a different repository root.
 
@@ -116,6 +117,16 @@ The Workspace overview opens with the **bound repository** identity (repository
 name, current branch, HEAD commit, latest commit subject, origin remote, and the
 canonical bound root path), followed by:
 
+- **Agents** — the Agent setup panel shows installed coding CLI detection and
+  the Adapter registry on demand (manual Discover, no background scanning), with
+  distinct Agent / Adapter / executable identity and command-source badges
+  (project > user > adapter-default). A bounded form configures a project Agent,
+  Adapter, exact executable command, and workflow role through the guarded
+  `setupConfigure` transaction (validation first, atomic rollback on failure).
+  Configured runtime Agents show adapter, roles, status, and queue depth. The
+  panel states that loaded local Adapter modules are trusted local code, that
+  configuration grants no browser filesystem/process bypass, and that no
+  credential or secret is rendered or persisted.
 - **Tasks** — current Task title, status, round, and update time for ordinary Tasks, plus distinguishable Task Graph parent entries with subtask count, max concurrency, and subtask state tallies.
 - **Agent flow** — the configured Planner → Implementer → Reviewer topology,
   including each Agent's current Agent Bus state.

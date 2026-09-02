@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import http from 'node:http';
 import {
+  chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -11,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { startWorkspace, startInspector } from '../inspector/server/server.mjs';
@@ -313,5 +315,133 @@ test('inspector compatibility mode keeps all non-GET traffic rejected with Allow
   } finally {
     await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+function writeFakeExecutable(directory, name) {
+  if (process.platform === 'win32') {
+    // A .cmd wrapper is only a safe entrypoint with a .js/.cjs sibling; tests
+    // configure the absolute .cmd path so detection does not depend on where.exe.
+    writeFileSync(join(directory, `${name}.cmd`), '@echo off\r\nnode "%~dp0${name}.js" %*\r\n', 'utf8');
+    writeFileSync(join(directory, `${name}.js`), 'console.log("1.0.0");\n', 'utf8');
+    return join(directory, `${name}.cmd`);
+  }
+  const path = join(directory, name);
+  writeFileSync(path, '#!/bin/sh\necho 1.0.0\n', 'utf8');
+  chmodSync(path, 0o755);
+  return path;
+}
+
+test('setup discovery and transactional Agent configuration work through the guarded gateway (#48)', async () => {
+  const repositoryRoot = repository();
+  const fakeBin = mkdtempSync(join(tmpdir(), 'coordinate-agents-gateway-bin-'));
+  const isolatedHome = mkdtempSync(join(tmpdir(), 'coordinate-agents-gateway-home-'));
+  const systemPath = process.platform === 'win32' ? join(process.env.SystemRoot || 'C://Windows', 'System32') : '';
+  const originalPath = process.env.PATH;
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  try {
+    writeFakeExecutable(fakeBin, 'claude');
+    writeFakeExecutable(fakeBin, 'agy');
+    const claudeCommand = process.platform === 'win32' ? join(fakeBin, 'claude.cmd') : join(fakeBin, 'claude');
+    const agyProxyCommand = process.platform === 'win32' ? join(fakeBin, 'agy-proxy.cmd') : join(fakeBin, 'agy-proxy');
+    process.env.COORDINATE_AGENTS_HOME = isolatedHome;
+    process.env.PATH = [fakeBin, originalPath].filter(Boolean).join(delimiter);
+
+    const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+    const base = started.url;
+    try {
+      const capability = await capabilityFromPage(base);
+      const post = payload => fetch(`${base}${ACTION_ENDPOINT}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-coordinate-agents-capability': capability },
+        body: JSON.stringify(payload),
+      });
+
+      // Read-only discovery exposes the shared setup snapshot without side effects.
+      const discoveryResponse = await (await post({ action: 'setupDiscover', params: {} })).json();
+      assert.equal(discoveryResponse.ok, true);
+      assert.equal(discoveryResponse.command, 'setup');
+      assert.ok(Array.isArray(discoveryResponse.agents));
+      assert.ok(Array.isArray(discoveryResponse.adapters));
+      assert.ok(discoveryResponse.agents.some(agent => typeof agent.command === 'string'));
+      const configBefore = readFileSync(join(repositoryRoot, '.agent-bus', 'config.json'), 'utf8');
+
+      // Transactional configure: exact command is preserved, role assigned,
+      // user command source reported, project config registers the adapter.
+      const configureResponse = await (await post({
+        action: 'setupConfigure',
+        params: { agent: 'claude', command: claudeCommand, adapter: 'generic-cli', role: 'implementer', args: ['--print', '{prompt}'] },
+      })).json();
+      assert.equal(configureResponse.ok, true, JSON.stringify(configureResponse.error || {}));
+      assert.equal(configureResponse.command, 'setup.configure');
+      assert.equal(configureResponse.agent.id, 'claude');
+      assert.equal(configureResponse.agent.command, claudeCommand);
+      assert.equal(configureResponse.agent.adapter, 'generic-cli');
+      assert.equal(configureResponse.agent.commandSource, 'user');
+      assert.deepEqual(configureResponse.workflow, { implementer: 'claude' });
+
+      const projectConfig = JSON.parse(readFileSync(join(repositoryRoot, '.agent-bus', 'config.json'), 'utf8'));
+      assert.ok(projectConfig.agents.some(agent => agent.id === 'claude' && agent.adapter === 'generic-cli'));
+      assert.equal(projectConfig.workflow.implementer, 'claude');
+      const userConfig = JSON.parse(readFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), 'utf8'));
+      assert.equal(userConfig.agents.claude.command, claudeCommand);
+
+      // Discovery after configure reflects the new registration.
+      const rediscovery = await (await post({ action: 'setupDiscover', params: {} })).json();
+      assert.equal(rediscovery.ok, true);
+      assert.ok(rediscovery.adapters.some(adapter => adapter.configuredAgents?.some(item => item.id === 'claude')));
+
+      // A failed configure rolls back both project and user configuration.
+      const projectBeforeRollback = readFileSync(join(repositoryRoot, '.agent-bus', 'config.json'), 'utf8');
+      const rollback = await (await post({
+        action: 'setupConfigure',
+        params: { agent: 'antigravity', command: agyProxyCommand, adapter: 'antigravity-cli', role: 'planner' },
+      })).json();
+      assert.equal(rollback.ok, false);
+      assert.equal(rollback.error.code, 'EXECUTABLE_NOT_FOUND');
+      assert.equal(rollback.error.recoverable, true);
+      const projectAfterRollback = readFileSync(join(repositoryRoot, '.agent-bus', 'config.json'), 'utf8');
+      assert.equal(projectAfterRollback, projectBeforeRollback, 'Failed configuration must not mutate project config');
+      assert.equal(existsSync(join(isolatedHome, '.coordinate-agents', 'config.json')), true);
+
+      // Failed detection leaves an existing user config unchanged.
+      const userBefore = readFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), 'utf8');
+      const badConfigure = await (await post({
+        action: 'setupConfigure',
+        params: { agent: 'codex', command: 'definitely-missing-command-xyz', adapter: 'generic-cli', role: 'reviewer' },
+      })).json();
+      assert.equal(badConfigure.ok, false);
+      const userAfter = readFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), 'utf8');
+      assert.equal(userAfter, userBefore, 'Failed configuration must not mutate user config');
+      assert.equal(readFileSync(join(repositoryRoot, '.agent-bus', 'config.json'), 'utf8'), projectBeforeRollback);
+
+      // No credential or environment secret is echoed in any response.
+      const serialized = JSON.stringify([discoveryResponse, configureResponse, rollback, badConfigure]);
+      for (const secret of ['token=', 'Authorization', process.env.PATH]) {
+        assert.equal(serialized.includes(secret), false, `Gateway responses must not echo secrets: ${secret}`);
+      }
+
+      // Workspace ships the Agents panel assets.
+      const page = await (await fetch(`${base}/`)).text();
+      assert.match(page, /id="agents-panel"/);
+      assert.match(page, /id="discover-agents"/);
+      assert.match(page, /id="agent-configure"/);
+      const js = await (await fetch(`${base}/app.js`)).text();
+      for (const expected of ['renderAgentsDiscovery', 'renderConfiguredAgents', 'discoverAgents', 'applyAgentConfigure', 'setupDiscover', 'setupConfigure', 'configured-agent-row', 'source-badge']) {
+        assert.ok(js.includes(expected), `Workspace app.js must expose Agents setup support: ${expected}`);
+      }
+      const css = await (await fetch(`${base}/styles.css`)).text();
+      for (const expected of ['.agents-panel', '.agent-form', '.agent-row', '.adapter-card', '.source-badge', '.configured-agent']) {
+        assert.ok(css.includes(expected), `Workspace styles.css must style Agents setup: ${expected}`);
+      }
+    } finally {
+      await closeServer(started.server);
+    }
+  } finally {
+    process.env.PATH = originalPath;
+    process.env.COORDINATE_AGENTS_HOME = originalHome;
+    rmSync(repositoryRoot, { recursive: true, force: true });
+    rmSync(fakeBin, { recursive: true, force: true });
+    rmSync(isolatedHome, { recursive: true, force: true });
   }
 });
