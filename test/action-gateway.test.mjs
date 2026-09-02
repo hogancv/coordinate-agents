@@ -318,6 +318,23 @@ test('inspector compatibility mode keeps all non-GET traffic rejected with Allow
   }
 });
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function safeRm(directory) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      rmSync(directory, { recursive: true, force: true });
+      return;
+    } catch {
+      // Windows may briefly hold a handle on a fixture after a dispatch/run
+      // probe; retry, then leave the temp directory for OS cleanup.
+      await sleep(250);
+    }
+  }
+}
+
 function writeFakeExecutable(directory, name) {
   if (process.platform === 'win32') {
     // A .cmd wrapper is only a safe entrypoint with a .js/.cjs sibling; tests
@@ -563,5 +580,121 @@ test('Task and Task Graph authoring with preflight stays side-effect free until 
   } finally {
     await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('execution controls are explicit, bounded, and fail closed without auto-dispatch (#50)', async () => {
+  const repositoryRoot = repository();
+  const isolatedHome = mkdtempSync(join(tmpdir(), 'coordinate-agents-exec-home-'));
+  const missingCommand = join(isolatedHome, 'definitely-missing-agent-cmd');
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  try {
+    // Isolate the machine user configuration so concurrent suites cannot leak
+    // a real executable into dispatch/run/advance probes; a user command that
+    // points at a missing absolute path fails deterministically.
+    mkdirSync(join(isolatedHome, '.coordinate-agents'), { recursive: true });
+    writeFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), `${JSON.stringify({
+      version: 1,
+      agents: {
+        codex: { command: missingCommand },
+        antigravity: { command: missingCommand },
+      },
+    }, null, 2)}\n`, 'utf8');
+    process.env.COORDINATE_AGENTS_HOME = isolatedHome;
+    const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+    const base = started.url;
+    try {
+    const capability = await capabilityFromPage(base);
+    const post = payload => fetch(`${base}${ACTION_ENDPOINT}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-coordinate-agents-capability': capability },
+      body: JSON.stringify(payload),
+    });
+    const read = async response => ({ status: response.status, payload: await response.json() });
+    const taskRuntime = await import('../skills/coordinate-agents/scripts/task-runtime.mjs');
+    const graphRuntime = await import('../skills/coordinate-agents/scripts/task-graph-runtime.mjs');
+
+    // Dispatch without an approved specification returns a conflict and creates no Session.
+    const noSpec = taskRuntime.createTask(repositoryRoot, { id: 'task-exec-nospec', title: 'No spec yet' });
+    const conflict = await read(await post({ action: 'taskDispatch', params: { taskId: noSpec.id } }));
+    assert.equal(conflict.payload.ok, false);
+    assert.equal(conflict.payload.error.code, 'TASK_STATE_CONFLICT');
+    assert.match(conflict.payload.error.message, /specification/i);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false);
+
+    // A reviewed/APPROVED Task is not dispatchable (stale state): the Runtime
+    // returns a conflict and refreshes from the authoritative record.
+    const approvedTask = taskRuntime.createTask(repositoryRoot, { id: 'task-exec-approved', title: 'Dispatch fixture', spec: 'Implement the dispatch surface.' });
+    taskRuntime.setTaskStatus(repositoryRoot, approvedTask.id, 'PLANNING');
+    taskRuntime.setTaskStatus(repositoryRoot, approvedTask.id, 'SPEC_READY');
+    taskRuntime.setTaskStatus(repositoryRoot, approvedTask.id, 'IMPLEMENTING');
+    taskRuntime.setTaskStatus(repositoryRoot, approvedTask.id, 'REVIEWING', { evidence: [{ type: 'TESTS', id: 'e-1', relatedCommit: 'abc1234', details: 'ok' }] });
+    taskRuntime.recordReviewDecision(repositoryRoot, approvedTask.id, 'REVIEW_APPROVED', { feedback: 'approved' });
+    const stale = await read(await post({ action: 'taskDispatch', params: { taskId: approvedTask.id } }));
+    assert.equal(stale.payload.ok, false);
+    assert.equal(stale.payload.error.code, 'TASK_STATE_CONFLICT');
+    assert.match(stale.payload.error.message, /cannot be dispatched from APPROVED/);
+
+    // A SPEC_READY Task with a specification attempts dispatch and fails fast
+    // and recoverably on the missing executable, before any Session side effect.
+    const readyTask = taskRuntime.createTask(repositoryRoot, { id: 'task-exec-ready', title: 'Ready fixture', spec: 'Implement the ready surface.' });
+    taskRuntime.setTaskStatus(repositoryRoot, readyTask.id, 'SPEC_READY');
+    const missingExe = await read(await post({ action: 'taskDispatch', params: { taskId: readyTask.id } }));
+    assert.equal(missingExe.payload.ok, false, JSON.stringify(missingExe.payload.error || {}));
+    assert.equal(missingExe.payload.error.code, 'EXECUTABLE_NOT_FOUND');
+    assert.equal(missingExe.payload.error.recoverable, true);
+
+    // Advance bounds are enforced at the gateway before any Runtime call.
+    const graphId = 'task-exec-graph';
+    const createdGraph = await read(await post({
+      action: 'taskGraphCreate',
+      params: { graph: {
+        schemaVersion: 1,
+        parentTask: { id: graphId, title: 'Exec graph', spec: 'Run it.', planner: 'codex', reviewer: 'codex' },
+        subtasks: [{ id: 'w', implementer: 'antigravity', spec: 'Do w.', dependsOn: [] }],
+        maxConcurrency: 1,
+      } },
+    }));
+    assert.equal(createdGraph.payload.ok, true, JSON.stringify(createdGraph.payload.error || {}));
+    for (const maxWaves of [0, 33]) {
+      const outOfBounds = await read(await post({ action: 'taskGraphAdvance', params: { taskId: graphId, maxWaves } }));
+      assert.equal(outOfBounds.status, 400, `maxWaves ${maxWaves} must be rejected at the gateway`);
+      assert.equal(outOfBounds.payload.error.code, 'ACTION_PARAMS_INVALID');
+    }
+    // Advance executes as a bounded Runtime operation: wavesExecuted and a
+    // stop fact are returned and nothing spawns a Session or worktree when
+    // the Implementer executable is missing.
+    const advance = await read(await post({ action: 'taskGraphAdvance', params: { taskId: graphId, maxWaves: 1 } }));
+    assert.equal(advance.payload.ok, true, JSON.stringify(advance.payload.error || {}));
+    assert.equal(typeof advance.payload.wavesExecuted, 'number');
+    assert.ok('stop' in advance.payload);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'worktrees')), false);
+
+    // Graph run on a CREATED graph is a bounded Runtime operation; with a
+    // missing executable it stops without spawning a Session or worktree.
+    const run = await read(await post({ action: 'taskGraphRun', params: { taskId: graphId, sessionWaitMs: 0 } }));
+    assert.equal(run.payload.ok, true, JSON.stringify(run.payload.error || {}));
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'worktrees')), false);
+
+    // Execution controls are render-only UI: assets ship but nothing auto-runs.
+    const page = await (await fetch(`${base}/`)).text();
+    assert.match(page, /id="execution-panel"/);
+    const js = await (await fetch(`${base}/app.js`)).text();
+    for (const expected of ['runExecutionAction', 'renderExecution', 'renderExecutionResult', 'taskDispatch', 'taskGraphRun', 'taskGraphAdvance', 'execution-confirm']) {
+      assert.ok(js.includes(expected), `Workspace app.js must expose execution support: ${expected}`);
+    }
+    const css = await (await fetch(`${base}/styles.css`)).text();
+    for (const expected of ['.execution-panel', '.execution-confirm-row', '.execution-fact', '.execution-ok']) {
+      assert.ok(css.includes(expected), `Workspace styles.css must style execution controls: ${expected}`);
+    }
+    } finally {
+      await closeServer(started.server);
+      await safeRm(repositoryRoot);
+    }
+  } finally {
+    process.env.COORDINATE_AGENTS_HOME = originalHome;
+    await safeRm(isolatedHome);
   }
 });

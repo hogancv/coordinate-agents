@@ -124,6 +124,31 @@ const ACTION_DEFINITIONS = Object.freeze({
       intentMap: { type: 'object', max: 512 * 1024 },
     },
   },
+  taskDispatch: {
+    operation: 'taskDispatch',
+    command: 'task.dispatch',
+    params: {
+      taskId: { type: 'string', required: true, max: 128 },
+      spec: { type: 'string', max: 256 * 1024 },
+    },
+  },
+  taskGraphRun: {
+    operation: 'taskGraphRun',
+    command: 'task.graph-run',
+    params: {
+      taskId: { type: 'string', required: true, max: 128 },
+      sessionWaitMs: { type: 'integer', min: 0, max: 10_000 },
+    },
+  },
+  taskGraphAdvance: {
+    operation: 'taskGraphAdvance',
+    command: 'task.graph-advance',
+    params: {
+      taskId: { type: 'string', required: true, max: 128 },
+      maxWaves: { type: 'integer', required: true, min: 1, max: 32 },
+      sessionWaitMs: { type: 'integer', min: 0, max: 10_000 },
+    },
+  },
   recoverInspect: {
     operation: 'recoverInspect',
     command: 'recover.inspect',
@@ -227,6 +252,11 @@ function validateParams(definition, params) {
       if (!Array.isArray(value)) return `Parameter ${key} must be an array.`;
       if (value.length > rule.max || value.some(item => typeof item !== 'string' || item.length > (rule.itemMax || 512))) {
         return `Parameter ${key} exceeds the supported size limit.`;
+      }
+    } else if (rule.type === 'integer') {
+      if (!Number.isInteger(value)) return `Parameter ${key} must be an integer.`;
+      if (value < (rule.min ?? 0) || value > (rule.max ?? Number.MAX_SAFE_INTEGER)) {
+        return `Parameter ${key} is outside the supported range.`;
       }
     }
   }

@@ -106,6 +106,18 @@
           <button id="close-detail" class="button ghost" type="button">Close</button>
         </div>
         <div id="detail-summary" class="detail-summary"></div>
+        <div id="execution-panel" class="execution-panel" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">EXECUTION CONTROL · EXPLICIT ONLY</p>
+              <h2 id="execution-title">Execution</h2>
+            </div>
+            <span class="muted-label">never on page load or reconnect · no automatic retry</span>
+          </div>
+          <div id="execution-controls" class="execution-controls"></div>
+          <span id="execution-status" class="author-status" aria-live="polite"></span>
+          <div id="execution-result" class="execution-result" aria-live="polite" hidden></div>
+        </div>
         <section id="graph-detail" class="graph-detail" hidden>
           <section id="graph-map-region" class="graph-map-region">
             <div class="section-heading">
