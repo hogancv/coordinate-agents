@@ -62,6 +62,7 @@ const elements = Object.fromEntries([
   'author-graph-max', 'author-graph-intent', 'author-graph-scope', 'author-subtask-add',
   'author-subtask-rows', 'author-graph-validate', 'author-graph-create', 'author-graph-status',
   'author-graph-errors', 'author-graph-validated', 'author-graph-preflight',
+  'execution-panel', 'execution-title', 'execution-controls', 'execution-status', 'execution-result',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -771,6 +772,132 @@ function closeGraphMap() {
   if (state.graphDetail) renderGraphMap(state.graphDetail);
 }
 
+function setExecutionStatus(message, kind = 'info') {
+  const element = elements['execution-status'];
+  element.textContent = message;
+  element.className = `author-status ${kind}`;
+}
+
+function renderExecutionResult(label, payload) {
+  const region = elements['execution-result'];
+  region.hidden = false;
+  if (!payload || payload.ok !== true) {
+    const error = payload?.error || {};
+    region.innerHTML = `<div class="empty-state error-state"><strong>${escapeHtml(label)} failed</strong> — ${escapeHtml(error.code || 'ACTION_FAILED')}: ${escapeHtml(error.message || 'Request failed.')}${error.details ? `<div class="execution-detail">${escapeHtml(error.details)}</div>` : ''}</div>`;
+    setExecutionStatus(`${label} failed (${error.code || 'error'}). Refreshing authoritative Runtime state…`, 'error');
+    return;
+  }
+  const pick = keys => keys.map(key => payload[key]).find(value => value !== undefined && value !== null && value !== '');
+  const facts = [];
+  const show = (labelText, value) => {
+    if (value !== undefined && value !== null && value !== '') facts.push(`<div class="execution-fact"><span>${escapeHtml(labelText)}</span><code>${escapeHtml(Array.isArray(value) ? value.join(', ') : value)}</code></div>`);
+  };
+  show('Task / parent', pick(['taskId', 'parentTaskId', 'id']));
+  show('Subtasks', payload.subtaskIds || payload.subtasks?.length);
+  show('State', pick(['state', 'status']));
+  show('Session', pick(['sessionId', 'sessions']) && !Array.isArray(payload.sessions) ? pick(['sessionId']) : Array.isArray(payload.sessions) ? payload.sessions.length : undefined);
+  show('Commit', pick(['implementationCommit', 'commit', 'aggregateCommit']));
+  show('Waves executed', payload.wavesExecuted || payload.waveCount);
+  show('Stop reason', payload.stopReason);
+  show('Agent', pick(['agent', 'implementer']));
+  region.innerHTML = `<div class="execution-ok"><strong>${escapeHtml(label)} completed</strong><div class="execution-facts">${facts.join('') || '<div class="agent-muted">(no identity facts returned)</div>'}</div>${payload.error ? `<div class="execution-detail">${escapeHtml(payload.error.message || '')}</div>` : ''}</div>`;
+  setExecutionStatus(`${label} completed. Refreshing views…`, 'ok');
+}
+
+async function runExecutionAction(actionName, params, label) {
+  setExecutionStatus(`${label}: executing…`);
+  const region = elements['execution-result'];
+  region.hidden = true;
+  try {
+    const { status, payload } = await postAction(actionName, params);
+    renderExecutionResult(label, status === 200 ? payload : { ok: false, error: { code: `HTTP ${status}`, message: payload?.error?.message || payload?.error || 'Request failed.' } });
+  } catch (error) {
+    setExecutionStatus(`${label} request failed: ${error.message}`, 'error');
+  }
+  await refresh();
+}
+
+function executionConfirmRow(labelText) {
+  return `<label class="author-toggle execution-confirm-row"><input type="checkbox" class="execution-confirm" data-action-confirm> ${escapeHtml(labelText)}</label>`;
+}
+
+function bindExecutionControls(container, detail) {
+  const confirm = container.querySelector('.execution-confirm');
+  const runButtons = container.querySelectorAll('[data-run-action]');
+  const update = () => {
+    const armed = confirm ? confirm.checked : true;
+    runButtons.forEach(button => { button.disabled = !armed; });
+  };
+  confirm?.addEventListener('change', update);
+  update();
+  runButtons.forEach(button => {
+    button.addEventListener('click', async () => {
+      if (confirm && !confirm.checked) return;
+      button.disabled = true;
+      try {
+        await runExecutionAction(button.dataset.runAction, JSON.parse(button.dataset.params || '{}'), button.dataset.label || 'Execution');
+      } finally {
+        if (confirm) confirm.checked = false;
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+function renderExecution(detail) {
+  const panel = elements['execution-panel'];
+  if (!detail) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  elements['execution-result'].hidden = true;
+  setExecutionStatus('');
+  const graph = Boolean(detail.graph);
+  elements['execution-title'].textContent = graph ? `Execution · ${detail.title || detail.id}` : `Execution · ${detail.title || detail.id}`;
+  const confirmText = 'I understand: this explicitly launches an Agent process that may write to the repository; failures are never retried automatically and no merge, push, tag, publish, deploy, or release occurs.';
+  const id = detail.id;
+  let controls = '';
+  if (!graph) {
+    const dispatchable = ['CREATED', 'PLANNING', 'SPEC_READY', 'CHANGES_REQUESTED'].includes(detail.status);
+    controls = `
+      ${executionConfirmRow(confirmText)}
+      <button class="button" type="button" data-run-action="taskDispatch" data-label="Dispatch ${escapeHtml(id)}" data-params="${escapeHtml(JSON.stringify({ taskId: id }))}" ${dispatchable ? '' : 'disabled title="Current status prevents dispatch; the Runtime will still validate"'}>Dispatch task</button>
+      ${dispatchable ? '' : `<span class="agent-muted">status ${escapeHtml(detail.status)} — dispatch applies to created / planning / spec-ready / changes-requested Tasks with a specification.</span>`}`;
+  } else {
+    controls = `
+      ${executionConfirmRow(confirmText)}
+      <label class="execution-field">Session wait (ms, 0–10000)<input type="number" class="execution-session-wait" min="0" max="10000" value="2000"></label>
+      <button class="button" type="button" data-run-action="taskGraphRun" data-label="Run eligible wave of ${escapeHtml(id)}">Run eligible wave</button>
+      <label class="execution-field">maxWaves (1–32)<input type="number" class="execution-max-waves" min="1" max="32" value="1"></label>
+      <button class="button" type="button" data-run-action="taskGraphAdvance" data-label="Advance ${escapeHtml(id)}">Advance graph</button>`;
+  }
+  elements['execution-controls'].innerHTML = controls;
+  const waitInput = elements['execution-controls'].querySelector('.execution-session-wait');
+  const wavesInput = elements['execution-controls'].querySelector('.execution-max-waves');
+  if (waitInput) {
+    elements['execution-controls'].querySelectorAll('[data-run-action="taskGraphRun"]').forEach(button => {
+      button.dataset.params = JSON.stringify({ taskId: id, sessionWaitMs: Number(waitInput.value) || 0 });
+    });
+    waitInput.addEventListener('input', () => {
+      elements['execution-controls'].querySelectorAll('[data-run-action="taskGraphRun"]').forEach(button => {
+        button.dataset.params = JSON.stringify({ taskId: id, sessionWaitMs: Number(waitInput.value) || 0 });
+      });
+    });
+  }
+  if (wavesInput) {
+    const updateAdvance = () => {
+      elements['execution-controls'].querySelectorAll('[data-run-action="taskGraphAdvance"]').forEach(button => {
+        button.dataset.params = JSON.stringify({ taskId: id, maxWaves: Math.max(1, Math.min(32, Number(wavesInput.value) || 1)), sessionWaitMs: Number(waitInput?.value) || 0 });
+      });
+    };
+    updateAdvance();
+    wavesInput.addEventListener('input', updateAdvance);
+    waitInput?.addEventListener('input', updateAdvance);
+  }
+  bindExecutionControls(elements['execution-controls'], detail);
+}
+
 function renderGraphDetail(task) {
   const graph = Boolean(task?.graph);
   elements['graph-detail'].hidden = !graph;
@@ -830,6 +957,7 @@ function renderGraphDetail(task) {
 function renderTaskDetail(task) {
   if (!task) {
     elements['task-detail'].hidden = true;
+    renderExecution(null);
     return;
   }
   elements['task-detail'].hidden = false;
@@ -840,6 +968,7 @@ function renderTaskDetail(task) {
     <span>${escapeHtml(task.id)}</span>
     <span>Updated ${formatDate(task.updatedAt)}</span>
   `;
+  renderExecution(task);
   renderGraphDetail(task);
   renderTimeline(task.timeline);
   elements['detail-agent-flow'].innerHTML = (task.agentFlow || []).map((item, index) => {

@@ -70,9 +70,10 @@ the guarded action endpoint below. Stop it with `Ctrl-C`.
 The Workspace exposes exactly one additive, guarded action endpoint for later
 controls: `POST /api/action`. It routes an explicit allow-list of structured
 operations to the same shared Runtime services used by CLI and MCP
-(`setupDiscover`, `setupConfigure`, `taskCreate`, `taskStatus`, `taskInspect`,
-`taskGraphStatus`, `taskGraphInspect`, `taskGraphPlan`, `taskGraphValidate`,
-`taskGraphCreate`, `recoverInspect`).
+(`setupDiscover`, `setupConfigure`, `taskCreate`, `taskDispatch`, `taskStatus`,
+`taskInspect`, `taskGraphStatus`, `taskGraphInspect`, `taskGraphPlan`,
+`taskGraphValidate`, `taskGraphCreate`, `taskGraphRun`, `taskGraphAdvance`,
+`recoverInspect`).
 The gateway never shells out, parses CLI output, proxies MCP, accepts an
 arbitrary operation name, or lets a request choose a different repository root.
 
@@ -148,6 +149,18 @@ canonical bound root path), followed by:
   (`task.graph-plan` facts: frontier, selected wave, write-intent conflicts,
   intent coverage, scope policy, risks, and estimated resources). Missing
   Intent Map coverage stays distinct from an explicitly empty write intent.
+- **Execution controls** — selecting a Task or Task Graph opens an explicit
+  control row that is never triggered by page load, GET, SSE reconnect, or a
+  double click. Dispatch, Run eligible wave, and Advance are armed only after
+  the user checks an understanding box (an Agent process may write to the
+  repository; failures are never retried automatically; no merge, push, tag,
+  publish, deploy, or release occurs). Graph Advance requires an explicit
+  bounded `maxWaves` (1–32) and Graph Run an optional bounded session-wait
+  (0–10000 ms). Results surface the same Task/subtask, Session, worktree,
+  commit, evidence, and stop facts as the shared Runtime operation; stale or
+  invalid state returns a conflict and views refresh from the authoritative
+  Runtime record via bounded SSE/refresh with `Last-Event-ID` resume. The
+  Workspace never modifies the user's checked-out worktree or remote refs.
 
 ## Endpoints
 
