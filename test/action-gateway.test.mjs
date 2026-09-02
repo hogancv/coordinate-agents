@@ -698,3 +698,99 @@ test('execution controls are explicit, bounded, and fail closed without auto-dis
     await safeRm(isolatedHome);
   }
 });
+
+test('Session console and recovery controls stay explicit, owned, and idempotent (#51)', async () => {
+  const repositoryRoot = repository();
+  const isolatedHome = mkdtempSync(join(tmpdir(), 'coordinate-agents-recovery-home-'));
+  const missingCommand = join(isolatedHome, 'definitely-missing-agent-cmd');
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  try {
+    mkdirSync(join(isolatedHome, '.coordinate-agents'), { recursive: true });
+    const userConfigBody = JSON.stringify({
+      version: 1,
+      agents: { codex: { command: missingCommand }, antigravity: { command: missingCommand } },
+    }, null, 2) + "\n";
+    writeFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), userConfigBody, 'utf8');
+    process.env.COORDINATE_AGENTS_HOME = isolatedHome;
+    const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+    const base = started.url;
+    try {
+      const capability = await capabilityFromPage(base);
+      const post = payload => fetch(base + ACTION_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-coordinate-agents-capability': capability },
+        body: JSON.stringify(payload),
+      });
+      const read = async response => ({ status: response.status, payload: await response.json() });
+      const taskRuntime = await import('../skills/coordinate-agents/scripts/task-runtime.mjs');
+
+      const graphId = 'task-recovery-graph';
+      const createdGraph = await read(await post({
+        action: 'taskGraphCreate',
+        params: { graph: {
+          schemaVersion: 1,
+          parentTask: { id: graphId, title: 'Recovery graph', spec: 's', planner: 'codex', reviewer: 'codex' },
+          subtasks: [{ id: 'a', implementer: 'antigravity', spec: 'do', dependsOn: [] }],
+          maxConcurrency: 1,
+        } },
+      }));
+      assert.equal(createdGraph.payload.ok, true, JSON.stringify(createdGraph.payload.error || {}));
+
+      // Recovery/cleanup controls are idempotent and facts-first on a graph
+      // that has never run: no Session or worktree is created.
+      for (const action of ['taskGraphRecover', 'taskGraphResume', 'taskGraphStop', 'taskGraphCleanup']) {
+        const result = await read(await post({ action, params: { taskId: graphId } }));
+        assert.equal(result.payload.ok, true, action + ' must be idempotent-safe on a fresh graph: ' + JSON.stringify(result.payload.error || {}));
+      }
+      assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false);
+      assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'worktrees')), false);
+
+      // Single-Task stop on a fresh Task is conflict-aware.
+      const freshTask = taskRuntime.createTask(repositoryRoot, { id: 'task-recovery-single', title: 'Fresh', spec: 's' });
+      const stopResult = await read(await post({ action: 'taskStop', params: { taskId: freshTask.id } }));
+      assert.equal(stopResult.payload.ok, true, JSON.stringify(stopResult.payload.error || {}));
+      const stoppedRecord = taskRuntime.readTask(repositoryRoot, freshTask.id);
+      assert.equal(stoppedRecord.status, 'STOPPED', 'Stop marks the owned Task STOPPED without auto retry');
+
+      // Session controls reject unknown Sessions with canonical errors and
+      // never write or spawn anything.
+      const sessionProbes = [
+        ['sessionStatus', {}],
+        ['sessionInspect', {}],
+        ['sessionRead', { limit: 50 }],
+        ['sessionClose', {}],
+      ];
+      for (const entry of sessionProbes) {
+        const action = entry[0];
+        const extra = entry[1];
+        const result = await read(await post({ action, params: Object.assign({ sessionId: 'session_never_owned' }, extra) }));
+        assert.equal(result.payload.ok, false, action + ' must reject an unknown Session');
+        assert.equal(result.payload.error.code, 'SESSION_NOT_FOUND', action + ' must report SESSION_NOT_FOUND');
+      }
+      const writeProbe = await read(await post({ action: 'sessionWrite', params: { sessionId: 'session_never_owned', input: 'hi' } }));
+      assert.equal(writeProbe.payload.ok, false);
+      assert.equal(writeProbe.payload.error.code, 'SESSION_NOT_FOUND');
+      const sessionsDir = join(repositoryRoot, '.agent-bus', 'sessions');
+      const sessionRecords = existsSync(sessionsDir) ? readdirSync(sessionsDir).filter(name => name.endsWith('.json')) : [];
+      assert.equal(sessionRecords.length, 0, 'Rejected Session input must not create any Session record');
+
+      // Session and recovery assets ship in the Workspace.
+      const page = await (await fetch(base + '/')).text();
+      assert.match(page, /id="sessions"/);
+      const js = await (await fetch(base + '/app.js')).text();
+      for (const expected of ['recoveryControls', 'bindSessionActions', 'submitSessionInput', 'closeOwnedSession', 'sessionWrite', 'sessionClose', 'taskGraphCleanup', 'taskResume', 'session-card']) {
+        assert.ok(js.includes(expected), 'Workspace app.js must expose session/recovery support: ' + expected);
+      }
+      const css = await (await fetch(base + '/styles.css')).text();
+      for (const expected of ['.session-controls', '.session-input-form', '.session-control-status', '.recovery-sep']) {
+        assert.ok(css.includes(expected), 'Workspace styles.css must style session/recovery: ' + expected);
+      }
+      } finally {
+        await closeServer(started.server);
+        await safeRm(repositoryRoot);
+      }
+  } finally {
+    process.env.COORDINATE_AGENTS_HOME = originalHome;
+    await safeRm(isolatedHome);
+  }
+});
