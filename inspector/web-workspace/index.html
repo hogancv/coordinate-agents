@@ -35,6 +35,45 @@
         <div id="repo-facts" class="repo-facts" aria-live="polite"></div>
       </section>
 
+      <section id="agents-panel" class="panel agents-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">AGENT SETUP</p>
+            <h2>Agents</h2>
+          </div>
+          <button id="discover-agents" class="button" type="button">Discover CLIs</button>
+        </div>
+        <p class="agents-note">Configure a local coding Agent, its Adapter, and its exact executable
+          command. Resolution order stays project command → user command → Adapter default. Detection
+          runs only when you click Discover; the Workspace never performs automatic login, remote lookup,
+          package download, or arbitrary process launch.</p>
+        <div id="agents-discovery" class="agents-discovery" aria-live="polite">
+          <div class="empty-state">Click “Discover CLIs” to inspect installed coding CLIs and registered Adapters.</div>
+        </div>
+        <form id="agent-configure" class="agent-form" novalidate>
+          <label>Agent ID<input id="cfg-agent" name="agent" list="agent-id-options" maxlength="64" placeholder="e.g. codex / antigravity" required></label>
+          <datalist id="agent-id-options"></datalist>
+          <label>Adapter<select id="cfg-adapter" name="adapter">
+            <option value="codex-cli">codex-cli (built-in)</option>
+            <option value="antigravity-cli">antigravity-cli (built-in)</option>
+            <option value="generic-cli">generic-cli</option>
+          </select></label>
+          <label>Executable command<input id="cfg-command" name="command" maxlength="512" placeholder="exact command, e.g. agy-proxy" required></label>
+          <label>Workflow role<select id="cfg-role" name="role">
+            <option value="implementer">implementer</option>
+            <option value="planner">planner</option>
+            <option value="reviewer">reviewer</option>
+          </select></label>
+          <button id="apply-agent" class="button" type="submit">Apply configuration</button>
+          <span id="agent-status" class="agent-status" aria-live="polite"></span>
+        </form>
+        <h3>Configured runtime agents</h3>
+        <div id="configured-agents" class="configured-agents" aria-live="polite"></div>
+        <p class="agents-scope-note">Only explicitly registered or loaded local Adapter modules are treated
+          as trusted local code; configuring an Agent grants no browser filesystem or process sandbox
+          bypass. The Workspace never renders or persists credentials, tokens, cookies, or secrets.</p>
+      </section>
+
       <section class="hero-grid">
         <div class="hero-card">
           <div class="section-heading">

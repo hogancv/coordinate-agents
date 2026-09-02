@@ -36,13 +36,31 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const CORRELATION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /**
- * First explicit Workspace action allow-list. Every entry maps to one shared
- * Runtime operation and is deliberately free of process-launching,
- * Session-input, stop, cleanup, integration, and review side effects; those
- * operations require explicit UI confirmation and arrive in later tickets.
- * `taskCreate` keeps its deterministic-id conflict as the replay guard.
+ * Workspace action allow-list. Every entry maps to one shared Runtime
+ * operation. Discovery is read-only; `setupConfigure` is the transactional
+ * project Agent/role configuration path and is deliberately the only
+ * configuration-write action in this slice. Process-launching, Session-input,
+ * stop, cleanup, integration, and review operations require explicit UI
+ * confirmation and arrive in later tickets. `taskCreate` keeps its
+ * deterministic-id conflict as the replay guard.
  */
 const ACTION_DEFINITIONS = Object.freeze({
+  setupDiscover: {
+    operation: 'setupDiscover',
+    command: 'setup',
+    params: {},
+  },
+  setupConfigure: {
+    operation: 'setupConfigure',
+    command: 'setup.configure',
+    params: {
+      agent: { type: 'string', required: true, max: 64 },
+      command: { type: 'string', required: true, max: 512 },
+      adapter: { type: 'string', max: 128 },
+      role: { type: 'string', max: 32 },
+      args: { type: 'array', max: 64, itemMax: 512 },
+    },
+  },
   taskCreate: {
     operation: 'taskCreate',
     command: 'task.create',
@@ -197,6 +215,11 @@ function validateParams(definition, params) {
         return `Parameter ${key} must be an object.`;
       }
       if (Buffer.byteLength(JSON.stringify(value)) > rule.max) return `Parameter ${key} exceeds the supported size limit.`;
+    } else if (rule.type === 'array') {
+      if (!Array.isArray(value)) return `Parameter ${key} must be an array.`;
+      if (value.length > rule.max || value.some(item => typeof item !== 'string' || item.length > (rule.itemMax || 512))) {
+        return `Parameter ${key} exceeds the supported size limit.`;
+      }
     }
   }
   return null;

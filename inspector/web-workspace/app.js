@@ -17,6 +17,7 @@ const state = {
   sessions: [],
   events: [],
   repository: null,
+  discovery: null,
   selectedTask: null,
   selectedSubtask: null,
   graphDetail: null,
@@ -51,6 +52,9 @@ const elements = Object.fromEntries([
   'graph-frontier', 'graph-conflicts', 'graph-integration', 'repository',
   'repo-name', 'repo-branch', 'repo-facts', 'graph-map-region', 'graph-map',
   'graph-node-detail', 'graph-map-note', 'graph-legend',
+  'discover-agents', 'agents-discovery', 'agent-configure', 'cfg-agent',
+  'cfg-adapter', 'cfg-command', 'cfg-role', 'apply-agent', 'agent-status',
+  'agent-id-options', 'configured-agents',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -130,6 +134,169 @@ function renderRepository() {
   facts.push(`<div class="repo-fact repo-fact-wide"><span>Bound root</span><code>${escapeHtml(repository.root || '—')}</code></div>`);
   if (repository.error) facts.push(`<div class="repo-fact repo-fact-wide"><span>Repository facts</span><code>${escapeHtml(repository.error)}</code></div>`);
   elements['repo-facts'].innerHTML = facts.join('');
+}
+
+function commandSourceClass(source) {
+  const value = `${source || ''}`.toLowerCase();
+  if (value.startsWith('project')) return 'project';
+  if (value.startsWith('user')) return 'user';
+  return 'adapter';
+}
+
+function setAgentStatus(message, kind = 'info') {
+  const element = elements['agent-status'];
+  element.textContent = message;
+  element.className = `agent-status ${kind}`;
+}
+
+function escapeAgent(value) {
+  return escapeHtml(value ?? '');
+}
+
+function fillConfigureForm(entry) {
+  const agentId = entry.configuredAgent || entry.agent || entry.command || '';
+  elements['cfg-agent'].value = agentId;
+  elements['cfg-command'].value = entry.command || '';
+  if (entry.adapter) elements['cfg-adapter'].value = entry.adapter;
+  elements['cfg-role'].value = 'implementer';
+  elements['agent-configure'].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  elements['cfg-agent'].focus();
+}
+
+function renderAgentsDiscovery(snapshot) {
+  if (!snapshot) {
+    elements['agents-discovery'].innerHTML = '<div class="empty-state">No discovery snapshot available.</div>';
+    return;
+  }
+  const agents = Array.isArray(snapshot.agents) ? snapshot.agents : [];
+  const adapters = Array.isArray(snapshot.adapters) ? snapshot.adapters : [];
+  const options = [];
+  for (const agent of agents) {
+    const identity = agent.configuredAgent || agent.command || '';
+    if (identity) options.push(`<option value="${escapeHtml(identity)}"></option>`);
+  }
+  elements['agent-id-options'].innerHTML = options.join('');
+
+  const agentRows = agents.map(agent => {
+    const available = agent.available === true;
+    const identity = agent.configuredAgent || agent.command || '?';
+    return `<article class="agent-row">
+      <div class="agent-row-main">
+        <strong>${escapeAgent(identity)}</strong>
+        <span class="status-pill ${available ? 'idle' : 'error'}">${available ? 'available' : 'unavailable'}</span>
+        ${agent.configured ? '<span class="history-label">configured</span>' : ''}
+        ${agent.adapter ? `<span class="agent-muted">adapter ${escapeAgent(agent.adapter)}</span>` : ''}
+        ${agent.command ? `<span class="agent-muted">command <code>${escapeAgent(agent.command)}</code></span>` : ''}
+      </div>
+      <div class="agent-row-detail">${escapeAgent(agent.details || agent.code || '')}</div>
+      <button class="button ghost agent-fill" type="button" data-json="${escapeHtml(JSON.stringify({ agent: identity, command: agent.command, adapter: agent.adapter || '' }))}">Configure this command</button>
+    </article>`;
+  }).join('') || '<div class="empty-state">No coding CLIs detected on this machine.</div>';
+
+  const adapterBlocks = adapters.map(adapter => {
+    const capabilities = Object.entries(adapter.capabilities || {})
+      .filter(([, value]) => value === true)
+      .map(([key]) => escapeHtml(key))
+      .join(', ');
+    const configured = (adapter.configuredAgents || []).map(item => `
+      <div class="configured-agent-row">
+        <code>${escapeAgent(item.id)}</code>
+        <span class="agent-muted">adapter ${escapeAgent(item.adapter || adapter.id)}</span>
+        <code>${escapeAgent(item.command || '—')}</code>
+        <span class="source-badge ${commandSourceClass(item.commandSource)}">${escapeAgent(item.commandSource || 'adapter-default')}</span>
+      </div>`).join('') || '<span class="agent-muted">not configured in this project</span>';
+    return `<article class="adapter-card">
+      <div class="adapter-card-heading">
+        <strong>${escapeAgent(adapter.id)}</strong>
+        <span class="history-label">${adapter.builtin ? 'built-in' : 'registered local adapter'}</span>
+        <span class="agent-muted">contract v${escapeAgent(adapter.contractVersion)}</span>
+      </div>
+      <div class="agent-muted">${capabilities || 'no capabilities'}</div>
+      <div class="configured-agents-list">${configured}</div>
+    </article>`;
+  }).join('');
+
+  elements['agents-discovery'].innerHTML = `
+    <div class="discovery-grid">
+      <div><h3>Detected coding CLIs</h3><div class="discovery-list">${agentRows}</div></div>
+      <div><h3>Adapters & command sources</h3><div class="discovery-list">${adapterBlocks || '<div class="empty-state">No adapters registered.</div>'}</div></div>
+    </div>`;
+  elements['agents-discovery'].querySelectorAll('.agent-fill').forEach(button => {
+    button.addEventListener('click', () => {
+      try { fillConfigureForm(JSON.parse(button.dataset.json)); } catch { /* ignore malformed presets */ }
+    });
+  });
+}
+
+function renderConfiguredAgents(agents) {
+  const list = Array.isArray(agents) ? agents : [];
+  if (list.length === 0) {
+    elements['configured-agents'].innerHTML = '<div class="empty-state">No Agents are registered in this repository yet.</div>';
+    return;
+  }
+  elements['configured-agents'].innerHTML = list.map(agent => `
+    <article class="configured-agent">
+      <div class="configured-agent-head">
+        <strong>${escapeAgent(agent.id)}</strong>
+        <span class="status-pill ${statusClass(agent.status)}">${escapeAgent(statusLabel(agent.status))}</span>
+      </div>
+      <div class="configured-agent-facts">
+        <span>adapter <code>${escapeAgent(agent.adapter || '—')}</code></span>
+        <span>roles <code>${escapeAgent(agent.roles?.join(', ') || 'unassigned')}</code></span>
+        <span>queue ${escapeAgent(agent.queue?.new || 0)} new · ${escapeAgent(agent.queue?.processing || 0)} processing</span>
+      </div>
+      ${agent.lastActivity ? `<div class="agent-muted">last activity ${escapeAgent(agent.lastActivity)}</div>` : ''}
+    </article>`).join('');
+}
+
+async function discoverAgents() {
+  setAgentStatus('Discovering local coding CLIs…');
+  try {
+    const { status, payload } = await postAction('setupDiscover', {});
+    if (status !== 200 || payload?.ok !== true) {
+      const code = payload?.error?.code || `HTTP ${status}`;
+      elements['agents-discovery'].innerHTML = `<div class="empty-state error-state">Discovery failed (${escapeHtml(code)}): ${escapeHtml(payload?.error?.message || 'unknown error')}</div>`;
+      setAgentStatus('Discovery failed.', 'error');
+      return;
+    }
+    state.discovery = payload;
+    renderAgentsDiscovery(payload);
+    setAgentStatus('Discovery complete. Configure a command below or pick “Configure this command”.', 'ok');
+  } catch (error) {
+    setAgentStatus(`Discovery request failed: ${error.message}`, 'error');
+  }
+}
+
+async function applyAgentConfigure(event) {
+  event.preventDefault();
+  const params = {
+    agent: elements['cfg-agent'].value.trim(),
+    adapter: elements['cfg-adapter'].value,
+    command: elements['cfg-command'].value.trim(),
+    role: elements['cfg-role'].value,
+  };
+  if (!params.agent || !params.command) {
+    setAgentStatus('Agent ID and executable command are required.', 'error');
+    return;
+  }
+  setAgentStatus('Applying configuration…');
+  elements['apply-agent'].disabled = true;
+  try {
+    const { status, payload } = await postAction('setupConfigure', params);
+    if (status !== 200 || payload?.ok !== true) {
+      const error = payload?.error || {};
+      setAgentStatus(`Configuration failed: ${error.code || `HTTP ${status}`} — ${error.message || 'unknown error'}${error.details ? ` (${error.details})` : ''}`, 'error');
+      return;
+    }
+    const configured = payload.agent || {};
+    setAgentStatus(`Configured ${configured.id} (${configured.adapter}) → ${configured.command} [${configured.commandSource}] · workflow ${Object.keys(payload.workflow || {}).join(', ')}`, 'ok');
+    await discoverAgents();
+    await refresh();
+  } catch (error) {
+    setAgentStatus(`Configuration request failed: ${error.message}`, 'error');
+  } finally {
+    elements['apply-agent'].disabled = false;
+  }
 }
 
 function agentFor(id) {
@@ -501,6 +668,7 @@ async function refresh() {
     state.events = events;
     renderTasks();
     renderAgentFlow();
+    renderConfiguredAgents(state.agents);
     renderSessions();
     renderEvents();
     if (state.selectedTask) {
@@ -519,6 +687,8 @@ async function refresh() {
 
 elements['refresh-button'].addEventListener('click', refresh);
 elements['close-detail'].addEventListener('click', closeDetail);
+elements['discover-agents'].addEventListener('click', discoverAgents);
+elements['agent-configure'].addEventListener('submit', applyAgentConfigure);
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') closeGraphMap();
 });
