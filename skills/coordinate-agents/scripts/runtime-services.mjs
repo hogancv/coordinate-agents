@@ -29,7 +29,7 @@ import {
   runtimeTaskGraphReview,
   runtimeTaskGraphDispatch,
   runtimeTaskOperation,
-} from '../../../bin/coordinate-agents.mjs';
+} from '../../../lib/cli-core.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,

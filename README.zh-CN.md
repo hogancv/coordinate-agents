@@ -141,8 +141,10 @@ npx @hogancv/coordinate-agents@latest web --port 3000
 
 Workspace 在启动时绑定唯一一个 Git 仓库，展示其身份（分支、HEAD、远程）、
 普通 Task 与 Task Graph parent、Agents、Sessions、近期 Runtime 事件以及有界
-的 Task/Graph 详情。`inspector` 命令继续作为同一套 GET 契约上的兼容只读
-界面保留。浏览器页面始终不是事实源。详见 [Inspector 与 Web Workspace](./docs/inspector.md)
+的 Task/Graph 详情。总览与刷新严格只读；受保护的 `POST /api/action` 端点把
+显式白名单内的 Runtime 操作路由到与 CLI/MCP 相同的服务。`inspector` 命令
+继续作为同一套 GET 契约上的兼容只读界面保留。浏览器页面始终不是事实源。
+详见 [Inspector 与 Web Workspace](./docs/inspector.md)
 与 [Event Journal](./docs/event-journal.md)。
 
 ## Standalone npm Runtime

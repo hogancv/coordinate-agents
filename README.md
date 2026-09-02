@@ -161,9 +161,11 @@ npx @hogancv/coordinate-agents@latest web --port 3000
 
 The Workspace binds exactly one Git repository and shows its identity (branch,
 HEAD, remote), Tasks and Task Graph parents, Agents, Sessions, recent Runtime
-events, and bounded Task/Graph detail. The `inspector` command stays available
-as the compatible read-only UI over the same GET contracts. The browser is
-never the source of truth. Learn more in
+events, and bounded Task/Graph detail. Overview and refresh are strictly
+read-only; a guarded `POST /api/action` endpoint routes an explicit allow-list
+of Runtime operations through the same services as CLI and MCP. The
+`inspector` command stays available as the compatible read-only UI over the
+same GET contracts. The browser is never the source of truth. Learn more in
 [Inspector & Web Workspace](./docs/inspector.md) and
 [Event Journal](./docs/event-journal.md).
 

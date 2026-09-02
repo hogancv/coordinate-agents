@@ -44,7 +44,7 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=4",
-    "test:core": "node --test --test-concurrency=4 test/workspace.test.mjs test/inspector.test.mjs test/cli-modules.test.mjs test/documentation.test.mjs test/repository-layout.test.mjs test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/adapter-acceptance-gate.test.mjs test/user-config.test.mjs test/intent-map-v1.test.mjs test/task-graph-contract.test.mjs test/task-graph-scheduler.test.mjs test/task-graph-persistence.test.mjs test/task-graph-intent-scheduler.test.mjs test/runtime-events.test.mjs test/task-graph-acceptance-gate.test.mjs test/release-workflow.test.mjs",
+    "test:core": "node --test --test-concurrency=4 test/action-gateway.test.mjs test/workspace.test.mjs test/inspector.test.mjs test/cli-modules.test.mjs test/documentation.test.mjs test/repository-layout.test.mjs test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/adapter-acceptance-gate.test.mjs test/user-config.test.mjs test/intent-map-v1.test.mjs test/task-graph-contract.test.mjs test/task-graph-scheduler.test.mjs test/task-graph-persistence.test.mjs test/task-graph-intent-scheduler.test.mjs test/runtime-events.test.mjs test/task-graph-acceptance-gate.test.mjs test/release-workflow.test.mjs",
     "sync:llms": "node scripts/sync-llms.mjs",
     "check:llms": "node scripts/sync-llms.mjs --check",
     "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm test",
