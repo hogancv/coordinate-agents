@@ -116,6 +116,14 @@ const ACTION_DEFINITIONS = Object.freeze({
       intentMap: { type: 'object', max: 512 * 1024 },
     },
   },
+  taskGraphCreate: {
+    operation: 'taskGraphCreate',
+    command: 'task.graph-create',
+    params: {
+      graph: { type: 'object', required: true, max: 512 * 1024 },
+      intentMap: { type: 'object', max: 512 * 1024 },
+    },
+  },
   recoverInspect: {
     operation: 'recoverInspect',
     command: 'recover.inspect',

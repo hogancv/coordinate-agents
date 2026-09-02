@@ -72,7 +72,7 @@ controls: `POST /api/action`. It routes an explicit allow-list of structured
 operations to the same shared Runtime services used by CLI and MCP
 (`setupDiscover`, `setupConfigure`, `taskCreate`, `taskStatus`, `taskInspect`,
 `taskGraphStatus`, `taskGraphInspect`, `taskGraphPlan`, `taskGraphValidate`,
-`recoverInspect`).
+`taskGraphCreate`, `recoverInspect`).
 The gateway never shells out, parses CLI output, proxies MCP, accepts an
 arbitrary operation name, or lets a request choose a different repository root.
 
@@ -135,6 +135,19 @@ canonical bound root path), followed by:
   and recorded Session event history.
 - **Recent events** — timestamp, sequence, event type, Task, Session, Agent, and
   a bounded summary from the append-only journal.
+- **Author new work** — the authoring panel creates one durable Task or a Task
+  Graph v1 (with optional Intent Map v1) without dispatching anything. Bounded
+  forms cover title/specification, role assignments from the configured Agents,
+  subtask IDs/specs/dependencies, maxConcurrency, write-intent patterns, and
+  scope policy. Validate runs the side-effect-free Runtime validation first
+  (cyclic, duplicate, unknown-Agent, unsafe-pattern, oversized, and malformed
+  input is rejected before any record exists); Create is the explicit user
+  action that persists the validated Runtime-owned record (Task Graph record
+  plus journal event only — no Session, worktree, Bus handoff, process, or
+  dispatch). After Create the panel shows the side-effect-free Graph Preflight
+  (`task.graph-plan` facts: frontier, selected wave, write-intent conflicts,
+  intent coverage, scope policy, risks, and estimated resources). Missing
+  Intent Map coverage stays distinct from an explicitly empty write intent.
 
 ## Endpoints
 
