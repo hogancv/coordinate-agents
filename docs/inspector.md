@@ -7,13 +7,15 @@ description: A localhost-only Web Workspace for Coordinate Agents with read-only
 # Web Workspace and Local Inspector
 
 The **Web Workspace** is the primary local browser entry for Coordinate Agents.
-It starts a loopback-only project overview for one selected Git repository and
-answers "what is happening?" without requiring Codex Plugin, a global
-installation, or a remote service. Overview, refresh, selection, and event
-replay are strictly read-only; a guarded action endpoint routes a small,
-explicit allow-list of operations to the shared Runtime without making the
-browser a second state owner. The **Inspector** command remains a behaviorally
-compatible read-only UI over the same server and data adapter.
+It starts a loopback-only, **chat-first workbench** for one selected Git
+repository — a three-column AI-chat layout with full `zh-CN` / `en-US`
+bilingual UI — that answers "what is happening?" without requiring Codex
+Plugin, a global installation, or a remote service. Chat rendering, refresh,
+selection, and event replay are strictly read-only; a guarded action endpoint
+routes a small, explicit allow-list of operations to the shared Runtime
+without making the browser a second state owner. The **Inspector** command
+remains a behaviorally compatible read-only UI over the same server and data
+adapter.
 
 Both surfaces are intentionally not a SaaS console, a replacement for Codex, or
 a second Task workflow. Read paths never send Agent messages, control Sessions,
@@ -115,15 +117,52 @@ The documented read-only Inspector command keeps its behavior and GET contract:
 npx @hogancv/coordinate-agents inspector --port 3000
 ```
 
-## Pages and panels
+## Pages and layout
 
-The Workspace overview opens with the **bound repository** identity (repository
-name, current branch, HEAD commit, latest commit subject, origin remote, and the
-canonical bound root path), followed by:
+The Workspace is a **chat-first, three-column workbench** (a normal AI chat
+product layout, not a dashboard of debug panels). It supports full `en-US` /
+`zh-CN` bilingual UI with a top-right **中文 / English** toggle; the choice is
+persisted in `localStorage` (`coordinate-agents.locale`) and applies instantly
+without a reload. Locale defaults to `zh-CN` for `zh-*` browser languages and
+`en-US` otherwise. Every visible string (navigation, buttons, form labels,
+empty/loading/toast states, status badges, timestamps) is localised through one
+I18N dictionary; user-supplied data (Task titles/specifications, IDs, commits,
+paths, Agent IDs, code, logs) is never translated or rewritten, and unknown
+backend statuses/events fall back to a localised generic label while preserving
+the original code.
 
-- **Agents** — the Agent setup panel shows installed coding CLI detection and
-  the Adapter registry on demand (manual Discover, no background scanning), with
-  distinct Agent / Adapter / executable identity and command-source badges
+- **Left Sidebar** — Coordinate Agents brand, the **bound repository** chip
+  (repository name, current branch or detached HEAD; expandable details show
+  HEAD short SHA/subject/date, origin remote, and canonical bound root), a
+  **New task** button, the Chat / Tasks / Agents / Sessions / Activity
+  navigation, and a Recent list of Tasks and Sessions with the current
+  selection highlighted. On screens ≤ 1024 px the sidebar becomes an
+  off-canvas drawer opened from the top bar.
+- **Chat (default view)** — a welcome card explains what the workspace can do.
+  Selecting a Task or Task Graph turns the centre column into a truthful
+  conversation timeline rebuilt from the authoritative Runtime record: the Task
+  card (title, ID, status, specification text), each recorded status/event
+  transition with Agent and Session identity, Session output, review decisions,
+  and last error, plus actions you actually performed in this browser session.
+  Nothing is fabricated — no invented agent thoughts, replies, or statuses.
+- **Composer** — a bounded multi-line input (Enter creates, Shift+Enter adds a
+  new line), an Agent select (populated from the configured Agents), and a Mode
+  select. Single-task mode creates one durable Task through the guarded
+  `taskCreate` action and opens it in the chat; Task Graph mode opens the
+  Authoring drawer pre-filled with the title and specification. Clear feedback
+  is shown when no Agent is configured, while a request is in flight, and on
+  success or failure.
+- **Right Context panel** — a compact summary of the selected Task/Graph
+  (state, roles, subtask/concurrency facts) or the workspace counts, plus entry
+  buttons that open the detail drawers. Agent flow (Planner → Implementer →
+  Reviewer topology with current Agent Bus state) stays visible here. The panel
+  is collapsed by default on narrow screens and slides in as a drawer.
+- **Tasks view** — all durable Tasks and Task Graph parents (title, status,
+  round, update time; graphs show subtask count, max concurrency, and state
+  tallies), plus counts.
+- **Agents view** — the Agent setup panel shows installed coding CLI detection
+  and the Adapter registry on demand (manual Discover, no background scanning),
+  with distinct Agent / Adapter / executable identity and command-source badges
   (project > user > adapter-default). A bounded form configures a project Agent,
   Adapter, exact executable command, and workflow role through the guarded
   `setupConfigure` transaction (validation first, atomic rollback on failure).
@@ -131,59 +170,71 @@ canonical bound root path), followed by:
   panel states that loaded local Adapter modules are trusted local code, that
   configuration grants no browser filesystem/process bypass, and that no
   credential or secret is rendered or persisted.
-- **Tasks** — current Task title, status, round, and update time for ordinary Tasks, plus distinguishable Task Graph parent entries with subtask count, max concurrency, and subtask state tallies.
-- **Agent flow** — the configured Planner → Implementer → Reviewer topology,
-  including each Agent's current Agent Bus state.
-- **Task detail & Task Graph topology** — for ordinary Tasks: sequence-ordered recorded event timeline, role assignments, specification, implementation commit, evidence, review history, and last error. For Task Graphs: an **interactive dependency map** (deterministic layered layout, one focusable node per bounded subtask, dependency arrows from each dependency to its dependent, state legend, keyboard focus/`Escape`, and a selected-node evidence panel with the same bounded authoritative facts as the graph API — Agent/Adapter/executable, Session/worktree/commit, Scope Audit, recovery, cleanup, and last error) above the text topology, frontier decisions, preflight waves, write-intent conflicts, integration facts, and review decisions. Large graphs degrade with a bounded deterministic truncation notice; the map renders no edges and no browser graph model of its own.
-- **Sessions** — Session state, timestamps, linked Tasks, bounded recent output,
-  and recorded Session event history. Active Runtime-owned Sessions show a
-  bounded input control (explicit submit only) and a Close control; arbitrary
+- **Sessions view** — Session state, timestamps, linked Tasks, bounded recent
+  output, and recorded Session event history. Active Runtime-owned Sessions show
+  a bounded input control (explicit submit only) and a Close control; arbitrary
   PIDs, paths, commands, environment data, and unattached processes are always
-  rejected by the Runtime ownership checks. Recovery rows on Task/Graph detail
-  are state-aware and explicit: Stop, Recover, Resume, and Clean up worktrees
-  reuse the existing ownership and recovery semantics, are idempotency- and
-  conflict-aware, and never retry automatically, silently discard verified
-  commits/evidence/user files, or touch remote refs. Cleanup removes only
-  Runtime-owned Sessions/worktrees and reports cleanup failures without hiding
-  the primary failure.
-- **Recent events** — timestamp, sequence, event type, Task, Session, Agent, and
-  a bounded summary from the append-only journal.
-- **Author new work** — the authoring panel creates one durable Task or a Task
-  Graph v1 (with optional Intent Map v1) without dispatching anything. Bounded
-  forms cover title/specification, role assignments from the configured Agents,
-  subtask IDs/specs/dependencies, maxConcurrency, write-intent patterns, and
-  scope policy. Validate runs the side-effect-free Runtime validation first
-  (cyclic, duplicate, unknown-Agent, unsafe-pattern, oversized, and malformed
-  input is rejected before any record exists); Create is the explicit user
-  action that persists the validated Runtime-owned record (Task Graph record
-  plus journal event only — no Session, worktree, Bus handoff, process, or
-  dispatch). After Create the panel shows the side-effect-free Graph Preflight
+  rejected by the Runtime ownership checks.
+- **Activity view** — the recent Event Journal feed (timestamp, sequence, event
+  type, Task, Session, Agent, and a bounded summary; recorded vs Derived /
+  Legacy History labels; click a Task id to jump to it).
+- **Detail drawer (Task & graph)** — opened from the Context panel: for
+  ordinary Tasks the sequence-ordered recorded event timeline, role
+  assignments, specification, implementation commit, evidence, review history,
+  and last error; for Task Graphs the **interactive dependency map**
+  (deterministic layered layout, one focusable node per bounded subtask,
+  dependency arrows, state legend, keyboard focus/`Escape`, and a selected-node
+  evidence panel with the same bounded authoritative facts as the graph API —
+  Agent/Adapter/executable, Session/worktree/commit, Scope Audit, recovery,
+  cleanup, and last error) above the text topology, frontier decisions,
+  preflight waves, write-intent conflicts, integration facts, and review
+  decisions. Large graphs degrade with a bounded deterministic truncation
+  notice; the map renders no edges and no browser graph model of its own. The
+  drawer also hosts the **Execution controls** and **Review & integrate**:
+  - **Execution controls** are never triggered by page load, GET, SSE
+    reconnect, or a double click. Dispatch, Run eligible wave, and Advance are
+    armed only after the user checks an understanding box (an Agent process may
+    write to the repository; failures are never retried automatically; no
+    merge, push, tag, publish, deploy, or release occurs). Graph Advance
+    requires an explicit bounded `maxWaves` (1–32) and Graph Run an optional
+    bounded session-wait (0–10000 ms). Results surface the same Task/subtask,
+    Session, worktree, commit, evidence, and stop facts as the shared Runtime
+    operation; stale or invalid state returns a conflict and views refresh from
+    the authoritative Runtime record via bounded SSE/refresh with `Last-Event-ID`
+    resume. State-aware Recovery rows (Stop, Recover, Resume, Clean up
+    worktrees) reuse the existing ownership and recovery semantics, are
+    idempotency- and conflict-aware, and never retry automatically, silently
+    discard verified commits/evidence/user files, or touch remote refs. Cleanup
+    removes only Runtime-owned Sessions/worktrees. The Workspace never modifies
+    the user's checked-out worktree or remote refs.
+  - **Review & integrate** — an explicit integrate action (applies verified
+    subtask commits only to the Runtime-owned aggregate review worktree) and a
+    bounded review form that records `REVIEW_APPROVED` / `CHANGES_REQUESTED`
+    with feedback/evidence through the shared Runtime operation; decisions are
+    durable and visible after reload and requested changes never trigger an
+    automatic retry. The surface shows commits, worktrees, Scope Audit, intent
+    conflicts, recovery, integration, Sessions, Event Journal, and review
+    history with parent identity preserved, and states plainly that review
+    approval is not the human `RELEASE_APPROVED` gate — the Workspace offers no
+    merge, push, tag, publish, deploy, or release control.
+- **Authoring drawer** — opened from **New task** (or the Composer in Task
+  Graph mode): creates one durable Task or a Task Graph v1 (with optional
+  Intent Map v1) without dispatching anything. Bounded forms cover
+  title/specification, role assignments from the configured Agents, subtask
+  IDs/specs/dependencies, maxConcurrency, write-intent patterns, and scope
+  policy. Validate runs the side-effect-free Runtime validation first (cyclic,
+  duplicate, unknown-Agent, unsafe-pattern, oversized, and malformed input is
+  rejected before any record exists); Create is the explicit user action that
+  persists the validated Runtime-owned record (Task Graph record plus journal
+  event only — no Session, worktree, Bus handoff, process, or dispatch). After
+  Create the drawer shows the side-effect-free Graph Preflight
   (`task.graph-plan` facts: frontier, selected wave, write-intent conflicts,
   intent coverage, scope policy, risks, and estimated resources). Missing
   Intent Map coverage stays distinct from an explicitly empty write intent.
-- **Execution controls** — selecting a Task or Task Graph opens an explicit
-  control row that is never triggered by page load, GET, SSE reconnect, or a
-  double click. Dispatch, Run eligible wave, and Advance are armed only after
-  the user checks an understanding box (an Agent process may write to the
-  repository; failures are never retried automatically; no merge, push, tag,
-  publish, deploy, or release occurs). Graph Advance requires an explicit
-  bounded `maxWaves` (1–32) and Graph Run an optional bounded session-wait
-  (0–10000 ms). Results surface the same Task/subtask, Session, worktree,
-  commit, evidence, and stop facts as the shared Runtime operation; stale or
-  invalid state returns a conflict and views refresh from the authoritative
-  Runtime record via bounded SSE/refresh with `Last-Event-ID` resume. The
-  Workspace never modifies the user's checked-out worktree or remote refs.
-- **Review & integrate** — Task/Graph detail offers an explicit integrate
-  action (applies verified subtask commits only to the Runtime-owned aggregate
-  review worktree) and a bounded review form that records
-  `REVIEW_APPROVED` / `CHANGES_REQUESTED` with feedback/evidence through the
-  shared Runtime operation; decisions are durable and visible after reload and
-  requested changes never trigger an automatic retry. The surface shows
-  commits, worktrees, Scope Audit, intent conflicts, recovery, integration,
-  Sessions, Event Journal, and review history with parent identity preserved,
-  and states plainly that review approval is not the human `RELEASE_APPROVED`
-  gate — the Workspace offers no merge, push, tag, publish, deploy, or release
-  control.
+
+Drawers support `Escape` to close and keep keyboard focus; the Context panel
+and Sidebar collapse to drawers on narrow screens (≤ 1180 px and ≤ 1024 px
+respectively).
 
 ## Endpoints
 
@@ -231,10 +282,11 @@ evidence. The Workspace is a control-plane view, not a secret store.
   incomplete; old history is never fabricated or backfilled.
 - Recorded ordering uses repository-monotonic sequence values rather than
   timestamps.
-- There is no authentication beyond the local per-launch capability, remote
-  access, chat, multi-tenant mode, cloud sync, or benchmark/evaluation
+- There is no authentication beyond the local per-launch capability, no remote
+  access, no multi-tenant mode, no cloud sync, and no benchmark/evaluation
   dashboard. Workspace mutations are limited to the allow-listed actions above;
   process-launching, Session-input, stop, cleanup, integration, and review
-  controls (with explicit UI confirmation) arrive in later tickets.
+  controls are always behind an explicit UI confirmation and never run on page
+  load, reconnect, or refresh.
 - `coordinate-agents web` requires an initialized Git repository root; the
   compatibility `inspector` command keeps its existing validation behavior.

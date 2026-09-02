@@ -152,21 +152,25 @@ project command > user command > adapter default precedence.
 ## Local Inspector
 
 The **Web Workspace** is the primary local browser entry. From any initialized
-Git repository with an Agent Bus it starts a loopback-only, read-only project
-overview — no Codex Plugin, global installation, or remote service required:
+Git repository with an Agent Bus it starts a loopback-only, chat-first
+workbench — no Codex Plugin, global installation, or remote service required:
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-The Workspace binds exactly one Git repository and shows its identity (branch,
-HEAD, remote), Tasks and Task Graph parents, Agents, Sessions, recent Runtime
-events, and bounded Task/Graph detail. Overview and refresh are strictly
-read-only; a guarded `POST /api/action` endpoint routes an explicit allow-list
-of Runtime operations — including transactional Agent discovery/configuration —
-through the same services as CLI and MCP. The
-`inspector` command stays available as the compatible read-only UI over the
-same GET contracts. The browser is never the source of truth. Learn more in
+The Workspace is a three-column AI-chat interface with full `zh-CN` / `en-US`
+bilingual UI (top-right toggle, persisted in `localStorage`). It binds exactly
+one Git repository and shows its identity (branch, HEAD, remote), and presents
+Tasks and Task Graph parents as truthful conversation timelines built from the
+authoritative Runtime records, with Agents, Sessions, recent Runtime events,
+and bounded Task/Graph detail in the sidebar, context panel, and drawers.
+Chat rendering and refresh are strictly read-only; a guarded `POST /api/action`
+endpoint routes an explicit allow-list of Runtime operations — including
+transactional Agent discovery/configuration — through the same services as CLI
+and MCP. The `inspector` command stays available as the compatible read-only UI
+over the same GET contracts. The browser is never the source of truth; no
+agent thoughts, replies, or statuses are ever invented. Learn more in
 [Inspector & Web Workspace](./docs/inspector.md) and
 [Event Journal](./docs/event-journal.md).
 

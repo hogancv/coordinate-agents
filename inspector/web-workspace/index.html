@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <meta name="description" content="Coordinate Agents Web Workspace: a localhost-only control plane for your local AI coding team.">
@@ -9,271 +10,366 @@
     <title>Coordinate Agents Workspace</title>
     <link rel="stylesheet" href="/styles.css">
   </head>
-  <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">LOCAL WEB WORKSPACE</p>
-        <h1>Coordinate Agents Workspace</h1>
-        <p class="subtitle">Control plane for your local AI coding team</p>
+  <body data-locale="en">
+    <div class="app" id="app">
+      <!-- ============ Left Sidebar ============ -->
+      <aside class="sidebar" id="sidebar" aria-label="Workspace sidebar">
+        <div class="sidebar-top">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <div class="brand-text">
+              <strong>Coordinate Agents</strong>
+              <span class="brand-sub">Web Workspace</span>
+            </div>
+          </div>
+          <button id="sidebar-close" class="icon-button sidebar-close" type="button" aria-label="Close sidebar" hidden>×</button>
+        </div>
+
+        <section id="repository" class="repo-chip" aria-label="Bound repository">
+          <p class="eyebrow repo-eyebrow">BOUND REPOSITORY</p>
+          <div class="repo-chip-main">
+            <h2 id="repo-name" class="repo-name" data-i18n="repo.loading">Loading repository…</h2>
+            <span id="repo-branch" class="count-badge branch-badge" title="Current branch">—</span>
+          </div>
+          <button id="repo-facts-toggle" class="text-button" type="button" data-i18n="repo.details">Show repository details</button>
+          <div id="repo-facts" class="repo-facts repo-facts-pop" aria-live="polite" hidden></div>
+        </section>
+
+        <button id="new-task-button" class="button new-task-button" type="button" data-i18n="nav.newTask">New task</button>
+
+        <nav class="nav" aria-label="Workspace sections">
+          <button class="nav-item active" type="button" data-view="chat" aria-current="true" data-i18n="nav.chat">Chat</button>
+          <button class="nav-item" type="button" data-view="tasks" data-i18n="nav.tasks">Tasks</button>
+          <button class="nav-item" type="button" data-view="agents" data-i18n="nav.agents">Agents</button>
+          <button class="nav-item" type="button" data-view="sessions" data-i18n="nav.sessions">Sessions</button>
+          <button class="nav-item" type="button" data-view="activity" data-i18n="nav.activity">Activity</button>
+        </nav>
+
+        <div class="recent-head" id="recent-head">
+          <span class="recent-label" data-i18n="nav.recent">Recent</span>
+          <button id="recent-toggle" class="text-button" type="button" data-i18n="nav.recentsToggle" aria-expanded="true">Tasks & sessions</button>
+        </div>
+        <div id="recent-list" class="recent-list" aria-live="polite"></div>
+
+        <div class="sidebar-footer">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="sidebar-live-text" data-i18n="status.connected">localhost · live</span>
+        </div>
+      </aside>
+
+      <!-- ============ Center column ============ -->
+      <div class="center">
+        <header class="main-topbar">
+          <button id="sidebar-open" class="icon-button menu-button" type="button" aria-label="Open sidebar">☰</button>
+          <div class="topbar-title">
+            <h1 id="view-title" class="view-title">Chat</h1>
+            <span id="view-subtitle" class="view-subtitle" data-i18n="subtitle.workspace">Workspace for your local AI coding team</span>
+          </div>
+          <div class="topbar-actions">
+            <div class="lang-toggle" role="group" aria-label="Language / 语言">
+              <button id="lang-zh" class="lang-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
+              <button id="lang-en" class="lang-button" type="button" lang="en-US" aria-pressed="true">English</button>
+            </div>
+            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
+            <button id="context-toggle" class="icon-button context-toggle" type="button" aria-label="Toggle context panel" aria-expanded="true">▤</button>
+          </div>
+        </header>
+
+        <main class="chat-scroll" id="chat-scroll">
+          <!-- Chat view -->
+          <section class="view active" id="view-chat" data-view-panel="chat" aria-live="polite">
+            <div id="chat-welcome" class="welcome" hidden></div>
+            <div id="chat-feed" class="chat-feed" aria-live="polite"></div>
+          </section>
+
+          <!-- Tasks view -->
+          <section class="view" id="view-tasks" data-view-panel="tasks" hidden>
+            <div class="view-heading">
+              <h2 data-i18n="view.tasksTitle">Tasks</h2>
+              <span id="task-count" class="count-badge">0</span>
+            </div>
+            <div id="tasks" class="task-grid" aria-live="polite"></div>
+          </section>
+
+          <!-- Agents view -->
+          <section class="view" id="view-agents" data-view-panel="agents" hidden>
+            <section id="agents-panel" class="panel agents-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">AGENT SETUP</p>
+                  <h2 data-i18n="agents.title">Agents</h2>
+                </div>
+                <button id="discover-agents" class="button" type="button" data-i18n="agents.discover">Discover CLIs</button>
+              </div>
+              <p class="agents-note" data-i18n="agents.note">Configure a local coding Agent, its Adapter, and its exact executable
+                command. Resolution order stays project command → user command → Adapter default. Detection
+                runs only when you click Discover; the Workspace never performs automatic login, remote lookup,
+                package download, or arbitrary process launch.</p>
+              <div id="agents-discovery" class="agents-discovery" aria-live="polite">
+                <div class="empty-state" data-i18n="agents.discoverHint">Click “Discover CLIs” to inspect installed coding CLIs and registered Adapters.</div>
+              </div>
+              <form id="agent-configure" class="agent-form" novalidate>
+                <label data-i18n="agents.agentId">Agent ID<input id="cfg-agent" name="agent" list="agent-id-options" maxlength="64" placeholder="e.g. codex / antigravity" data-i18n-placeholder="agents.agentIdPh" required></label>
+                <datalist id="agent-id-options"></datalist>
+                <label data-i18n="agents.adapter">Adapter<select id="cfg-adapter" name="adapter">
+                  <option value="codex-cli">codex-cli (built-in)</option>
+                  <option value="antigravity-cli">antigravity-cli (built-in)</option>
+                  <option value="generic-cli">generic-cli</option>
+                </select></label>
+                <label data-i18n="agents.command">Executable command<input id="cfg-command" name="command" maxlength="512" placeholder="exact command, e.g. agy-proxy" data-i18n-placeholder="agents.commandPh" required></label>
+                <label data-i18n="agents.role">Workflow role<select id="cfg-role" name="role">
+                  <option value="implementer" data-i18n="roles.implementer">implementer</option>
+                  <option value="planner" data-i18n="roles.planner">planner</option>
+                  <option value="reviewer" data-i18n="roles.reviewer">reviewer</option>
+                </select></label>
+                <button id="apply-agent" class="button" type="submit" data-i18n="agents.apply">Apply configuration</button>
+                <span id="agent-status" class="agent-status" aria-live="polite"></span>
+              </form>
+              <h3 data-i18n="agents.configured">Configured runtime agents</h3>
+              <div id="configured-agents" class="configured-agents" aria-live="polite"></div>
+              <p class="agents-scope-note" data-i18n="agents.scopeNote">Only explicitly registered or loaded local Adapter modules are treated
+                as trusted local code; configuring an Agent grants no browser filesystem or process sandbox
+                bypass. The Workspace never renders or persists credentials, tokens, cookies, or secrets.</p>
+            </section>
+          </section>
+
+          <!-- Sessions view -->
+          <section class="view" id="view-sessions" data-view-panel="sessions" hidden>
+            <section class="panel sessions-panel">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">EXECUTION RUNTIME</p>
+                  <h2 data-i18n="view.sessionsTitle">Sessions</h2>
+                </div>
+                <span id="session-count" class="count-badge">0</span>
+              </div>
+              <div id="sessions" class="session-list" aria-live="polite"></div>
+            </section>
+          </section>
+
+          <!-- Activity view -->
+          <section class="view" id="view-activity" data-view-panel="activity" hidden>
+            <div class="view-heading">
+              <h2 data-i18n="view.activityTitle">Recent events</h2>
+              <span class="muted-label" data-i18n="view.activityHint">recorded events · legacy fallback</span>
+            </div>
+            <div id="events" class="event-list" aria-live="polite"></div>
+          </section>
+        </main>
+
+        <!-- Composer -->
+        <footer class="composer" id="composer" aria-label="Composer">
+          <div class="composer-row">
+            <textarea id="composer-input" class="composer-input" rows="2" maxlength="1024"
+              placeholder="Describe a task for your local AI team… (Enter to create, Shift+Enter for a new line)"
+              data-i18n-placeholder="composer.placeholder" aria-label="Task description"></textarea>
+            <div class="composer-actions">
+              <label class="composer-field" data-i18n="composer.agent">Agent
+                <select id="composer-agent"><option value="">—</option></select>
+              </label>
+              <label class="composer-field" data-i18n="composer.mode">Mode
+                <select id="composer-mode">
+                  <option value="task" data-i18n="composer.modeTask">Single task</option>
+                  <option value="graph" data-i18n="composer.modeGraph">Task Graph…</option>
+                </select>
+              </label>
+              <button id="composer-send" class="button primary-button" type="button" data-i18n="composer.send">Send</button>
+            </div>
+          </div>
+          <div class="composer-hint" id="composer-hint" aria-live="polite">
+            <span data-i18n="composer.enterHint">Enter to create a Task · Shift+Enter for a new line</span>
+          </div>
+          <div class="composer-status" id="composer-status" aria-live="polite" hidden></div>
+        </footer>
       </div>
-      <div class="topbar-meta">
-        <span class="live-dot"></span>
-        <span>localhost · read-only</span>
-        <button id="refresh-button" class="button" type="button">Refresh</button>
-      </div>
-    </header>
 
-    <main class="shell">
-      <section id="repository" class="panel repository-panel" hidden>
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">BOUND REPOSITORY</p>
-            <h2 id="repo-name">Loading repository…</h2>
-          </div>
-          <span id="repo-branch" class="count-badge branch-badge" title="Current branch">—</span>
+      <!-- ============ Right Context panel ============ -->
+      <aside class="context-panel" id="context-panel" aria-label="Context panel">
+        <div class="context-head">
+          <h2 data-i18n="context.title">Context</h2>
+          <button id="context-close" class="icon-button" type="button" aria-label="Close context panel">×</button>
         </div>
-        <div id="repo-facts" class="repo-facts" aria-live="polite"></div>
-      </section>
+        <div id="context-body" class="context-body">
+          <div id="context-selection" class="context-selection" aria-live="polite"></div>
+          <section class="context-section" aria-label="Agent flow">
+            <h3 data-i18n="context.agentFlow">Agent flow</h3>
+            <div id="agent-flow" class="agent-flow context-flow" aria-live="polite"></div>
+          </section>
+        </div>
+      </aside>
 
-      <section id="agents-panel" class="panel agents-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">AGENT SETUP</p>
-            <h2>Agents</h2>
-          </div>
-          <button id="discover-agents" class="button" type="button">Discover CLIs</button>
-        </div>
-        <p class="agents-note">Configure a local coding Agent, its Adapter, and its exact executable
-          command. Resolution order stays project command → user command → Adapter default. Detection
-          runs only when you click Discover; the Workspace never performs automatic login, remote lookup,
-          package download, or arbitrary process launch.</p>
-        <div id="agents-discovery" class="agents-discovery" aria-live="polite">
-          <div class="empty-state">Click “Discover CLIs” to inspect installed coding CLIs and registered Adapters.</div>
-        </div>
-        <form id="agent-configure" class="agent-form" novalidate>
-          <label>Agent ID<input id="cfg-agent" name="agent" list="agent-id-options" maxlength="64" placeholder="e.g. codex / antigravity" required></label>
-          <datalist id="agent-id-options"></datalist>
-          <label>Adapter<select id="cfg-adapter" name="adapter">
-            <option value="codex-cli">codex-cli (built-in)</option>
-            <option value="antigravity-cli">antigravity-cli (built-in)</option>
-            <option value="generic-cli">generic-cli</option>
-          </select></label>
-          <label>Executable command<input id="cfg-command" name="command" maxlength="512" placeholder="exact command, e.g. agy-proxy" required></label>
-          <label>Workflow role<select id="cfg-role" name="role">
-            <option value="implementer">implementer</option>
-            <option value="planner">planner</option>
-            <option value="reviewer">reviewer</option>
-          </select></label>
-          <button id="apply-agent" class="button" type="submit">Apply configuration</button>
-          <span id="agent-status" class="agent-status" aria-live="polite"></span>
-        </form>
-        <h3>Configured runtime agents</h3>
-        <div id="configured-agents" class="configured-agents" aria-live="polite"></div>
-        <p class="agents-scope-note">Only explicitly registered or loaded local Adapter modules are treated
-          as trusted local code; configuring an Agent grants no browser filesystem or process sandbox
-          bypass. The Workspace never renders or persists credentials, tokens, cookies, or secrets.</p>
-      </section>
-
-      <section class="hero-grid">
-        <div class="hero-card">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">COORDINATION OVERVIEW</p>
-              <h2>Tasks</h2>
-            </div>
-            <span id="task-count" class="count-badge">0</span>
-          </div>
-          <div id="tasks" class="task-grid" aria-live="polite"></div>
-        </div>
-        <div class="hero-card topology-card">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">ROLE TOPOLOGY</p>
-              <h2>Agent flow</h2>
-            </div>
-            <span class="muted-label">Planner → Implementer → Reviewer</span>
-          </div>
-          <div id="agent-flow" class="agent-flow" aria-live="polite"></div>
-        </div>
-      </section>
-
-      <section id="task-detail" class="panel task-detail-panel" hidden>
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">TASK DETAIL</p>
-            <h2 id="detail-title">Select a task</h2>
-          </div>
-          <button id="close-detail" class="button ghost" type="button">Close</button>
-        </div>
-        <div id="detail-summary" class="detail-summary"></div>
-        <div id="execution-panel" class="execution-panel" hidden>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">EXECUTION CONTROL · EXPLICIT ONLY</p>
-              <h2 id="execution-title">Execution</h2>
-            </div>
-            <span class="muted-label">never on page load or reconnect · no automatic retry</span>
-          </div>
-          <div id="execution-controls" class="execution-controls"></div>
-          <span id="execution-status" class="author-status" aria-live="polite"></span>
-          <div id="execution-result" class="execution-result" aria-live="polite" hidden></div>
-        </div>
-        <div id="review-panel" class="review-panel" hidden>
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">REVIEW & INTEGRATE</p>
-              <h2>Review & integrate</h2>
-            </div>
-            <span class="muted-label">review approval is never release approval</span>
-          </div>
-          <p class="agents-note">Integration applies verified subtask commits only to the Runtime-owned aggregate
-            review worktree — never to your checked-out worktree or remote refs. Recording a review decision is
-            durable and visible after reload; requested changes never trigger an automatic retry. This Workspace
-            offers no merge, push, tag, publish, deploy, or release control: releasing requires the separate human
-            <code>RELEASE_APPROVED</code> gate.</p>
-          <div id="review-controls" class="review-controls"></div>
-          <span id="review-status" class="author-status" aria-live="polite"></span>
-          <div id="review-result" class="review-result" aria-live="polite" hidden></div>
-        </div>
-        <section id="graph-detail" class="graph-detail" hidden>
-          <section id="graph-map-region" class="graph-map-region">
+      <!-- ============ Detail drawer (task / graph deep view) ============ -->
+      <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+      <aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-label="Task and graph details" hidden>
+        <header class="drawer-head">
+          <h2 id="drawer-title" class="drawer-title" data-i18n="drawer.taskDetail">Task & graph details</h2>
+          <button id="drawer-close" class="button ghost" type="button" data-i18n="drawer.close">Close</button>
+        </header>
+        <div class="drawer-body">
+          <section id="task-detail" class="panel task-detail-panel" hidden>
             <div class="section-heading">
               <div>
-                <h3>Graph map</h3>
-                <span id="graph-map-note" class="muted-label" aria-live="polite"></span>
+                <p class="eyebrow">TASK DETAIL</p>
+                <h2 id="detail-title">Select a task</h2>
               </div>
-              <span id="graph-legend" class="graph-legend" aria-hidden="true"></span>
+              <button id="close-detail" class="button ghost" type="button" data-i18n="drawer.close">Close</button>
             </div>
-            <div id="graph-map" class="graph-map" role="img" aria-label="Interactive Task Graph dependency map. Each node is a subtask; arrows point from a dependency to the subtask that depends on it."></div>
-            <div id="graph-node-detail" class="graph-node-detail" aria-live="polite"></div>
+            <div id="detail-summary" class="detail-summary"></div>
+            <div id="execution-panel" class="execution-panel" hidden>
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">EXECUTION CONTROL · EXPLICIT ONLY</p>
+                  <h2 id="execution-title">Execution</h2>
+                </div>
+                <span class="muted-label" data-i18n="execution.explicitLabel">never on page load or reconnect · no automatic retry</span>
+              </div>
+              <div id="execution-controls" class="execution-controls"></div>
+              <span id="execution-status" class="author-status" aria-live="polite"></span>
+              <div id="execution-result" class="execution-result" aria-live="polite" hidden></div>
+            </div>
+            <div id="review-panel" class="review-panel" hidden>
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">REVIEW & INTEGRATE</p>
+                  <h2 data-i18n="review.title">Review & integrate</h2>
+                </div>
+                <span class="muted-label" data-i18n="review.releaseLabel">review approval is never release approval</span>
+              </div>
+              <p class="agents-note" data-i18n="review.note">Integration applies verified subtask commits only to the Runtime-owned aggregate
+                review worktree — never to your checked-out worktree or remote refs. Recording a review decision is
+                durable and visible after reload; requested changes never trigger an automatic retry. This Workspace
+                offers no merge, push, tag, publish, deploy, or release control: releasing requires the separate human
+                <code>RELEASE_APPROVED</code> gate.</p>
+              <div id="review-controls" class="review-controls"></div>
+              <span id="review-status" class="author-status" aria-live="polite"></span>
+              <div id="review-result" class="review-result" aria-live="polite" hidden></div>
+            </div>
+            <section id="graph-detail" class="graph-detail" hidden>
+              <section id="graph-map-region" class="graph-map-region">
+                <div class="section-heading">
+                  <div>
+                    <h3 data-i18n="graph.map">Graph map</h3>
+                    <span id="graph-map-note" class="muted-label" aria-live="polite"></span>
+                  </div>
+                  <span id="graph-legend" class="graph-legend" aria-hidden="true"></span>
+                </div>
+                <div id="graph-map" class="graph-map" role="img" aria-label="Interactive Task Graph dependency map. Each node is a subtask; arrows point from a dependency to the subtask that depends on it."></div>
+                <div id="graph-node-detail" class="graph-node-detail" aria-live="polite"></div>
+              </section>
+              <div class="graph-overview-grid">
+                <div>
+                  <h3>Task Graph topology</h3>
+                  <div id="graph-topology" class="graph-topology"></div>
+                </div>
+                <div>
+                  <h3 data-i18n="graph.frontier">Frontier & preflight wave</h3>
+                  <div id="graph-frontier" class="graph-facts"></div>
+                </div>
+              </div>
+              <div class="graph-overview-grid">
+                <div>
+                  <h3 data-i18n="graph.conflicts">Conflicts & scope audit</h3>
+                  <div id="graph-conflicts" class="graph-facts"></div>
+                </div>
+                <div>
+                  <h3 data-i18n="graph.integration">Integration & review</h3>
+                  <div id="graph-integration" class="graph-facts"></div>
+                </div>
+              </div>
+            </section>
+            <div class="detail-grid">
+              <div>
+                <h3 data-i18n="detail.timelineTitle">Event timeline</h3>
+                <div id="timeline" class="timeline"></div>
+              </div>
+              <div>
+                <h3 data-i18n="detail.agentFlowTitle">Agent flow</h3>
+                <div id="detail-agent-flow" class="detail-agent-flow"></div>
+              </div>
+            </div>
+            <div class="detail-grid lower-grid">
+              <div>
+                <h3 data-i18n="detail.evidenceTitle">Evidence & review</h3>
+                <div id="evidence" class="evidence-list"></div>
+              </div>
+              <div>
+                <h3 data-i18n="detail.specTitle">Specification</h3>
+                <pre id="spec" class="code-block"></pre>
+              </div>
+            </div>
           </section>
-          <div class="graph-overview-grid">
-            <div>
-              <h3>Task Graph topology</h3>
-              <div id="graph-topology" class="graph-topology"></div>
-            </div>
-            <div>
-              <h3>Frontier & preflight wave</h3>
-              <div id="graph-frontier" class="graph-facts"></div>
-            </div>
-          </div>
-          <div class="graph-overview-grid">
-            <div>
-              <h3>Conflicts & scope audit</h3>
-              <div id="graph-conflicts" class="graph-facts"></div>
-            </div>
-            <div>
-              <h3>Integration & review</h3>
-              <div id="graph-integration" class="graph-facts"></div>
-            </div>
-          </div>
-        </section>
-        <div class="detail-grid">
-          <div>
-            <h3>Event timeline</h3>
-            <div id="timeline" class="timeline"></div>
-          </div>
-          <div>
-            <h3>Agent flow</h3>
-            <div id="detail-agent-flow" class="detail-agent-flow"></div>
-          </div>
         </div>
-        <div class="detail-grid lower-grid">
-          <div>
-            <h3>Evidence & review</h3>
-            <div id="evidence" class="evidence-list"></div>
-          </div>
-          <div>
-            <h3>Specification</h3>
-            <pre id="spec" class="code-block"></pre>
-          </div>
-        </div>
-      </section>
+      </aside>
 
-      <section class="panel sessions-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">EXECUTION RUNTIME</p>
-            <h2>Sessions</h2>
-          </div>
-          <span id="session-count" class="count-badge">0</span>
-        </div>
-        <div id="sessions" class="session-list" aria-live="polite"></div>
-      </section>
-
-      <section class="panel events-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">RUNTIME JOURNAL</p>
-            <h2>Recent events</h2>
-          </div>
-          <span class="muted-label">recorded events · legacy fallback</span>
-        </div>
-        <div id="events" class="event-list" aria-live="polite"></div>
-      </section>
-
-      <section id="author-panel" class="panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">AUTHORING · NO DISPATCH</p>
-            <h2>Author new work</h2>
-          </div>
-          <span class="muted-label">validate first · preflight is side-effect free · create persists the Runtime record only</span>
-        </div>
-        <p id="author-empty-agents" class="agents-note" hidden>No Agents are configured yet. Configure an Agent in the Agents panel above before authoring.</p>
-        <div class="author-grid">
-          <div class="author-col">
-            <h3>Single Task</h3>
-            <form id="task-create-form" class="author-form" novalidate>
-              <label>Title<input id="author-task-title" maxlength="1024" required placeholder="Task title"></label>
-              <label>Specification (optional)<textarea id="author-task-spec" rows="3" placeholder="What must change and how is it verified?"></textarea></label>
-              <label>Planner<select id="author-task-planner"></select></label>
-              <label>Implementer<select id="author-task-implementer"></select></label>
-              <label>Reviewer<select id="author-task-reviewer"></select></label>
-              <label>Deterministic ID (optional)<input id="author-task-id" maxlength="128" placeholder="task-… (created automatically when empty)"></label>
-              <button id="author-task-submit" class="button" type="submit">Create Task</button>
-              <span id="author-task-status" class="author-status" aria-live="polite"></span>
-            </form>
-          </div>
-          <div class="author-col">
-            <h3>Task Graph v1 <span class="muted-label">with optional Intent Map v1</span></h3>
-            <form id="graph-create-form" class="author-form" novalidate>
-              <label>Parent ID<input id="author-graph-id" maxlength="128" placeholder="task-…"></label>
-              <label>Title<input id="author-graph-title" maxlength="1024" required placeholder="Graph title"></label>
-              <label>Specification<textarea id="author-graph-spec" rows="2"></textarea></label>
-              <label>Planner<select id="author-graph-planner"></select></label>
-              <label>Reviewer<select id="author-graph-reviewer"></select></label>
-              <label>Max concurrency<input id="author-graph-max" type="number" min="1" max="32" value="1"></label>
-              <label class="author-toggle"><input id="author-graph-intent" type="checkbox"> Intent Map (write intents)</label>
-              <label>Scope policy<select id="author-graph-scope">
-                <option value="warn">warn (default)</option>
-                <option value="observe">observe</option>
-                <option value="strict">strict</option>
-              </select></label>
-            </form>
-            <div class="author-subtasks-head">
-              <h3>Subtasks</h3>
-              <button id="author-subtask-add" class="button ghost" type="button">+ Add subtask</button>
+      <!-- ============ Authoring drawer ============ -->
+      <aside class="drawer drawer-right" id="author-drawer" role="dialog" aria-modal="true" aria-label="Author new work" hidden>
+        <header class="drawer-head">
+          <h2 class="drawer-title" data-i18n="author.title">Author new work</h2>
+          <button id="author-drawer-close" class="button ghost" type="button" data-i18n="drawer.close">Close</button>
+        </header>
+        <div class="drawer-body">
+          <section id="author-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">AUTHORING · NO DISPATCH</p>
+                <h2 data-i18n="author.panelTitle">Author new work</h2>
+              </div>
+              <span class="muted-label" data-i18n="author.hint">validate first · preflight is side-effect free · create persists the Runtime record only</span>
             </div>
-            <p class="agents-note">Leave write intent empty in a row for an explicitly empty intent; disable the Intent Map for missing (unverified) coverage.</p>
-            <div id="author-subtask-rows" class="subtask-rows"></div>
-            <div class="author-actions">
-              <button id="author-graph-validate" class="button" type="button">Validate</button>
-              <button id="author-graph-create" class="button" type="button">Create Graph (persist only)</button>
-              <span id="author-graph-status" class="author-status" aria-live="polite"></span>
+            <p id="author-empty-agents" class="agents-note" hidden data-i18n="author.emptyAgents">No Agents are configured yet. Configure an Agent in the Agents panel above before authoring.</p>
+            <div class="author-grid">
+              <div class="author-col">
+                <h3 data-i18n="author.singleTask">Single Task</h3>
+                <form id="task-create-form" class="author-form" novalidate>
+                  <label data-i18n="author.taskTitleLabel">Title<input id="author-task-title" maxlength="1024" required data-i18n-placeholder="author.taskTitlePh" placeholder="Task title"></label>
+                  <label data-i18n="author.specLabel">Specification (optional)<textarea id="author-task-spec" rows="3" data-i18n-placeholder="author.specPh" placeholder="What must change and how is it verified?"></textarea></label>
+                  <label data-i18n="roles.planner">Planner<select id="author-task-planner"></select></label>
+                  <label data-i18n="roles.implementer">Implementer<select id="author-task-implementer"></select></label>
+                  <label data-i18n="roles.reviewer">Reviewer<select id="author-task-reviewer"></select></label>
+                  <label data-i18n="author.taskIdLabel">Deterministic ID (optional)<input id="author-task-id" maxlength="128" data-i18n-placeholder="author.taskIdPh" placeholder="task-… (created automatically when empty)"></label>
+                  <button id="author-task-submit" class="button" type="submit" data-i18n="author.createTask">Create Task</button>
+                  <span id="author-task-status" class="author-status" aria-live="polite"></span>
+                </form>
+              </div>
+              <div class="author-col">
+                <h3 data-i18n="author.graphTitle">Task Graph v1 <span class="muted-label" data-i18n="author.intentMapHint">with optional Intent Map v1</span></h3>
+                <form id="graph-create-form" class="author-form" novalidate>
+                  <label data-i18n="author.parentId">Parent ID<input id="author-graph-id" maxlength="128" placeholder="task-…"></label>
+                  <label data-i18n="author.graphTitleLabel">Title<input id="author-graph-title" maxlength="1024" required placeholder="Graph title"></label>
+                  <label data-i18n="author.specLabel">Specification<textarea id="author-graph-spec" rows="2"></textarea></label>
+                  <label data-i18n="roles.planner">Planner<select id="author-graph-planner"></select></label>
+                  <label data-i18n="roles.reviewer">Reviewer<select id="author-graph-reviewer"></select></label>
+                  <label data-i18n="author.maxConcurrency">Max concurrency<input id="author-graph-max" type="number" min="1" max="32" value="1"></label>
+                  <label class="author-toggle"><input id="author-graph-intent" type="checkbox"> <span data-i18n="author.intentMap">Intent Map (write intents)</span></label>
+                  <label data-i18n="author.scopePolicy">Scope policy<select id="author-graph-scope">
+                    <option value="warn" data-i18n="author.scopeWarn">warn (default)</option>
+                    <option value="observe" data-i18n="author.scopeObserve">observe</option>
+                    <option value="strict" data-i18n="author.scopeStrict">strict</option>
+                  </select></label>
+                </form>
+                <div class="author-subtasks-head">
+                  <h3 data-i18n="author.subtasks">Subtasks</h3>
+                  <button id="author-subtask-add" class="button ghost" type="button" data-i18n="author.addSubtask">+ Add subtask</button>
+                </div>
+                <p class="agents-note" data-i18n="author.subtaskHint">Leave write intent empty in a row for an explicitly empty intent; disable the Intent Map for missing (unverified) coverage.</p>
+                <div id="author-subtask-rows" class="subtask-rows"></div>
+                <div class="author-actions">
+                  <button id="author-graph-validate" class="button" type="button" data-i18n="author.validate">Validate</button>
+                  <button id="author-graph-create" class="button" type="button" data-i18n="author.createGraph">Create Graph (persist only)</button>
+                  <span id="author-graph-status" class="author-status" aria-live="polite"></span>
+                </div>
+                <div id="author-graph-errors" class="author-errors" aria-live="polite" hidden></div>
+                <div id="author-graph-validated" class="author-validated" aria-live="polite" hidden></div>
+                <div id="author-graph-preflight" class="author-preflight" aria-live="polite" hidden></div>
+              </div>
             </div>
-            <div id="author-graph-errors" class="author-errors" aria-live="polite" hidden></div>
-            <div id="author-graph-validated" class="author-validated" aria-live="polite" hidden></div>
-            <div id="author-graph-preflight" class="author-preflight" aria-live="polite" hidden></div>
-          </div>
+          </section>
         </div>
-      </section>
-    </main>
+      </aside>
 
-    <footer class="footer">
-      <span>Coordinate Agents Web Workspace</span>
-      <span>Read-only overview · Tasks · Task Graphs · Agents · Sessions · Runtime events</span>
-    </footer>
+      <!-- Toast region -->
+      <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    </div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
