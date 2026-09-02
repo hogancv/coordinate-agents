@@ -207,6 +207,31 @@ const ACTION_DEFINITIONS = Object.freeze({
     command: 'session.close',
     params: { sessionId: { type: 'string', required: true, max: 256 } },
   },
+  taskGraphIntegrate: {
+    operation: 'taskGraphIntegrate',
+    command: 'task.graph-integrate',
+    params: { taskId: { type: 'string', required: true, max: 128 } },
+  },
+  taskReview: {
+    operation: 'taskReview',
+    command: 'task.review',
+    params: {
+      taskId: { type: 'string', required: true, max: 128 },
+      decision: { type: 'string', required: true, max: 32, enum: ['REVIEW_APPROVED', 'CHANGES_REQUESTED'] },
+      feedback: { type: 'string', max: 16 * 1024 },
+      evidence: { type: 'object', max: 64 * 1024 },
+    },
+  },
+  taskGraphReview: {
+    operation: 'taskGraphReview',
+    command: 'task.graph-review',
+    params: {
+      taskId: { type: 'string', required: true, max: 128 },
+      decision: { type: 'string', required: true, max: 32, enum: ['REVIEW_APPROVED', 'CHANGES_REQUESTED'] },
+      feedback: { type: 'string', max: 16 * 1024 },
+      evidence: { type: 'object', max: 64 * 1024 },
+    },
+  },
   recoverInspect: {
     operation: 'recoverInspect',
     command: 'recover.inspect',
@@ -317,6 +342,7 @@ function validateParams(definition, params) {
         return `Parameter ${key} is outside the supported range.`;
       }
     }
+    if (Array.isArray(rule.enum) && !rule.enum.includes(value)) return `Parameter ${key} has an unsupported value.`;
   }
   return null;
 }

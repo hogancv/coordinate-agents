@@ -71,10 +71,11 @@ The Workspace exposes exactly one additive, guarded action endpoint for later
 controls: `POST /api/action`. It routes an explicit allow-list of structured
 operations to the same shared Runtime services used by CLI and MCP
 (`setupDiscover`, `setupConfigure`, `taskCreate`, `taskDispatch`, `taskStatus`,
-`taskInspect`, `taskStop`, `taskResume`, `taskGraphStatus`, `taskGraphInspect`,
-`taskGraphPlan`, `taskGraphValidate`, `taskGraphCreate`, `taskGraphRun`,
-`taskGraphAdvance`, `taskGraphStop`, `taskGraphRecover`, `taskGraphResume`,
-`taskGraphCleanup`, `sessionStatus`, `sessionInspect`, `sessionRead`,
+`taskInspect`, `taskStop`, `taskResume`, `taskReview`, `taskGraphStatus`,
+`taskGraphInspect`, `taskGraphPlan`, `taskGraphValidate`, `taskGraphCreate`,
+`taskGraphRun`, `taskGraphAdvance`, `taskGraphStop`, `taskGraphRecover`,
+`taskGraphResume`, `taskGraphCleanup`, `taskGraphIntegrate`,
+`taskGraphReview`, `sessionStatus`, `sessionInspect`, `sessionRead`,
 `sessionWrite`, `sessionClose`, `recoverInspect`).
 The gateway never shells out, parses CLI output, proxies MCP, accepts an
 arbitrary operation name, or lets a request choose a different repository root.
@@ -172,6 +173,17 @@ canonical bound root path), followed by:
   invalid state returns a conflict and views refresh from the authoritative
   Runtime record via bounded SSE/refresh with `Last-Event-ID` resume. The
   Workspace never modifies the user's checked-out worktree or remote refs.
+- **Review & integrate** — Task/Graph detail offers an explicit integrate
+  action (applies verified subtask commits only to the Runtime-owned aggregate
+  review worktree) and a bounded review form that records
+  `REVIEW_APPROVED` / `CHANGES_REQUESTED` with feedback/evidence through the
+  shared Runtime operation; decisions are durable and visible after reload and
+  requested changes never trigger an automatic retry. The surface shows
+  commits, worktrees, Scope Audit, intent conflicts, recovery, integration,
+  Sessions, Event Journal, and review history with parent identity preserved,
+  and states plainly that review approval is not the human `RELEASE_APPROVED`
+  gate — the Workspace offers no merge, push, tag, publish, deploy, or release
+  control.
 
 ## Endpoints
 

@@ -63,6 +63,7 @@ const elements = Object.fromEntries([
   'author-subtask-rows', 'author-graph-validate', 'author-graph-create', 'author-graph-status',
   'author-graph-errors', 'author-graph-validated', 'author-graph-preflight',
   'execution-panel', 'execution-title', 'execution-controls', 'execution-status', 'execution-result',
+  'review-panel', 'review-controls', 'review-status', 'review-result',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -982,6 +983,131 @@ function renderExecution(detail) {
   bindExecutionControls(elements['execution-controls'], detail);
 }
 
+function setReviewStatus(message, kind = 'info') {
+  const element = elements['review-status'];
+  element.textContent = message;
+  element.className = `author-status ${kind}`;
+}
+
+function reviewParams(detail) {
+  const decision = elements['review-controls'].querySelector('.review-decision')?.value;
+  const feedback = elements['review-controls'].querySelector('.review-feedback')?.value.trim() || undefined;
+  const evidenceText = elements['review-controls'].querySelector('.review-evidence')?.value.trim() || '';
+  let evidence;
+  if (evidenceText) {
+    try {
+      evidence = JSON.parse(evidenceText);
+      if (typeof evidence !== 'object' || evidence === null || Array.isArray(evidence)) throw new Error('object');
+    } catch {
+      setReviewStatus('Review evidence must be valid JSON object text.', 'error');
+      return null;
+    }
+  }
+  const params = { taskId: detail.id, decision };
+  if (feedback) params.feedback = feedback;
+  if (evidence) params.evidence = evidence;
+  return params;
+}
+
+async function submitReview(detail) {
+  const params = reviewParams(detail);
+  if (!params) return;
+  if (!params.decision) {
+    setReviewStatus('Choose a review decision.', 'error');
+    return;
+  }
+  const action = Boolean(detail.graph) ? 'taskGraphReview' : 'taskReview';
+  const label = Boolean(detail.graph) ? 'Graph review' : 'Task review';
+  setReviewStatus(`${label}: recording decision…`);
+  try {
+    const { status, payload } = await postAction(action, params);
+    if (status !== 200 || payload?.ok !== true) {
+      const error = payload?.error || {};
+      setReviewStatus(`${label} rejected: ${error.code || `HTTP ${status}`} — ${error.message || ''}${error.details ? ` (${error.details})` : ''}`, 'error');
+      return;
+    }
+    setReviewStatus(`${label} recorded (${payload.review?.decision || payload.status || params.decision}). Durable after reload.`, 'ok');
+    await refresh();
+  } catch (error) {
+    setReviewStatus(`${label} request failed: ${error.message}`, 'error');
+  }
+}
+
+async function integrateGraph(detail) {
+  setReviewStatus('Integrating verified subtask commits into the Runtime-owned aggregate review worktree…');
+  try {
+    const { status, payload } = await postAction('taskGraphIntegrate', { taskId: detail.id });
+    if (status !== 200 || payload?.ok !== true) {
+      const error = payload?.error || {};
+      setReviewStatus(`Integration rejected: ${error.code || `HTTP ${status}`} — ${error.message || ''}${error.details ? ` (${error.details})` : ''}`, 'error');
+      return;
+    }
+    const region = elements['review-result'];
+    region.hidden = false;
+    region.innerHTML = `<div class="execution-ok"><strong>Integration complete</strong>
+      <div class="execution-facts">
+        ${factBlock('Aggregate commit', payload.integration?.aggregateCommit || payload.aggregateCommit)}
+        ${factBlock('Applied refs', payload.integration?.appliedCommits)}
+        ${factBlock('Review worktree', payload.integration?.worktreePath)}
+        ${factBlock('Branch', payload.integration?.branch)}
+        ${factBlock('Conflicts', payload.integration?.conflicts)}
+      </div></div>`;
+    setReviewStatus('Integration recorded. Review the aggregate facts, then record a decision.', 'ok');
+    await refresh();
+  } catch (error) {
+    setReviewStatus(`Integration request failed: ${error.message}`, 'error');
+  }
+}
+
+function renderReview(detail) {
+  const panel = elements['review-panel'];
+  if (!detail) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  elements['review-result'].hidden = true;
+  setReviewStatus('');
+  const graph = Boolean(detail.graph);
+  const state = detail.state || detail.status;
+  const reviewable = graph
+    ? ['RUNNING', 'SUCCEEDED', 'APPROVED', 'REVIEW_APPROVED', 'CHANGES_REQUESTED'].includes(state)
+    : ['REVIEWING', 'CHANGES_REQUESTED'].includes(state);
+  const controls = [];
+  controls.push(`<label class="author-toggle review-confirm-row"><input type="checkbox" class="review-confirm"> I understand: integration/review targets Runtime-owned artifacts only; review approval is not release approval; no merge, push, tag, publish, deploy, or release happens here.</label>`);
+  if (graph) {
+    controls.push(`<button class="button" type="button" id="review-integrate">Integrate verified subtasks</button>`);
+  }
+  controls.push(`<div class="review-form">
+    <label>Decision<select class="review-decision">
+      <option value="REVIEW_APPROVED">REVIEW_APPROVED</option>
+      <option value="CHANGES_REQUESTED">CHANGES_REQUESTED</option>
+    </select></label>
+    <label>Feedback<textarea class="review-feedback" rows="3" maxlength="16384" placeholder="Bounded review feedback…"></textarea></label>
+    <label>Evidence (optional JSON object)<textarea class="review-evidence" rows="2" maxlength="65536" placeholder="{ &quot;tests&quot;: &quot;passed&quot; }"></textarea></label>
+    <button class="button" type="button" id="review-submit" ${reviewable ? '' : 'disabled title="Current state is not reviewable; review applies to reviewed/changes-requested Tasks or running/succeeded graphs"'}>Record review decision</button>
+    <span class="agent-muted">state ${escapeHtml(state || 'unknown')}</span>
+  </div>`);
+  elements['review-controls'].innerHTML = controls.join('');
+  const confirm = elements['review-controls'].querySelector('.review-confirm');
+  const integrate = elements['review-controls'].querySelector('#review-integrate');
+  const submit = elements['review-controls'].querySelector('#review-submit');
+  const arm = () => {
+    if (integrate) integrate.disabled = !confirm.checked;
+    if (submit) submit.disabled = !confirm.checked || !reviewable;
+  };
+  confirm.addEventListener('change', arm);
+  arm();
+  integrate?.addEventListener('click', () => {
+    integrate.disabled = true;
+    integrateGraph(detail).finally(() => { if (confirm) confirm.checked = false; arm(); });
+  });
+  submit?.addEventListener('click', () => {
+    submit.disabled = true;
+    submitReview(detail).finally(() => { if (confirm) confirm.checked = false; arm(); });
+  });
+}
+
 function renderGraphDetail(task) {
   const graph = Boolean(task?.graph);
   elements['graph-detail'].hidden = !graph;
@@ -1042,6 +1168,7 @@ function renderTaskDetail(task) {
   if (!task) {
     elements['task-detail'].hidden = true;
     renderExecution(null);
+    renderReview(null);
     return;
   }
   elements['task-detail'].hidden = false;
@@ -1053,6 +1180,7 @@ function renderTaskDetail(task) {
     <span>Updated ${formatDate(task.updatedAt)}</span>
   `;
   renderExecution(task);
+  renderReview(task);
   renderGraphDetail(task);
   renderTimeline(task.timeline);
   elements['detail-agent-flow'].innerHTML = (task.agentFlow || []).map((item, index) => {

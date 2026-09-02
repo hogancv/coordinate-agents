@@ -333,3 +333,15 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .session-control-status.ok { color: var(--green); }
 .session-control-status.error { color: var(--red); }
 .recovery-sep { width: 100%; margin-top: .4rem; color: var(--yellow); font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+
+/* Review & integrate panel */
+.review-panel { margin-bottom: 1.5rem; padding: 1rem; border: 1px solid rgba(140, 169, 255, .3); border-radius: .8rem; background: rgba(140, 169, 255, .05); }
+.review-panel .agents-note { margin-bottom: .8rem; }
+.review-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem; margin-bottom: .4rem; }
+.review-confirm-row { max-width: 64ch; color: var(--text) !important; font-size: .76rem !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; }
+.review-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; width: 100%; margin-top: .4rem; }
+.review-form label { display: flex; flex-direction: column; gap: .3rem; color: var(--muted); font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.review-form select, .review-form textarea { padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .5rem; color: var(--text); background: var(--panel-strong); font: .8rem inherit; }
+.review-form textarea { resize: vertical; }
+.review-form .button:disabled { opacity: .45; cursor: not-allowed; }
+.review-result { margin-top: .5rem; }
