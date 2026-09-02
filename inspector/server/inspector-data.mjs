@@ -4,6 +4,7 @@ import {
   readdirSync,
   realpathSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { basename, join, resolve } from 'node:path';
 import {
   assertSafePath,
@@ -403,6 +404,47 @@ function recordedEvents(root, options = {}) {
   return readRuntimeEvents(root, options).map(inspectorJournalEvent);
 }
 
+// Repository identity facts are derived with read-only Git helpers only. Each
+// invocation stays bounded (short timeout, capped buffers) and spawns no Agent,
+// Session, worktree, or Bus side effect; failures degrade to partial facts so
+// the Workspace overview remains usable outside a fully committed repository.
+function gitFact(root, args) {
+  const result = spawnSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 5_000,
+    maxBuffer: 512 * 1024,
+  });
+  if (result.error || result.status !== 0) return null;
+  return result.stdout.trim();
+}
+
+function repositoryFacts(root) {
+  const headLine = gitFact(root, ['log', '-1', '--format=%h%x1f%s%x1f%cI']);
+  const head = headLine
+    ? (() => {
+      const [shortSha, subject, committedAtRaw] = headLine.split('\x1f');
+      const committedAt = typeof committedAtRaw === 'string' && !Number.isNaN(Date.parse(committedAtRaw))
+        ? committedAtRaw
+        : null;
+      return {
+        short: bounded(shortSha, 64) || null,
+        subject: bounded(subject, 2 * 1024) || null,
+        committedAt,
+      };
+    })()
+    : null;
+  const branch = bounded(gitFact(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']), 256) || null;
+  return {
+    root,
+    name: bounded(basename(root), 256),
+    branch,
+    detached: Boolean(head && !branch),
+    head,
+    remoteUrl: bounded(gitFact(root, ['remote', 'get-url', 'origin']), 2 * 1024) || null,
+  };
+}
+
 function readSessions(root, tasks = readTaskRecords(root)) {
   const bus = busFor(root);
   if (!bus || !existsSync(join(bus, 'sessions'))) return Promise.resolve([]);
@@ -651,6 +693,21 @@ export function createInspectorData(root) {
   const repository = canonicalRoot(root);
   return {
     root: repository,
+    readRepository() {
+      try {
+        return repositoryFacts(repository);
+      } catch (error) {
+        return {
+          root: repository,
+          name: bounded(basename(repository), 256),
+          branch: null,
+          detached: false,
+          head: null,
+          remoteUrl: null,
+          error: bounded(error.message || String(error), 2 * 1024),
+        };
+      }
+    },
     readTasks() {
       return [
         ...readTaskRecords(repository).map(taskSummary),

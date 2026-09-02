@@ -6,6 +6,29 @@ description: A verified first-run lifecycle for Codex App or Codex CLI specifica
 
 # Getting started
 
+## Open the local Web Workspace (read-only)
+
+The **Web Workspace** is the primary local browser entry for observing a
+repository: repository identity, Tasks and Task Graph parents, Agents,
+Sessions, recent Runtime events, and bounded Task/Graph detail. From any
+initialized Git repository with an Agent Bus it starts a loopback-only,
+read-only server — no Codex Plugin, global installation, or remote service:
+
+```console
+$ npx @hogancv/coordinate-agents@latest web --port 3000
+Workspace running:
+
+http://localhost:3000
+```
+
+The Workspace binds exactly one canonical repository root at startup and
+browser requests can never select another root. It is read-only: opening,
+refreshing, selecting Tasks or Task Graphs, and replaying events create no
+process, Session, worktree, Bus message, commit, or state transition. The
+`inspector` command remains available as the compatible read-only UI over the
+same GET contracts. Follow the Plugin or CLI paths below to create, dispatch,
+review, resume, or stop work; later milestones add guarded browser actions.
+
 ## Codex Plugin-first path
 
 The Codex Plugin is the preferred first-use experience. Its Multi-Skill surface
