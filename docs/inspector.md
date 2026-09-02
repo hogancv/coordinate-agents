@@ -71,9 +71,11 @@ The Workspace exposes exactly one additive, guarded action endpoint for later
 controls: `POST /api/action`. It routes an explicit allow-list of structured
 operations to the same shared Runtime services used by CLI and MCP
 (`setupDiscover`, `setupConfigure`, `taskCreate`, `taskDispatch`, `taskStatus`,
-`taskInspect`, `taskGraphStatus`, `taskGraphInspect`, `taskGraphPlan`,
-`taskGraphValidate`, `taskGraphCreate`, `taskGraphRun`, `taskGraphAdvance`,
-`recoverInspect`).
+`taskInspect`, `taskStop`, `taskResume`, `taskGraphStatus`, `taskGraphInspect`,
+`taskGraphPlan`, `taskGraphValidate`, `taskGraphCreate`, `taskGraphRun`,
+`taskGraphAdvance`, `taskGraphStop`, `taskGraphRecover`, `taskGraphResume`,
+`taskGraphCleanup`, `sessionStatus`, `sessionInspect`, `sessionRead`,
+`sessionWrite`, `sessionClose`, `recoverInspect`).
 The gateway never shells out, parses CLI output, proxies MCP, accepts an
 arbitrary operation name, or lets a request choose a different repository root.
 
@@ -133,7 +135,16 @@ canonical bound root path), followed by:
   including each Agent's current Agent Bus state.
 - **Task detail & Task Graph topology** — for ordinary Tasks: sequence-ordered recorded event timeline, role assignments, specification, implementation commit, evidence, review history, and last error. For Task Graphs: an **interactive dependency map** (deterministic layered layout, one focusable node per bounded subtask, dependency arrows from each dependency to its dependent, state legend, keyboard focus/`Escape`, and a selected-node evidence panel with the same bounded authoritative facts as the graph API — Agent/Adapter/executable, Session/worktree/commit, Scope Audit, recovery, cleanup, and last error) above the text topology, frontier decisions, preflight waves, write-intent conflicts, integration facts, and review decisions. Large graphs degrade with a bounded deterministic truncation notice; the map renders no edges and no browser graph model of its own.
 - **Sessions** — Session state, timestamps, linked Tasks, bounded recent output,
-  and recorded Session event history.
+  and recorded Session event history. Active Runtime-owned Sessions show a
+  bounded input control (explicit submit only) and a Close control; arbitrary
+  PIDs, paths, commands, environment data, and unattached processes are always
+  rejected by the Runtime ownership checks. Recovery rows on Task/Graph detail
+  are state-aware and explicit: Stop, Recover, Resume, and Clean up worktrees
+  reuse the existing ownership and recovery semantics, are idempotency- and
+  conflict-aware, and never retry automatically, silently discard verified
+  commits/evidence/user files, or touch remote refs. Cleanup removes only
+  Runtime-owned Sessions/worktrees and reports cleanup failures without hiding
+  the primary failure.
 - **Recent events** — timestamp, sequence, event type, Task, Session, Agent, and
   a bounded summary from the append-only journal.
 - **Author new work** — the authoring panel creates one durable Task or a Task

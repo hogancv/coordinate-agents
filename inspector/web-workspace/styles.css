@@ -324,3 +324,12 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .execution-fact { display: flex; justify-content: space-between; gap: .6rem; color: var(--muted); font-size: .74rem; }
 .execution-fact code { max-width: 70%; color: var(--text); overflow-wrap: anywhere; text-align: right; }
 .execution-detail { margin-top: .35rem; color: var(--muted); font-size: .72rem; overflow-wrap: anywhere; }
+
+/* Session console & recovery controls */
+.session-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .7rem; }
+.session-input-form { display: flex; flex: 1 1 18rem; gap: .45rem; }
+.session-input-text { flex: 1; min-width: 0; padding: .45rem .55rem; border: 1px solid var(--line); border-radius: .5rem; color: var(--text); background: var(--panel-strong); font: .74rem inherit; }
+.session-control-status { display: block; margin-top: .45rem; font-size: .72rem; overflow-wrap: anywhere; }
+.session-control-status.ok { color: var(--green); }
+.session-control-status.error { color: var(--red); }
+.recovery-sep { width: 100%; margin-top: .4rem; color: var(--yellow); font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }

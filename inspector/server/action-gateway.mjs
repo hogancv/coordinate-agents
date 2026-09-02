@@ -149,6 +149,64 @@ const ACTION_DEFINITIONS = Object.freeze({
       sessionWaitMs: { type: 'integer', min: 0, max: 10_000 },
     },
   },
+  taskStop: {
+    operation: 'taskStop',
+    command: 'task.stop',
+    params: { taskId: { type: 'string', required: true, max: 128 } },
+  },
+  taskResume: {
+    operation: 'taskResume',
+    command: 'task.resume',
+    params: { taskId: { type: 'string', required: true, max: 128 } },
+  },
+  taskGraphStop: {
+    operation: 'taskGraphStop',
+    command: 'task.graph-stop',
+    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
+  },
+  taskGraphRecover: {
+    operation: 'taskGraphRecover',
+    command: 'task.graph-recover',
+    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
+  },
+  taskGraphResume: {
+    operation: 'taskGraphResume',
+    command: 'task.graph-resume',
+    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
+  },
+  taskGraphCleanup: {
+    operation: 'taskGraphCleanup',
+    command: 'task.graph-cleanup',
+    params: { taskId: { type: 'string', required: true, max: 128 } },
+  },
+  sessionStatus: {
+    operation: 'sessionStatus',
+    command: 'session.status',
+    params: { sessionId: { type: 'string', required: true, max: 256 } },
+  },
+  sessionInspect: {
+    operation: 'sessionInspect',
+    command: 'session.inspect',
+    params: { sessionId: { type: 'string', required: true, max: 256 } },
+  },
+  sessionRead: {
+    operation: 'sessionRead',
+    command: 'session.read',
+    params: { sessionId: { type: 'string', required: true, max: 256 }, limit: { type: 'integer', min: 1, max: 2000 } },
+  },
+  sessionWrite: {
+    operation: 'sessionWrite',
+    command: 'session.write',
+    params: {
+      sessionId: { type: 'string', required: true, max: 256 },
+      input: { type: 'string', required: true, max: 16 * 1024 },
+    },
+  },
+  sessionClose: {
+    operation: 'sessionClose',
+    command: 'session.close',
+    params: { sessionId: { type: 'string', required: true, max: 256 } },
+  },
   recoverInspect: {
     operation: 'recoverInspect',
     command: 'recover.inspect',

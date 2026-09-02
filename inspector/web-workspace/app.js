@@ -574,6 +574,15 @@ function renderSessions() {
       <div class="session-meta"><span>Created ${formatDate(session.createdAt)}</span><span>Last activity ${formatDate(session.lastActivity)}</span></div>
       <pre class="session-output">${escapeHtml(session.recentOutput || 'No recent output available.')}</pre>
       ${session.taskIds?.length ? `<div class="session-tasks">Tasks: ${session.taskIds.map(escapeHtml).join(', ')}</div>` : ''}
+      ${['starting', 'running', 'idle', 'busy'].includes(session.status) ? `
+      <div class="session-controls">
+        <form class="session-input-form" data-session="${escapeHtml(session.sessionId)}">
+          <input class="session-input-text" maxlength="4096" placeholder="Bounded input to this owned Session…">
+          <button class="button" type="submit">Send input</button>
+        </form>
+        <button class="button ghost session-close-btn" type="button" data-session="${escapeHtml(session.sessionId)}">Close Session</button>
+      </div>` : ''}
+      <span class="session-control-status" data-session="${escapeHtml(session.sessionId)}" aria-live="polite"></span>
       <div class="session-history">
         <span class="history-label">${session.historySource === 'recorded' ? 'Recorded Events' : 'Derived / Legacy History'}</span>
         ${(session.events || []).slice(-8).map(event => `<div><code>${event.sequence ? `#${escapeHtml(event.sequence)}` : '—'}</code><strong>${escapeHtml(event.event)}</strong><time>${formatDate(event.timestamp)}</time></div>`).join('')}
@@ -772,6 +781,81 @@ function closeGraphMap() {
   if (state.graphDetail) renderGraphMap(state.graphDetail);
 }
 
+function recoveryControls(detail) {
+  const graph = Boolean(detail?.graph);
+  const state = detail?.state || detail?.status;
+  const buttons = [];
+  const add = (action, label, taskId, extra = '') => buttons.push(
+    `<button class="button ghost" type="button" data-run-action="${action}" data-label="${escapeHtml(label)}" data-params="${escapeHtml(JSON.stringify({ taskId: taskId || detail.id }))}">${escapeHtml(label)}</button>${extra}`);
+  if (!graph) {
+    if (['IMPLEMENTING', 'WAITING_IMPLEMENTER'].includes(state)) add('taskStop', 'Stop Task', detail.id);
+    if (['ERROR', 'STOPPED'].includes(state)) add('taskResume', 'Resume Task', detail.id);
+  } else {
+    const note = `<span class="agent-muted">state ${escapeHtml(state || 'unknown')}</span>`;
+    if (state === 'RUNNING') add('taskGraphStop', 'Stop graph', detail.id, note);
+    if (['FAILED', 'RECOVERING'].includes(state)) add('taskGraphRecover', 'Recover graph', detail.id, note);
+    if (['FAILED', 'STOPPED', 'BLOCKED', 'RECOVERING'].includes(state)) add('taskGraphResume', 'Resume graph', detail.id, note);
+    if (['STOPPED', 'FAILED', 'SUCCEEDED', 'APPROVED'].includes(state)) add('taskGraphCleanup', 'Clean up worktrees', detail.id, note);
+    if (!buttons.length) return `<span class="agent-muted">${escapeHtml(state || '')} — no automatic recovery action; review the Runtime facts and act explicitly.</span>`;
+  }
+  return buttons.length ? `<span class="recovery-sep">Recovery & ownership</span>${buttons.join(' ')}` : '';
+}
+
+function setSessionControlStatus(sessionId, message, kind = 'info') {
+  const target = elements.sessions.querySelector(`.session-control-status[data-session="${CSS.escape(sessionId)}"]`);
+  if (!target) return;
+  target.textContent = message;
+  target.className = `session-control-status ${kind}`;
+}
+
+async function submitSessionInput(form) {
+  const sessionId = form.dataset.session;
+  const input = form.querySelector('.session-input-text');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  setSessionControlStatus(sessionId, 'Sending bounded input…');
+  try {
+    const { status, payload } = await postAction('sessionWrite', { sessionId, input: text });
+    if (status !== 200 || payload?.ok !== true) {
+      setSessionControlStatus(sessionId, `Input rejected: ${payload?.error?.code || `HTTP ${status}`} — ${payload?.error?.message || ''}`, 'error');
+      return;
+    }
+    setSessionControlStatus(sessionId, 'Input accepted.', 'ok');
+    await refresh();
+  } catch (error) {
+    setSessionControlStatus(sessionId, `Input failed: ${error.message}`, 'error');
+  }
+}
+
+async function closeOwnedSession(sessionId) {
+  setSessionControlStatus(sessionId, 'Closing Session…');
+  try {
+    const { status, payload } = await postAction('sessionClose', { sessionId });
+    if (status !== 200 || payload?.ok !== true) {
+      setSessionControlStatus(sessionId, `Close rejected: ${payload?.error?.code || `HTTP ${status}`} — ${payload?.error?.message || ''}`, 'error');
+      return;
+    }
+    setSessionControlStatus(sessionId, 'Session closed.', 'ok');
+    await refresh();
+  } catch (error) {
+    setSessionControlStatus(sessionId, `Close failed: ${error.message}`, 'error');
+  }
+}
+
+function bindSessionActions(container) {
+  if (!container) return;
+  container.querySelectorAll('.session-input-form').forEach(form => {
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      submitSessionInput(form);
+    });
+  });
+  container.querySelectorAll('.session-close-btn').forEach(button => {
+    button.addEventListener('click', () => closeOwnedSession(button.dataset.session));
+  });
+}
+
 function setExecutionStatus(message, kind = 'info') {
   const element = elements['execution-status'];
   element.textContent = message;
@@ -872,7 +956,7 @@ function renderExecution(detail) {
       <label class="execution-field">maxWaves (1–32)<input type="number" class="execution-max-waves" min="1" max="32" value="1"></label>
       <button class="button" type="button" data-run-action="taskGraphAdvance" data-label="Advance ${escapeHtml(id)}">Advance graph</button>`;
   }
-  elements['execution-controls'].innerHTML = controls;
+  elements['execution-controls'].innerHTML = controls + recoveryControls(detail);
   const waitInput = elements['execution-controls'].querySelector('.execution-session-wait');
   const wavesInput = elements['execution-controls'].querySelector('.execution-max-waves');
   if (waitInput) {
@@ -1035,6 +1119,7 @@ async function refresh() {
     renderConfiguredAgents(state.agents);
     refreshAgentSelects();
     renderSessions();
+    bindSessionActions(elements.sessions);
     renderEvents();
     if (state.selectedTask) {
       try { renderTaskDetail(await fetchJson(`/api/tasks/${encodeURIComponent(state.selectedTask)}`)); } catch { /* The list remains useful if a task is removed during refresh. */ }
