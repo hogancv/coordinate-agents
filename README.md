@@ -151,23 +151,44 @@ project command > user command > adapter default precedence.
 
 ## Local Inspector
 
-Start the read-only local Inspector from a repository with an initialized Agent Bus:
+The **Web Workspace** is the primary local browser entry. From any initialized
+Git repository with an Agent Bus it starts a loopback-only, read-only project
+overview — no Codex Plugin, global installation, or remote service required:
 
 ```sh
-npx @hogancv/coordinate-agents@latest inspector --port 3000
+npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-It presents task, session, and Event Journal timelines without making the browser the source of truth. Learn more in [Inspector](./docs/inspector.md) and [Event Journal](./docs/event-journal.md).
+The Workspace binds exactly one Git repository and shows its identity (branch,
+HEAD, remote), Tasks and Task Graph parents, Agents, Sessions, recent Runtime
+events, and bounded Task/Graph detail. The `inspector` command stays available
+as the compatible read-only UI over the same GET contracts. The browser is
+never the source of truth. Learn more in
+[Inspector & Web Workspace](./docs/inspector.md) and
+[Event Journal](./docs/event-journal.md).
 
 ## Standalone npm Runtime
 
-The compatibility package exposes the installer, doctor, quickstart, task, agent, session, MCP, and Inspector commands:
+The compatibility package exposes the installer, doctor, quickstart, task, agent, session, MCP, Inspector, and web commands:
 
 ```sh
 npx @hogancv/coordinate-agents@latest --help
 ```
 
 Use this path for legacy standalone Skill installation, external automation, or protocol debugging. The full command workflows are maintained in [Getting Started](./docs/getting-started.md) and [MCP integration](./docs/mcp.md).
+
+## Local Development
+
+For fast daily regressions run the focused core suite (~20 seconds), which
+covers the CLI dispatcher, Web Workspace, Inspector, documentation, repository
+layout, and shared Runtime contracts:
+
+```sh
+npm run test:core
+```
+
+Run the full `npm test` suite (several minutes, including Task Graph, Session,
+Plugin, and MCP integration guards) before proposing a release.
 
 ## Documentation
 

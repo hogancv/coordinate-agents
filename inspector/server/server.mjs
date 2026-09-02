@@ -2,17 +2,23 @@
 
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInspectorData } from './inspector-data.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 
-const webRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
+const inspectorWebRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
+const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
 const STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
 ]);
+
+function webAssetsFor(ui) {
+  return ui === 'workspace' ? workspaceWebRoot : inspectorWebRoot;
+}
 
 function json(response, status, payload) {
   const body = `${JSON.stringify(payload)}\n`;
@@ -24,10 +30,10 @@ function json(response, status, payload) {
   response.end(body);
 }
 
-function asset(response, pathname) {
+function asset(response, pathname, assetsRoot) {
   const entry = STATIC_FILES.get(pathname) || STATIC_FILES.get('/index.html');
   try {
-    const body = readFileSync(resolve(webRoot, entry.file));
+    const body = readFileSync(resolve(assetsRoot, entry.file));
     response.writeHead(200, {
       'Cache-Control': 'no-cache',
       'Content-Type': entry.type,
@@ -35,7 +41,7 @@ function asset(response, pathname) {
     });
     response.end(body);
   } catch {
-    json(response, 500, { error: 'Inspector web assets are unavailable.' });
+    json(response, 500, { error: 'Workspace web assets are unavailable.' });
   }
 }
 
@@ -111,7 +117,8 @@ function apiError(response, error) {
   });
 }
 
-export function createInspectorServer({ root, data = createInspectorData(root) } = {}) {
+export function createInspectorServer({ root, data = createInspectorData(root), ui = 'inspector' } = {}) {
+  const assetsRoot = webAssetsFor(ui);
   return createServer(async (request, response) => {
     if (request.method !== 'GET') {
       response.setHeader('Allow', 'GET');
@@ -123,7 +130,7 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
     const pathname = url.pathname;
     if (!pathname.startsWith('/api/')) {
       if (pathname === '/' || STATIC_FILES.has(pathname)) {
-        asset(response, pathname);
+        asset(response, pathname, assetsRoot);
         return;
       }
       json(response, 404, { error: 'Inspector page not found.' });
@@ -131,6 +138,10 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
     }
 
     try {
+      if (pathname === '/api/repository' && typeof data.readRepository === 'function') {
+        json(response, 200, data.readRepository());
+        return;
+      }
       if (pathname === '/api/tasks') {
         json(response, 200, data.readTasks());
         return;
@@ -172,13 +183,13 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
   });
 }
 
-export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
+export function startInspector({ root, host = '127.0.0.1', port = 3000, ui = 'inspector' } = {}) {
   if (host !== '127.0.0.1') throw new Error('Inspector must listen on localhost only.');
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new Error(`Inspector port must be an integer between 0 and 65535: ${port}`);
   }
   const data = createInspectorData(root);
-  const server = createInspectorServer({ root: data.root, data });
+  const server = createInspectorServer({ root: data.root, data, ui });
   return new Promise((resolvePromise, reject) => {
     let ipv6Loopback = null;
     const onError = error => {
@@ -196,7 +207,7 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
       // optional IPv6 loopback alias on the same port so the localhost URL is
       // reachable without exposing the Inspector beyond loopback interfaces.
       if (host === '127.0.0.1') {
-        const candidate = createInspectorServer({ root: data.root, data });
+        const candidate = createInspectorServer({ root: data.root, data, ui });
         try {
           await new Promise((resolveAlias, rejectAlias) => {
             const onAliasError = error => {
@@ -262,6 +273,30 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
   });
 }
 
+// The Web Workspace is the primary local product entry (#45). It reuses the
+// same read-only server, data adapter, loopback guards, and bounded content as
+// the Inspector compatibility path and only selects the Workspace web assets.
+// Unlike the compatibility Inspector, the Workspace binds exactly one validated
+// Git repository root: unsafe, symlinked, or non-Git roots fail closed before a
+// listener is created.
+export function startWorkspace(options = {}) {
+  const requested = resolve(options.root || process.cwd());
+  const result = spawnSync('git', ['-C', requested, 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 5_000,
+    maxBuffer: 512 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Workspace must start inside an initialized Git repository: ${requested}`);
+  }
+  return startInspector({
+    ...options,
+    root: resolve(result.stdout.trim()),
+    ui: 'workspace',
+  });
+}
+
 function isInvokedDirectly() {
   if (!process.argv[1]) return false;
   return resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
@@ -271,10 +306,14 @@ if (isInvokedDirectly()) {
   const args = process.argv.slice(2);
   const rootIndex = args.indexOf('--root');
   const portIndex = args.indexOf('--port');
+  const uiIndex = args.indexOf('--ui');
   const root = rootIndex >= 0 ? args[rootIndex + 1] : process.cwd();
   const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 3000;
+  const ui = uiIndex >= 0 ? args[uiIndex + 1] : 'inspector';
   try {
-    const started = await startInspector({ root, port });
+    const started = ui === 'workspace'
+      ? await startWorkspace({ root, port })
+      : await startInspector({ root, port });
     console.log(`Inspector running:\n\n${started.url}`);
   } catch (error) {
     console.error(error.message || String(error));

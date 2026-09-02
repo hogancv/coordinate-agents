@@ -131,23 +131,41 @@ Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼
 
 ## 本地 Inspector
 
-在已初始化 Agent Bus 的仓库中启动只读本地 Inspector：
+**Web Workspace** 是主要的本地浏览器入口。在任何已初始化 Agent Bus 的 Git
+仓库中即可启动一个仅回环、只读的项目总览 —— 无需 Codex Plugin、全局安装或
+远程服务：
 
 ```sh
-npx @hogancv/coordinate-agents@latest inspector --port 3000
+npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-它展示任务、Session 与 Event Journal 时间线，但浏览器页面不是事实源。详见 [Inspector](./docs/inspector.md)与 [Event Journal](./docs/event-journal.md)。
+Workspace 在启动时绑定唯一一个 Git 仓库，展示其身份（分支、HEAD、远程）、
+普通 Task 与 Task Graph parent、Agents、Sessions、近期 Runtime 事件以及有界
+的 Task/Graph 详情。`inspector` 命令继续作为同一套 GET 契约上的兼容只读
+界面保留。浏览器页面始终不是事实源。详见 [Inspector 与 Web Workspace](./docs/inspector.md)
+与 [Event Journal](./docs/event-journal.md)。
 
 ## Standalone npm Runtime
 
-兼容性 npm 包提供 installer、doctor、quickstart、task、agent、session、MCP 和 Inspector 命令：
+兼容性 npm 包提供 installer、doctor、quickstart、task、agent、session、MCP、Inspector 和 web 命令：
 
 ```sh
 npx @hogancv/coordinate-agents@latest --help
 ```
 
 该路径适用于旧版 standalone Skill 安装、外部自动化或协议调试。完整命令工作流见[快速入门](./docs/getting-started.md)与 [MCP 集成](./docs/mcp.md)。
+
+## 本地开发
+
+日常快速回归请运行精简核心测试（约 20 秒），覆盖 CLI 分发、Web Workspace、
+Inspector、文档、仓库布局与共享 Runtime 契约：
+
+```sh
+npm run test:core
+```
+
+发布前再运行完整 `npm test`（数分钟，包含 Task Graph、Session、Plugin 与 MCP
+集成守卫）。
 
 ## 文档导航
 

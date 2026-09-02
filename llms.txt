@@ -29,7 +29,7 @@ capabilities. Discovery does not launch an adapter; configured external Agents
 contribute only their declared detection facts, while exact Agent/Adapter/
 executable identity and project > user > adapter-default precedence remain
 separate through Task and persistent-Session execution.
-Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
+Web Workspace and Local Inspector (primary read-only local browser entry, plus the compatible Inspector UI): https://hogancv.github.io/coordinate-agents/inspector.html
 Durable Runtime Event Journal: https://hogancv.github.io/coordinate-agents/event-journal.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
 Task Graph v1 contract: https://hogancv.github.io/coordinate-agents/task-graph-v1.html
