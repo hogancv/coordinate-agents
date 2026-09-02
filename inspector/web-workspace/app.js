@@ -18,6 +18,8 @@ const state = {
   events: [],
   repository: null,
   selectedTask: null,
+  selectedSubtask: null,
+  graphDetail: null,
 };
 
 const elements = Object.fromEntries([
@@ -25,7 +27,8 @@ const elements = Object.fromEntries([
   'timeline', 'detail-agent-flow', 'evidence', 'spec', 'sessions', 'session-count',
   'events', 'refresh-button', 'close-detail', 'graph-detail', 'graph-topology',
   'graph-frontier', 'graph-conflicts', 'graph-integration', 'repository',
-  'repo-name', 'repo-branch', 'repo-facts',
+  'repo-name', 'repo-branch', 'repo-facts', 'graph-map-region', 'graph-map',
+  'graph-node-detail', 'graph-map-note', 'graph-legend',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -203,13 +206,160 @@ function factBlock(label, value) {
   return `<div class="graph-fact"><span>${escapeHtml(label)}</span>${rendered}</div>`;
 }
 
+const GRAPH_MAP_MAX_NODES = 120;
+const GRAPH_MAP_STATES = ['READY', 'WAITING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'BLOCKED', 'STOPPED'];
+const GRAPH_MAP_NODE_W = 176;
+const GRAPH_MAP_NODE_H = 58;
+const GRAPH_MAP_GAP_X = 64;
+const GRAPH_MAP_GAP_Y = 16;
+const GRAPH_MAP_PAD = 12;
+
+function renderGraphLegend() {
+  elements['graph-legend'].innerHTML = GRAPH_MAP_STATES
+    .map(state => `<span class="legend-item"><i class="legend-dot ${statusClass(state)}"></i>${escapeHtml(statusLabel(state))}</span>`)
+    .join('');
+}
+
+function graphNodeLevels(subtasks, dependencies) {
+  const levels = new Map(subtasks.map(item => [item.id, 0]));
+  const edges = (dependencies || []).filter(edge => levels.has(edge.from) && levels.has(edge.to));
+  for (let pass = 0; pass <= subtasks.length; pass += 1) {
+    let changed = false;
+    for (const edge of edges) {
+      const candidate = levels.get(edge.from) + 1;
+      if (candidate > levels.get(edge.to)) {
+        levels.set(edge.to, candidate);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return { levels, edges };
+}
+
+function renderGraphNodeDetail(detail, subtaskId) {
+  const subtask = (detail.subtasks || []).find(item => item.id === subtaskId);
+  if (!subtask) {
+    elements['graph-node-detail'].innerHTML = '';
+    return;
+  }
+  const agent = subtask.agent || {};
+  const blocks = [
+    `<div class="graph-node-detail-heading"><span class="eyebrow">${escapeHtml(subtask.id)}</span>
+       <span class="status-pill ${statusClass(subtask.state)}">${escapeHtml(statusLabel(subtask.state))}</span>
+       <button class="button ghost graph-node-close" type="button" aria-label="Close subtask detail">Close</button></div>`,
+    `<p class="graph-node-detail-title">${escapeHtml(subtask.title || subtask.id)}</p>`,
+    factBlock('Specification', subtask.spec),
+    `<div class="graph-dependencies">Depends on: ${subtask.dependsOn?.length ? subtask.dependsOn.map(item => `<code>${escapeHtml(item)}</code>`).join(' ') : '<span>none</span>'}</div>`,
+    `<div class="graph-node-meta"><span>Agent <strong>${escapeHtml(subtask.implementer || '—')}</strong></span><span>Adapter <strong>${escapeHtml(agent.adapter || '—')}</strong></span><span>Registered <strong>${agent.registered === true ? 'yes' : 'no'}</strong></span><span>Session <code>${escapeHtml(shortId(subtask.sessionId) || '—')}</code></span></div>`,
+    factBlock('Executable', subtask.executable),
+    factBlock('Worktree / branch / commit', { ...(subtask.worktree || {}), implementationCommit: subtask.implementationCommit }),
+    factBlock('Evidence', subtask.evidence),
+    factBlock('Scope audit', subtask.scopeAudit),
+    factBlock('Recovery', subtask.recovery),
+    factBlock('Cleanup', subtask.cleanup),
+    factBlock('Last error', subtask.lastError),
+  ];
+  elements['graph-node-detail'].innerHTML = blocks.join('');
+  elements['graph-node-detail'].querySelector('.graph-node-close')?.addEventListener('click', () => {
+    state.selectedSubtask = null;
+    renderGraphMap(detail);
+  });
+}
+
+function renderGraphMap(detail) {
+  state.graphDetail = detail;
+  const subtasks = Array.isArray(detail?.subtasks) ? detail.subtasks : [];
+  elements['graph-map-note'].textContent = '';
+  if (!subtasks.length) {
+    elements['graph-map'].innerHTML = '<div class="empty-state error-state">Task Graph record has no readable subtasks.</div>';
+    elements['graph-node-detail'].innerHTML = '';
+    return;
+  }
+  const { levels, edges } = graphNodeLevels(subtasks, detail.dependencies || []);
+  const truncated = subtasks.length > GRAPH_MAP_MAX_NODES;
+  const visible = truncated ? subtasks.slice(0, GRAPH_MAP_MAX_NODES) : subtasks;
+  if (truncated) {
+    elements['graph-map-note'].textContent = `Large graph: rendering the first ${GRAPH_MAP_MAX_NODES} of ${subtasks.length} subtasks in deterministic order; the complete bounded topology remains below.`;
+  }
+
+  const maxLevel = Math.max(0, ...visible.map(item => levels.get(item.id) || 0));
+  const columns = [];
+  for (let level = 0; level <= maxLevel; level += 1) {
+    columns.push(visible.filter(item => (levels.get(item.id) || 0) === level));
+  }
+  const rowByLevel = new Map(columns.map((column, level) => [level, new Map(column.map((item, row) => [item.id, row]))]));
+  const totalWidth = GRAPH_MAP_PAD * 2 + (maxLevel + 1) * GRAPH_MAP_NODE_W + maxLevel * GRAPH_MAP_GAP_X;
+  const maxRows = Math.max(1, ...columns.map(column => column.length));
+  const totalHeight = GRAPH_MAP_PAD * 2 + maxRows * GRAPH_MAP_NODE_H + (maxRows - 1) * GRAPH_MAP_GAP_Y;
+
+  const nodeRect = new Map();
+  const nodes = visible.map(item => {
+    const level = levels.get(item.id) || 0;
+    const row = rowByLevel.get(level).get(item.id);
+    const x = GRAPH_MAP_PAD + level * (GRAPH_MAP_NODE_W + GRAPH_MAP_GAP_X);
+    const y = GRAPH_MAP_PAD + row * (GRAPH_MAP_NODE_H + GRAPH_MAP_GAP_Y);
+    nodeRect.set(item.id, { x, y });
+    const selected = state.selectedSubtask === item.id;
+    const edgeLabels = [];
+    return `<button type="button" class="graph-map-node ${statusClass(item.state)}${selected ? ' selected' : ''}"
+      data-subtask="${escapeHtml(item.id)}" style="left:${x}px;top:${y}px;width:${GRAPH_MAP_NODE_W}px;height:${GRAPH_MAP_NODE_H}px"
+      aria-pressed="${selected}" aria-label="Subtask ${escapeHtml(item.id)}: ${escapeHtml(item.title || item.id)} (${escapeHtml(statusLabel(item.state))})">
+      <span class="graph-map-node-title">${escapeHtml(item.title || item.id)}</span>
+      <span class="graph-map-node-meta"><code>${escapeHtml(item.id)}</code><i class="state-dot ${statusClass(item.state)}"></i>${escapeHtml(statusLabel(item.state))}</span>
+    </button>`;
+  }).join('');
+
+  const arrows = edges.map(edge => {
+    const from = nodeRect.get(edge.from);
+    const to = nodeRect.get(edge.to);
+    if (!from || !to) return '';
+    const x1 = from.x + GRAPH_MAP_NODE_W;
+    const y1 = from.y + GRAPH_MAP_NODE_H / 2;
+    const x2 = to.x;
+    const y2 = to.y + GRAPH_MAP_NODE_H / 2;
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="graph-map-edge" marker-end="url(#graph-map-arrow)"></line>`;
+  }).join('');
+  const edgeLayer = visible.length > 1 ? `
+    <svg class="graph-map-edges" width="${totalWidth}" height="${totalHeight}" aria-hidden="true">
+      <defs><marker id="graph-map-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+      ${arrows}
+    </svg>` : '';
+
+  elements['graph-map'].innerHTML = `<div class="graph-map-canvas" style="width:${totalWidth}px;height:${totalHeight}px">${edgeLayer}${nodes}</div>`;
+  elements['graph-map'].querySelectorAll('[data-subtask]').forEach(button => {
+    button.addEventListener('click', () => {
+      state.selectedSubtask = button.dataset.subtask;
+      renderGraphMap(detail);
+      renderGraphNodeDetail(detail, state.selectedSubtask);
+    });
+  });
+  if (state.selectedSubtask && subtasks.some(item => item.id === state.selectedSubtask)) {
+    renderGraphNodeDetail(detail, state.selectedSubtask);
+  } else {
+    elements['graph-node-detail'].innerHTML = '<div class="empty-state">Select a map node to inspect its bounded Runtime evidence.</div>';
+  }
+  elements['graph-map-region'].hidden = false;
+}
+
+function closeGraphMap() {
+  state.selectedSubtask = null;
+  if (state.graphDetail) renderGraphMap(state.graphDetail);
+}
+
 function renderGraphDetail(task) {
   const graph = Boolean(task?.graph);
   elements['graph-detail'].hidden = !graph;
   if (!graph) {
-    for (const id of ['graph-topology', 'graph-frontier', 'graph-conflicts', 'graph-integration']) elements[id].innerHTML = '';
+    for (const id of ['graph-topology', 'graph-frontier', 'graph-conflicts', 'graph-integration', 'graph-map', 'graph-node-detail']) elements[id].innerHTML = '';
+    elements['graph-map-note'].textContent = '';
+    elements['graph-map-region'].hidden = true;
+    state.selectedSubtask = null;
     return;
   }
+  elements['graph-map-region'].hidden = false;
+  renderGraphLegend();
+  renderGraphMap(task);
   const dependencies = task.dependencies || [];
   elements['graph-topology'].innerHTML = (task.subtasks || []).map(subtask => `
     <article class="graph-node">
@@ -294,6 +444,8 @@ function renderTaskDetail(task) {
 async function selectTask(id) {
   try {
     state.selectedTask = id;
+    state.selectedSubtask = null;
+    state.graphDetail = null;
     window.location.hash = encodeURIComponent(id);
     renderTasks();
     const task = await fetchJson(`/api/tasks/${encodeURIComponent(id)}`);
@@ -306,6 +458,8 @@ async function selectTask(id) {
 
 function closeDetail() {
   state.selectedTask = null;
+  state.selectedSubtask = null;
+  state.graphDetail = null;
   history.replaceState(null, '', window.location.pathname);
   renderTasks();
   renderTaskDetail(null);
@@ -343,6 +497,9 @@ async function refresh() {
 
 elements['refresh-button'].addEventListener('click', refresh);
 elements['close-detail'].addEventListener('click', closeDetail);
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeGraphMap();
+});
 const initialTask = decodeURIComponent(window.location.hash.slice(1));
 if (initialTask) state.selectedTask = initialTask;
 refresh();

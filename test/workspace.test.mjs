@@ -260,6 +260,44 @@ test('Web Workspace fails closed for non-Git, missing, and uncommitted-unsafe en
   }
 });
 
+test('Web Workspace ships the interactive Task Graph map over authoritative graph facts (#47)', async () => {
+  const repositoryRoot = graphFixture(taskFixture(repository()));
+  const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+  try {
+    const page = await (await fetch(`${started.url}/`)).text();
+    assert.match(page, /id="graph-map-region"/);
+    assert.match(page, /id="graph-map"/);
+    assert.match(page, /id="graph-map-note"/);
+    assert.match(page, /id="graph-legend"/);
+    assert.match(page, /id="graph-node-detail"/);
+    assert.match(page, /Interactive Task Graph dependency map/);
+
+    const js = await (await fetch(`${started.url}/app.js`)).text();
+    for (const expected of ['renderGraphMap', 'graphNodeLevels', 'renderGraphNodeDetail', 'renderGraphLegend',
+      'GRAPH_MAP_MAX_NODES', 'data-subtask', 'graph-map-edge', 'graph-map-node']) {
+      assert.ok(js.includes(expected), `Workspace app.js must expose graph map support: ${expected}`);
+    }
+
+    const css = await (await fetch(`${started.url}/styles.css`)).text();
+    for (const expected of ['.graph-map-region', '.graph-map-canvas', '.graph-map-node', '.graph-map-edge', '.graph-node-detail', '.graph-legend']) {
+      assert.ok(css.includes(expected), `Workspace styles.css must style graph map elements: ${expected}`);
+    }
+
+    // The map consumes the bounded authoritative graph detail API; facts are
+    // not invented in the browser.
+    const detail = await (await fetch(`${started.url}/api/graphs/task-workspace-graph`)).json();
+    assert.equal(detail.graph, true);
+    assert.ok(detail.subtasks.length >= 2);
+    for (const subtask of detail.subtasks) {
+      assert.ok(typeof subtask.implementer === 'string');
+      assert.ok(subtask.agent && typeof subtask.agent.adapter === 'string');
+    }
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
 test('Workspace metadata ships in the package payload, CLI help, and web assets directory', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(packageJson.files.includes('inspector'));

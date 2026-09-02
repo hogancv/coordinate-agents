@@ -201,3 +201,37 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .repo-fact-wide { grid-column: 1 / -1; }
 .repo-fact-wide code { white-space: pre-wrap; }
 
+
+/* Interactive Task Graph map */
+.graph-map-region { margin-bottom: 2rem; }
+.graph-map-region .section-heading { align-items: flex-start; flex-wrap: wrap; }
+.graph-map-region .section-heading h3 { margin-bottom: 0; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: .45rem .8rem; }
+.legend-item { display: inline-flex; align-items: center; gap: .35rem; color: var(--muted); font-size: .66rem; text-transform: uppercase; letter-spacing: .04em; }
+.legend-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--muted); }
+.legend-dot.ready, .legend-dot.waiting { background: var(--accent); }
+.legend-dot.running, .legend-dot.busy { background: var(--yellow); }
+.legend-dot.succeeded, .legend-dot.approved { background: var(--green); }
+.legend-dot.failed, .legend-dot.blocked, .legend-dot.stopped { background: var(--red); }
+.graph-map { margin-top: .9rem; overflow: auto; border: 1px solid var(--line); border-radius: .75rem; background: rgba(0, 0, 0, .18); }
+.graph-map-canvas { position: relative; margin: 0 auto; }
+.graph-map-edges { position: absolute; inset: 0; pointer-events: none; }
+.graph-map-edge { stroke: rgba(160, 180, 230, .5); stroke-width: 1.5px; }
+.graph-map-edges marker path { fill: rgba(160, 180, 230, .6); }
+.graph-map-node { position: absolute; display: flex; flex-direction: column; justify-content: space-between; gap: .3rem; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: .6rem; color: var(--text); background: var(--panel-strong); text-align: left; cursor: pointer; box-shadow: 0 .3rem .9rem rgba(0, 0, 0, .25); transition: border-color .15s, transform .15s, background .15s; }
+.graph-map-node:hover, .graph-map-node:focus-visible { border-color: var(--accent); outline: 2px solid rgba(140, 169, 255, .5); transform: translateY(-1px); }
+.graph-map-node.selected { border-color: var(--accent-strong); background: rgba(97, 124, 255, .22); }
+.graph-map-node.succeeded { border-left: 3px solid var(--green); }
+.graph-map-node.failed, .graph-map-node.blocked, .graph-map-node.stopped { border-left: 3px solid var(--red); }
+.graph-map-node.running { border-left: 3px solid var(--yellow); }
+.graph-map-node-title { display: -webkit-box; overflow: hidden; font-size: .78rem; font-weight: 600; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.graph-map-node-meta { display: flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .62rem; }
+.graph-map-node-meta code { max-width: 8rem; overflow: hidden; color: var(--muted); font: .6rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.graph-map-node-meta .state-dot { width: .45rem; height: .45rem; margin-left: auto; }
+.graph-node-detail { margin-top: .9rem; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(255, 255, 255, .025); }
+.graph-node-detail-heading { display: flex; align-items: center; gap: .7rem; margin-bottom: .6rem; }
+.graph-node-detail-heading .graph-node-close { margin-left: auto; padding: .35rem .6rem; font-size: .72rem; }
+.graph-node-detail-title { margin: 0 0 .8rem; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.graph-node-detail .graph-dependencies { margin-bottom: .7rem; }
+.graph-node-detail .graph-node-meta { margin-bottom: .7rem; }
+.graph-node-detail .graph-facts { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
