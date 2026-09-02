@@ -6,6 +6,11 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInspectorData } from './inspector-data.mjs';
+import {
+  createActionGateway,
+  createWorkspaceCapability,
+  CAPABILITY_PLACEHOLDER,
+} from './action-gateway.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 
 const inspectorWebRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
@@ -30,10 +35,13 @@ function json(response, status, payload) {
   response.end(body);
 }
 
-function asset(response, pathname, assetsRoot) {
+function asset(response, pathname, assetsRoot, capability = null) {
   const entry = STATIC_FILES.get(pathname) || STATIC_FILES.get('/index.html');
   try {
-    const body = readFileSync(resolve(assetsRoot, entry.file));
+    let body = readFileSync(resolve(assetsRoot, entry.file));
+    if (capability && entry.file === 'index.html') {
+      body = Buffer.from(body.toString('utf8').replaceAll(CAPABILITY_PLACEHOLDER, capability), 'utf8');
+    }
     response.writeHead(200, {
       'Cache-Control': 'no-cache',
       'Content-Type': entry.type,
@@ -117,10 +125,23 @@ function apiError(response, error) {
   });
 }
 
-export function createInspectorServer({ root, data = createInspectorData(root), ui = 'inspector' } = {}) {
+export function createInspectorServer({
+  root,
+  data = createInspectorData(root),
+  ui = 'inspector',
+  capability = null,
+  gateway = null,
+} = {}) {
   const assetsRoot = webAssetsFor(ui);
   return createServer(async (request, response) => {
     if (request.method !== 'GET') {
+      // The Workspace action gateway is the only non-GET surface; the
+      // compatibility Inspector path remains strictly GET-only.
+      if (gateway) {
+        const actionUrl = new URL(request.url || '/', 'http://localhost');
+        await gateway.handleAction(request, response, actionUrl.pathname);
+        return;
+      }
       response.setHeader('Allow', 'GET');
       json(response, 405, { error: 'Inspector is read-only; only GET is supported.' });
       return;
@@ -130,7 +151,7 @@ export function createInspectorServer({ root, data = createInspectorData(root), 
     const pathname = url.pathname;
     if (!pathname.startsWith('/api/')) {
       if (pathname === '/' || STATIC_FILES.has(pathname)) {
-        asset(response, pathname, assetsRoot);
+        asset(response, pathname, assetsRoot, capability);
         return;
       }
       json(response, 404, { error: 'Inspector page not found.' });
@@ -183,13 +204,20 @@ export function createInspectorServer({ root, data = createInspectorData(root), 
   });
 }
 
-export function startInspector({ root, host = '127.0.0.1', port = 3000, ui = 'inspector' } = {}) {
+export function startInspector({
+  root,
+  host = '127.0.0.1',
+  port = 3000,
+  ui = 'inspector',
+  capability = null,
+  gateway = null,
+} = {}) {
   if (host !== '127.0.0.1') throw new Error('Inspector must listen on localhost only.');
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new Error(`Inspector port must be an integer between 0 and 65535: ${port}`);
   }
   const data = createInspectorData(root);
-  const server = createInspectorServer({ root: data.root, data, ui });
+  const server = createInspectorServer({ root: data.root, data, ui, capability, gateway });
   return new Promise((resolvePromise, reject) => {
     let ipv6Loopback = null;
     const onError = error => {
@@ -207,7 +235,7 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000, ui = 'in
       // optional IPv6 loopback alias on the same port so the localhost URL is
       // reachable without exposing the Inspector beyond loopback interfaces.
       if (host === '127.0.0.1') {
-        const candidate = createInspectorServer({ root: data.root, data, ui });
+        const candidate = createInspectorServer({ root: data.root, data, ui, capability, gateway });
         try {
           await new Promise((resolveAlias, rejectAlias) => {
             const onAliasError = error => {
@@ -265,6 +293,8 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000, ui = 'in
         host,
         port: boundPort,
         url: `http://localhost:${boundPort}`,
+        capability: capability || null,
+        actionEndpoint: gateway ? '/api/action' : null,
       });
     };
     server.once('error', onError);
@@ -278,7 +308,8 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000, ui = 'in
 // the Inspector compatibility path and only selects the Workspace web assets.
 // Unlike the compatibility Inspector, the Workspace binds exactly one validated
 // Git repository root: unsafe, symlinked, or non-Git roots fail closed before a
-// listener is created.
+// listener is created. It also mounts the guarded browser-to-Runtime action
+// gateway (#46) with a server-issued per-launch capability.
 export function startWorkspace(options = {}) {
   const requested = resolve(options.root || process.cwd());
   const result = spawnSync('git', ['-C', requested, 'rev-parse', '--show-toplevel'], {
@@ -290,10 +321,19 @@ export function startWorkspace(options = {}) {
   if (result.error || result.status !== 0) {
     throw new Error(`Workspace must start inside an initialized Git repository: ${requested}`);
   }
+  const canonicalRoot = resolve(result.stdout.trim());
+  const capability = options.capability || createWorkspaceCapability();
+  const gateway = options.gateway || createActionGateway({
+    root: canonicalRoot,
+    capability,
+    maxBodyBytes: options.maxBodyBytes,
+  });
   return startInspector({
     ...options,
-    root: resolve(result.stdout.trim()),
+    root: canonicalRoot,
     ui: 'workspace',
+    capability,
+    gateway,
   });
 }
 
@@ -314,7 +354,7 @@ if (isInvokedDirectly()) {
     const started = ui === 'workspace'
       ? await startWorkspace({ root, port })
       : await startInspector({ root, port });
-    console.log(`Inspector running:\n\n${started.url}`);
+    console.log(`${ui === 'workspace' ? 'Workspace' : 'Inspector'} running:\n\n${started.url}`);
   } catch (error) {
     console.error(error.message || String(error));
     process.exitCode = 1;

@@ -20,6 +20,28 @@ const state = {
   selectedTask: null,
 };
 
+// Server-issued per-launch capability for guarded browser actions (#46). The
+// read-only surfaces never use it; later control panels attach it to POST
+// /api/action requests as x-coordinate-agents-capability.
+const capabilityMeta = document.querySelector('meta[name="coordinate-agents-capability"]');
+const workspaceCapability = capabilityMeta?.content && capabilityMeta.content !== '__COORDINATE_AGENTS_CAPABILITY__'
+  ? capabilityMeta.content
+  : null;
+
+async function postAction(action, params, { correlationId = null } = {}) {
+  const response = await fetch('/api/action', {
+    method: 'POST',
+    cache: 'no-store',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(workspaceCapability ? { 'x-coordinate-agents-capability': workspaceCapability } : {}),
+      ...(correlationId ? { 'x-correlation-id': correlationId } : {}),
+    },
+    body: JSON.stringify({ action, params, correlationId }),
+  });
+  return { status: response.status, payload: await response.json() };
+}
+
 const elements = Object.fromEntries([
   'tasks', 'task-count', 'agent-flow', 'task-detail', 'detail-title', 'detail-summary',
   'timeline', 'detail-agent-flow', 'evidence', 'spec', 'sessions', 'session-count',
