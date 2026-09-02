@@ -161,7 +161,7 @@ function parseChildJson(result, label) {
 }
 
 function isolatedEnvironment(home, extra = {}) {
-  return {
+  const env = {
     ...process.env,
     COORDINATE_AGENTS_HOME: home,
     HOME: home,
@@ -170,6 +170,13 @@ function isolatedEnvironment(home, extra = {}) {
     GEMINI_HOME: join(home, '.gemini'),
     ...extra,
   };
+  // POSIX-style hosts (e.g. Git Bash on Windows) may run this verifier without
+  // PATHEXT; where.exe then matches only extension-less names and the doctor
+  // probe can resolve the host's unusable shim instead of the fixture .cmd.
+  if (process.platform === 'win32' && !env.PATHEXT) {
+    env.PATHEXT = '.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC';
+  }
+  return env;
 }
 
 function verifyIdentity(packageRoot, expectedVersion) {
@@ -263,10 +270,15 @@ function verifyRuntime(packageRoot, tempRoot, env, expectedVersion) {
   const home = join(tempRoot, 'consumer-home');
   const fixtureBin = createCodexFixture(tempRoot);
   const existingPath = env.PATH || env.Path || process.env.PATH || process.env.Path || '';
+  // Windows env blocks are case-insensitive: keep a single PATH key so the
+  // child process reliably sees the fixture bin ahead of the host PATH (a
+  // stale duplicate `Path` key used to shadow the fixture with the host's
+  // unusable codex shim).
   const doctorEnv = {
     ...env,
     PATH: `${fixtureBin}${delimiter}${existingPath}`,
   };
+  delete doctorEnv.Path;
   mkdirSync(repository, { recursive: true });
   mkdirSync(home, { recursive: true });
   run('git', ['init', repository], { cwd: packageRoot, env });
@@ -307,7 +319,13 @@ function extractArtifact(artifact, tempRoot) {
   if (!metadata.isFile() || metadata.isSymbolicLink()) throw new VerificationError(`Package artifact is not a regular file: ${artifact}`);
   const extractionRoot = join(tempRoot, 'extract');
   mkdirSync(extractionRoot, { recursive: true });
-  run('tar', ['-xzf', artifact, '-C', extractionRoot], { cwd: tempRoot, env: process.env });
+  // GNU tar (used on Windows via Git for Windows) interprets "C:\..." as a
+  // remote host:path unless --force-local is passed; BSD tar on macOS/Linux
+  // never treats a drive letter as a host and does not need the flag.
+  const tarArgs = process.platform === 'win32'
+    ? ['--force-local', '-xzf', artifact, '-C', extractionRoot]
+    : ['-xzf', artifact, '-C', extractionRoot];
+  run('tar', tarArgs, { cwd: tempRoot, env: process.env });
   const packageRoot = join(extractionRoot, 'package');
   if (!existsSync(packageRoot) || !lstatSync(packageRoot).isDirectory()) {
     throw new VerificationError(`Package artifact did not extract a package/ directory: ${basename(artifact)}`);

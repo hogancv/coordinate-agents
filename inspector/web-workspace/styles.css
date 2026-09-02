@@ -661,3 +661,6 @@ body { overflow: hidden; }
 @media (min-width: 1025px) {
   body.context-closed .context-panel { display: none; }
 }
+
+/* Field labels separated from wrapped form controls (i18n-safe) */
+label .field-label { display: block; }

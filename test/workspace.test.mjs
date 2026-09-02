@@ -309,3 +309,56 @@ test('Workspace metadata ships in the package payload, CLI help, and web assets 
   assert.match(help.stdout, /web\s+Launch the local Web Workspace over the selected Git repository/);
   assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);
 });
+
+test('Workspace form controls survive the bilingual i18n layer', async () => {
+  const repositoryRoot = taskFixture(repository());
+  const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+  try {
+    const base = started.url;
+    const page = await (await fetch(`${base}/`)).text();
+
+    // 1) Composer, Agent/Mode selects, and every authoring control ship in
+    //    the static page: the i18n layer must never remove them.
+    const controls = [
+      'composer-input', 'composer-agent', 'composer-mode', 'composer-send',
+      'cfg-agent', 'cfg-adapter', 'cfg-command', 'cfg-role',
+      'author-task-title', 'author-task-spec', 'author-task-planner',
+      'author-task-implementer', 'author-task-reviewer', 'author-task-id',
+      'author-graph-id', 'author-graph-title', 'author-graph-spec',
+      'author-graph-planner', 'author-graph-reviewer', 'author-graph-max',
+      'author-graph-intent', 'author-graph-scope',
+    ];
+    for (const id of controls) {
+      assert.ok(page.includes(`id="${id}"`), `Workspace page must keep control #${id}`);
+    }
+
+    // 2) Both locale dictionaries, the storage key, and the navigator
+    //    fallback ship in the bundled app.js.
+    const js = await (await fetch(`${base}/app.js`)).text();
+    assert.ok(js.includes("'zh-CN'"), 'app.js must ship the zh-CN dictionary');
+    assert.ok(js.includes("'en-US'"), 'app.js must ship the en-US dictionary');
+    assert.ok(js.includes('coordinate-agents.locale'), 'app.js must persist the locale key');
+    assert.ok(js.includes('navigator.language'), 'app.js must fall back to navigator.language');
+
+    // 3) Language switch controls exist and are keyboard accessible.
+    for (const id of ['lang-zh', 'lang-en']) {
+      assert.ok(page.includes(`id="${id}"`), `Workspace page must include #${id}`);
+    }
+
+    // 4) Label text nodes are separated from the controls they wrap: a
+    //    data-i18n label that directly contains an input/select/textarea/
+    //    button would lose the control on the first textContent rewrite.
+    const wrappedControls = page.match(/<label[^>]*data-i18n[^>]*>[^<]*<(?:input|select|textarea|button)\b/g) || [];
+    assert.deepEqual(wrappedControls, [], 'data-i18n labels must wrap their text in a dedicated child span');
+    assert.ok(page.includes('class="field-label"'), 'labels must use dedicated field-label spans');
+    assert.ok(js.includes('hasFormControlDescendant'), 'app.js must guard textContent rewrites with hasFormControlDescendant');
+
+    // 5) Static aria/title/placeholder i18n hooks ship (no parent-node
+    //    overwrites for these attributes).
+    assert.ok(page.includes('data-i18n-aria-label'), 'page must ship data-i18n-aria-label hooks');
+    assert.ok(page.includes('data-i18n-placeholder'), 'page must ship data-i18n-placeholder hooks');
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});

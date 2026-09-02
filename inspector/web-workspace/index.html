@@ -13,7 +13,7 @@
   <body data-locale="en">
     <div class="app" id="app">
       <!-- ============ Left Sidebar ============ -->
-      <aside class="sidebar" id="sidebar" aria-label="Workspace sidebar">
+      <aside class="sidebar" id="sidebar" aria-label="Workspace sidebar" data-i18n-aria-label="aria.sidebar">
         <div class="sidebar-top">
           <div class="brand">
             <span class="brand-mark" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
               <span class="brand-sub">Web Workspace</span>
             </div>
           </div>
-          <button id="sidebar-close" class="icon-button sidebar-close" type="button" aria-label="Close sidebar" hidden>×</button>
+          <button id="sidebar-close" class="icon-button sidebar-close" type="button" aria-label="Close sidebar" data-i18n-aria-label="aria.closeSidebar" hidden>×</button>
         </div>
 
         <section id="repository" class="repo-chip" aria-label="Bound repository">
@@ -60,18 +60,18 @@
       <!-- ============ Center column ============ -->
       <div class="center">
         <header class="main-topbar">
-          <button id="sidebar-open" class="icon-button menu-button" type="button" aria-label="Open sidebar">☰</button>
+          <button id="sidebar-open" class="icon-button menu-button" type="button" aria-label="Open sidebar" data-i18n-aria-label="aria.openSidebar">☰</button>
           <div class="topbar-title">
             <h1 id="view-title" class="view-title">Chat</h1>
             <span id="view-subtitle" class="view-subtitle" data-i18n="subtitle.workspace">Workspace for your local AI coding team</span>
           </div>
           <div class="topbar-actions">
-            <div class="lang-toggle" role="group" aria-label="Language / 语言">
+            <div class="lang-toggle" role="group" aria-label="Language / 语言" data-i18n-aria-label="aria.langGroup">
               <button id="lang-zh" class="lang-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
               <button id="lang-en" class="lang-button" type="button" lang="en-US" aria-pressed="true">English</button>
             </div>
-            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
-            <button id="context-toggle" class="icon-button context-toggle" type="button" aria-label="Toggle context panel" aria-expanded="true">▤</button>
+            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh" data-i18n-aria-label="aria.refresh" data-i18n-title="aria.refresh">⟳</button>
+            <button id="context-toggle" class="icon-button context-toggle" type="button" aria-label="Toggle context panel" data-i18n-aria-label="aria.toggleContext" aria-expanded="true">▤</button>
           </div>
         </header>
 
@@ -109,15 +109,15 @@
                 <div class="empty-state" data-i18n="agents.discoverHint">Click “Discover CLIs” to inspect installed coding CLIs and registered Adapters.</div>
               </div>
               <form id="agent-configure" class="agent-form" novalidate>
-                <label data-i18n="agents.agentId">Agent ID<input id="cfg-agent" name="agent" list="agent-id-options" maxlength="64" placeholder="e.g. codex / antigravity" data-i18n-placeholder="agents.agentIdPh" required></label>
+                <label><span class="field-label" data-i18n="agents.agentId">Agent ID</span><input id="cfg-agent" name="agent" list="agent-id-options" maxlength="64" placeholder="e.g. codex / antigravity" data-i18n-placeholder="agents.agentIdPh" required></label>
                 <datalist id="agent-id-options"></datalist>
-                <label data-i18n="agents.adapter">Adapter<select id="cfg-adapter" name="adapter">
+                <label><span class="field-label" data-i18n="agents.adapter">Adapter</span><select id="cfg-adapter" name="adapter">
                   <option value="codex-cli">codex-cli (built-in)</option>
                   <option value="antigravity-cli">antigravity-cli (built-in)</option>
                   <option value="generic-cli">generic-cli</option>
                 </select></label>
-                <label data-i18n="agents.command">Executable command<input id="cfg-command" name="command" maxlength="512" placeholder="exact command, e.g. agy-proxy" data-i18n-placeholder="agents.commandPh" required></label>
-                <label data-i18n="agents.role">Workflow role<select id="cfg-role" name="role">
+                <label><span class="field-label" data-i18n="agents.command">Executable command</span><input id="cfg-command" name="command" maxlength="512" placeholder="exact command, e.g. agy-proxy" data-i18n-placeholder="agents.commandPh" required></label>
+                <label><span class="field-label" data-i18n="agents.role">Workflow role</span><select id="cfg-role" name="role">
                   <option value="implementer" data-i18n="roles.implementer">implementer</option>
                   <option value="planner" data-i18n="roles.planner">planner</option>
                   <option value="reviewer" data-i18n="roles.reviewer">reviewer</option>
@@ -158,17 +158,15 @@
         </main>
 
         <!-- Composer -->
-        <footer class="composer" id="composer" aria-label="Composer">
+        <footer class="composer" id="composer" aria-label="Composer" data-i18n-aria-label="composer.aria">
           <div class="composer-row">
             <textarea id="composer-input" class="composer-input" rows="2" maxlength="1024"
               placeholder="Describe a task for your local AI team… (Enter to create, Shift+Enter for a new line)"
-              data-i18n-placeholder="composer.placeholder" aria-label="Task description"></textarea>
+              data-i18n-placeholder="composer.placeholder" aria-label="Task description" data-i18n-aria-label="composer.inputAria"></textarea>
             <div class="composer-actions">
-              <label class="composer-field" data-i18n="composer.agent">Agent
-                <select id="composer-agent"><option value="">—</option></select>
+              <label class="composer-field"><span class="field-label" data-i18n="composer.agent">Agent</span><select id="composer-agent"><option value="">—</option></select>
               </label>
-              <label class="composer-field" data-i18n="composer.mode">Mode
-                <select id="composer-mode">
+              <label class="composer-field"><span class="field-label" data-i18n="composer.mode">Mode</span><select id="composer-mode">
                   <option value="task" data-i18n="composer.modeTask">Single task</option>
                   <option value="graph" data-i18n="composer.modeGraph">Task Graph…</option>
                 </select>
@@ -187,7 +185,7 @@
       <aside class="context-panel" id="context-panel" aria-label="Context panel">
         <div class="context-head">
           <h2 data-i18n="context.title">Context</h2>
-          <button id="context-close" class="icon-button" type="button" aria-label="Close context panel">×</button>
+          <button id="context-close" class="icon-button" type="button" aria-label="Close context panel" data-i18n-aria-label="aria.closeContext">×</button>
         </div>
         <div id="context-body" class="context-body">
           <div id="context-selection" class="context-selection" aria-live="polite"></div>
@@ -200,7 +198,7 @@
 
       <!-- ============ Detail drawer (task / graph deep view) ============ -->
       <div class="drawer-scrim" id="drawer-scrim" hidden></div>
-      <aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-label="Task and graph details" hidden>
+      <aside class="drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-label="Task and graph details" data-i18n-aria-label="aria.detailDrawer" hidden>
         <header class="drawer-head">
           <h2 id="drawer-title" class="drawer-title" data-i18n="drawer.taskDetail">Task & graph details</h2>
           <button id="drawer-close" class="button ghost" type="button" data-i18n="drawer.close">Close</button>
@@ -302,7 +300,7 @@
       </aside>
 
       <!-- ============ Authoring drawer ============ -->
-      <aside class="drawer drawer-right" id="author-drawer" role="dialog" aria-modal="true" aria-label="Author new work" hidden>
+      <aside class="drawer drawer-right" id="author-drawer" role="dialog" aria-modal="true" aria-label="Author new work" data-i18n-aria-label="aria.authorDrawer" hidden>
         <header class="drawer-head">
           <h2 class="drawer-title" data-i18n="author.title">Author new work</h2>
           <button id="author-drawer-close" class="button ghost" type="button" data-i18n="drawer.close">Close</button>
@@ -321,12 +319,12 @@
               <div class="author-col">
                 <h3 data-i18n="author.singleTask">Single Task</h3>
                 <form id="task-create-form" class="author-form" novalidate>
-                  <label data-i18n="author.taskTitleLabel">Title<input id="author-task-title" maxlength="1024" required data-i18n-placeholder="author.taskTitlePh" placeholder="Task title"></label>
-                  <label data-i18n="author.specLabel">Specification (optional)<textarea id="author-task-spec" rows="3" data-i18n-placeholder="author.specPh" placeholder="What must change and how is it verified?"></textarea></label>
-                  <label data-i18n="roles.planner">Planner<select id="author-task-planner"></select></label>
-                  <label data-i18n="roles.implementer">Implementer<select id="author-task-implementer"></select></label>
-                  <label data-i18n="roles.reviewer">Reviewer<select id="author-task-reviewer"></select></label>
-                  <label data-i18n="author.taskIdLabel">Deterministic ID (optional)<input id="author-task-id" maxlength="128" data-i18n-placeholder="author.taskIdPh" placeholder="task-… (created automatically when empty)"></label>
+                  <label><span class="field-label" data-i18n="author.taskTitleLabel">Title</span><input id="author-task-title" maxlength="1024" required data-i18n-placeholder="author.taskTitlePh" placeholder="Task title"></label>
+                  <label><span class="field-label" data-i18n="author.specLabel">Specification (optional)</span><textarea id="author-task-spec" rows="3" data-i18n-placeholder="author.specPh" placeholder="What must change and how is it verified?"></textarea></label>
+                  <label><span class="field-label" data-i18n="roles.planner">Planner</span><select id="author-task-planner"></select></label>
+                  <label><span class="field-label" data-i18n="roles.implementer">Implementer</span><select id="author-task-implementer"></select></label>
+                  <label><span class="field-label" data-i18n="roles.reviewer">Reviewer</span><select id="author-task-reviewer"></select></label>
+                  <label><span class="field-label" data-i18n="author.taskIdLabel">Deterministic ID (optional)</span><input id="author-task-id" maxlength="128" data-i18n-placeholder="author.taskIdPh" placeholder="task-… (created automatically when empty)"></label>
                   <button id="author-task-submit" class="button" type="submit" data-i18n="author.createTask">Create Task</button>
                   <span id="author-task-status" class="author-status" aria-live="polite"></span>
                 </form>
@@ -334,14 +332,14 @@
               <div class="author-col">
                 <h3 data-i18n="author.graphTitle">Task Graph v1 <span class="muted-label" data-i18n="author.intentMapHint">with optional Intent Map v1</span></h3>
                 <form id="graph-create-form" class="author-form" novalidate>
-                  <label data-i18n="author.parentId">Parent ID<input id="author-graph-id" maxlength="128" placeholder="task-…"></label>
-                  <label data-i18n="author.graphTitleLabel">Title<input id="author-graph-title" maxlength="1024" required placeholder="Graph title"></label>
-                  <label data-i18n="author.specLabel">Specification<textarea id="author-graph-spec" rows="2"></textarea></label>
-                  <label data-i18n="roles.planner">Planner<select id="author-graph-planner"></select></label>
-                  <label data-i18n="roles.reviewer">Reviewer<select id="author-graph-reviewer"></select></label>
-                  <label data-i18n="author.maxConcurrency">Max concurrency<input id="author-graph-max" type="number" min="1" max="32" value="1"></label>
+                  <label><span class="field-label" data-i18n="author.parentId">Parent ID</span><input id="author-graph-id" maxlength="128" placeholder="task-…"></label>
+                  <label><span class="field-label" data-i18n="author.graphTitleLabel">Title</span><input id="author-graph-title" maxlength="1024" required placeholder="Graph title"></label>
+                  <label><span class="field-label" data-i18n="author.specLabel">Specification</span><textarea id="author-graph-spec" rows="2"></textarea></label>
+                  <label><span class="field-label" data-i18n="roles.planner">Planner</span><select id="author-graph-planner"></select></label>
+                  <label><span class="field-label" data-i18n="roles.reviewer">Reviewer</span><select id="author-graph-reviewer"></select></label>
+                  <label><span class="field-label" data-i18n="author.maxConcurrency">Max concurrency</span><input id="author-graph-max" type="number" min="1" max="32" value="1"></label>
                   <label class="author-toggle"><input id="author-graph-intent" type="checkbox"> <span data-i18n="author.intentMap">Intent Map (write intents)</span></label>
-                  <label data-i18n="author.scopePolicy">Scope policy<select id="author-graph-scope">
+                  <label><span class="field-label" data-i18n="author.scopePolicy">Scope policy</span><select id="author-graph-scope">
                     <option value="warn" data-i18n="author.scopeWarn">warn (default)</option>
                     <option value="observe" data-i18n="author.scopeObserve">observe</option>
                     <option value="strict" data-i18n="author.scopeStrict">strict</option>

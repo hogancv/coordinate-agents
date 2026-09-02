@@ -303,6 +303,37 @@ const I18N = {
     'execution.factWaves': 'Waves executed',
     'execution.factStop': 'Stop reason',
     'execution.factAgent': 'Agent',
+    'aria.sidebar': 'Workspace sidebar',
+    'aria.openSidebar': 'Open sidebar',
+    'aria.closeSidebar': 'Close sidebar',
+    'aria.refresh': 'Refresh',
+    'aria.toggleContext': 'Toggle context panel',
+    'aria.closeContext': 'Close context panel',
+    'aria.langGroup': 'Language',
+    'aria.detailDrawer': 'Task and graph details',
+    'aria.authorDrawer': 'Author new work',
+    'composer.aria': 'Composer',
+    'composer.inputAria': 'Task description',
+    'subtask.id': 'ID',
+    'subtask.idPh': 'sub-a',
+    'subtask.specPh': 'What this subtask must change',
+    'subtask.dependsPh': 'sub-a sub-b (ids)',
+    'subtask.intentPh': 'src/a/** docs/a/**',
+    'subtask.removeAria': 'Remove subtask',
+    'subtask.closeDetail': 'Close subtask detail',
+    'review.feedbackPh': 'Bounded review feedback…',
+    'review.evidencePh': '{ "tests": "passed" }',
+    'execution.notDispatchableTitle': 'Current status prevents dispatch; the Runtime will still validate',
+    'graph.adapter': 'Adapter',
+    'graph.registered': 'Registered',
+    'generic.yes': 'yes',
+    'generic.no': 'no',
+    'generic.unknown': 'unknown',
+    'author.graphRequired': 'Graph title, parent ID, and at least one subtask are required.',
+    'author.parentRequired': 'Parent ID, title, and at least one subtask are required.',
+    'author.validationFailed': 'Validation failed.',
+    'author.validationRequestFailed': 'Validation request failed: {message}',
+    'author.createRequestFailed': 'Create request failed: {message}',
     'generic.copy': 'Copy',
     'subtask.dependsOn': 'Depends on',
     'subtask.writeIntent': 'Write intent (optional)',
@@ -632,6 +663,37 @@ const I18N = {
     'lb.Frontier & preflight wave': '前沿与预检波次',
     'lb.Conflicts & scope audit': '冲突与范围审计',
     'lb.Integration & review': '集成与评审',
+    'aria.sidebar': '工作台侧栏',
+    'aria.openSidebar': '打开侧栏',
+    'aria.closeSidebar': '关闭侧栏',
+    'aria.refresh': '刷新',
+    'aria.toggleContext': '切换上下文面板',
+    'aria.closeContext': '关闭上下文面板',
+    'aria.langGroup': '语言',
+    'aria.detailDrawer': '任务与图详情',
+    'aria.authorDrawer': '创作新工作',
+    'composer.aria': '输入区',
+    'composer.inputAria': '任务描述',
+    'subtask.id': 'ID',
+    'subtask.idPh': 'sub-a',
+    'subtask.specPh': '这个子任务要改变什么',
+    'subtask.dependsPh': 'sub-a sub-b（id 列表）',
+    'subtask.intentPh': 'src/a/** docs/a/**',
+    'subtask.removeAria': '移除子任务',
+    'subtask.closeDetail': '关闭子任务详情',
+    'review.feedbackPh': '有界评审反馈…',
+    'review.evidencePh': '{ "tests": "passed" }',
+    'execution.notDispatchableTitle': '当前状态不可派发；Runtime 仍会校验',
+    'graph.adapter': 'Adapter',
+    'graph.registered': '已注册',
+    'generic.yes': '是',
+    'generic.no': '否',
+    'generic.unknown': '未知',
+    'author.graphRequired': '图标题、父任务 ID 与至少一个子任务必填。',
+    'author.parentRequired': '父任务 ID、标题与至少一个子任务必填。',
+    'author.validationFailed': '验证失败。',
+    'author.validationRequestFailed': '验证请求失败：{message}',
+    'author.createRequestFailed': '创建请求失败：{message}',
     'generic.copy': '复制',
     'subtask.dependsOn': '依赖',
     'subtask.writeIntent': '写入意图（可选）',
@@ -693,9 +755,20 @@ function labelText(label) {
   return translated ?? text;
 }
 
+// A data-i18n element that wraps a form control must carry its translatable
+// text in a dedicated child node (e.g. <span class="field-label">); setting
+// textContent on such an element would delete the control itself. This guard
+// keeps every input/select/textarea/button alive across locale switches.
+const I18N_FORM_CONTROL_SELECTOR = 'input, textarea, select, button';
+
+function hasFormControlDescendant(element) {
+  return Boolean(element) && element.querySelector(I18N_FORM_CONTROL_SELECTOR) !== null;
+}
+
 function applyStaticI18n() {
   document.documentElement.lang = locale === 'zh-CN' ? 'zh-CN' : 'en-US';
   document.querySelectorAll('[data-i18n]').forEach(element => {
+    if (hasFormControlDescendant(element)) return; // never wipe form controls
     element.textContent = t(element.dataset.i18n);
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
@@ -704,8 +777,25 @@ function applyStaticI18n() {
   document.querySelectorAll('[data-i18n-title]').forEach(element => {
     element.title = t(element.dataset.i18nTitle);
   });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
+    element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
+  });
   // Document title keeps the product anchor "Coordinate Agents Workspace".
   document.title = locale === 'zh-CN' ? 'Coordinate Agents 工作台' : 'Coordinate Agents Workspace';
+  refreshDynamicI18n();
+}
+
+// Re-localise dynamically generated rows (the subtask editor) without
+// rebuilding them, so user input, selections, and listeners survive a
+// language switch.
+function refreshDynamicI18n() {
+  document.querySelectorAll('[data-sub-label]').forEach(element => {
+    if (hasFormControlDescendant(element)) return;
+    element.textContent = t(element.dataset.subLabel);
+  });
+  document.querySelectorAll('[data-sub-ph]').forEach(element => {
+    element.placeholder = t(element.dataset.subPh);
+  });
 }
 
 function persistLocale(next) {
@@ -1222,13 +1312,13 @@ function addSubtaskRow(preset = {}) {
   const row = document.createElement('div');
   row.className = 'subtask-row';
   row.innerHTML = `
-    <label>ID<input class="sub-id" maxlength="64" placeholder="sub-a" value="${escapeHtml(preset.id || '')}"></label>
-    <label>${escapeHtml(t('author.graphTitleLabel'))}<input class="sub-title" maxlength="1024" placeholder="${escapeHtml(preset.title || '')}"></label>
-    <label>${escapeHtml(t('roles.implementer'))}<select class="sub-implementer" data-implementer-select></select></label>
-    <label>${escapeHtml(t('author.specLabel'))}<input class="sub-spec" maxlength="262144" placeholder="What this subtask must change"></label>
-    <label>${escapeHtml(t('subtask.dependsOn'))}<input class="sub-depends" maxlength="1024" placeholder="sub-a sub-b (ids)"></label>
-    <label>${escapeHtml(t('subtask.writeIntent'))}<input class="sub-intent" maxlength="2048" placeholder="src/a/** docs/a/**"></label>
-    <button class="button ghost sub-remove" type="button" aria-label="Remove subtask">${escapeHtml(t('subtask.remove'))}</button>`;
+    <label><span class="field-label" data-sub-label="subtask.id">${escapeHtml(t('subtask.id'))}</span><input class="sub-id" maxlength="64" data-sub-ph="subtask.idPh" placeholder="${escapeHtml(t('subtask.idPh'))}" value="${escapeHtml(preset.id || '')}"></label>
+    <label><span class="field-label" data-sub-label="author.graphTitleLabel">${escapeHtml(t('author.graphTitleLabel'))}</span><input class="sub-title" maxlength="1024" placeholder="${escapeHtml(preset.title || '')}"></label>
+    <label><span class="field-label" data-sub-label="roles.implementer">${escapeHtml(t('roles.implementer'))}</span><select class="sub-implementer" data-implementer-select></select></label>
+    <label><span class="field-label" data-sub-label="author.specLabel">${escapeHtml(t('author.specLabel'))}</span><input class="sub-spec" maxlength="262144" data-sub-ph="subtask.specPh" placeholder="${escapeHtml(t('subtask.specPh'))}"></label>
+    <label><span class="field-label" data-sub-label="subtask.dependsOn">${escapeHtml(t('subtask.dependsOn'))}</span><input class="sub-depends" maxlength="1024" data-sub-ph="subtask.dependsPh" placeholder="${escapeHtml(t('subtask.dependsPh'))}"></label>
+    <label><span class="field-label" data-sub-label="subtask.writeIntent">${escapeHtml(t('subtask.writeIntent'))}</span><input class="sub-intent" maxlength="2048" data-sub-ph="subtask.intentPh" placeholder="${escapeHtml(t('subtask.intentPh'))}"></label>
+    <button class="button ghost sub-remove" type="button" aria-label="${escapeHtml(t('subtask.removeAria'))}">${escapeHtml(t('subtask.remove'))}</button>`;
   row.querySelector('.sub-remove').addEventListener('click', () => row.remove());
   elements['author-subtask-rows'].appendChild(row);
   refreshAgentSelects();
@@ -1306,7 +1396,7 @@ async function validateGraphNow() {
   elements['author-graph-validated'].hidden = true;
   const { graph, intentMap } = graphInputs();
   if (!graph.parentTask.title || !graph.subtasks.length) {
-    setGraphStatus('Graph title, parent ID, and at least one subtask are required.', 'error');
+    setGraphStatus(t('author.graphRequired'), 'error');
     return;
   }
   setGraphStatus(t('generic.validating'));
@@ -1317,7 +1407,7 @@ async function validateGraphNow() {
     });
     if (status !== 200 || payload?.ok !== true) {
       renderActionError(elements['author-graph-errors'], payload);
-      setGraphStatus('Validation failed.', 'error');
+      setGraphStatus(t('author.validationFailed'), 'error');
       return;
     }
     const count = payload.subtaskCount ?? payload.subtasks?.length ?? 'ok';
@@ -1325,7 +1415,7 @@ async function validateGraphNow() {
     elements['author-graph-validated'].hidden = false;
     setGraphStatus(t('author.validatedOk'), 'ok');
   } catch (error) {
-    setGraphStatus(`Validation request failed: ${error.message}`, 'error');
+    setGraphStatus(t('author.validationRequestFailed', { message: error.message }), 'error');
   }
 }
 
@@ -1359,7 +1449,7 @@ async function showGraphPreflight(taskId) {
 async function createGraphNow() {
   const { graph, intentMap, parentId } = graphInputs();
   if (!graph.parentTask.id || !graph.parentTask.title || !graph.subtasks.length) {
-    setGraphStatus('Parent ID, title, and at least one subtask are required.', 'error');
+    setGraphStatus(t('author.parentRequired'), 'error');
     return;
   }
   setGraphStatus(t('author.creatingGraph'));
@@ -1379,7 +1469,7 @@ async function createGraphNow() {
     await showGraphPreflight(createdId);
     await refresh();
   } catch (error) {
-    setGraphStatus(`Create request failed: ${error.message}`, 'error');
+    setGraphStatus(t('author.createRequestFailed', { message: error.message }), 'error');
   } finally {
     elements['author-graph-create'].disabled = false;
   }
@@ -1666,11 +1756,11 @@ function renderGraphNodeDetail(detail, subtaskId) {
   const blocks = [
     `<div class="graph-node-detail-heading"><span class="eyebrow">${escapeHtml(subtask.id)}</span>
        <span class="status-pill ${statusClass(subtask.state)}">${escapeHtml(statusText(subtask.state))}</span>
-       <button class="button ghost graph-node-close" type="button" aria-label="Close subtask detail">${escapeHtml(t('drawer.close'))}</button></div>`,
+       <button class="button ghost graph-node-close" type="button" aria-label="${escapeHtml(t('subtask.closeDetail'))}">${escapeHtml(t('drawer.close'))}</button></div>`,
     `<p class="graph-node-detail-title">${escapeHtml(subtask.title || subtask.id)}</p>`,
     factBlock('Specification', subtask.spec),
     `<div class="graph-dependencies">${escapeHtml(t('lb.Depends on'))}: ${subtask.dependsOn?.length ? subtask.dependsOn.map(item => `<code>${escapeHtml(item)}</code>`).join(' ') : `<span>${escapeHtml(t('empty.dependencies'))}</span>`}</div>`,
-    `<div class="graph-node-meta"><span>${escapeHtml(t('msg.agent'))} <strong>${escapeHtml(subtask.implementer || '—')}</strong></span><span>Adapter <strong>${escapeHtml(agent.adapter || '—')}</strong></span><span>Registered <strong>${agent.registered === true ? 'yes' : 'no'}</strong></span><span>${escapeHtml(t('msg.session'))} <code>${escapeHtml(shortId(subtask.sessionId) || '—')}</code></span></div>`,
+    `<div class="graph-node-meta"><span>${escapeHtml(t('msg.agent'))} <strong>${escapeHtml(subtask.implementer || '—')}</strong></span><span>${escapeHtml(t('graph.adapter'))} <strong>${escapeHtml(agent.adapter || '—')}</strong></span><span>${escapeHtml(t('graph.registered'))} <strong>${agent.registered === true ? escapeHtml(t('generic.yes')) : escapeHtml(t('generic.no'))}</strong></span><span>${escapeHtml(t('msg.session'))} <code>${escapeHtml(shortId(subtask.sessionId) || '—')}</code></span></div>`,
     factBlock('Executable', subtask.executable),
     factBlock('Worktree / branch / commit', { ...(subtask.worktree || {}), implementationCommit: subtask.implementationCommit }),
     factBlock('Evidence', subtask.evidence),
@@ -1775,7 +1865,7 @@ function recoveryControls(detail) {
     if (['IMPLEMENTING', 'WAITING_IMPLEMENTER'].includes(detailState)) add('taskStop', t('execution.stopTask'), detail.id);
     if (['ERROR', 'STOPPED'].includes(detailState)) add('taskResume', t('execution.resumeTask'), detail.id);
   } else {
-    const note = `<span class="agent-muted">${escapeHtml(t('review.state', { state: detailState || 'unknown' }))}</span>`;
+    const note = `<span class="agent-muted">${escapeHtml(t('review.state', { state: detailState || t('generic.unknown') }))}</span>`;
     if (detailState === 'RUNNING') add('taskGraphStop', t('execution.stopGraph'), detail.id, note);
     if (['FAILED', 'RECOVERING'].includes(detailState)) add('taskGraphRecover', t('execution.recoverGraph'), detail.id, note);
     if (['FAILED', 'STOPPED', 'BLOCKED', 'RECOVERING'].includes(detailState)) add('taskGraphResume', t('execution.resumeGraph'), detail.id, note);
@@ -1937,7 +2027,7 @@ function renderExecution(detail) {
     const dispatchable = ['CREATED', 'PLANNING', 'SPEC_READY', 'CHANGES_REQUESTED'].includes(detail.status);
     controls = `
       ${executionConfirmRow(confirmText)}
-      <button class="button" type="button" data-run-action="taskDispatch" data-label="${escapeHtml(t('execution.dispatch'))}" data-params="${escapeHtml(JSON.stringify({ taskId: id }))}" ${dispatchable ? '' : 'disabled title="Current status prevents dispatch; the Runtime will still validate"'}>${escapeHtml(t('execution.dispatch'))}</button>
+      <button class="button" type="button" data-run-action="taskDispatch" data-label="${escapeHtml(t('execution.dispatch'))}" data-params="${escapeHtml(JSON.stringify({ taskId: id }))}" ${dispatchable ? '' : `disabled title="${escapeHtml(t('execution.notDispatchableTitle'))}"`}>${escapeHtml(t('execution.dispatch'))}</button>
       ${dispatchable ? '' : `<span class="agent-muted">${escapeHtml(t('execution.notDispatchable', { status: detail.status || '' }))}</span>`}`;
   } else {
     controls = `
@@ -2076,9 +2166,9 @@ function renderReview(detail) {
       <option value="REVIEW_APPROVED">REVIEW_APPROVED</option>
       <option value="CHANGES_REQUESTED">CHANGES_REQUESTED</option>
     </select></label>
-    <label>${escapeHtml(t('review.feedback'))}<textarea class="review-feedback" rows="3" maxlength="16384" placeholder="Bounded review feedback…"></textarea></label>
-    <label>${escapeHtml(t('review.evidence'))}<textarea class="review-evidence" rows="2" maxlength="65536" placeholder='{ "tests": "passed" }'></textarea></label>
-    <button class="button" type="button" id="review-submit" ${reviewable ? '' : 'disabled title="Current state is not reviewable; review applies to reviewed/changes-requested Tasks or running/succeeded graphs"'}>${escapeHtml(t('review.record'))}</button>
+    <label>${escapeHtml(t('review.feedback'))}<textarea class="review-feedback" rows="3" maxlength="16384" placeholder="${escapeHtml(t('review.feedbackPh'))}"></textarea></label>
+    <label>${escapeHtml(t('review.evidence'))}<textarea class="review-evidence" rows="2" maxlength="65536" placeholder="${escapeHtml(t('review.evidencePh'))}"></textarea></label>
+    <button class="button" type="button" id="review-submit" ${reviewable ? '' : `disabled title="${escapeHtml(t('review.notReviewable'))}"`}>${escapeHtml(t('review.record'))}</button>
     <span class="agent-muted">${escapeHtml(t('review.state', { state: detailState || 'unknown' }))}</span>
   </div>`);
   elements['review-controls'].innerHTML = controls.join('');
@@ -2124,7 +2214,7 @@ function renderGraphDetail(task) {
       <div class="graph-dependencies">${escapeHtml(t('lb.Depends on'))}: ${subtask.dependsOn?.length ? subtask.dependsOn.map(item => `<code>${escapeHtml(item)}</code>`).join(' ') : `<span>${escapeHtml(t('empty.dependencies'))}</span>`}</div>
       <div class="graph-node-meta">
         <span>${escapeHtml(t('msg.agent'))} <strong>${escapeHtml(subtask.implementer)}</strong></span>
-        <span>Adapter <strong>${escapeHtml(subtask.agent?.adapter || '—')}</strong></span>
+        <span>${escapeHtml(t('graph.adapter'))} <strong>${escapeHtml(subtask.agent?.adapter || '—')}</strong></span>
         <span>${escapeHtml(t('msg.session'))} <code>${escapeHtml(shortId(subtask.sessionId) || '—')}</code></span>
       </div>
       ${factBlock('Executable', subtask.executable)}
