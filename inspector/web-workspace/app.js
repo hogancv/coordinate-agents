@@ -55,6 +55,13 @@ const elements = Object.fromEntries([
   'discover-agents', 'agents-discovery', 'agent-configure', 'cfg-agent',
   'cfg-adapter', 'cfg-command', 'cfg-role', 'apply-agent', 'agent-status',
   'agent-id-options', 'configured-agents',
+  'author-empty-agents', 'task-create-form', 'author-task-title', 'author-task-spec',
+  'author-task-planner', 'author-task-implementer', 'author-task-reviewer', 'author-task-id',
+  'author-task-submit', 'author-task-status', 'graph-create-form', 'author-graph-id',
+  'author-graph-title', 'author-graph-spec', 'author-graph-planner', 'author-graph-reviewer',
+  'author-graph-max', 'author-graph-intent', 'author-graph-scope', 'author-subtask-add',
+  'author-subtask-rows', 'author-graph-validate', 'author-graph-create', 'author-graph-status',
+  'author-graph-errors', 'author-graph-validated', 'author-graph-preflight',
 ].map(id => [id, document.getElementById(id)]));
 
 function escapeHtml(value) {
@@ -247,6 +254,234 @@ function renderConfiguredAgents(agents) {
       </div>
       ${agent.lastActivity ? `<div class="agent-muted">last activity ${escapeAgent(agent.lastActivity)}</div>` : ''}
     </article>`).join('');
+}
+
+function authorAgentIds() {
+  return Array.isArray(state.agents) ? state.agents.map(agent => agent.id).filter(Boolean) : [];
+}
+
+function refreshAgentSelects() {
+  const ids = authorAgentIds();
+  elements['author-empty-agents'].hidden = ids.length > 0;
+  const selects = [
+    'author-task-planner', 'author-task-implementer', 'author-task-reviewer',
+    'author-graph-planner', 'author-graph-reviewer',
+  ];
+  const options = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join('');
+  for (const name of selects) {
+    const element = elements[name];
+    if (!element) continue;
+    const previous = element.value;
+    element.innerHTML = options || '<option value="">(no agents configured)</option>';
+    if (previous && ids.includes(previous)) element.value = previous;
+    else if (element.name === 'implementer' && ids.includes('antigravity')) element.value = 'antigravity';
+  }
+  document.querySelectorAll('[data-implementer-select]').forEach(select => {
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = options || '<option value="">(no agents configured)</option>';
+    if (previous && ids.includes(previous)) select.value = previous;
+  });
+}
+
+function addSubtaskRow(preset = {}) {
+  const row = document.createElement('div');
+  row.className = 'subtask-row';
+  row.innerHTML = `
+    <label>ID<input class="sub-id" maxlength="64" placeholder="sub-a" value="${escapeHtml(preset.id || '')}"></label>
+    <label>Title<input class="sub-title" maxlength="1024" placeholder="${escapeHtml(preset.title || '')}"></label>
+    <label>Implementer<select class="sub-implementer" data-implementer-select></select></label>
+    <label>Spec<input class="sub-spec" maxlength="262144" placeholder="What this subtask must change"></label>
+    <label>Depends on<input class="sub-depends" maxlength="1024" placeholder="sub-a sub-b (ids)"></label>
+    <label>Write intent (optional)<input class="sub-intent" maxlength="2048" placeholder="src/a/** docs/a/**"></label>
+    <button class="button ghost sub-remove" type="button" aria-label="Remove subtask">Remove</button>`;
+  row.querySelector('.sub-remove').addEventListener('click', () => row.remove());
+  elements['author-subtask-rows'].appendChild(row);
+  refreshAgentSelects();
+  return row;
+}
+
+function readSubtaskRows() {
+  return [...elements['author-subtask-rows'].querySelectorAll('.subtask-row')].map(row => {
+    const splitList = value => (value || '').split(/[\s,]+/).map(item => item.trim()).filter(Boolean);
+    return {
+      id: row.querySelector('.sub-id').value.trim(),
+      title: row.querySelector('.sub-title').value.trim(),
+      implementer: row.querySelector('.sub-implementer').value,
+      spec: row.querySelector('.sub-spec').value.trim(),
+      dependsOn: splitList(row.querySelector('.sub-depends').value),
+      writeIntent: splitList(row.querySelector('.sub-intent').value),
+    };
+  });
+}
+
+function setGraphStatus(message, kind = 'info') {
+  const element = elements['author-graph-status'];
+  element.textContent = message;
+  element.className = `author-status ${kind}`;
+}
+
+function graphInputs() {
+  const parentId = elements['author-graph-id'].value.trim();
+  const subtasks = readSubtaskRows();
+  const intentEnabled = elements['author-graph-intent'].checked;
+  const parentTask = {
+    id: parentId,
+    title: elements['author-graph-title'].value.trim(),
+    planner: elements['author-graph-planner'].value,
+    reviewer: elements['author-graph-reviewer'].value,
+  };
+  const spec = elements['author-graph-spec'].value.trim();
+  if (spec) parentTask.spec = spec;
+  const graph = {
+    schemaVersion: 1,
+    parentTask,
+    subtasks: subtasks.map(item => {
+      const subtask = {
+        id: item.id,
+        implementer: item.implementer,
+        spec: item.spec,
+        dependsOn: item.dependsOn,
+      };
+      if (item.title) subtask.title = item.title;
+      return subtask;
+    }),
+    maxConcurrency: Math.max(1, Math.min(32, Number(elements['author-graph-max'].value) || 1)),
+  };
+  let intentMap = null;
+  if (intentEnabled) {
+    intentMap = {
+      schemaVersion: 1,
+      parentTaskId: parentId,
+      scopePolicy: elements['author-graph-scope'].value || 'warn',
+      subtasks: subtasks.map(item => ({ id: item.id, writeIntent: item.writeIntent })),
+    };
+  }
+  return { graph, intentMap, parentId };
+}
+
+function renderActionError(container, payload) {
+  const error = payload?.error || {};
+  container.innerHTML = `<div class="empty-state error-state">${escapeHtml(error.code || 'ACTION_FAILED')} — ${escapeHtml(error.message || 'Request failed.')}${error.details ? `<div>${escapeHtml(error.details)}</div>` : ''}</div>`;
+  container.hidden = false;
+}
+
+async function validateGraphNow() {
+  elements['author-graph-errors'].hidden = true;
+  elements['author-graph-validated'].hidden = true;
+  const { graph, intentMap } = graphInputs();
+  if (!graph.parentTask.title || !graph.subtasks.length) {
+    setGraphStatus('Graph title, parent ID, and at least one subtask are required.', 'error');
+    return;
+  }
+  setGraphStatus('Validating…');
+  try {
+    const { status, payload } = await postAction('taskGraphValidate', {
+      graph,
+      ...(intentMap ? { intentMap } : {}),
+    });
+    if (status !== 200 || payload?.ok !== true) {
+      renderActionError(elements['author-graph-errors'], payload);
+      setGraphStatus('Validation failed.', 'error');
+      return;
+    }
+    elements['author-graph-validated'].innerHTML = `<div class="author-ok-banner">Graph validates: ${escapeHtml(payload.subtaskCount ?? payload.subtasks?.length ?? 'ok')} subtask(s) · ${payload.missingIntentCoverage ? 'intent coverage missing (unverified)' : 'intent facts present'} · scope ${escapeHtml(payload.scopePolicy || payload.intentCoverage?.scopePolicy || '—')}</div>`;
+    elements['author-graph-validated'].hidden = false;
+    setGraphStatus('Validation passed. Review Preflight after creating, or fix the form.', 'ok');
+  } catch (error) {
+    setGraphStatus(`Validation request failed: ${error.message}`, 'error');
+  }
+}
+
+async function showGraphPreflight(taskId) {
+  const region = elements['author-graph-preflight'];
+  region.hidden = false;
+  region.innerHTML = '<div class="empty-state">Loading Graph Preflight…</div>';
+  try {
+    const { status, payload } = await postAction('taskGraphPlan', { taskId });
+    if (status !== 200 || payload?.ok !== true) {
+      region.innerHTML = `<div class="empty-state error-state">Preflight unavailable: ${escapeHtml(payload?.error?.message || `HTTP ${status}`)}</div>`;
+      return;
+    }
+    const plan = payload.plan && typeof payload.plan === 'object' ? payload.plan : {};
+    region.innerHTML = `
+      <h3>Graph Preflight</h3>
+      <div class="preflight-grid">
+        ${factBlock('Frontier', payload.frontier)}
+        ${factBlock('Selected wave', plan.wave)}
+        ${factBlock('Write-intent conflicts', plan.conflicts)}
+        ${factBlock('Intent coverage', plan.intentCoverage || payload.intentCoverage)}
+        ${factBlock('Scope policy', plan.scopePolicy || payload.scopePolicy)}
+        ${factBlock('Risks', plan.risks)}
+        ${factBlock('Estimated resources', plan.resourceEstimates)}
+      </div>`;
+  } catch (error) {
+    region.innerHTML = `<div class="empty-state error-state">Preflight request failed: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+async function createGraphNow() {
+  const { graph, intentMap, parentId } = graphInputs();
+  if (!graph.parentTask.id || !graph.parentTask.title || !graph.subtasks.length) {
+    setGraphStatus('Parent ID, title, and at least one subtask are required.', 'error');
+    return;
+  }
+  setGraphStatus('Creating the validated Runtime record (no dispatch)…');
+  elements['author-graph-create'].disabled = true;
+  try {
+    const { status, payload } = await postAction('taskGraphCreate', {
+      graph,
+      ...(intentMap ? { intentMap } : {}),
+    });
+    if (status !== 200 || payload?.ok !== true) {
+      renderActionError(elements['author-graph-errors'], payload);
+      setGraphStatus('Create failed.', 'error');
+      return;
+    }
+    setGraphStatus(`Created ${payload.parentTaskId || payload.graphId} (state ${escapeHtml(payload.state || payload.status || 'CREATED')}). Loading Preflight…`, 'ok');
+    await showGraphPreflight(payload.parentTaskId || payload.graphId || parentId);
+    await refresh();
+  } catch (error) {
+    setGraphStatus(`Create request failed: ${error.message}`, 'error');
+  } finally {
+    elements['author-graph-create'].disabled = false;
+  }
+}
+
+async function createSingleTask(event) {
+  event.preventDefault();
+  const params = {
+    title: elements['author-task-title'].value.trim(),
+    spec: elements['author-task-spec'].value.trim() || undefined,
+    planner: elements['author-task-planner'].value || undefined,
+    implementer: elements['author-task-implementer'].value || undefined,
+    reviewer: elements['author-task-reviewer'].value || undefined,
+  };
+  const id = elements['author-task-id'].value.trim();
+  if (id) params.id = id;
+  if (!params.title) {
+    elements['author-task-status'].textContent = 'Task title is required.';
+    elements['author-task-status'].className = 'author-status error';
+    return;
+  }
+  elements['author-task-status'].textContent = 'Creating Task…';
+  try {
+    const { status, payload } = await postAction('taskCreate', params);
+    if (status !== 200 || payload?.ok !== true) {
+      const error = payload?.error || {};
+      elements['author-task-status'].textContent = `Create failed: ${error.code || `HTTP ${status}`} — ${error.message || ''}`;
+      elements['author-task-status'].className = 'author-status error';
+      return;
+    }
+    elements['author-task-status'].textContent = `Created ${payload.task?.id || payload.id || params.title}.`;
+    elements['author-task-status'].className = 'author-status ok';
+    elements['author-task-id'].value = '';
+    elements['author-task-title'].value = '';
+    await refresh();
+  } catch (error) {
+    elements['author-task-status'].textContent = `Create request failed: ${error.message}`;
+    elements['author-task-status'].className = 'author-status error';
+  }
 }
 
 async function discoverAgents() {
@@ -669,6 +904,7 @@ async function refresh() {
     renderTasks();
     renderAgentFlow();
     renderConfiguredAgents(state.agents);
+    refreshAgentSelects();
     renderSessions();
     renderEvents();
     if (state.selectedTask) {
@@ -689,9 +925,17 @@ elements['refresh-button'].addEventListener('click', refresh);
 elements['close-detail'].addEventListener('click', closeDetail);
 elements['discover-agents'].addEventListener('click', discoverAgents);
 elements['agent-configure'].addEventListener('submit', applyAgentConfigure);
+elements['author-subtask-add'].addEventListener('click', () => addSubtaskRow());
+elements['author-graph-validate'].addEventListener('click', validateGraphNow);
+elements['author-graph-create'].addEventListener('click', createGraphNow);
+elements['task-create-form'].addEventListener('submit', createSingleTask);
+elements['author-graph-intent'].addEventListener('change', event => {
+  elements['author-graph-scope'].disabled = !event.target.checked;
+});
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape') closeGraphMap();
 });
+addSubtaskRow({ id: 'sub-a' });
 const initialTask = decodeURIComponent(window.location.hash.slice(1));
 if (initialTask) state.selectedTask = initialTask;
 refresh();

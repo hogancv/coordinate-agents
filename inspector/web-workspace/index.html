@@ -182,6 +182,63 @@
         </div>
         <div id="events" class="event-list" aria-live="polite"></div>
       </section>
+
+      <section id="author-panel" class="panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">AUTHORING · NO DISPATCH</p>
+            <h2>Author new work</h2>
+          </div>
+          <span class="muted-label">validate first · preflight is side-effect free · create persists the Runtime record only</span>
+        </div>
+        <p id="author-empty-agents" class="agents-note" hidden>No Agents are configured yet. Configure an Agent in the Agents panel above before authoring.</p>
+        <div class="author-grid">
+          <div class="author-col">
+            <h3>Single Task</h3>
+            <form id="task-create-form" class="author-form" novalidate>
+              <label>Title<input id="author-task-title" maxlength="1024" required placeholder="Task title"></label>
+              <label>Specification (optional)<textarea id="author-task-spec" rows="3" placeholder="What must change and how is it verified?"></textarea></label>
+              <label>Planner<select id="author-task-planner"></select></label>
+              <label>Implementer<select id="author-task-implementer"></select></label>
+              <label>Reviewer<select id="author-task-reviewer"></select></label>
+              <label>Deterministic ID (optional)<input id="author-task-id" maxlength="128" placeholder="task-… (created automatically when empty)"></label>
+              <button id="author-task-submit" class="button" type="submit">Create Task</button>
+              <span id="author-task-status" class="author-status" aria-live="polite"></span>
+            </form>
+          </div>
+          <div class="author-col">
+            <h3>Task Graph v1 <span class="muted-label">with optional Intent Map v1</span></h3>
+            <form id="graph-create-form" class="author-form" novalidate>
+              <label>Parent ID<input id="author-graph-id" maxlength="128" placeholder="task-…"></label>
+              <label>Title<input id="author-graph-title" maxlength="1024" required placeholder="Graph title"></label>
+              <label>Specification<textarea id="author-graph-spec" rows="2"></textarea></label>
+              <label>Planner<select id="author-graph-planner"></select></label>
+              <label>Reviewer<select id="author-graph-reviewer"></select></label>
+              <label>Max concurrency<input id="author-graph-max" type="number" min="1" max="32" value="1"></label>
+              <label class="author-toggle"><input id="author-graph-intent" type="checkbox"> Intent Map (write intents)</label>
+              <label>Scope policy<select id="author-graph-scope">
+                <option value="warn">warn (default)</option>
+                <option value="observe">observe</option>
+                <option value="strict">strict</option>
+              </select></label>
+            </form>
+            <div class="author-subtasks-head">
+              <h3>Subtasks</h3>
+              <button id="author-subtask-add" class="button ghost" type="button">+ Add subtask</button>
+            </div>
+            <p class="agents-note">Leave write intent empty in a row for an explicitly empty intent; disable the Intent Map for missing (unverified) coverage.</p>
+            <div id="author-subtask-rows" class="subtask-rows"></div>
+            <div class="author-actions">
+              <button id="author-graph-validate" class="button" type="button">Validate</button>
+              <button id="author-graph-create" class="button" type="button">Create Graph (persist only)</button>
+              <span id="author-graph-status" class="author-status" aria-live="polite"></span>
+            </div>
+            <div id="author-graph-errors" class="author-errors" aria-live="polite" hidden></div>
+            <div id="author-graph-validated" class="author-validated" aria-live="polite" hidden></div>
+            <div id="author-graph-preflight" class="author-preflight" aria-live="polite" hidden></div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">

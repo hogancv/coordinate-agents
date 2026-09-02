@@ -445,3 +445,123 @@ test('setup discovery and transactional Agent configuration work through the gua
     rmSync(isolatedHome, { recursive: true, force: true });
   }
 });
+
+test('Task and Task Graph authoring with preflight stays side-effect free until an explicit create (#49)', async () => {
+  const repositoryRoot = repository();
+  const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+  const base = started.url;
+  try {
+    const capability = await capabilityFromPage(base);
+    const post = payload => fetch(`${base}${ACTION_ENDPOINT}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-coordinate-agents-capability': capability },
+      body: JSON.stringify(payload),
+    });
+    const read = async response => ({ status: response.status, payload: await response.json() });
+
+    const graph = {
+      schemaVersion: 1,
+      parentTask: { id: 'task-author-parent', title: 'Author graph', spec: 'Build the authoring flow.', planner: 'codex', reviewer: 'codex' },
+      subtasks: [
+        { id: 'fe', implementer: 'antigravity', spec: 'Frontend.', dependsOn: [] },
+        { id: 'be', implementer: 'codex', spec: 'Backend.', dependsOn: ['fe'] },
+      ],
+      maxConcurrency: 1,
+    };
+    const intentMap = {
+      schemaVersion: 1,
+      parentTaskId: 'task-author-parent',
+      scopePolicy: 'strict',
+      subtasks: [
+        { id: 'fe', writeIntent: ['src/front/**'] },
+        { id: 'be', writeIntent: ['src/back/**'] },
+      ],
+    };
+
+    // Validate is side-effect free for valid and invalid inputs.
+    const validated = await read(await post({ action: 'taskGraphValidate', params: { graph, intentMap } }));
+    assert.equal(validated.status, 200);
+    assert.equal(validated.payload.ok, true, JSON.stringify(validated.payload.error || {}));
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'task-graphs', 'task-author-parent.json')), false);
+
+    // Cyclic and unknown-agent graphs are rejected before any persistence.
+    const cyclic = await read(await post({
+      action: 'taskGraphValidate',
+      params: { graph: { ...graph, parentTask: { ...graph.parentTask, id: 'task-cyclic' }, subtasks: [
+        { id: 'a', implementer: 'antigravity', spec: 'a', dependsOn: ['b'] },
+        { id: 'b', implementer: 'codex', spec: 'b', dependsOn: ['a'] },
+      ] } },
+    }));
+    assert.equal(cyclic.payload.ok, false);
+    assert.equal(cyclic.payload.error.code, 'TASK_GRAPH_INVALID');
+    const unknown = await read(await post({
+      action: 'taskGraphValidate',
+      params: { graph: { ...graph, parentTask: { ...graph.parentTask, id: 'task-unknown-agent' }, subtasks: [
+        { id: 'x', implementer: 'ghost-agent', spec: 'x' },
+      ] } },
+    }));
+    assert.equal(unknown.payload.ok, false);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'task-graphs', 'task-cyclic.json')), false);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'task-graphs', 'task-unknown-agent.json')), false);
+
+    // Explicit empty write intent and missing Intent Map both validate.
+    const emptyIntent = await read(await post({
+      action: 'taskGraphValidate',
+      params: { graph, intentMap: { schemaVersion: 1, parentTaskId: 'task-author-parent', scopePolicy: 'strict', subtasks: [{ id: 'fe', writeIntent: [] }, { id: 'be', writeIntent: [] }] } },
+    }));
+    assert.equal(emptyIntent.payload.ok, true);
+    const noIntent = await read(await post({ action: 'taskGraphValidate', params: { graph } }));
+    assert.equal(noIntent.payload.ok, true);
+
+    // Create is an explicit action that persists the Runtime-owned record and
+    // dispatches nothing (no Session, worktree, Bus handoff, or dispatch event).
+    const eventLog = join(repositoryRoot, '.agent-bus', 'events', 'runtime.jsonl');
+    const eventsBefore = existsSync(eventLog) ? readFileSync(eventLog, 'utf8').split('\n').filter(Boolean).length : 0;
+    const created = await read(await post({ action: 'taskGraphCreate', params: { graph, intentMap } }));
+    assert.equal(created.status, 200);
+    assert.equal(created.payload.ok, true, JSON.stringify(created.payload.error || {}));
+    assert.equal(created.payload.command, 'task.graph-create');
+    assert.ok(created.payload.parentTaskId === 'task-author-parent' || created.payload.graphId === 'task-author-parent');
+    const eventsAfterCreate = readFileSync(eventLog, 'utf8').split('\n').filter(Boolean).length;
+    assert.ok(eventsAfterCreate > eventsBefore, 'Create records a TASK_GRAPH_CREATED journal event');
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'task-graphs', 'task-author-parent.json')), true);
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false, 'Create must not open a Session');
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'worktrees')), false, 'Create must not create a worktree');
+    const journal = readFileSync(eventLog, 'utf8');
+    assert.equal(journal.includes('TASK_GRAPH_DISPATCH'), false, 'Create must not emit a dispatch event');
+
+    // A duplicate create is rejected without a second record.
+    const duplicate = await read(await post({ action: 'taskGraphCreate', params: { graph, intentMap } }));
+    assert.equal(duplicate.payload.ok, false);
+
+    // Preflight reads the persisted record and is side-effect free.
+    const eventsMid = readFileSync(eventLog, 'utf8').split('\n').filter(Boolean).length;
+    const preflight = await read(await post({ action: 'taskGraphPlan', params: { taskId: 'task-author-parent' } }));
+    assert.equal(preflight.status, 200);
+    assert.equal(preflight.payload.ok, true, JSON.stringify(preflight.payload.error || {}));
+    assert.equal(preflight.payload.frontier.ready.includes('fe'), true, 'fe is the dependency-free READY subtask');
+    assert.equal(preflight.payload.frontier.waiting.includes('be'), true, 'be waits on fe');
+    assert.ok(preflight.payload.plan && (preflight.payload.plan.wave || preflight.payload.plan.conflicts !== undefined));
+    const eventsAfterPlan = readFileSync(eventLog, 'utf8').split('\n').filter(Boolean).length;
+    assert.equal(eventsAfterPlan, eventsMid, 'Graph Preflight must be side-effect free');
+
+    // Single-Task create through the same authoring surface.
+    const singleTask = await read(await post({ action: 'taskCreate', params: { title: 'Single authored task', id: 'task-author-single' } }));
+    assert.equal(singleTask.payload.ok, true);
+    assert.equal(singleTask.payload.command, 'task.create');
+    assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'tasks', 'task-author-single.json')), true);
+
+    // Authoring panel assets ship in the Workspace.
+    const page = await (await fetch(`${base}/`)).text();
+    for (const expected of ['id="author-panel"', 'id="graph-create-form"', 'id="author-subtask-rows"', 'id="author-graph-preflight"', 'id="task-create-form"']) {
+      assert.ok(page.includes(expected), `Workspace page must include authoring surface: ${expected}`);
+    }
+    const js = await (await fetch(`${base}/app.js`)).text();
+    for (const expected of ['validateGraphNow', 'createGraphNow', 'showGraphPreflight', 'readSubtaskRows', 'refreshAgentSelects', 'taskGraphCreate', 'taskGraphPlan']) {
+      assert.ok(js.includes(expected), `Workspace app.js must expose authoring support: ${expected}`);
+    }
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
