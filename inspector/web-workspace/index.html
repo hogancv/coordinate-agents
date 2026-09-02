@@ -118,6 +118,23 @@
           <span id="execution-status" class="author-status" aria-live="polite"></span>
           <div id="execution-result" class="execution-result" aria-live="polite" hidden></div>
         </div>
+        <div id="review-panel" class="review-panel" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">REVIEW & INTEGRATE</p>
+              <h2>Review & integrate</h2>
+            </div>
+            <span class="muted-label">review approval is never release approval</span>
+          </div>
+          <p class="agents-note">Integration applies verified subtask commits only to the Runtime-owned aggregate
+            review worktree — never to your checked-out worktree or remote refs. Recording a review decision is
+            durable and visible after reload; requested changes never trigger an automatic retry. This Workspace
+            offers no merge, push, tag, publish, deploy, or release control: releasing requires the separate human
+            <code>RELEASE_APPROVED</code> gate.</p>
+          <div id="review-controls" class="review-controls"></div>
+          <span id="review-status" class="author-status" aria-live="polite"></span>
+          <div id="review-result" class="review-result" aria-live="polite" hidden></div>
+        </div>
         <section id="graph-detail" class="graph-detail" hidden>
           <section id="graph-map-region" class="graph-map-region">
             <div class="section-heading">

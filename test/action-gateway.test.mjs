@@ -794,3 +794,90 @@ test('Session console and recovery controls stay explicit, owned, and idempotent
     await safeRm(isolatedHome);
   }
 });
+
+test('review and integrate controls are explicit, conflict-aware, and never release (#52)', async () => {
+  const repositoryRoot = repository();
+  const isolatedHome = mkdtempSync(join(tmpdir(), 'coordinate-agents-review-home-'));
+  const missingCommand = join(isolatedHome, 'definitely-missing-agent-cmd');
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  try {
+    mkdirSync(join(isolatedHome, '.coordinate-agents'), { recursive: true });
+    const body = JSON.stringify({ version: 1, agents: { codex: { command: missingCommand }, antigravity: { command: missingCommand } } }, null, 2) + "\n";
+    writeFileSync(join(isolatedHome, '.coordinate-agents', 'config.json'), body, 'utf8');
+    process.env.COORDINATE_AGENTS_HOME = isolatedHome;
+    const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+    const base = started.url;
+    try {
+      const capability = await capabilityFromPage(base);
+      const post = payload => fetch(base + ACTION_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-coordinate-agents-capability': capability },
+        body: JSON.stringify(payload),
+      });
+      const read = async response => ({ status: response.status, payload: await response.json() });
+      const taskRuntime = await import('../skills/coordinate-agents/scripts/task-runtime.mjs');
+
+      const graphId = 'task-review-graph';
+      const created = await read(await post({
+        action: 'taskGraphCreate',
+        params: { graph: {
+          schemaVersion: 1,
+          parentTask: { id: graphId, title: 'Review graph', spec: 's', planner: 'codex', reviewer: 'codex' },
+          subtasks: [{ id: 'a', implementer: 'antigravity', spec: 'do', dependsOn: [] }],
+          maxConcurrency: 1,
+        } },
+      }));
+      assert.equal(created.payload.ok, true, JSON.stringify(created.payload.error || {}));
+
+      // Unsupported review decisions are rejected by the gateway before any Runtime call.
+      for (const decision of ['NOPE', 'APPROVE', '']) {
+        const bad = await read(await post({ action: 'taskReview', params: { taskId: 'task-x', decision } }));
+        assert.equal(bad.status, 400, 'decision ' + decision + ' must be rejected at the gateway');
+        assert.equal(bad.payload.error.code, 'ACTION_PARAMS_INVALID');
+      }
+
+      // Integration on a graph without verified subtask completion is a conflict,
+      // and review of that graph fails with the same Runtime gate; no user
+      // checkout or remote ref is touched.
+      const integrate = await read(await post({ action: 'taskGraphIntegrate', params: { taskId: graphId } }));
+      assert.equal(integrate.payload.ok, false, JSON.stringify(integrate.payload.error || {}));
+      assert.equal(integrate.payload.error.code, 'TASK_STATE_CONFLICT');
+      const review = await read(await post({ action: 'taskGraphReview', params: { taskId: graphId, decision: 'REVIEW_APPROVED', feedback: 'ok' } }));
+      assert.equal(review.payload.ok, false);
+      const porcelain = spawnSync('git', ['status', '--porcelain'], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
+      assert.equal(porcelain.stdout.trim(), '', 'Integration/review attempts must not touch the user checkout');
+      const gitBranch = spawnSync('git', ['branch', '--list', '--remote'], { cwd: repositoryRoot, encoding: 'utf8', windowsHide: true });
+      assert.equal(gitBranch.stdout.trim(), '', 'No remote refs are created by review controls');
+
+      // Single-Task review is state-aware: a fresh Task is not reviewable.
+      const freshTask = taskRuntime.createTask(repositoryRoot, { id: 'task-review-single', title: 'Fresh', spec: 's' });
+      const taskReview = await read(await post({ action: 'taskReview', params: { taskId: freshTask.id, decision: 'REVIEW_APPROVED', feedback: 'looks good' } }));
+      assert.equal(taskReview.payload.ok, false);
+      assert.ok(taskReview.payload.error.code, 'Single-Task review must be gated by Runtime state');
+
+      // Review UI explicitly separates review approval from RELEASE_APPROVED and
+      // ships no release control.
+      const page = await (await fetch(base + '/')).text();
+      assert.match(page, /id="review-panel"/);
+      const js = await (await fetch(base + '/app.js')).text();
+      assert.ok(page.includes('RELEASE_APPROVED'), 'Review UI text must name the human RELEASE_APPROVED gate');
+      for (const expected of ['renderReview', 'integrateGraph', 'submitReview', 'reviewParams', 'taskGraphIntegrate', 'taskGraphReview', 'taskReview']) {
+        assert.ok(js.includes(expected), 'Workspace app.js must expose review/integrate support: ' + expected);
+      }
+      const htmlLower = (await (await fetch(base + '/')).text()).toLowerCase();
+      for (const forbidden of ['>merge<', '>push<', '>publish<', '>deploy<', '>release<', '>tag<']) {
+        assert.equal(htmlLower.includes(forbidden), false, 'Review UI must not offer release-like controls: ' + forbidden);
+      }
+      const css = await (await fetch(base + '/styles.css')).text();
+      for (const expected of ['.review-panel', '.review-form', '.review-confirm-row', '.review-result']) {
+        assert.ok(css.includes(expected), 'Workspace styles.css must style review: ' + expected);
+      }
+      } finally {
+        await closeServer(started.server);
+        await safeRm(repositoryRoot);
+      }
+  } finally {
+    process.env.COORDINATE_AGENTS_HOME = originalHome;
+    await safeRm(isolatedHome);
+  }
+});
