@@ -6,6 +6,8 @@
  * a localised generic label while preserving the original code.
  */
 
+import { deriveComposerParams } from './composer-model.mjs';
+
 /* ------------------------------------------------------------------ */
 /* I18N                                                               */
 /* ------------------------------------------------------------------ */
@@ -65,6 +67,16 @@ const I18N = {
     'composer.failed': 'Create failed: {message}',
     'composer.graphHint': 'Graph mode opens the authoring form; validate, preview, then create explicitly.',
     'composer.sent': 'Request sent — Runtime accepted.',
+    'composer.dispatching': 'Dispatching task {id}…',
+    'composer.dispatchFailed': 'Dispatch failed — {message}',
+    'composer.dispatchRecoverable': 'Task {id} was created but was not dispatched.',
+    'composer.redispatch': 'Redispatch',
+    'composer.redispatchHint': 'Fix the Agent, then redispatch this same task — nothing is recreated.',
+    'composer.agentExecuting': 'Agent executing — real output is recorded below as it arrives.',
+    'composer.waitingAgent': 'Waiting for the implementer…',
+    'composer.dispatched': 'Dispatched {id} — {status}',
+    'composer.aria': 'Composer',
+    'composer.inputAria': 'Task description',
     'context.title': 'Context',
     'context.agentFlow': 'Agent flow',
     'context.selectionHint': 'Select a Task or Session to inspect it here.',
@@ -122,6 +134,8 @@ const I18N = {
     'detail.evidenceTitle': 'Evidence & review',
     'detail.specTitle': 'Specification',
     'msg.agent': 'Agent',
+    'msg.user': 'You',
+    'msg.taskDescription': 'Task description',
     'msg.session': 'Session',
     'msg.round': 'Round {round}',
     'msg.graph': 'Task Graph',
@@ -361,6 +375,16 @@ const I18N = {
     'composer.failed': '创建失败：{message}',
     'composer.graphHint': '图模式会打开创作表单；先验证与预检，再显式创建。',
     'composer.sent': '请求已发送 —— Runtime 已接受。',
+    'composer.dispatching': '正在派发任务 {id}…',
+    'composer.dispatchFailed': '派发失败 —— {message}',
+    'composer.dispatchRecoverable': '任务 {id} 已创建，但尚未派发。',
+    'composer.redispatch': '重新派发',
+    'composer.redispatchHint': '修正 Agent 后，可对同一任务重新派发 —— 不会重复创建。',
+    'composer.agentExecuting': 'Agent 正在执行 —— 真实输出会随记录显示在下方。',
+    'composer.waitingAgent': '正在等待实现者…',
+    'composer.dispatched': '已派发 {id} —— {status}',
+    'composer.aria': '消息输入区',
+    'composer.inputAria': '任务描述',
     'context.title': '上下文',
     'context.agentFlow': 'Agent 流转',
     'context.selectionHint': '选中一个 Task 或 Session 在此查看。',
@@ -418,6 +442,8 @@ const I18N = {
     'detail.evidenceTitle': '证据与评审',
     'detail.specTitle': '规格说明',
     'msg.agent': 'Agent',
+    'msg.user': '你',
+    'msg.taskDescription': '任务描述',
     'msg.session': '会话',
     'msg.round': '第 {round} 轮',
     'msg.graph': '任务图',
@@ -703,6 +729,9 @@ function applyStaticI18n() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach(element => {
     element.title = t(element.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(element => {
+    element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel));
   });
   // Document title keeps the product anchor "Coordinate Agents Workspace".
   document.title = locale === 'zh-CN' ? 'Coordinate Agents 工作台' : 'Coordinate Agents Workspace';
@@ -2240,7 +2269,7 @@ function chatMessageCard(task, entry) {
   // entry: {kind: 'task'|'state'|'event'|'session'|'review'|'error'|'action'|'evidence',
   //          title, sub, body, raw, time, dot, pill}
   const dotClass = entry.dot ? ` dot-${statusClass(entry.dot)}` : '';
-  const side = entry.kind === 'action' ? 'side-right' : '';
+  const side = entry.kind === 'action' || entry.kind === 'user' ? 'side-right' : '';
   return `
     <article class="chat-msg msg-${entry.kind}${side}" data-chat-kind="${entry.kind}">
       <div class="chat-msg-head">
@@ -2266,14 +2295,21 @@ function renderChatFeed(task) {
   }
   welcome.hidden = true;
   const messages = [];
-  // Header card: the authoritative Task record.
+  // User message, derived from the authoritative Task record: the full
+  // description is the Task spec (single-line inputs are kept verbatim), and
+  // the bubble carries the Task id, creation time, and live status. Never
+  // fabricated — everything below it comes from the Runtime/Event Journal.
+  const description = task.spec && `${task.spec}`.trim()
+    ? `${task.spec}`
+    : (task.title ? `${task.title}` : task.id);
   messages.push(chatMessageCard(task, {
-    kind: task.graph ? 'task' : 'task',
-    title: task.title || task.id,
-    sub: `${task.id} · ${task.graph ? t('msg.graph') : t('msg.round', { round: task.round })} · ${t('msg.updated', { time: formatDate(task.updatedAt) })}`,
+    kind: 'user',
+    title: t('msg.user'),
+    sub: `${task.id} · ${task.graph ? t('msg.graph') : t('msg.round', { round: task.round })} · ${t('msg.created', { time: formatDate(task.createdAt) })}`,
     pill: task.status || (task.graph ? 'RUNNING' : ''),
-    body: task.spec || null,
-    dot: task.status || 'UNKNOWN',
+    body: description,
+    dot: task.status || 'OK',
+    time: formatDate(task.createdAt),
   }));
 
   const timeline = Array.isArray(task.timeline) ? task.timeline : [];
@@ -2342,12 +2378,32 @@ function renderChatFeed(task) {
     }));
   }
 
+  // Recoverable dispatch failure: keep the created Task and offer an explicit
+  // redispatch entry. Never an automatic retry, never a second Task.
+  if (canRedispatch(task)) {
+    messages.push(`
+      <article class="chat-msg msg-action" data-chat-kind="recover">
+        <div class="chat-msg-head">
+          <span class="chat-dot dot-error" aria-hidden="true"></span>
+          <strong>${escapeHtml(t('composer.dispatchRecoverable', { id: task.id }))}</strong>
+          <time>${escapeHtml(formatTime(task.updatedAt))}</time>
+        </div>
+        <div class="chat-msg-sub">${escapeHtml(t('composer.redispatchHint'))}</div>
+        <button type="button" class="button chat-msg-cta" data-redispatch="${escapeHtml(task.id)}">${escapeHtml(t('composer.redispatch'))}</button>
+      </article>`);
+  }
+
   if (!messages.length) {
     feed.innerHTML = `<div class="empty-state">${escapeHtml(t('empty.detailTimeline'))}</div>`;
     return;
   }
   const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 180;
   feed.innerHTML = messages.join('');
+  feed.querySelectorAll('[data-redispatch]').forEach(button => {
+    const taskId = `${button.dataset.redispatch || ''}`;
+    if (!taskId) return;
+    button.addEventListener('click', () => { redispatchTask(taskId); });
+  });
   if (nearBottom) {
     feed.scrollTop = feed.scrollHeight;
   }
@@ -2356,6 +2412,14 @@ function renderChatFeed(task) {
 function isErrorEvent(event) {
   const text = `${event.event || ''} ${event.status || ''}`.toUpperCase();
   return /ERROR|FAIL|NONZERO|REJECTED|BLOCKED|STOPPED/.test(text) && !/STOPPED_OK/.test(text);
+}
+
+function canRedispatch(task) {
+  if (!task || task.graph) return false;
+  if (task.status !== 'ERROR' || !task.lastError) return false;
+  if (task.lastError.recoverable === false) return false;
+  const code = `${task.lastError.code || ''}`;
+  return /EXECUTABLE_NOT_FOUND|AGENT_EXIT_NONZERO|AGENT_RUNTIME_ERROR|UNSUPPORTED_CAPABILITY|INVALID_AGENT_CONFIG|SESSION_START_FAILED|TASK_STATE_CONFLICT/.test(code);
 }
 
 function recordLocalAction(taskId, label, kind = 'ok') {
@@ -2460,11 +2524,82 @@ function updateSendLabel() {
   send.textContent = mode === 'graph' ? t('composer.openGraph') : t('composer.send');
 }
 
+let composerBusy = false;
+
+function composerUiBusy(busy) {
+  composerBusy = busy;
+  const send = elements['composer-send'];
+  if (send) send.disabled = busy;
+  if (!busy) updateSendLabel();
+}
+
+function actionError(status, payload) {
+  if (status === 200 && payload?.ok === true) return null;
+  const error = payload?.error || {};
+  return {
+    code: error.code || (status !== 200 ? `HTTP ${status}` : 'ACTION_REJECTED'),
+    message: error.message || payload?.message || 'Runtime rejected the request.',
+    recoverable: error.recoverable === true,
+  };
+}
+
+function cryptoRandomId() {
+  try {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      return globalThis.crypto.randomUUID();
+    }
+  } catch { /* fall through to local random */ }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function errorLabel(code, message, status) {
+  return `${code || `HTTP ${status}`} — ${message || ''}`;
+}
+
+async function dispatchTask(taskId, correlationId = null) {
+  // Dispatch exactly once against the real Task id. The Runtime waits a short
+  // bounded grace for the implementer, so a returned Task status is real.
+  setComposerStatus(t('composer.dispatching', { id: shortId(taskId) }), 'info');
+  const response = await postAction('taskDispatch', { taskId }, { correlationId });
+  const error = actionError(response.status, response.payload);
+  if (error) {
+    recordLocalAction(taskId, t('composer.dispatchFailed', { message: error.message || error.code }), 'error');
+    setComposerStatus(t('composer.dispatchFailed', { message: errorLabel(error.code, error.message, response.status) }), 'error');
+    toast(t('composer.dispatchFailed', { message: error.message || error.code || `HTTP ${response.status}` }), 'error', 6000);
+    if (state.selectedTask !== taskId) switchView('chat');
+    await selectTask(taskId);
+    return { ok: false, error };
+  }
+  const status = response.payload?.task?.status || response.payload?.status || '';
+  const statusLabel = statusText(status);
+  recordLocalAction(taskId, t('composer.dispatched', { id: shortId(taskId), status: statusLabel }), 'ok');
+  setComposerStatus(
+    status === 'REVIEWING' || status === 'WAITING_IMPLEMENTER' ? t('composer.waitingAgent') : statusLabel,
+    'ok',
+  );
+  if (state.selectedTask !== taskId) switchView('chat');
+  await selectTask(taskId);
+  return { ok: true, status };
+}
+
+async function redispatchTask(taskId) {
+  if (!taskId || composerBusy) return;
+  composerUiBusy(true);
+  try {
+    const result = await dispatchTask(taskId, cryptoRandomId());
+    if (result.ok) toast(t('composer.dispatched', { id: shortId(taskId), status: statusText(result.status) }), 'ok', 3200);
+  } catch (error) {
+    setComposerStatus(t('composer.dispatchFailed', { message: errorLabel(error.code, error.message) }), 'error');
+  } finally {
+    composerUiBusy(false);
+  }
+}
+
 async function composerSend() {
+  if (composerBusy) return; // Rapid double-click / double-Enter guard.
   const input = elements['composer-input'];
-  const text = input.value.trim();
-  const firstLine = text.split(/\r?\n/, 1)[0].trim();
-  if (!firstLine) {
+  const derived = deriveComposerParams(input.value);
+  if (!derived) {
     setComposerStatus(t('composer.titleRequired'), 'error');
     toast(t('composer.titleRequired'), 'error', 3200);
     input.focus();
@@ -2473,41 +2608,60 @@ async function composerSend() {
   const mode = elements['composer-mode']?.value || 'task';
   const agentId = elements['composer-agent']?.value || '';
   if (mode === 'graph') {
+    // Graph mode opens the authoring form only; it never auto-executes.
     openAuthorDrawer();
-    elements['author-graph-title'].value = firstLine;
-    elements['author-graph-spec'].value = text;
+    elements['author-graph-title'].value = derived.firstLine;
+    elements['author-graph-spec'].value = derived.spec;
     setComposerStatus(t('composer.graphHint'), 'info');
     window.setTimeout(() => elements['author-graph-title'].focus(), 60);
     return;
   }
-  const params = { title: firstLine };
-  if (text.length > firstLine.length) params.spec = text;
-  if (agentId) params.implementer = agentId;
+
+  composerUiBusy(true);
   const send = elements['composer-send'];
-  send.disabled = true;
+  if (send) send.textContent = t('composer.creating');
   setComposerStatus(t('composer.creating'), 'info');
+  const correlationId = cryptoRandomId();
+  let createdTaskId = null;
   try {
-    const { status, payload } = await postAction('taskCreate', params);
-    if (status !== 200 || payload?.ok !== true) {
-      const error = payload?.error || {};
-      setComposerStatus(t('composer.failed', { message: `${error.code || `HTTP ${status}`} — ${error.message || ''}` }), 'error');
-      toast(t('composer.failed', { message: error.message || error.code || `HTTP ${status}` }), 'error', 5000);
+    const createParams = { title: derived.title, spec: derived.spec }; // spec is always the full input.
+    if (agentId) createParams.implementer = agentId;
+    const create = await postAction('taskCreate', createParams, { correlationId });
+    const createError = actionError(create.status, create.payload);
+    if (createError) {
+      // Create failed: nothing was dispatched. Keep the input and surface the
+      // real code/message plus correlation for diagnosis.
+      setComposerStatus(t('composer.failed', { message: errorLabel(createError.code, createError.message, create.status) }), 'error');
+      toast(t('composer.failed', { message: createError.message || createError.code || `HTTP ${create.status}` }), 'error', 5000);
       return;
     }
-    const taskId = payload.task?.id || payload.id;
-    setComposerStatus('');
-    toast(t('composer.sent'), 'ok', 3000);
+    createdTaskId = create.payload?.task?.id || create.payload?.id || null;
+    if (!createdTaskId) throw new Error('Runtime accepted the task without returning a Task id.');
+    // The user message is now visible in the feed; the spec is preserved whole.
     input.value = '';
-    await refresh();
-    if (taskId) {
-      switchView('chat');
-      selectTask(taskId);
+    await selectTask(createdTaskId);
+    const dispatched = await dispatchTask(createdTaskId, correlationId);
+    if (dispatched.ok && (dispatched.status === 'REVIEWING' || dispatched.status === 'WAITING_IMPLEMENTER')) {
+      toast(t('composer.dispatched', { id: shortId(createdTaskId), status: statusText(dispatched.status) }), 'ok', 3600);
     }
   } catch (error) {
-    setComposerStatus(t('composer.failed', { message: error.message }), 'error');
-    toast(t('composer.failed', { message: error.message }), 'error', 5000);
+    const code = error?.code || 'NETWORK';
+    const message = error?.message || String(error);
+    if (createdTaskId) {
+      // Dispatch failed after a successful create: keep and select the task;
+      // no second task is created and the feed offers an explicit redispatch.
+      recordLocalAction(createdTaskId, t('composer.dispatchFailed', { message }), 'error');
+      setComposerStatus(t('composer.dispatchFailed', { message: errorLabel(code, message) }), 'error');
+      if (state.selectedTask !== createdTaskId) switchView('chat');
+      await selectTask(createdTaskId);
+    } else {
+      setComposerStatus(t('composer.failed', { message: errorLabel(code, message) }), 'error');
+      toast(t('composer.failed', { message }), 'error', 5000);
+    }
   } finally {
-    send.disabled = false;
+    composerUiBusy(false); // restores the mode-aware Send label.
+    const inputEl = elements['composer-input'];
+    if (inputEl && document.activeElement !== send) inputEl.focus();
   }
 }
 

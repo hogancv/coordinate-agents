@@ -1,3 +1,16 @@
 # WorkBuddy local data and UI verification artifacts
 /.workbuddy/
 /ui-shots/
+
+# Runtime, build, environment, log, tarball, and OS clutter
+.agent-bus/
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+npm-debug.log*
+*.tgz
+.DS_Store
+Thumbs.db

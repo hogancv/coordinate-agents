@@ -237,6 +237,8 @@ test('Happy path: Dispatch one selected READY subtask in an isolated Git worktre
 test('Unchanged user worktree: Captures exact base commit without touching uncommitted files', async () => {
   const root = tempRepository('coordinate-graph-uncommitted-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-graph-home-'));
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  process.env.COORDINATE_AGENTS_HOME = home;
   const cmd = fixtureImplementer(root, 'agent-antigravity');
   let dispatched = null;
 
@@ -285,12 +287,16 @@ test('Unchanged user worktree: Captures exact base commit without touching uncom
     }
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.COORDINATE_AGENTS_HOME = originalHome;
+    else delete process.env.COORDINATE_AGENTS_HOME;
   }
 });
 
 test('Worktree paths with spaces and shell metacharacters', async () => {
   const root = tempRepository('coordinate graph spaces & $meta (test)-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-graph-home-'));
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  process.env.COORDINATE_AGENTS_HOME = home;
   const cmd = fixtureImplementer(root, 'agent-antigravity');
   let dispatched = null;
 
@@ -323,12 +329,16 @@ test('Worktree paths with spaces and shell metacharacters', async () => {
     }
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.COORDINATE_AGENTS_HOME = originalHome;
+    else delete process.env.COORDINATE_AGENTS_HOME;
   }
 });
 
 test('Validation & Safety: Rejects invalid subtask IDs, path escapes, and non-READY subtasks', async () => {
   const root = tempRepository('coordinate-graph-safety-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-graph-home-'));
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  process.env.COORDINATE_AGENTS_HOME = home;
   const cmd = fixtureImplementer(root, 'agent-antigravity');
 
   try {
@@ -371,6 +381,8 @@ test('Validation & Safety: Rejects invalid subtask IDs, path escapes, and non-RE
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.COORDINATE_AGENTS_HOME = originalHome;
+    else delete process.env.COORDINATE_AGENTS_HOME;
   }
 });
 
@@ -421,6 +433,8 @@ test('Worktree boundary: Rejects a symlinked or junction graph worktree root bef
 test('Session isolation: Session is rooted in worktree and isolated from main root sessions', async () => {
   const root = tempRepository('coordinate-graph-session-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-graph-home-'));
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  process.env.COORDINATE_AGENTS_HOME = home;
   const cmd = fixtureImplementer(root, 'agent-antigravity');
   let dispatched = null;
 
@@ -459,12 +473,16 @@ test('Session isolation: Session is rooted in worktree and isolated from main ro
     }
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.COORDINATE_AGENTS_HOME = originalHome;
+    else delete process.env.COORDINATE_AGENTS_HOME;
   }
 });
 
 test('Failure isolation: Executable failure fails closed, marks subtask FAILED, and leaves sibling untouched', async () => {
   const root = tempRepository('coordinate-graph-failure-');
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-graph-home-'));
+  const originalHome = process.env.COORDINATE_AGENTS_HOME;
+  process.env.COORDINATE_AGENTS_HOME = home;
   const failingCmd = fixtureImplementer(root, 'agent-failing', { exitCode: 7 });
 
   try {
@@ -516,6 +534,8 @@ test('Failure isolation: Executable failure fails closed, marks subtask FAILED, 
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+    if (originalHome !== undefined) process.env.COORDINATE_AGENTS_HOME = originalHome;
+    else delete process.env.COORDINATE_AGENTS_HOME;
   }
 });
 

@@ -18,6 +18,7 @@ import test from 'node:test';
 import { createTask, setTaskStatus } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { createTaskGraph } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import { startWorkspace } from '../inspector/server/server.mjs';
+import { COMPOSER_TITLE_MAX, deriveComposerParams } from '../inspector/web-workspace/composer-model.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
@@ -308,4 +309,44 @@ test('Workspace metadata ships in the package payload, CLI help, and web assets 
   assert.equal(help.status, 0);
   assert.match(help.stdout, /web\s+Launch the local Web Workspace over the selected Git repository/);
   assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);
+});
+
+test('chat composer keeps the full single-line input as the Task spec', () => {
+  // Regression: a single-line prompt previously lost its spec entirely.
+  const single = deriveComposerParams('Fix the login redirect');
+  assert.equal(single.title, 'Fix the login redirect');
+  assert.equal(single.spec, 'Fix the login redirect');
+  assert.equal(single.firstLine, single.title);
+});
+
+test('chat composer writes multi-line input whole and truncates only the title safely', () => {
+  const multi = deriveComposerParams('  First line title\n\nSecond paragraph with details.\nThird line.  ');
+  assert.equal(multi.title, 'First line title');
+  assert.equal(multi.spec, 'First line title\n\nSecond paragraph with details.\nThird line.');
+  assert.equal(multi.firstLine, 'First line title');
+  assert.ok(multi.spec.length > multi.title.length, 'the spec is never truncated');
+
+  const longLine = 'x'.repeat(COMPOSER_TITLE_MAX + 40);
+  const truncated = deriveComposerParams(longLine);
+  assert.equal(truncated.title.length, COMPOSER_TITLE_MAX);
+  assert.equal(truncated.spec, longLine, 'spec must stay intact when the title is shortened');
+  assert.equal(truncated.title, longLine.slice(0, COMPOSER_TITLE_MAX));
+
+  assert.equal(deriveComposerParams('   \n  '), null, 'blank composer input creates nothing');
+});
+
+test('Workspace serves the composer model module for the browser bundle', async () => {
+  const repositoryRoot = taskFixture(repository());
+  const started = await startWorkspace({ root: repositoryRoot, port: 0 });
+  try {
+    const response = await fetch(`${started.url}/composer-model.mjs`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /text\/javascript/);
+    const body = await response.text();
+    assert.match(body, /export function deriveComposerParams/);
+    assert.match(body, /COMPOSER_TITLE_MAX/);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
 });

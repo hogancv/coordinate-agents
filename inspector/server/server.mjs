@@ -18,6 +18,7 @@ const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', impor
 const STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
+  ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
 ]);
 

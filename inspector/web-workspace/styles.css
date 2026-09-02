@@ -527,7 +527,9 @@ body { overflow: hidden; }
 .msg-review { border-left: 3px solid var(--green); }
 .msg-error { border-color: rgba(255, 127, 143, .3); border-left-color: var(--red); background: rgba(255, 127, 143, .05); }
 .msg-action { border: 1px solid rgba(140, 169, 255, .25); background: rgba(97, 124, 255, .12); }
+.msg-user { border-color: rgba(140, 169, 255, .42); background: rgba(97, 124, 255, .18); }
 .side-right { margin-left: 12%; }
+.chat-msg-cta { grid-column: 2 / -1; justify-self: start; }
 
 /* Welcome */
 .welcome-card { padding: 1.2rem 1.4rem; border: 1px solid var(--line); border-radius: 1rem; background: rgba(255, 255, 255, .025); }

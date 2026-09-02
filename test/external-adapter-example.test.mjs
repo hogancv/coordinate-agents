@@ -46,6 +46,7 @@ test('minimal external Adapter follows explicit registration and persistent Sess
         COORDINATE_AGENTS_HOME: home,
         HOME: home,
         USERPROFILE: home,
+        COORDINATE_AGENTS_REGISTRATION_CHILD: '1',
       },
       windowsHide: true,
     });

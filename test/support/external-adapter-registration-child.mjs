@@ -178,7 +178,15 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  console.error(error?.stack || error);
-  process.exitCode = 1;
-});
+// This file is both a fixture (spawned by external-adapter-example.test.mjs with
+// an isolated COORDINATE_AGENTS_HOME) and a file the Node test-runner discovers
+// under test/. The registration flow must never run as a discovered test module:
+// that would execute against the real user configuration. The parent therefore
+// spawns it with an explicit execution marker; discovery (no marker) stays inert.
+const isFixtureChild = process.env.COORDINATE_AGENTS_REGISTRATION_CHILD === '1';
+if (isFixtureChild) {
+  main().catch(error => {
+    console.error(error?.stack || error);
+    process.exitCode = 1;
+  });
+}
