@@ -68,6 +68,17 @@
         </div>
         <div id="detail-summary" class="detail-summary"></div>
         <section id="graph-detail" class="graph-detail" hidden>
+          <section id="graph-map-region" class="graph-map-region">
+            <div class="section-heading">
+              <div>
+                <h3>Graph map</h3>
+                <span id="graph-map-note" class="muted-label" aria-live="polite"></span>
+              </div>
+              <span id="graph-legend" class="graph-legend" aria-hidden="true"></span>
+            </div>
+            <div id="graph-map" class="graph-map" role="img" aria-label="Interactive Task Graph dependency map. Each node is a subtask; arrows point from a dependency to the subtask that depends on it."></div>
+            <div id="graph-node-detail" class="graph-node-detail" aria-live="polite"></div>
+          </section>
           <div class="graph-overview-grid">
             <div>
               <h3>Task Graph topology</h3>
