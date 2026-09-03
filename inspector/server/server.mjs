@@ -25,7 +25,10 @@ const WORKSPACE_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/terminal-model.mjs', { file: 'terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
+  ['/vendor/xterm.js', { file: 'vendor/xterm.js', type: 'text/javascript; charset=utf-8' }],
+  ['/vendor/xterm.css', { file: 'vendor/xterm.css', type: 'text/css; charset=utf-8' }],
 ]);
 
 const STATIC_FILES = WORKSPACE_STATIC_FILES;
@@ -70,9 +73,14 @@ function asset(response, pathname, assetsRoot, capability = null, staticFiles = 
   }
 }
 
-function parseLimit(value) {
+function parseLimit(value, fallback = 100, maximum = 500) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  return Number.isFinite(parsed) ? Math.min(maximum, Math.max(1, Math.floor(parsed))) : fallback;
+}
+
+function parseByteLimit(value, fallback = 32 * 1024) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(32 * 1024, Math.max(1, Math.floor(parsed))) : fallback;
 }
 
 function parseSequence(value, fallback = null) {
@@ -131,11 +139,15 @@ function apiError(response, error) {
   const code = error?.code || '';
   const status = code === 'TASK_NOT_FOUND'
     ? 404
-    : code === 'TASK_GRAPH_INVALID'
-      ? 400
-      : code === 'TASK_STATE_CONFLICT'
-        ? 409
-        : 500;
+    : code === 'SESSION_NOT_FOUND'
+      ? 404
+      : code === 'SESSION_STATE_CONFLICT'
+        ? 400
+        : code === 'TASK_GRAPH_INVALID'
+          ? 400
+          : code === 'TASK_STATE_CONFLICT'
+            ? 409
+            : 500;
   json(response, status, {
     error: redactOutput(error?.message || 'Inspector request failed.', 2 * 1024),
     code: code || 'INSPECTOR_READ_FAILED',
@@ -205,6 +217,30 @@ export function createInspectorServer({
       }
       if (pathname === '/api/sessions') {
         json(response, 200, await data.readSessions());
+        return;
+      }
+      if (ui === 'workspace' && pathname.startsWith('/api/sessions/')) {
+        const suffix = pathname.slice('/api/sessions/'.length);
+        const match = /^([^/]+)\/read$/.exec(suffix);
+        if (!match) {
+          json(response, 404, { error: 'Workspace Session endpoint not found.' });
+          return;
+        }
+        let sessionId;
+        try {
+          sessionId = decodeURIComponent(match[1]);
+        } catch {
+          json(response, 400, { error: 'Invalid Session id.' });
+          return;
+        }
+        if (typeof data.readSessionOutput !== 'function') {
+          json(response, 404, { error: 'Workspace Session endpoint not found.' });
+          return;
+        }
+        const cursor = parseSequence(url.searchParams.get('cursor'), null);
+        const maxLines = parseLimit(url.searchParams.get('maxLines'), 200, 200);
+        const maxBytes = parseByteLimit(url.searchParams.get('maxBytes'));
+        json(response, 200, await data.readSessionOutput(sessionId, { cursor, maxLines, maxBytes }));
         return;
       }
       if (pathname === '/api/events') {

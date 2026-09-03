@@ -17,7 +17,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { createTask, setTaskStatus } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { createTaskGraph } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
-import { startWorkspace, startInspector } from '../inspector/server/server.mjs';
+import { createInspectorServer, startWorkspace, startInspector } from '../inspector/server/server.mjs';
 import {
   COMPOSER_TITLE_MAX,
   CHAT_MAX_OUTPUT,
@@ -25,6 +25,12 @@ import {
   deriveSessionChatEntry,
   renderSessionChatCard,
 } from '../inspector/web-workspace/composer-model.mjs';
+import {
+  isActiveTerminalSession,
+  selectTerminalPanes,
+  TERMINAL_MAX_BYTES,
+  TERMINAL_MAX_LINES,
+} from '../inspector/web-workspace/terminal-model.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
@@ -351,8 +357,112 @@ test('Workspace serves the composer model module for the browser bundle', async 
     const body = await response.text();
     assert.match(body, /export function deriveComposerParams/);
     assert.match(body, /COMPOSER_TITLE_MAX/);
+
+    const terminalModel = await (await fetch(`${started.url}/terminal-model.mjs`)).text();
+    assert.match(terminalModel, /selectTerminalPanes/);
+    const xterm = await fetch(`${started.url}/vendor/xterm.js`);
+    assert.equal(xterm.status, 200);
+    assert.match(xterm.headers.get('content-type'), /text\/javascript/);
+    assert.match(await xterm.text(), /Terminal/);
+    const xtermCss = await fetch(`${started.url}/vendor/xterm.css`);
+    assert.equal(xtermCss.status, 200);
+    assert.match(xtermCss.headers.get('content-type'), /text\/css/);
+    const missingSession = await fetch(`${started.url}/api/sessions/session_missing1/read`);
+    assert.equal(missingSession.status, 404);
+    assert.match((await missingSession.json()).code, /SESSION_NOT_FOUND/);
   } finally {
     await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Workspace terminal panes prefer the current Task Session and fall back transparently', () => {
+  const agents = [
+    { id: 'codex', adapter: 'codex-cli' },
+    { id: 'codex', adapter: 'codex-cli' },
+    { id: 'antigravity', adapter: 'antigravity-cli' },
+    { id: 'reviewer', adapter: 'generic-cli' },
+  ];
+  const sessions = [
+    { sessionId: 'session-codex-old', agent: 'codex', status: 'exited', lastActivity: '2026-09-03T08:00:00.000Z' },
+    { sessionId: 'session-codex-new', agent: 'codex', status: 'running', lastActivity: '2026-09-03T09:00:00.000Z' },
+    { sessionId: 'session-task', agent: 'antigravity', status: 'running', lastActivity: '2026-09-03T08:30:00.000Z' },
+  ];
+  const panes = selectTerminalPanes({
+    agents,
+    sessions,
+    task: { id: 'task-terminal', sessionId: 'session-task', implementer: 'antigravity' },
+  });
+  assert.equal(panes.length, 2);
+  assert.deepEqual(panes.map(pane => pane.agentId), ['antigravity', 'codex']);
+  assert.equal(panes[0].sessionId, 'session-task');
+  assert.equal(panes[0].source, 'task');
+  assert.equal(panes[1].sessionId, 'session-codex-new');
+  assert.equal(panes[1].source, 'latest');
+
+  const empty = selectTerminalPanes({ agents: [], sessions: [], count: 2 });
+  assert.equal(empty.length, 2);
+  assert.ok(empty.every(pane => pane.source === 'none' && pane.sessionId === null));
+  assert.equal(isActiveTerminalSession({ status: 'running' }), true);
+  assert.equal(isActiveTerminalSession({ state: 'exited' }), false);
+  assert.equal(TERMINAL_MAX_LINES, 200);
+  assert.equal(TERMINAL_MAX_BYTES, 32 * 1024);
+});
+
+test('Workspace exposes bounded cursor Session reads but Inspector does not', async () => {
+  const repositoryRoot = taskFixture(repository());
+  const payloads = [];
+  const data = {
+    async readSessionOutput(sessionId, options) {
+      payloads.push({ sessionId, options });
+      return {
+        session: {
+          id: sessionId,
+          agent: 'codex',
+          state: 'running',
+          exitCode: null,
+          signal: null,
+          error: null,
+        },
+        output: {
+          output: '\u001b[32mhello',
+          nextCursor: 9,
+          truncated: false,
+        },
+      };
+    },
+  };
+  const server = createInspectorServer({ root: repositoryRoot, data, ui: 'workspace' });
+  await new Promise((resolvePromise, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolvePromise);
+  });
+  const port = server.address().port;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/session_terminal/read?cursor=7&maxLines=999&maxBytes=999999`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.session.id, 'session_terminal');
+    assert.equal(body.output.nextCursor, 9);
+    assert.equal(body.output.output, '\u001b[32mhello');
+    assert.deepEqual(payloads[0], {
+      sessionId: 'session_terminal',
+      options: { cursor: 7, maxLines: 200, maxBytes: 32 * 1024 },
+    });
+
+    const inspector = createInspectorServer({ root: repositoryRoot, data, ui: 'inspector' });
+    await new Promise((resolvePromise, reject) => {
+      inspector.once('error', reject);
+      inspector.listen(0, '127.0.0.1', resolvePromise);
+    });
+    try {
+      const missing = await fetch(`http://127.0.0.1:${inspector.address().port}/api/sessions/session_terminal/read`);
+      assert.equal(missing.status, 404);
+    } finally {
+      await closeServer(inspector);
+    }
+  } finally {
+    await closeServer(server);
     rmSync(repositoryRoot, { recursive: true, force: true });
   }
 });

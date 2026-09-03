@@ -48,6 +48,7 @@ const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_READ_BYTES = 32 * 1024;
 const MAX_READ_LINES = 200;
+const MAX_PERSISTED_OUTPUT_BYTES = 8 * 1024;
 const MAX_INPUT_BYTES = 256 * 1024;
 const HOST_PATH = fileURLToPath(new URL('./session-host.mjs', import.meta.url));
 
@@ -218,6 +219,7 @@ function writeRecord(root, record) {
     exitCode: record.exitCode ?? null,
     signal: record.signal || null,
     error: record.error ? redactOutput(record.error, 2 * 1024) : null,
+    outputTail: record.outputTail ? redactOutput(record.outputTail, MAX_PERSISTED_OUTPUT_BYTES) : '',
     endpoint: record.endpoint,
     hostPid: Number.isInteger(record.hostPid) ? record.hostPid : null,
     taskId: record.taskId || null,
@@ -573,6 +575,7 @@ export class ExecutionSessionManager {
       exitCode: null,
       signal: null,
       error: null,
+      outputTail: '',
       endpoint,
       hostPid: null,
       taskId,
@@ -704,7 +707,7 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    let output = { output: '', nextCursor: null, truncated: false };
+    let output = { output: current.outputTail || '', nextCursor: null, truncated: false };
     if (ACTIVE_STATES.has(current.state)) {
       const boundedLines = Number.isInteger(maxLines) ? Math.min(MAX_READ_LINES, Math.max(1, maxLines)) : 100;
       const boundedBytes = Number.isInteger(maxBytes) ? Math.min(MAX_READ_BYTES, Math.max(1, maxBytes)) : 16 * 1024;
@@ -717,7 +720,17 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) return { session: publicRecord(current), output: '', nextCursor: null, truncated: false };
+    if (!ACTIVE_STATES.has(current.state)) {
+      // A cursor is meaningful only while the owned host is still buffering
+      // live output. Once it has exited, return the bounded persisted tail as
+      // a replacement snapshot so clients do not append the same tail twice.
+      return {
+        session: publicRecord(current),
+        output: current.outputTail || '',
+        nextCursor: null,
+        truncated: Number.isInteger(cursor),
+      };
+    }
     const result = await requestHost(current, {
       op: 'read',
       cursor: Number.isInteger(cursor) ? cursor : null,

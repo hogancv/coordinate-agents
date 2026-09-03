@@ -7,6 +7,15 @@
  */
 
 import { deriveComposerParams, deriveSessionChatEntry } from './composer-model.mjs';
+import {
+  isActiveTerminalSession,
+  selectTerminalPanes,
+  terminalSessionKey,
+  TERMINAL_MAX_BYTES,
+  TERMINAL_MAX_LINES,
+  TERMINAL_PANE_COUNT,
+  TERMINAL_POLL_MS,
+} from './terminal-model.mjs';
 
 /* ------------------------------------------------------------------ */
 /* I18N                                                               */
@@ -28,7 +37,7 @@ const I18N = {
     'view.sessions': 'Sessions',
     'view.activity': 'Activity',
     'view.subtitleWorkspace': 'Workspace for your local AI coding team',
-    'view.subtitleChat': 'Task conversations and workspace events',
+    'view.subtitleChat': 'Live Agent terminals and task dispatch',
     'view.subtitleTasks': 'All durable Tasks and Task Graphs in this repository',
     'view.subtitleAgents': 'Configure local coding Agents, Adapters and executables',
     'view.subtitleSessions': 'Execution Sessions owned by the Runtime',
@@ -96,7 +105,7 @@ const I18N = {
     'welcome.subtitle': 'A local, browser-only control plane for the AI coding team running on this machine.',
     'welcome.whatYouCan': 'What you can do here',
     'welcome.w1': 'Describe work in the composer and create durable Tasks or Task Graphs.',
-    'welcome.w2': 'Watch real Task, Agent, Session and Runtime events as a conversation timeline.',
+    'welcome.w2': 'Watch two live Agent terminals alongside authoritative Task and Runtime state.',
     'welcome.w3': 'Configure your local Agents and their executables.',
     'welcome.w4': 'Single tasks sent from the composer are automatically created and dispatched; Task Graphs, recovery, integration, and review still require explicit action.',
     'welcome.hint': 'Everything shown is read from the local Runtime records; the Workspace never invents agent thoughts, replies, or status.',
@@ -293,6 +302,20 @@ const I18N = {
     'session.signal': 'signal {signal}',
     'session.recorded': 'Recorded Events',
     'session.derived': 'Derived / Legacy History',
+    'terminal.title': 'Agent terminal',
+    'terminal.taskSession': 'Task Session',
+    'terminal.latestSession': 'Latest Session',
+    'terminal.noSession': 'Waiting for a Session…',
+    'terminal.noOutput': 'No terminal output yet.',
+    'terminal.readFailed': 'Terminal read failed: {message}',
+    'terminal.componentUnavailable': 'Terminal component unavailable.',
+    'terminal.inputPh': 'Send a line to this Session…',
+    'terminal.send': 'Send line',
+    'terminal.sendEmpty': 'Enter a line first.',
+    'terminal.sent': 'Input accepted.',
+    'terminal.rejected': 'Input rejected: {message}',
+    'terminal.exitCode': 'exit {code}',
+    'terminal.signal': 'signal {signal}',
     'status.creator': 'created',
     'date.justNow': 'just now',
     'generic.ok': 'Ok',
@@ -338,7 +361,7 @@ const I18N = {
     'view.sessions': '会话',
     'view.activity': '活动',
     'view.subtitleWorkspace': '本机 AI 编码团队工作台',
-    'view.subtitleChat': '任务对话与工作区事件',
+    'view.subtitleChat': '实时 Agent 终端与任务派发',
     'view.subtitleTasks': '仓库内所有持久化 Task 与 Task Graph',
     'view.subtitleAgents': '配置本地编码 Agent、Adapter 与可执行命令',
     'view.subtitleSessions': '由 Runtime 持有的执行会话',
@@ -406,7 +429,7 @@ const I18N = {
     'welcome.subtitle': '为本机 AI 编码团队打造的本地、纯浏览器控制台。',
     'welcome.whatYouCan': '这里可以做什么',
     'welcome.w1': '在下方 Composer 描述工作，创建持久化 Task 或 Task Graph。',
-    'welcome.w2': '把真实的 Task、Agent、Session 与 Runtime 事件当作对话时间线查看。',
+    'welcome.w2': '查看两个实时 Agent 终端，以及权威的 Task 与 Runtime 状态。',
     'welcome.w3': '配置本地 Agent 及其可执行命令。',
     'welcome.w4': '通过 Composer 发送的单任务会自动创建并派发；Task Graph、恢复、集成与评审仍需显式操作。',
     'welcome.hint': '所有内容都来自本地 Runtime 记录；Workspace 不会虚构任何 Agent 思考、回复或状态。',
@@ -603,6 +626,20 @@ const I18N = {
     'session.signal': '信号 {signal}',
     'session.recorded': '已记录事件',
     'session.derived': '派生 / 旧版历史',
+    'terminal.title': 'Agent 终端',
+    'terminal.taskSession': '当前任务会话',
+    'terminal.latestSession': '最近会话',
+    'terminal.noSession': '等待 Session…',
+    'terminal.noOutput': '暂无终端输出。',
+    'terminal.readFailed': '终端读取失败：{message}',
+    'terminal.componentUnavailable': '终端组件不可用。',
+    'terminal.inputPh': '向此 Session 发送一行输入…',
+    'terminal.send': '发送一行',
+    'terminal.sendEmpty': '请先输入一行内容。',
+    'terminal.sent': '输入已接受。',
+    'terminal.rejected': '输入被拒绝：{message}',
+    'terminal.exitCode': '退出代码 {code}',
+    'terminal.signal': '信号 {signal}',
     'status.creator': '已创建',
     'date.justNow': '刚刚',
     'generic.ok': '确定',
@@ -842,7 +879,7 @@ const elements = Object.fromEntries([
   'author-graph-errors', 'author-graph-validated', 'author-graph-preflight',
   'execution-panel', 'execution-title', 'execution-controls', 'execution-status', 'execution-result',
   'review-panel', 'review-controls', 'review-status', 'review-result',
-  'view-title', 'view-subtitle', 'chat-welcome', 'chat-feed', 'recent-list', 'recent-toggle',
+  'view-title', 'view-subtitle', 'chat-welcome', 'chat-feed', 'agent-terminal-grid', 'recent-list', 'recent-toggle',
   'context-panel', 'context-body', 'context-selection', 'context-toggle', 'context-close',
   'new-task-button', 'composer-input', 'composer-agent', 'composer-mode', 'composer-send',
   'composer-hint', 'composer-status', 'toast-region',
@@ -937,8 +974,15 @@ function switchView(view) {
   setViewHeading(view);
   if (view !== 'chat') {
     closeSidebarIfMobile();
+    if (terminalPollTimer) {
+      clearTimeout(terminalPollTimer);
+      terminalPollTimer = null;
+    }
   }
-  if (view === 'chat') renderChatArea();
+  if (view === 'chat') {
+    renderChatArea();
+    requestTerminalPoll();
+  }
 }
 
 function isNarrowSidebar() {
@@ -2235,6 +2279,339 @@ function renderTaskDetail(task) {
 /* ------------------------------------------------------------------ */
 /* Chat area                                                          */
 /* ------------------------------------------------------------------ */
+const terminalViews = new Map();
+let terminalPollTimer = null;
+let terminalPollInFlight = false;
+let terminalPollAgain = false;
+
+function terminalSourceLabel(source) {
+  if (source === 'task') return t('terminal.taskSession');
+  if (source === 'latest') return t('terminal.latestSession');
+  return t('terminal.noSession');
+}
+
+function terminalSessionStatus(session) {
+  return session?.status || session?.state || 'UNKNOWN';
+}
+
+function terminalSessionFacts(session) {
+  if (!session) return '';
+  const facts = [];
+  if (session.exitCode !== undefined && session.exitCode !== null) facts.push(t('terminal.exitCode', { code: session.exitCode }));
+  if (session.signal) facts.push(t('terminal.signal', { signal: session.signal }));
+  return facts.join(' · ');
+}
+
+function terminalPaneMarkup(pane) {
+  const agentLabel = pane.agentId || t('roles.unassigned');
+  return `
+    <article class="agent-terminal" data-terminal-slot="${escapeHtml(pane.slot)}" data-terminal-key="${escapeHtml(terminalSessionKey(pane))}">
+      <header class="terminal-header">
+        <div class="terminal-agent-heading">
+          <span class="terminal-dot state-dot ${statusClass(terminalSessionStatus(pane.session))}" aria-hidden="true"></span>
+          <div>
+            <p class="eyebrow">${escapeHtml(t('terminal.title'))}</p>
+            <h2 data-terminal-agent>${escapeHtml(agentLabel)}</h2>
+          </div>
+        </div>
+        <span class="status-pill ${statusClass(terminalSessionStatus(pane.session))}" data-terminal-status>${escapeHtml(statusText(terminalSessionStatus(pane.session)))}</span>
+      </header>
+      <div class="terminal-meta">
+        <span class="terminal-source" data-terminal-source>${escapeHtml(terminalSourceLabel(pane.source))}</span>
+        <code data-terminal-id>${escapeHtml(pane.sessionId ? shortId(pane.sessionId) : '—')}</code>
+        <span class="terminal-facts" data-terminal-facts>${escapeHtml(terminalSessionFacts(pane.session))}</span>
+      </div>
+      <div class="terminal-screen-wrap">
+        <div class="terminal-screen" data-terminal-screen role="log" aria-label="${escapeHtml(`${agentLabel} ${t('terminal.title')}`)}"></div>
+        <div class="terminal-empty" data-terminal-empty>${escapeHtml(pane.sessionId ? t('terminal.noOutput') : t('terminal.noSession'))}</div>
+        <div class="terminal-error" data-terminal-error hidden></div>
+      </div>
+      <form class="terminal-input-form" data-terminal-input-form>
+        <input class="terminal-input-text" data-terminal-input maxlength="16384" autocomplete="off" placeholder="${escapeHtml(t('terminal.inputPh'))}">
+        <button class="button" type="submit" data-terminal-send>${escapeHtml(t('terminal.send'))}</button>
+      </form>
+      <span class="terminal-input-status" data-terminal-input-status aria-live="polite"></span>
+    </article>`;
+}
+
+function terminalControllerFor(pane, element) {
+  const screen = element.querySelector('[data-terminal-screen]');
+  const controller = {
+    pane,
+    element,
+    screen,
+    terminal: null,
+    fallbackOutput: '',
+    cursor: null,
+    hasOutput: false,
+    readAttempted: false,
+    readError: null,
+    input: element.querySelector('[data-terminal-input]'),
+    send: element.querySelector('[data-terminal-send]'),
+    inputStatus: element.querySelector('[data-terminal-input-status]'),
+  };
+
+  const Terminal = globalThis.Terminal;
+  if (typeof Terminal === 'function' && screen) {
+    try {
+      controller.terminal = new Terminal({
+        cols: 120,
+        rows: 30,
+        convertEol: true,
+        disableStdin: true,
+        cursorBlink: false,
+        scrollback: 2000,
+        fontSize: 12,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        theme: {
+          background: '#080d1d',
+          foreground: '#dce6ff',
+          cursor: '#8ca9ff',
+          selectionBackground: 'rgba(140, 169, 255, .3)',
+        },
+      });
+      controller.terminal.open(screen);
+    } catch (error) {
+      controller.terminal = null;
+      controller.readError = error.message || String(error);
+    }
+  } else {
+    controller.readError = t('terminal.componentUnavailable');
+  }
+
+  element.querySelector('[data-terminal-input-form]')?.addEventListener('submit', event => {
+    event.preventDefault();
+    submitTerminalInput(controller);
+  });
+  updateTerminalController(controller);
+  return controller;
+}
+
+function disposeTerminalViews({ clearGrid = true } = {}) {
+  if (terminalPollTimer) {
+    clearTimeout(terminalPollTimer);
+    terminalPollTimer = null;
+  }
+  for (const controller of terminalViews.values()) {
+    try { controller.terminal?.dispose(); } catch { /* The browser may already be unloading. */ }
+  }
+  terminalViews.clear();
+  if (clearGrid && elements['agent-terminal-grid']) {
+    elements['agent-terminal-grid'].innerHTML = '';
+    delete elements['agent-terminal-grid'].dataset.signature;
+  }
+}
+
+function updateTerminalController(controller) {
+  const pane = controller.pane || {};
+  const session = pane.session;
+  const status = terminalSessionStatus(session);
+  const active = Boolean(pane.sessionId && isActiveTerminalSession(session));
+  const agent = controller.element.querySelector('[data-terminal-agent]');
+  const statusPill = controller.element.querySelector('[data-terminal-status]');
+  const dot = controller.element.querySelector('.terminal-dot');
+  const source = controller.element.querySelector('[data-terminal-source]');
+  const sessionId = controller.element.querySelector('[data-terminal-id]');
+  const facts = controller.element.querySelector('[data-terminal-facts]');
+  const empty = controller.element.querySelector('[data-terminal-empty]');
+  const error = controller.element.querySelector('[data-terminal-error]');
+  if (agent) agent.textContent = pane.agentId || t('roles.unassigned');
+  if (statusPill) {
+    statusPill.className = `status-pill ${statusClass(status)}`;
+    statusPill.textContent = statusText(status);
+  }
+  if (dot) dot.className = `terminal-dot state-dot ${statusClass(status)}`;
+  if (source) source.textContent = terminalSourceLabel(pane.source);
+  if (sessionId) sessionId.textContent = pane.sessionId ? shortId(pane.sessionId) : '—';
+  if (facts) facts.textContent = terminalSessionFacts(session);
+  const errorText = controller.readError || session?.error || '';
+  if (error) {
+    error.hidden = !errorText;
+    error.textContent = errorText ? `${controller.readError ? t('terminal.readFailed', { message: errorText }) : errorText}` : '';
+  }
+  if (empty) {
+    empty.textContent = controller.readError
+      ? t('terminal.componentUnavailable')
+      : pane.sessionId ? t('terminal.noOutput') : t('terminal.noSession');
+    empty.hidden = controller.hasOutput || Boolean(errorText);
+  }
+  if (controller.input) {
+    controller.input.disabled = !active;
+    controller.input.placeholder = t('terminal.inputPh');
+  }
+  if (controller.send) controller.send.disabled = !active;
+}
+
+function writeTerminalOutput(controller, output, truncated = false) {
+  const text = typeof output === 'string' ? output : '';
+  if (truncated) {
+    controller.terminal?.reset();
+    controller.fallbackOutput = '';
+    controller.hasOutput = false;
+  }
+  if (!text) {
+    updateTerminalController(controller);
+    return;
+  }
+  if (controller.terminal) {
+    controller.terminal.write(text);
+  } else {
+    controller.fallbackOutput = `${controller.fallbackOutput}${text}`.slice(-TERMINAL_MAX_BYTES);
+    controller.screen.textContent = controller.fallbackOutput;
+  }
+  controller.hasOutput = true;
+  updateTerminalController(controller);
+}
+
+async function readTerminal(controller) {
+  const sessionId = controller.pane?.sessionId;
+  if (!sessionId) return;
+  const params = new URLSearchParams({
+    maxLines: `${TERMINAL_MAX_LINES}`,
+    maxBytes: `${TERMINAL_MAX_BYTES}`,
+  });
+  if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
+  try {
+    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(sessionId)}/read?${params}`);
+    if (controller.pane?.sessionId !== sessionId) return;
+    const session = payload?.session || controller.pane.session || null;
+    controller.pane.session = {
+      ...(controller.pane.session || {}),
+      ...session,
+      status: session?.status || session?.state || controller.pane.session?.status || 'UNKNOWN',
+    };
+    const output = payload?.output || {};
+    if (output.truncated === true) controller.cursor = null;
+    writeTerminalOutput(controller, output.output || '', output.truncated === true);
+    if (Number.isInteger(output.nextCursor)) controller.cursor = output.nextCursor;
+    controller.readAttempted = true;
+    controller.readError = null;
+    // An exited Session has no live host to query. Use the already bounded
+    // snapshot from /api/sessions only as a truthful final fallback.
+    if (!output.output && !controller.hasOutput && !isActiveTerminalSession(controller.pane.session)) {
+      writeTerminalOutput(controller, controller.pane.session.recentOutput || '');
+    }
+    updateTerminalController(controller);
+  } catch (error) {
+    controller.readAttempted = true;
+    controller.readError = error.message || String(error);
+    updateTerminalController(controller);
+  }
+}
+
+function scheduleTerminalPoll(delay = 0) {
+  if (terminalPollTimer || state.currentView !== 'chat') return;
+  if (![...terminalViews.values()].some(controller => controller.pane?.sessionId)) return;
+  terminalPollTimer = window.setTimeout(() => {
+    terminalPollTimer = null;
+    pollTerminals();
+  }, Math.max(0, delay));
+}
+
+async function pollTerminals() {
+  if (state.currentView !== 'chat') return;
+  if (terminalPollInFlight) {
+    terminalPollAgain = true;
+    return;
+  }
+  const controllers = [...terminalViews.values()].filter(controller => controller.pane?.sessionId);
+  if (!controllers.length) return;
+  terminalPollInFlight = true;
+  await Promise.allSettled(controllers.map(controller => readTerminal(controller)));
+  terminalPollInFlight = false;
+  if (terminalPollAgain) {
+    terminalPollAgain = false;
+    scheduleTerminalPoll(0);
+    return;
+  }
+  if (controllers.some(controller => isActiveTerminalSession(controller.pane?.session))) {
+    scheduleTerminalPoll(TERMINAL_POLL_MS);
+  }
+}
+
+function requestTerminalPoll() {
+  scheduleTerminalPoll(0);
+}
+
+async function submitTerminalInput(controller) {
+  const sessionId = controller.pane?.sessionId;
+  const input = controller.input;
+  const text = input?.value.trim() || '';
+  if (!sessionId || !input || !text) {
+    if (controller.inputStatus && !text) controller.inputStatus.textContent = t('terminal.sendEmpty');
+    return;
+  }
+  input.value = '';
+  if (controller.inputStatus) controller.inputStatus.textContent = '';
+  if (controller.send) controller.send.disabled = true;
+  try {
+    const { status, payload } = await postAction('sessionWrite', { sessionId, input: text });
+    if (status !== 200 || payload?.ok !== true) {
+      const message = payload?.error?.message || payload?.error?.code || `HTTP ${status}`;
+      if (controller.inputStatus) controller.inputStatus.textContent = t('terminal.rejected', { message });
+      return;
+    }
+    if (controller.inputStatus) controller.inputStatus.textContent = t('terminal.sent');
+    requestTerminalPoll();
+    scheduleRefresh();
+  } catch (error) {
+    if (controller.inputStatus) controller.inputStatus.textContent = t('terminal.rejected', { message: error.message || String(error) });
+  } finally {
+    updateTerminalController(controller);
+  }
+}
+
+function renderAgentTerminalGrid(task = null) {
+  const grid = elements['agent-terminal-grid'];
+  if (!grid) return;
+  if (task?.graph) {
+    disposeTerminalViews();
+    grid.hidden = true;
+    return;
+  }
+  grid.hidden = false;
+  const panes = selectTerminalPanes({
+    agents: state.agents,
+    sessions: state.sessions,
+    task,
+    count: TERMINAL_PANE_COUNT,
+  });
+  const signature = panes.map(terminalSessionKey).join('|');
+  const currentSignature = grid.dataset.signature || '';
+  if (signature !== currentSignature) {
+    disposeTerminalViews();
+    grid.dataset.signature = signature;
+    grid.innerHTML = panes.map(terminalPaneMarkup).join('');
+    panes.forEach(pane => {
+      const element = grid.querySelector(`[data-terminal-slot="${CSS.escape(`${pane.slot}`)}"]`);
+      if (!element) return;
+      terminalViews.set(pane.slot, terminalControllerFor(pane, element));
+    });
+  } else {
+    panes.forEach(pane => {
+      const controller = terminalViews.get(pane.slot);
+      if (!controller) return;
+      controller.pane = pane;
+      updateTerminalController(controller);
+    });
+  }
+  requestTerminalPoll();
+}
+
+function renderChatContent(task) {
+  const welcome = elements['chat-welcome'];
+  const feed = elements['chat-feed'];
+  if (task?.graph) {
+    if (welcome) welcome.hidden = true;
+    renderAgentTerminalGrid(task);
+    renderChatFeed(task);
+    return;
+  }
+  if (welcome) welcome.hidden = Boolean(task);
+  if (feed) feed.innerHTML = '';
+  renderAgentTerminalGrid(task || null);
+}
+
 function renderChatWelcome() {
   const region = elements['chat-welcome'];
   if (!region) return;
@@ -2709,7 +3086,7 @@ async function selectTask(id) {
     renderRecentList();
     const task = await fetchJson(`/api/tasks/${encodeURIComponent(id)}`);
     renderTaskDetail(task);
-    renderChatFeed(task);
+    renderChatContent(task);
     renderContext();
     // Keep the details drawer populated if it is open.
     if (!state.detailOpen) {
@@ -2754,7 +3131,7 @@ async function refresh() {
       try {
         const task = await fetchJson(`/api/tasks/${encodeURIComponent(state.selectedTask)}`);
         renderTaskDetail(task);
-        renderChatFeed(task);
+        renderChatContent(task);
       } catch { /* The list remains useful if a task is removed during refresh. */ }
     }
   } catch (error) {
@@ -2766,7 +3143,7 @@ async function refresh() {
     state.repository = null;
   }
   renderRepository();
-  if (state.currentView === 'chat' && !state.selectedTask) renderChatWelcome();
+  if (state.currentView === 'chat' && !state.selectedTask) renderChatContent(null);
 }
 
 function renderAllDynamic() {
@@ -2788,12 +3165,8 @@ function renderAllDynamic() {
 
 function renderChatArea() {
   if (state.currentView !== 'chat') return;
-  if (!state.selectedTask) {
-    renderChatWelcome();
-    elements['chat-feed'].innerHTML = '';
-    return;
-  }
-  // The freshest timeline lives in the per-task detail; keep chat in sync lazily.
+  const task = state.tasks.find(item => item.id === state.selectedTask) || null;
+  renderChatContent(task);
 }
 
 function bindEvents() {
@@ -2856,7 +3229,7 @@ function init() {
     state.selectedTask = initialTask;
     switchView('chat');
   } else {
-    renderChatWelcome();
+    renderChatContent(null);
   }
   refresh();
   setInterval(refresh, 5_000);
@@ -2875,5 +3248,8 @@ init();
 
 if ('EventSource' in window) {
   const stream = new EventSource('/api/events/stream');
-  stream.addEventListener('runtime-event', scheduleRefresh);
+  stream.addEventListener('runtime-event', () => {
+    scheduleRefresh();
+    requestTerminalPoll();
+  });
 }

@@ -20,7 +20,10 @@ import {
 import {
   listRecords,
 } from '../../skills/coordinate-agents/scripts/session-manager.mjs';
-import { runtimeSessionFacts } from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import {
+  runtimeSessionFacts,
+  runtimeSessionRead,
+} from '../../skills/coordinate-agents/scripts/session-service.mjs';
 import { observeAgentBus } from '../../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
@@ -38,6 +41,8 @@ const MAX_EVENT_SCAN = 600;
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_SPEC_BYTES = 16 * 1024;
 const MAX_SESSION_OUTPUT = 8 * 1024;
+const MAX_TERMINAL_READ_BYTES = 32 * 1024;
+const MAX_TERMINAL_READ_LINES = 200;
 const MAX_GRAPH_ITEMS = 256;
 const MAX_NESTED_ITEMS = 256;
 const MAX_NESTED_KEYS = 64;
@@ -500,6 +505,35 @@ function readSessions(root, tasks = readTaskRecords(root)) {
   }));
 }
 
+async function readSessionOutput(root, sessionId, {
+  cursor = null,
+  maxLines = MAX_TERMINAL_READ_LINES,
+  maxBytes = MAX_TERMINAL_READ_BYTES,
+} = {}) {
+  const result = await runtimeSessionRead({
+    root,
+    sessionId,
+    cursor,
+    maxLines: Math.min(MAX_TERMINAL_READ_LINES, Math.max(1, Number.isInteger(maxLines) ? maxLines : MAX_TERMINAL_READ_LINES)),
+    maxBytes: Math.min(MAX_TERMINAL_READ_BYTES, Math.max(1, Number.isInteger(maxBytes) ? maxBytes : MAX_TERMINAL_READ_BYTES)),
+  });
+  const output = typeof result.output === 'string' ? result.output : '';
+  const session = result.session
+    ? {
+      ...result.session,
+      status: result.session.status || result.session.state || null,
+    }
+    : null;
+  return {
+    session,
+    output: {
+      output: redactOutput(output, MAX_TERMINAL_READ_BYTES),
+      nextCursor: Number.isInteger(result.nextCursor) ? result.nextCursor : null,
+      truncated: result.truncated === true,
+    },
+  };
+}
+
 function taskEvents(tasks) {
   const events = [];
   for (const task of tasks) {
@@ -750,6 +784,9 @@ export function createInspectorData(root) {
     },
     async readSessions() {
       return readSessions(repository);
+    },
+    async readSessionOutput(sessionId, options = {}) {
+      return readSessionOutput(repository, sessionId, options);
     },
     readEvents(options = {}) {
       return readEvents(repository, options);

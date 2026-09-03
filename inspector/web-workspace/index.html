@@ -9,6 +9,7 @@
     <meta name="coordinate-agents-capability" content="__COORDINATE_AGENTS_CAPABILITY__">
     <title>Coordinate Agents Workspace</title>
     <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/vendor/xterm.css">
   </head>
   <body data-locale="en">
     <div class="app" id="app">
@@ -79,6 +80,7 @@
           <!-- Chat view -->
           <section class="view active" id="view-chat" data-view-panel="chat" aria-live="polite">
             <div id="chat-welcome" class="welcome" hidden></div>
+            <section id="agent-terminal-grid" class="agent-terminal-grid" aria-label="Agent terminals" aria-live="polite"></section>
             <div id="chat-feed" class="chat-feed" aria-live="polite"></div>
           </section>
 
@@ -372,6 +374,7 @@
       <!-- Toast region -->
       <div id="toast-region" class="toast-region" aria-live="polite"></div>
     </div>
+    <script src="/vendor/xterm.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

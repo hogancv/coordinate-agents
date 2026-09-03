@@ -9,6 +9,7 @@ import { redactOutput } from '../adapters/executable.mjs';
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024;
 const MAX_INPUT_LENGTH = 256 * 1024;
+const MAX_PERSISTED_OUTPUT_BYTES = 8 * 1024;
 
 function safeArgs(args) {
   return Array.isArray(args) ? args.map(value => redactOutput(`${value}`, 2 * 1024)) : [];
@@ -33,6 +34,14 @@ function safeSessionError(message, code = 'SESSION_HOST_ERROR') {
   return error;
 }
 
+function outputTail() {
+  try {
+    return redactOutput(runtime?.read?.({ maxLines: 60, maxBytes: MAX_PERSISTED_OUTPUT_BYTES })?.output || '', MAX_PERSISTED_OUTPUT_BYTES);
+  } catch {
+    return '';
+  }
+}
+
 function metadataFromRuntime() {
   const snapshot = runtime?.snapshot?.() || {};
   return {
@@ -50,6 +59,7 @@ function metadataFromRuntime() {
     exitCode: snapshot.exitCode ?? null,
     signal: snapshot.signal || null,
     error: snapshot.error ? redactOutput(snapshot.error, 2 * 1024) : null,
+    outputTail: outputTail(),
     endpoint: session.endpoint,
     hostPid: process.pid,
   };
@@ -251,6 +261,7 @@ try {
         exitCode: null,
         signal: null,
         error: redactOutput(error.message || String(error), 2 * 1024),
+        outputTail: outputTail(),
         endpoint: session.endpoint,
         hostPid: process.pid,
       };
