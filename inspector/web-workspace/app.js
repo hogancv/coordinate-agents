@@ -6,7 +6,7 @@
  * a localised generic label while preserving the original code.
  */
 
-import { deriveComposerParams } from './composer-model.mjs';
+import { deriveComposerParams, deriveSessionChatEntry } from './composer-model.mjs';
 
 /* ------------------------------------------------------------------ */
 /* I18N                                                               */
@@ -98,7 +98,7 @@ const I18N = {
     'welcome.w1': 'Describe work in the composer and create durable Tasks or Task Graphs.',
     'welcome.w2': 'Watch real Task, Agent, Session and Runtime events as a conversation timeline.',
     'welcome.w3': 'Configure your local Agents and their executables.',
-    'welcome.w4': 'Explicitly dispatch, advance, recover, integrate and review — nothing runs automatically.',
+    'welcome.w4': 'Single tasks sent from the composer are automatically created and dispatched; Task Graphs, recovery, integration, and review still require explicit action.',
     'welcome.hint': 'Everything shown is read from the local Runtime records; the Workspace never invents agent thoughts, replies, or status.',
     'welcome.startTask': 'Describe a task below',
     'welcome.configAgents': 'Configure Agents',
@@ -289,6 +289,8 @@ const I18N = {
     'session.sent': 'Input accepted.',
     'session.rejected': 'Input rejected: {message}',
     'session.tasks': 'Tasks: {tasks}',
+    'session.exitCode': 'exit {code}',
+    'session.signal': 'signal {signal}',
     'session.recorded': 'Recorded Events',
     'session.derived': 'Derived / Legacy History',
     'status.creator': 'created',
@@ -406,7 +408,7 @@ const I18N = {
     'welcome.w1': '在下方 Composer 描述工作，创建持久化 Task 或 Task Graph。',
     'welcome.w2': '把真实的 Task、Agent、Session 与 Runtime 事件当作对话时间线查看。',
     'welcome.w3': '配置本地 Agent 及其可执行命令。',
-    'welcome.w4': '显式派发、推进、恢复、集成与评审 —— 一切都不会自动运行。',
+    'welcome.w4': '通过 Composer 发送的单任务会自动创建并派发；Task Graph、恢复、集成与评审仍需显式操作。',
     'welcome.hint': '所有内容都来自本地 Runtime 记录；Workspace 不会虚构任何 Agent 思考、回复或状态。',
     'welcome.startTask': '在下方描述一项任务',
     'welcome.configAgents': '配置 Agents',
@@ -468,7 +470,7 @@ const I18N = {
     'msg.subtasks': '个子任务',
     'msg.concurrency': '并发 {n}',
     'msg.output': '会话输出',
-    'msg.noOutput': '暂无最近输出。',
+    'msg.noOutput': '暂无输出',
     'msg.reviewDecision': '已记录的评审决策',
     'msg.sessionInput': '向会话发送输入',
     'msg.feedback': '反馈',
@@ -597,6 +599,8 @@ const I18N = {
     'session.sent': '输入已接受。',
     'session.rejected': '输入被拒绝：{message}',
     'session.tasks': '任务：{tasks}',
+    'session.exitCode': '退出代码 {code}',
+    'session.signal': '信号 {signal}',
     'session.recorded': '已记录事件',
     'session.derived': '派生 / 旧版历史',
     'status.creator': '已创建',
@@ -675,7 +679,7 @@ const STATUS_I18N = {
     REVIEW_APPROVED: 'Review approved', IDLE: 'Idle', BUSY: 'Busy', AVAILABLE: 'Available',
     UNAVAILABLE: 'Unavailable', UNKNOWN: 'Unknown', STARTING: 'Starting',
     RECOVERING: 'Recovering', RECOVERED: 'Recovered', REVIEW: 'Review', PLANNED: 'Planned',
-    QUEUED: 'Queued', SESSION_STARTED: 'Session started',
+    QUEUED: 'Queued', SESSION_STARTED: 'Session started', EXITED: 'Exited',
   },
   'zh-CN': {
     CREATED: '已创建', PLANNING: '规划中', SPEC_READY: '规格就绪',
@@ -686,7 +690,7 @@ const STATUS_I18N = {
     REVIEW_APPROVED: '评审通过', IDLE: '空闲', BUSY: '忙碌', AVAILABLE: '可用',
     UNAVAILABLE: '不可用', UNKNOWN: '未知', STARTING: '启动中',
     RECOVERING: '恢复中', RECOVERED: '已恢复', REVIEW: '评审', PLANNED: '已规划',
-    QUEUED: '排队中', SESSION_STARTED: '会话已启动',
+    QUEUED: '排队中', SESSION_STARTED: '会话已启动', EXITED: '已退出',
   },
 };
 
@@ -2267,11 +2271,12 @@ function renderChatWelcome() {
 
 function chatMessageCard(task, entry) {
   // entry: {kind: 'task'|'state'|'event'|'session'|'review'|'error'|'action'|'evidence',
-  //          title, sub, body, raw, time, dot, pill}
+  //          title, sub, body, raw, time, dot, pill, sessionId}
   const dotClass = entry.dot ? ` dot-${statusClass(entry.dot)}` : '';
   const side = entry.kind === 'action' || entry.kind === 'user' ? 'side-right' : '';
+  const sessionAttr = entry.sessionId ? ` data-session-id="${escapeHtml(entry.sessionId)}"` : '';
   return `
-    <article class="chat-msg msg-${entry.kind}${side}" data-chat-kind="${entry.kind}">
+    <article class="chat-msg msg-${entry.kind}${side}" data-chat-kind="${entry.kind}"${sessionAttr}>
       <div class="chat-msg-head">
         <span class="chat-dot${dotClass}" aria-hidden="true"></span>
         <strong>${escapeHtml(entry.title)}</strong>
@@ -2343,6 +2348,24 @@ function renderChatFeed(task) {
       body: null,
       dot: 'RUNNING',
     }));
+  }
+
+  // Session / Agent output card:
+  // Render authoritative output from state.sessions for the current Task's sessionId.
+  // Exactly one card is rendered for the task's session; never duplicated across events.
+  if (task.sessionId) {
+    const session = (state.sessions || []).find(s => s.sessionId === task.sessionId || s.id === task.sessionId);
+    if (session) {
+      const sessionEntry = deriveSessionChatEntry(task, session, {
+        locale,
+        t,
+        statusText,
+        formatTime: formatDate,
+      });
+      if (sessionEntry) {
+        messages.push(chatMessageCard(task, sessionEntry));
+      }
+    }
   }
 
   for (const review of (task.reviewHistory || [])) {

@@ -85,8 +85,9 @@ h3 { margin-bottom: 1rem; color: var(--muted); font-size: .74rem; letter-spacing
 .status-pill { display: inline-flex; width: fit-content; padding: .22rem .48rem; border-radius: 999px; color: var(--accent); background: rgba(140, 169, 255, .13); font-size: .66rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
 .status-pill.approved, .status-pill.review-approved, .status-pill.idle { color: var(--green); background: rgba(87, 217, 154, .12); }
 .status-pill.error, .status-pill.stopped, .status-pill.failed { color: var(--red); background: rgba(255, 127, 143, .12); }
-.status-pill.implementing, .status-pill.busy, .status-pill.waiting, .status-pill.reviewing { color: var(--yellow); background: rgba(244, 201, 107, .12); }
+.status-pill.implementing, .status-pill.busy, .status-pill.waiting, .status-pill.reviewing, .status-pill.starting { color: var(--yellow); background: rgba(244, 201, 107, .12); }
 .status-pill.changes-requested { color: var(--purple); background: rgba(195, 155, 255, .13); }
+.status-pill.exited { color: var(--muted); background: rgba(154, 169, 200, .14); }
 
 .agent-flow { display: flex; min-height: 16rem; align-items: center; justify-content: center; gap: .7rem; }
 .flow-node { display: flex; min-width: 8rem; min-height: 9.5rem; flex: 1; flex-direction: column; justify-content: center; gap: .55rem; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: rgba(255, 255, 255, .025); }

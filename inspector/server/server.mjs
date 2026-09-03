@@ -15,12 +15,24 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 
 const inspectorWebRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
 const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
-const STATIC_FILES = new Map([
+const INSPECTOR_STATIC_FILES = new Map([
+  ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
+  ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
+  ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
+]);
+
+const WORKSPACE_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
 ]);
+
+const STATIC_FILES = WORKSPACE_STATIC_FILES;
+
+function staticFilesFor(ui) {
+  return ui === 'workspace' ? WORKSPACE_STATIC_FILES : INSPECTOR_STATIC_FILES;
+}
 
 function webAssetsFor(ui) {
   return ui === 'workspace' ? workspaceWebRoot : inspectorWebRoot;
@@ -36,8 +48,12 @@ function json(response, status, payload) {
   response.end(body);
 }
 
-function asset(response, pathname, assetsRoot, capability = null) {
-  const entry = STATIC_FILES.get(pathname) || STATIC_FILES.get('/index.html');
+function asset(response, pathname, assetsRoot, capability = null, staticFiles = WORKSPACE_STATIC_FILES) {
+  const entry = staticFiles.get(pathname) || staticFiles.get('/index.html');
+  if (!entry) {
+    json(response, 404, { error: 'Inspector page not found.' });
+    return;
+  }
   try {
     let body = readFileSync(resolve(assetsRoot, entry.file));
     if (capability && entry.file === 'index.html') {
@@ -134,6 +150,7 @@ export function createInspectorServer({
   gateway = null,
 } = {}) {
   const assetsRoot = webAssetsFor(ui);
+  const staticFiles = staticFilesFor(ui);
   return createServer(async (request, response) => {
     if (request.method !== 'GET') {
       // The Workspace action gateway is the only non-GET surface; the
@@ -151,8 +168,8 @@ export function createInspectorServer({
     const url = new URL(request.url || '/', 'http://localhost');
     const pathname = url.pathname;
     if (!pathname.startsWith('/api/')) {
-      if (pathname === '/' || STATIC_FILES.has(pathname)) {
-        asset(response, pathname, assetsRoot, capability);
+      if (pathname === '/' || staticFiles.has(pathname)) {
+        asset(response, pathname, assetsRoot, capability, staticFiles);
         return;
       }
       json(response, 404, { error: 'Inspector page not found.' });

@@ -17,8 +17,14 @@ import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { createTask, setTaskStatus } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { createTaskGraph } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
-import { startWorkspace } from '../inspector/server/server.mjs';
-import { COMPOSER_TITLE_MAX, deriveComposerParams } from '../inspector/web-workspace/composer-model.mjs';
+import { startWorkspace, startInspector } from '../inspector/server/server.mjs';
+import {
+  COMPOSER_TITLE_MAX,
+  CHAT_MAX_OUTPUT,
+  deriveComposerParams,
+  deriveSessionChatEntry,
+  renderSessionChatCard,
+} from '../inspector/web-workspace/composer-model.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
@@ -349,4 +355,175 @@ test('Workspace serves the composer model module for the browser bundle', async 
     await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
   }
+});
+
+test('Inspector does not return 500 for Workspace-only composer model asset', async () => {
+  const repositoryRoot = taskFixture(repository());
+  const started = await startInspector({ root: repositoryRoot, port: 0 });
+  try {
+    const response = await fetch(`${started.url}/composer-model.mjs`);
+    assert.notEqual(response.status, 500, 'Inspector must not return 500 for missing composer model');
+    assert.equal(response.status, 404);
+    const jsonBody = await response.json();
+    assert.match(jsonBody.error, /not found/i);
+
+    // Inspector still serves its own valid assets:
+    const indexRes = await fetch(`${started.url}/index.html`);
+    assert.equal(indexRes.status, 200);
+    assert.match(indexRes.headers.get('content-type'), /text\/html/);
+    const appRes = await fetch(`${started.url}/app.js`);
+    assert.equal(appRes.status, 200);
+    assert.match(appRes.headers.get('content-type'), /text\/javascript/);
+  } finally {
+    await closeServer(started.server);
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test('Session output card uses current Task sessionId and ignores mismatched sessions', () => {
+  const task = { id: 'task-abc', sessionId: 'session-target-123', implementer: 'codex' };
+  const matchingSession = {
+    sessionId: 'session-target-123',
+    agent: 'codex',
+    status: 'running',
+    recentOutput: 'agent compiling code...',
+  };
+  const mismatchedSession = {
+    sessionId: 'session-other-999',
+    agent: 'antigravity',
+    status: 'running',
+    recentOutput: 'unrelated output',
+  };
+
+  // Matching session produces an entry with matching sessionId
+  const entry = deriveSessionChatEntry(task, matchingSession);
+  assert.ok(entry);
+  assert.equal(entry.kind, 'session');
+  assert.equal(entry.sessionId, 'session-target-123');
+  assert.match(entry.title, /codex/);
+  assert.match(entry.body, /agent compiling code/);
+
+  // Mismatched session returns null (never attached to the wrong task)
+  assert.equal(deriveSessionChatEntry(task, mismatchedSession), null);
+
+  // Task without sessionId returns null
+  assert.equal(deriveSessionChatEntry({ id: 'task-no-session' }, matchingSession), null);
+  assert.equal(deriveSessionChatEntry(null, matchingSession), null);
+});
+
+test('Session chat entry handles no output, running, ended, failed, and review states', () => {
+  const task = { id: 'task-states', sessionId: 'session-s1' };
+
+  // 1. 无输出 (no output) - localized fallback, no invented agent reply
+  const noOutputSession = {
+    sessionId: 'session-s1',
+    agent: 'codex',
+    status: 'running',
+    recentOutput: '   ',
+  };
+  const noOutputEn = deriveSessionChatEntry(task, noOutputSession, { locale: 'en-US' });
+  assert.equal(noOutputEn.body, 'No recent output available.');
+  const noOutputZh = deriveSessionChatEntry(task, noOutputSession, { locale: 'zh-CN' });
+  assert.equal(noOutputZh.body, '暂无输出');
+
+  // 2. 运行中 (running)
+  const runningSession = {
+    sessionId: 'session-s1',
+    agent: 'antigravity',
+    status: 'running',
+    recentOutput: 'Step 1: analyzing workspace...',
+  };
+  const runningEntry = deriveSessionChatEntry(task, runningSession, { locale: 'zh-CN' });
+  assert.equal(runningEntry.pill, 'running');
+  assert.equal(runningEntry.dot, 'running');
+  assert.equal(runningEntry.body, 'Step 1: analyzing workspace...');
+  assert.match(runningEntry.sub, /session-s1/);
+
+  // 3. 已结束 (ended / exited) - exitCode and signal facts
+  const exitedSuccess = {
+    sessionId: 'session-s1',
+    agent: 'codex',
+    status: 'exited',
+    exitCode: 0,
+    signal: null,
+    recentOutput: 'Build succeeded.',
+  };
+  const exitSuccessEntry = deriveSessionChatEntry(task, exitedSuccess, { locale: 'zh-CN' });
+  assert.equal(exitSuccessEntry.pill, 'exited');
+  assert.equal(exitSuccessEntry.dot, 'ok');
+  assert.match(exitSuccessEntry.sub, /退出代码 0/);
+
+  const exitedSignal = {
+    sessionId: 'session-s1',
+    agent: 'codex',
+    status: 'exited',
+    exitCode: 137,
+    signal: 'SIGKILL',
+    recentOutput: 'Killed',
+  };
+  const exitSignalEntry = deriveSessionChatEntry(task, exitedSignal, { locale: 'en-US' });
+  assert.equal(exitSignalEntry.pill, 'exited');
+  assert.equal(exitSignalEntry.dot, 'failed');
+  assert.match(exitSignalEntry.sub, /exit 137/);
+  assert.match(exitSignalEntry.sub, /signal SIGKILL/);
+
+  // 4. 失败 (failed / error) - includes error details
+  const failedSession = {
+    sessionId: 'session-s1',
+    agent: 'antigravity',
+    status: 'failed',
+    error: 'Spawn ENOENT agy-proxy',
+    recentOutput: '',
+  };
+  const failedEntry = deriveSessionChatEntry(task, failedSession, { locale: 'zh-CN' });
+  assert.equal(failedEntry.pill, 'failed');
+  assert.equal(failedEntry.dot, 'failed');
+  assert.match(failedEntry.sub, /错误: Spawn ENOENT agy-proxy/);
+  assert.match(failedEntry.raw, /Spawn ENOENT agy-proxy/);
+
+  // 5. 等待中 (waiting) and 评审中 (reviewing) and 已停止 (stopped)
+  const waitingSession = { sessionId: 'session-s1', status: 'waiting', recentOutput: '' };
+  assert.equal(deriveSessionChatEntry(task, waitingSession).dot, 'waiting');
+
+  const reviewingSession = { sessionId: 'session-s1', status: 'reviewing', recentOutput: '' };
+  assert.equal(deriveSessionChatEntry(task, reviewingSession).dot, 'reviewing');
+
+  const stoppedSession = { sessionId: 'session-s1', status: 'stopped', recentOutput: '' };
+  assert.equal(deriveSessionChatEntry(task, stoppedSession).dot, 'stopped');
+
+  // HTML escaping check
+  const xssSession = {
+    sessionId: 'session-s1',
+    agent: '<script>alert(1)</script>',
+    status: 'running',
+    recentOutput: '<b>output</b>',
+  };
+  const cardHtml = renderSessionChatCard(task, xssSession);
+  assert.ok(!cardHtml.includes('<script>'), 'agent name must be escaped');
+  assert.ok(cardHtml.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(cardHtml.includes('&lt;b&gt;output&lt;/b&gt;'), 'output body must be escaped');
+  assert.ok(cardHtml.includes('data-session-id="session-s1"'));
+
+  // Bounded output length check
+  const hugeSession = {
+    sessionId: 'session-s1',
+    status: 'running',
+    recentOutput: 'a'.repeat(CHAT_MAX_OUTPUT + 100),
+  };
+  const boundedEntry = deriveSessionChatEntry(task, hugeSession);
+  assert.equal(boundedEntry.body.length, CHAT_MAX_OUTPUT);
+});
+
+test('Bilingual welcome text accurately describes automatic single-task dispatch and explicit graph/recovery controls', () => {
+  const appJs = readFileSync(join(root, 'inspector', 'web-workspace', 'app.js'), 'utf8');
+
+  // Neither English nor Chinese welcome text may claim "nothing runs automatically"
+  assert.equal(appJs.includes('nothing runs automatically'), false, 'welcome.w4 must not claim nothing runs automatically');
+  assert.equal(appJs.includes('一切都不会自动运行'), false, 'welcome.w4 zh-CN must not claim nothing runs automatically');
+
+  // Both languages must reflect automatic create + dispatch for composer single tasks
+  assert.match(appJs, /Single tasks sent from the composer are automatically created and dispatched/);
+  assert.match(appJs, /Task Graphs, recovery, integration, and review still require explicit action/);
+  assert.match(appJs, /通过 Composer 发送的单任务会自动创建并派发/);
+  assert.match(appJs, /Task Graph、恢复、集成与评审仍需显式操作/);
 });
