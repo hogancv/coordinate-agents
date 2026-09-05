@@ -197,6 +197,10 @@ export function createInspectorServer({
         json(response, 200, data.readRepository());
         return;
       }
+      if (ui === 'workspace' && pathname === '/api/workspace-settings' && typeof data.readWorkspaceSettings === 'function') {
+        json(response, 200, await data.readWorkspaceSettings());
+        return;
+      }
       if (ui === 'workspace' && pathname === '/api/workspace-tasks' && typeof data.readWorkspaceTasks === 'function') {
         json(response, 200, await data.readWorkspaceTasks());
         return;

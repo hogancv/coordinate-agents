@@ -121,6 +121,8 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.match(page, /id="workspace-task-list"/);
     assert.match(page, /id="agent-terminal-grid"/);
     assert.match(page, /Codex and Antigravity terminals/);
+    assert.match(page, /id="terminal-settings-button"/);
+    assert.match(page, /id="terminal-settings-dialog"/);
     assert.doesNotMatch(page, /id="composer"|id="chat-feed"|id="graph-map"|id="view-agents"|id="view-sessions"|id="view-activity"/);
 
     const repositoryFacts = await (await fetch(`${started.url}/api/repository`)).json();
@@ -145,6 +147,13 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     const workspaceTasks = await (await fetch(`${started.url}/api/workspace-tasks`)).json();
     assert.deepEqual(workspaceTasks, [], 'standard Task and Graph records stay hidden from the Workspace task list');
 
+    const workspaceSettings = await (await fetch(`${started.url}/api/workspace-settings`)).json();
+    assert.deepEqual(Object.keys(workspaceSettings).sort(), ['antigravity', 'codex']);
+    assert.equal(workspaceSettings.codex.adapter, 'codex-cli');
+    assert.equal(workspaceSettings.antigravity.adapter, 'antigravity-cli');
+    assert.ok(workspaceSettings.codex.command);
+    assert.ok(workspaceSettings.antigravity.command);
+
     // Persisted #36 Task Graph records remain readable through the Workspace.
     const graphDetail = await (await fetch(`${started.url}/api/tasks/task-workspace-graph`)).json();
     assert.equal(graphDetail.graph, true);
@@ -155,12 +164,15 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.match(js, /renderRepository/);
     assert.match(js, /\/api\/workspace-tasks/);
     assert.match(js, /workspaceTaskCreate/);
+    assert.match(js, /workspace-settings/);
+    assert.match(js, /setupConfigure/);
     assert.match(js, /sessionResize/);
     assert.doesNotMatch(js, /\/api\/tasks/);
     const css = await (await fetch(`${started.url}/styles.css`)).text();
     assert.match(css, /\.repository-card/);
     assert.match(css, /\.terminal-grid/);
     assert.match(css, /\.repo-facts/);
+    assert.match(css, /overflow-x: hidden/);
 
     const mutation = await fetch(`${started.url}/api/repository`, { method: 'POST' });
     assert.equal(mutation.status, 405);

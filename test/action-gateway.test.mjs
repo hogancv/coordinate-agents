@@ -442,16 +442,16 @@ test('setup discovery and transactional Agent configuration work through the gua
       // available through the guarded backend contract while the page is the
       // focused dual-terminal workbench.
       const page = await (await fetch(`${base}/`)).text();
-      for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="restart-task-button"', 'id="close-task-button"']) {
+      for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="terminal-settings-button"', 'id="terminal-settings-dialog"', 'id="restart-task-button"', 'id="close-task-button"']) {
         assert.match(page, new RegExp(expected));
       }
       assert.doesNotMatch(page, /agents-panel|discover-agents|agent-configure|chat-feed|composer|graph-map|execution-panel/);
       const js = await (await fetch(`${base}/app.js`)).text();
-      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionResize', 'onData', 'onBinary']) {
+      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'workspace-settings', 'setupConfigure', 'sessionResize', 'onData', 'onBinary']) {
         assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
       }
       const css = await (await fetch(`${base}/styles.css`)).text();
-      for (const expected of ['.terminal-grid', '.terminal-screen', '.workspace-task-list']) {
+      for (const expected of ['.terminal-grid', '.terminal-screen', '.workspace-task-list', 'overflow-x: hidden']) {
         assert.ok(css.includes(expected), `Workspace styles.css must style the dual-terminal UI: ${expected}`);
       }
     } finally {

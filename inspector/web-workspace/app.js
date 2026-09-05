@@ -14,6 +14,8 @@ const MAX_INPUT_QUEUE_BYTES = 128 * 1024;
 const MAX_VISIBLE_ERROR = 2 * 1024;
 const REFRESH_MS = 5_000;
 const UTF8_ENCODER = new TextEncoder();
+const WORKSPACE_SETTINGS_ENDPOINT = '/api/workspace-settings';
+const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: 'agy' });
 
 const I18N = {
   en: {
@@ -35,6 +37,20 @@ const I18N = {
     'task.created': 'New dual-terminal task created.',
     'task.restarted': 'The terminal pair was restarted.',
     'task.error': 'Task error',
+    'settings.open': 'Terminal settings',
+    'settings.eyebrow': 'TERMINAL SETTINGS',
+    'settings.title': 'Terminal startup commands',
+    'settings.body': 'New tasks and restarts use these saved commands.',
+    'settings.codex': 'Codex',
+    'settings.antigravity': 'Antigravity',
+    'settings.hint': 'Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.',
+    'settings.cancel': 'Cancel',
+    'settings.save': 'Save settings',
+    'settings.saving': 'Saving…',
+    'settings.saved': 'Terminal startup commands saved.',
+    'settings.loadError': 'Could not load terminal settings.',
+    'settings.saveError': 'Could not save terminal settings.',
+    'settings.invalid': 'Both startup commands are required and must be single-line executable names or paths.',
     'empty.title': 'Start a dual-terminal task',
     'empty.body': 'Create a task to open fresh Codex and Antigravity terminals. Enter the requirement directly in the Codex terminal.',
     'empty.failed': 'This task did not start both terminals. Review the error, then restart the pair.',
@@ -79,6 +95,20 @@ const I18N = {
     'task.created': '新的双终端任务已创建。',
     'task.restarted': '终端组已重启。',
     'task.error': '任务错误',
+    'settings.open': '终端设置',
+    'settings.eyebrow': '终端设置',
+    'settings.title': '两个终端的启动命令',
+    'settings.body': '新建任务和重启终端组都会使用这里保存的命令。',
+    'settings.codex': 'Codex',
+    'settings.antigravity': 'Antigravity',
+    'settings.hint': '填写可执行文件名或绝对路径，例如 agy-proxy；不要填写 shell 参数。',
+    'settings.cancel': '取消',
+    'settings.save': '保存设置',
+    'settings.saving': '保存中…',
+    'settings.saved': '两个终端的启动命令已保存。',
+    'settings.loadError': '无法读取终端设置。',
+    'settings.saveError': '无法保存终端设置。',
+    'settings.invalid': '两个启动命令都不能为空，并且必须是单行的可执行文件名或路径。',
     'empty.title': '开始一个双终端任务',
     'empty.body': '新建任务会打开全新的 Codex 与 Antigravity 终端，请直接在 Codex 终端中输入需求。',
     'empty.failed': '这项任务没有成功启动两个终端，请检查错误后重启终端组。',
@@ -119,6 +149,9 @@ const state = {
   taskTimer: null,
   pollTimer: null,
   repoFactsOpen: false,
+  settings: { ...DEFAULT_TERMINAL_COMMANDS },
+  settingsBusy: false,
+  settingsOpen: false,
 };
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
@@ -223,9 +256,104 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'refresh-button']) {
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'refresh-button', 'terminal-settings-button']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
+  }
+}
+
+function settingsError(message = '') {
+  const element = document.querySelector('#terminal-settings-error');
+  if (!element) return;
+  element.hidden = !message;
+  element.textContent = message;
+}
+
+function renderSettingsForm() {
+  const codex = document.querySelector('#codex-command');
+  const antigravity = document.querySelector('#antigravity-command');
+  if (codex) codex.value = state.settings.codex || DEFAULT_TERMINAL_COMMANDS.codex;
+  if (antigravity) antigravity.value = state.settings.antigravity || DEFAULT_TERMINAL_COMMANDS.antigravity;
+}
+
+function setSettingsBusy(busy) {
+  state.settingsBusy = busy;
+  for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'antigravity-command']) {
+    const element = document.querySelector(`#${id}`);
+    if (element) element.disabled = busy;
+  }
+  const save = document.querySelector('#terminal-settings-save');
+  if (save) save.textContent = busy ? t('settings.saving') : t('settings.save');
+}
+
+function closeSettings({ force = false } = {}) {
+  if (state.settingsBusy && !force) return;
+  const dialog = document.querySelector('#terminal-settings-dialog');
+  if (dialog) dialog.hidden = true;
+  state.settingsOpen = false;
+  settingsError();
+  document.querySelector('#terminal-settings-button')?.focus();
+}
+
+async function openSettings() {
+  if (state.actionBusy || state.settingsBusy) return;
+  const dialog = document.querySelector('#terminal-settings-dialog');
+  if (!dialog) return;
+  state.settingsOpen = true;
+  settingsError();
+  renderSettingsForm();
+  dialog.hidden = false;
+  dialog.setAttribute('aria-busy', 'true');
+  try {
+    const payload = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT);
+    state.settings = {
+      codex: payload?.codex?.command || DEFAULT_TERMINAL_COMMANDS.codex,
+      antigravity: payload?.antigravity?.command || DEFAULT_TERMINAL_COMMANDS.antigravity,
+    };
+    if (state.settingsOpen) renderSettingsForm();
+  } catch (error) {
+    settingsError(error.message || t('settings.loadError'));
+  } finally {
+    dialog.removeAttribute('aria-busy');
+    if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+  }
+}
+
+async function saveSettings(event) {
+  event?.preventDefault();
+  if (state.actionBusy || state.settingsBusy) return;
+  const commands = {
+    codex: `${document.querySelector('#codex-command')?.value || ''}`.trim(),
+    antigravity: `${document.querySelector('#antigravity-command')?.value || ''}`.trim(),
+  };
+  if (!commands.codex || !commands.antigravity || /[\u0000-\r\n\u007F]/.test(commands.codex) || /[\u0000-\r\n\u007F]/.test(commands.antigravity)) {
+    settingsError(t('settings.invalid'));
+    return;
+  }
+  setBusy(true);
+  setSettingsBusy(true);
+  settingsError();
+  try {
+    await postAction('setupConfigure', {
+      agent: 'codex',
+      command: commands.codex,
+      adapter: 'codex-cli',
+      role: 'planner',
+    });
+    await postAction('setupConfigure', {
+      agent: 'antigravity',
+      command: commands.antigravity,
+      adapter: 'antigravity-cli',
+      role: 'implementer',
+    });
+    state.settings = commands;
+    closeSettings({ force: true });
+    showToast(t('settings.saved'), 'success');
+  } catch (error) {
+    settingsError(error.payload?.error?.message || error.message || t('settings.saveError'));
+  } finally {
+    setSettingsBusy(false);
+    setBusy(false);
   }
 }
 
@@ -647,6 +775,16 @@ function setLocale(locale) {
 function bindEvents() {
   document.querySelector('#new-task-button')?.addEventListener('click', createTask);
   document.querySelector('#empty-new-task')?.addEventListener('click', createTask);
+  document.querySelector('#terminal-settings-button')?.addEventListener('click', () => void openSettings());
+  document.querySelector('#terminal-settings-close')?.addEventListener('click', closeSettings);
+  document.querySelector('#terminal-settings-cancel')?.addEventListener('click', closeSettings);
+  document.querySelector('#terminal-settings-form')?.addEventListener('submit', event => void saveSettings(event));
+  document.querySelector('#terminal-settings-dialog')?.addEventListener('click', event => {
+    if (event.target?.id === 'terminal-settings-dialog') closeSettings();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && state.settingsOpen) closeSettings();
+  });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
   document.querySelector('#restart-task-button')?.addEventListener('click', restartTask);
   document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));

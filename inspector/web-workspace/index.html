@@ -32,7 +32,10 @@
           <div id="repo-facts" class="repo-facts" hidden></div>
         </section>
 
-        <button id="new-task-button" class="primary-button new-task-button" type="button" data-i18n="task.new">New task</button>
+        <div class="sidebar-actions">
+          <button id="new-task-button" class="primary-button new-task-button" type="button" data-i18n="task.new">New task</button>
+          <button id="terminal-settings-button" class="secondary-button terminal-settings-button" type="button" data-i18n="settings.open">Terminal settings</button>
+        </div>
 
         <div class="task-list-heading">
           <span data-i18n="task.list">Workspace tasks</span>
@@ -92,6 +95,35 @@
 
         <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
       </main>
+    </div>
+
+    <div id="terminal-settings-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title" hidden>
+      <form id="terminal-settings-form" class="settings-modal">
+        <header class="settings-modal-header">
+          <div>
+            <span class="eyebrow" data-i18n="settings.eyebrow">TERMINAL SETTINGS</span>
+            <h2 id="terminal-settings-title" data-i18n="settings.title">Terminal startup commands</h2>
+          </div>
+          <button id="terminal-settings-close" class="icon-button" type="button" aria-label="Close settings">×</button>
+        </header>
+        <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
+        <div class="settings-fields">
+          <label class="settings-field" for="codex-command">
+            <span data-i18n="settings.codex">Codex</span>
+            <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+          </label>
+          <label class="settings-field" for="antigravity-command">
+            <span data-i18n="settings.antigravity">Antigravity</span>
+            <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+          </label>
+        </div>
+        <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+        <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
+        <footer class="settings-modal-actions">
+          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>
+          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save settings</button>
+        </footer>
+      </form>
     </div>
 
     <script src="/vendor/xterm.js"></script>

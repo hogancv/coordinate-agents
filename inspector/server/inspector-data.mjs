@@ -21,6 +21,10 @@ import {
   listRecords,
 } from '../../skills/coordinate-agents/scripts/session-manager.mjs';
 import {
+  readUserConfig,
+  resolveAgentConfig,
+} from '../../skills/coordinate-agents/scripts/user-config.mjs';
+import {
   runtimeSessionFacts,
   runtimeSessionRead,
 } from '../../skills/coordinate-agents/scripts/session-service.mjs';
@@ -52,6 +56,10 @@ const MAX_NESTED_ITEMS = 256;
 const MAX_NESTED_KEYS = 64;
 const MAX_NESTED_DEPTH = 8;
 const EMPTY_ARRAY = Object.freeze([]);
+const WORKSPACE_AGENT_DEFAULTS = Object.freeze([
+  Object.freeze({ id: 'codex', adapter: 'codex-cli', command: 'codex' }),
+  Object.freeze({ id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' }),
+]);
 
 function canonicalRoot(root) {
   const candidate = resolve(`${root || process.cwd()}`);
@@ -76,6 +84,46 @@ function busFor(root) {
 function bounded(value, limit = MAX_EVENT_DETAILS) {
   if (value === null || value === undefined) return '';
   return redactOutput(`${value}`, limit);
+}
+
+function safeWorkspaceCommand(value, fallback) {
+  const command = bounded(value || fallback, 512)
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .trim();
+  return command || fallback;
+}
+
+function readWorkspaceSettings(root) {
+  const bus = busFor(root);
+  let projectAgents = [];
+  try {
+    if (bus) projectAgents = readConfig(bus).agents;
+  } catch {
+    projectAgents = [];
+  }
+  let userConfig;
+  try {
+    userConfig = readUserConfig();
+  } catch {
+    userConfig = { version: 1, agents: {} };
+  }
+  return Object.fromEntries(WORKSPACE_AGENT_DEFAULTS.map(({ id, adapter, command: fallback }) => {
+    const projectAgent = projectAgents.find(agent => agent.id === id) || { id, adapter };
+    try {
+      const resolved = resolveAgentConfig(projectAgent, userConfig);
+      return [id, {
+        command: safeWorkspaceCommand(resolved.command, fallback),
+        adapter: resolved.adapter || adapter,
+        source: resolved.commandSource || 'adapter-default',
+      }];
+    } catch {
+      return [id, {
+        command: fallback,
+        adapter,
+        source: 'adapter-default',
+      }];
+    }
+  }));
 }
 
 function sanitizeNested(value, {
@@ -745,6 +793,9 @@ export function createInspectorData(root) {
           error: bounded(error.message || String(error), 2 * 1024),
         };
       }
+    },
+    readWorkspaceSettings() {
+      return readWorkspaceSettings(repository);
     },
     readTasks() {
       return [
