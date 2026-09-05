@@ -22,6 +22,7 @@ export async function runtimeSessionOpen(input = {}) {
     language: input.language || 'en',
     taskId: input.taskId || null,
     subtaskId: input.subtaskId || null,
+    workspace: input.workspace === true,
     reuseExisting: input.reuseExisting !== false,
   });
   let session = opened.session;

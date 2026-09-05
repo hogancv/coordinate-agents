@@ -21,7 +21,7 @@ import {
   serializeRuntimeError,
 } from './runtime-contract.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
-import { runtimeSessionClose, runtimeSessionOpen } from './session-service.mjs';
+import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen } from './session-service.mjs';
 import { listRecords } from './session-manager.mjs';
 import { ROLE_PROMPT_VERSION, workspaceRolePrompt } from './role-prompts.mjs';
 
@@ -45,6 +45,8 @@ const WORKSPACE_TASK_ID_PATTERN = /^workspace-[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const MAX_ERROR_BYTES = 4 * 1024;
 const MAX_HISTORY = 32;
+const WORKSPACE_STARTUP_TIMEOUT_MS = 20_000;
+const WORKSPACE_READY_QUIET_MS = 900;
 
 function now() {
   return new Date().toISOString();
@@ -400,16 +402,92 @@ async function discoverTaskSessions(root, taskId) {
   }
 }
 
+function workspaceTerminalMarker(agent) {
+  return agent === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts';
+}
+
+function workspaceTerminalReady(agent, output) {
+  const marker = workspaceTerminalMarker(agent);
+  const markerIndex = output.lastIndexOf(marker);
+  if (markerIndex < 0) return false;
+  const loadingMarkers = agent === 'codex'
+    ? ['Starting MCP servers', 'esc to interrupt']
+    : ['Signing in...', 'Generating...', 'esc to cancel'];
+  const lastLoadingIndex = Math.max(...loadingMarkers.map(value => output.lastIndexOf(value)));
+  // Some interactive CLIs paint the input line before MCP/login work is
+  // complete. The prompt is ready only when the most recent loading marker
+  // precedes the most recent input marker in the PTY byte stream.
+  return lastLoadingIndex >= 0 && lastLoadingIndex < markerIndex;
+}
+
+async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
+  const manager = getExecutionSessionManager();
+  const marker = workspaceTerminalMarker(agent);
+  const deadline = Date.now() + WORKSPACE_STARTUP_TIMEOUT_MS;
+  let markerSeen = false;
+  let lastCursor = null;
+  let quietSince = null;
+  let latest = session;
+
+  while (Date.now() < deadline) {
+    try {
+      const inspected = await manager.inspect(root, session.id, { maxLines: 160, maxBytes: 24 * 1024 });
+      latest = inspected.session || latest;
+      if (!ACTIVE_SESSION_STATES.has(`${latest?.state || ''}`)) {
+        throw runtimeError('WORKSPACE_TASK_START_FAILED', `Workspace Task ${taskId} ${agent} Session exited before its interactive prompt was ready.`, {
+          recoverable: true,
+          taskId,
+          agent,
+          sessionId: session.id,
+          details: { state: latest?.state || null },
+        });
+      }
+
+      const output = `${inspected.output?.output || ''}`;
+      const ready = workspaceTerminalReady(agent, output);
+      markerSeen = ready;
+      const cursor = inspected.output?.nextCursor ?? null;
+      if (markerSeen && cursor === lastCursor) {
+        quietSince ??= Date.now();
+        if (Date.now() - quietSince >= WORKSPACE_READY_QUIET_MS) return latest;
+      } else {
+        quietSince = null;
+      }
+      lastCursor = cursor;
+    } catch (error) {
+      if (error?.code === 'WORKSPACE_TASK_START_FAILED') throw error;
+      // A detached host can briefly be unavailable between its socket bind
+      // and first output. Keep this bounded readiness probe retryable.
+    }
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 100));
+  }
+
+  throw runtimeError('WORKSPACE_TASK_START_FAILED', `Workspace Task ${taskId} ${agent} Session did not reach its interactive prompt in time.`, {
+    recoverable: true,
+    taskId,
+    agent,
+    sessionId: session.id,
+    details: {
+      timeoutMs: WORKSPACE_STARTUP_TIMEOUT_MS,
+      marker,
+    },
+  });
+}
+
 async function openWorkspaceSlot(root, record, slot, language) {
   const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
   const prompt = workspaceRolePrompt(expected.agent, language);
   const opened = await runtimeSessionOpen({
     root,
     agent: expected.agent,
-    initialPrompt: prompt,
+    // Do not inject the role prompt during Session Host startup. Interactive
+    // CLIs can render their input line before MCP/login initialization is
+    // complete and silently discard bytes written in that window.
+    initialPrompt: '',
     language,
     taskId: record.id,
     subtaskId: slot,
+    workspace: true,
     reuseExisting: false,
   });
   const sessionState = `${opened?.session?.state || ''}`;
@@ -422,9 +500,14 @@ async function openWorkspaceSlot(root, record, slot, language) {
       details: { state: sessionState || null },
     });
   }
-  record.sessions[slot].sessionId = opened.session.id;
+  await waitForWorkspaceTerminalReady(root, opened.session, expected.agent, record.id);
+  const session = await getExecutionSessionManager().write(root, opened.session.id, prompt, {
+    taskId: record.id,
+    subtaskId: slot,
+  });
+  record.sessions[slot].sessionId = session.id;
   writeWorkspaceTask(root, record);
-  return opened.session;
+  return session;
 }
 
 async function rollbackTaskSessions(root, record) {

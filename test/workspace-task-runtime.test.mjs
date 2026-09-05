@@ -25,6 +25,7 @@ import {
 import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { startWorkspace } from '../inspector/server/server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
+import { workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const ACTIVE = new Set(['starting', 'running', 'idle', 'busy']);
@@ -57,7 +58,9 @@ const log = ${JSON.stringify(log)};
 const termLog = ${JSON.stringify(termLog)};
 if (process.argv.includes('--version')) { console.log('workspace-fixture 1.0.0'); process.exit(0); }
 ${fail ? 'process.exit(17);' : `fs.writeFileSync(termLog, process.env.TERM || '');
+console.log('${name === 'codex' ? 'Starting MCP servers' : 'Generating...'}');
 console.log('${name}-ready');
+console.log('${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
 process.stdin.on('data', chunk => fs.appendFileSync(log, Buffer.from(chunk).toString('hex')));`}
@@ -114,6 +117,8 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(readFileSync(codex.termLog, 'utf8'), 'xterm-256color');
     assert.equal(readFileSync(antigravity.termLog, 'utf8'), 'xterm-256color');
+    assert.ok(readFileSync(codex.log, 'utf8').includes(Buffer.from(workspaceRolePrompt('codex', 'en')).toString('hex')));
+    assert.ok(readFileSync(antigravity.log, 'utf8').includes(Buffer.from(workspaceRolePrompt('antigravity', 'en')).toString('hex')));
 
     const bound = listRecords(root).filter(session => session.taskId === first.id);
     assert.deepEqual(new Set(bound.map(session => session.agent)), new Set(['codex', 'antigravity']));

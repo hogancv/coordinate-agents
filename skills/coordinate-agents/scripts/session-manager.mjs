@@ -411,7 +411,7 @@ async function syncHostRecord(root, record) {
   }
 }
 
-function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en' }) {
+function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false }) {
   const contract = getAdapterContract(adapter);
   if (contract) {
     if (!contract.capabilities.persistentSession) {
@@ -423,14 +423,14 @@ function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'e
       });
     }
     return validateLaunchResult(
-      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language }),
+      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace }),
       { kind: 'persistent-session' },
     );
   }
   if (typeof adapter.resolveSessionLaunch === 'function') {
-    return adapter.resolveSessionLaunch({ root, agent, initialPrompt, language });
+    return adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace });
   }
-  const launch = adapter.resolveLaunch({ root, prompt: initialPrompt, agent, language });
+  const launch = adapter.resolveLaunch({ root, prompt: initialPrompt, agent, language, workspace });
   return { ...launch, initialInputConsumed: Boolean(initialPrompt) };
 }
 
@@ -509,7 +509,7 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false } = {}) {
     const repository = sessionRoot(root);
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
@@ -542,7 +542,7 @@ export class ExecutionSessionManager {
       appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
       return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
-    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
+    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
     // starting the owned host. This preserves adapter-specific Windows
