@@ -47,6 +47,7 @@ const MAX_ERROR_BYTES = 4 * 1024;
 const MAX_HISTORY = 32;
 const WORKSPACE_STARTUP_TIMEOUT_MS = 20_000;
 const WORKSPACE_READY_QUIET_MS = 900;
+const ANSI_ESCAPE_PATTERN = /(?:\u001B\][^\u0007]*(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[@-_]|\u009B[0-?]*[ -/]*[@-~])/g;
 
 function now() {
   return new Date().toISOString();
@@ -406,18 +407,25 @@ function workspaceTerminalMarker(agent) {
   return agent === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts';
 }
 
-function workspaceTerminalReady(agent, output) {
+export function normalizeWorkspaceTerminalOutput(output) {
+  return `${output || ''}`.replace(ANSI_ESCAPE_PATTERN, '');
+}
+
+export function workspaceTerminalReady(agent, output) {
   const marker = workspaceTerminalMarker(agent);
-  const markerIndex = output.lastIndexOf(marker);
+  const normalized = normalizeWorkspaceTerminalOutput(output);
+  const markerIndex = normalized.lastIndexOf(marker);
   if (markerIndex < 0) return false;
   const loadingMarkers = agent === 'codex'
     ? ['Starting MCP servers', 'esc to interrupt']
     : ['Signing in...', 'Generating...', 'esc to cancel'];
-  const lastLoadingIndex = Math.max(...loadingMarkers.map(value => output.lastIndexOf(value)));
+  const lastLoadingIndex = Math.max(...loadingMarkers.map(value => normalized.lastIndexOf(value)));
   // Some interactive CLIs paint the input line before MCP/login work is
   // complete. The prompt is ready only when the most recent loading marker
-  // precedes the most recent input marker in the PTY byte stream.
-  return lastLoadingIndex >= 0 && lastLoadingIndex < markerIndex;
+  // precedes the most recent input marker in the PTY byte stream. Full-screen
+  // TUIs may redraw the loading screen without replaying the loading phrase;
+  // in that case the quiet-period check below is the stability guard.
+  return lastLoadingIndex < 0 || lastLoadingIndex < markerIndex;
 }
 
 function workspaceTerminalAuthRequired(agent, output) {
@@ -429,6 +437,7 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
   const marker = workspaceTerminalMarker(agent);
   const deadline = Date.now() + WORKSPACE_STARTUP_TIMEOUT_MS;
   let markerSeen = false;
+  let authObserved = false;
   let lastCursor = null;
   let quietSince = null;
   let latest = session;
@@ -447,17 +456,13 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
         });
       }
 
-      const output = `${inspected.output?.output || ''}`;
-      if (workspaceTerminalAuthRequired(agent, output)) {
-        throw runtimeError('AUTH_REQUIRED', `Workspace Task ${taskId} ${agent} CLI requires sign-in before its terminal can start.`, {
-          recoverable: true,
-          taskId,
-          agent,
-          sessionId: session.id,
-          stage: 'authentication',
-          details: { hint: 'Sign in with the CLI, then restart the Workspace Task.' },
-        });
-      }
+      const output = normalizeWorkspaceTerminalOutput(inspected.output?.output || '');
+      // Antigravity can print its unauthenticated banner while its keyring
+      // auth is still being loaded. Treat that output as an observation, not
+      // an immediate failure; a real login can complete before the prompt is
+      // ready. Only report AUTH_REQUIRED after the bounded readiness window
+      // expires without an interactive prompt.
+      authObserved ||= workspaceTerminalAuthRequired(agent, output);
       const ready = workspaceTerminalReady(agent, output);
       markerSeen = ready;
       const cursor = inspected.output?.nextCursor ?? null;
@@ -474,6 +479,17 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
       // and first output. Keep this bounded readiness probe retryable.
     }
     await new Promise(resolvePromise => setTimeout(resolvePromise, 100));
+  }
+
+  if (authObserved) {
+    throw runtimeError('AUTH_REQUIRED', `Workspace Task ${taskId} ${agent} CLI requires sign-in before its terminal can start.`, {
+      recoverable: true,
+      taskId,
+      agent,
+      sessionId: session.id,
+      stage: 'authentication',
+      details: { hint: 'Sign in with the CLI, then restart the Workspace Task.' },
+    });
   }
 
   throw runtimeError('WORKSPACE_TASK_START_FAILED', `Workspace Task ${taskId} ${agent} Session did not reach its interactive prompt in time.`, {

@@ -21,6 +21,7 @@ import {
   runtimeWorkspaceTaskClose,
   runtimeWorkspaceTaskCreate,
   runtimeWorkspaceTaskRestart,
+  workspaceTerminalReady,
 } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { startWorkspace } from '../inspector/server/server.mjs';
@@ -29,6 +30,13 @@ import { workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-pr
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const ACTIVE = new Set(['starting', 'running', 'idle', 'busy']);
+
+test('Workspace readiness recognizes ANSI-redrawn interactive prompts', () => {
+  const paint = value => [...value].map(character => `\u001b[38;5;252m${character}\u001b[39m`).join('');
+  assert.equal(workspaceTerminalReady('codex', `${paint('Starting MCP servers')}\n${paint('Ask Codex to do anything')}`), true);
+  assert.equal(workspaceTerminalReady('codex', paint('Ask Codex to do anything')), true);
+  assert.equal(workspaceTerminalReady('antigravity', paint('? for shortcuts')), true);
+});
 
 function git(root, args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', windowsHide: true });
@@ -48,7 +56,7 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   return realpathSync(root);
 }
 
-function fakeCli(root, name, { fail = false, auth = false } = {}) {
+function fakeCli(root, name, { fail = false, auth = false, transientAuth = false } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
   const command = join(root, `${name}-cli`);
@@ -60,7 +68,16 @@ if (process.argv.includes('--version')) { console.log('workspace-fixture 1.0.0')
 ${fail ? 'process.exit(17);' : auth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
 console.log('Select login method:');
 console.log('Google OAuth');
-process.stdin.resume();` : `fs.writeFileSync(termLog, process.env.TERM || '');
+process.stdin.resume();` : transientAuth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
+console.log('Signing in...');
+setTimeout(() => {
+  fs.writeFileSync(termLog, process.env.TERM || '');
+  console.log('${name === 'codex' ? 'Starting MCP servers' : 'Generating...'}');
+  console.log('${name}-ready');
+  console.log('${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
+  process.stdin.setRawMode?.(true);
+  process.stdin.resume();
+}, 100);` : `fs.writeFileSync(termLog, process.env.TERM || '');
 console.log('${name === 'codex' ? 'Starting MCP servers' : 'Generating...'}');
 console.log('${name}-ready');
 console.log('${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
@@ -195,6 +212,23 @@ test('Workspace Task reports explicit Antigravity authentication blockers', { ti
     assert.match(`${tasks[0].error?.details || ''}`, /Sign in with the CLI/);
     assert.ok(listRecords(root).every(session => !ACTIVE.has(session.state)));
   } finally {
+    await removeTree(root);
+  }
+});
+
+test('Workspace Task waits for transient Antigravity authentication before failing', { timeout: 90_000 }, async () => {
+  const root = repository('coordinate-agents-workspace-task-transient-auth-');
+  const codex = fakeCli(root, 'codex');
+  const antigravity = fakeCli(root, 'antigravity', { transientAuth: true });
+  configurePair(root, codex, antigravity);
+  let workspaceTaskId = null;
+  try {
+    const created = await runtimeWorkspaceTaskCreate({ root });
+    workspaceTaskId = created.workspaceTask.id;
+    assert.equal(created.workspaceTask.status, 'RUNNING');
+    assert.ok(created.workspaceTask.sessions.antigravity.sessionId);
+  } finally {
+    await closeGroup(root, workspaceTaskId);
     await removeTree(root);
   }
 });
