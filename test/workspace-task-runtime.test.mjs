@@ -48,7 +48,7 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   return realpathSync(root);
 }
 
-function fakeCli(root, name, { fail = false } = {}) {
+function fakeCli(root, name, { fail = false, auth = false } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
   const command = join(root, `${name}-cli`);
@@ -57,7 +57,10 @@ const fs = require('node:fs');
 const log = ${JSON.stringify(log)};
 const termLog = ${JSON.stringify(termLog)};
 if (process.argv.includes('--version')) { console.log('workspace-fixture 1.0.0'); process.exit(0); }
-${fail ? 'process.exit(17);' : `fs.writeFileSync(termLog, process.env.TERM || '');
+${fail ? 'process.exit(17);' : auth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
+console.log('Select login method:');
+console.log('Google OAuth');
+process.stdin.resume();` : `fs.writeFileSync(termLog, process.env.TERM || '');
 console.log('${name === 'codex' ? 'Starting MCP servers' : 'Generating...'}');
 console.log('${name}-ready');
 console.log('${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
@@ -169,6 +172,28 @@ test('Workspace Task startup failure rolls back the first terminal and keeps bot
     assert.equal(sessions.length, 2);
     assert.ok(sessions.every(session => !ACTIVE.has(session.state)));
     assert.ok(tasks[0].error?.code);
+  } finally {
+    await removeTree(root);
+  }
+});
+
+test('Workspace Task reports explicit Antigravity authentication blockers', { timeout: 90_000 }, async () => {
+  const root = repository('coordinate-agents-workspace-task-auth-');
+  const codex = fakeCli(root, 'codex');
+  const antigravity = fakeCli(root, 'antigravity', { auth: true });
+  configurePair(root, codex, antigravity);
+  try {
+    await assert.rejects(
+      runtimeWorkspaceTaskCreate({ root }),
+      error => error.code === 'WORKSPACE_TASK_START_FAILED'
+        && JSON.stringify(error.details || '').includes('AUTH_REQUIRED')
+        && JSON.stringify(error.details || '').includes('authentication'),
+    );
+    const tasks = await readWorkspaceTasks(root);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, 'ERROR');
+    assert.match(`${tasks[0].error?.details || ''}`, /Sign in with the CLI/);
+    assert.ok(listRecords(root).every(session => !ACTIVE.has(session.state)));
   } finally {
     await removeTree(root);
   }

@@ -420,6 +420,10 @@ function workspaceTerminalReady(agent, output) {
   return lastLoadingIndex >= 0 && lastLoadingIndex < markerIndex;
 }
 
+function workspaceTerminalAuthRequired(agent, output) {
+  return agent === 'antigravity' && /currently\s+not\s+signed\s+in|select\s+login\s+method|google\s+oauth/i.test(output);
+}
+
 async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
   const manager = getExecutionSessionManager();
   const marker = workspaceTerminalMarker(agent);
@@ -444,6 +448,16 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
       }
 
       const output = `${inspected.output?.output || ''}`;
+      if (workspaceTerminalAuthRequired(agent, output)) {
+        throw runtimeError('AUTH_REQUIRED', `Workspace Task ${taskId} ${agent} CLI requires sign-in before its terminal can start.`, {
+          recoverable: true,
+          taskId,
+          agent,
+          sessionId: session.id,
+          stage: 'authentication',
+          details: { hint: 'Sign in with the CLI, then restart the Workspace Task.' },
+        });
+      }
       const ready = workspaceTerminalReady(agent, output);
       markerSeen = ready;
       const cursor = inspected.output?.nextCursor ?? null;
@@ -455,7 +469,7 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
       }
       lastCursor = cursor;
     } catch (error) {
-      if (error?.code === 'WORKSPACE_TASK_START_FAILED') throw error;
+      if (error?.code === 'WORKSPACE_TASK_START_FAILED' || error?.code === 'AUTH_REQUIRED') throw error;
       // A detached host can briefly be unavailable between its socket bind
       // and first output. Keep this bounded readiness probe retryable.
     }
@@ -501,7 +515,18 @@ async function openWorkspaceSlot(root, record, slot, language) {
     });
   }
   await waitForWorkspaceTerminalReady(root, opened.session, expected.agent, record.id);
-  const session = await getExecutionSessionManager().write(root, opened.session.id, prompt, {
+  const manager = getExecutionSessionManager();
+  // Send the instruction and Enter as separate PTY writes. Codex treats one
+  // large write containing text plus CR as a paste buffer and leaves it in
+  // the draft editor; a distinct control-byte write is the same interaction
+  // as pressing Enter in the terminal.
+  await manager.write(root, opened.session.id, prompt, {
+    submit: false,
+    taskId: record.id,
+    subtaskId: slot,
+  });
+  const session = await manager.write(root, opened.session.id, '\r', {
+    submit: false,
     taskId: record.id,
     subtaskId: slot,
   });

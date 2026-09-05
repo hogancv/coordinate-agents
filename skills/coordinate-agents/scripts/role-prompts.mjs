@@ -50,10 +50,10 @@ export function buildAgentPrompt({
 
   if (language === 'zh') {
     if (isDefaultCodex) {
-      return `调用 $coordinate-agents 并以 Codex 角色恢复当前仓库的协作。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(template, language)}\n\n本轮任务：${task}`;
+      return `调用 $coordinate-agents 并以 Codex 角色恢复当前仓库的协作；如果宿主未注册该技能，直接阅读仓库内 skills/coordinate-agents/SKILL.md 并按其中流程执行。你只负责需求澄清、规格、验收标准、提交与证据审查及发布门禁，不修改产品代码。${taskGuidance(template, language)}\n\n本轮任务：${task}`;
     }
     if (isDefaultAgy) {
-      return '调用 $coordinate-agents 并以 Antigravity 角色恢复当前仓库的协作。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
+      return '调用 $coordinate-agents 并以 Antigravity 角色恢复当前仓库的协作；如果宿主未注册该技能，直接阅读仓库内 skills/coordinate-agents/SKILL.md 并按其中流程执行。立即等待 Codex；你是唯一的产品代码修改者，负责实现、验证、提交并发送带证据的 IMPLEMENTATION_DONE；等待 review；不得发布。';
     }
     if (normalizedRoles.includes('planner') && normalizedRoles.includes('implementer') && normalizedRoles.includes('reviewer')) {
       return `调用 $coordinate-agents 并作为规划、实现与审查者（${agentId}）恢复当前仓库的协作。按规格实现、验证、提交并进行审查；未获明确授权不得发布。${taskGuidance(template, language)}\n\n本轮任务：${task}`;
@@ -72,10 +72,10 @@ export function buildAgentPrompt({
   }
 
   if (isDefaultCodex) {
-    return `Use $coordinate-agents as Codex and resume collaboration in this repository. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(template, language)}\n\nTask: ${task}`;
+    return `Use $coordinate-agents as Codex and resume collaboration in this repository; if the host has not registered the skill, read skills/coordinate-agents/SKILL.md in this repository and follow it directly. Own only clarification, specification, acceptance criteria, commit/evidence review, and the release gate; do not edit product code. ${taskGuidance(template, language)}\n\nTask: ${task}`;
   }
   if (isDefaultAgy) {
-    return 'Use $coordinate-agents as Antigravity and resume collaboration in this repository. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
+    return 'Use $coordinate-agents as Antigravity and resume collaboration in this repository; if the host has not registered the skill, read skills/coordinate-agents/SKILL.md in this repository and follow it directly. Wait for Codex now; be the sole product-code writer; implement, validate, commit, and send IMPLEMENTATION_DONE with evidence; wait for review; never release.';
   }
   if (normalizedRoles.includes('planner') && normalizedRoles.includes('implementer') && normalizedRoles.includes('reviewer')) {
     return `Use $coordinate-agents as planner, implementer, and reviewer (${agentId}) and resume collaboration in this repository. Implement, validate, commit, and review according to specifications; never release without explicit approval. ${taskGuidance(template, language)}\n\nTask: ${task}`;

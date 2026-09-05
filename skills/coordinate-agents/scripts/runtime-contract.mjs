@@ -73,7 +73,7 @@ export function legacyErrorCode(code) {
 
 export function isExplicitAuthFailure(value) {
   const text = `${value || ''}`;
-  return /(?:not\s+authenticated|authentication\s+required|authorization\s+required|unauthorized|please\s+(?:log|sign)\s*[- ]?in|(?:log|sign)\s*[- ]?in\s+required|login\s+required|invalid\s+(?:api\s+)?(?:key|token))/i.test(text);
+  return /(?:not\s+(?:authenticated|signed\s+in)|authentication\s+required|authorization\s+required|unauthorized|please\s+(?:log|sign)\s*[- ]?in|(?:log|sign)\s*[- ]?in\s+required|login\s+required|invalid\s+(?:api\s+)?(?:key|token))/i.test(text);
 }
 
 export function runtimeError(code, message, options = {}) {
