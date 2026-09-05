@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { parseConfigValue } from '../lib/commands/config.mjs';
 import {
   defaultUserConfig,
   readUserConfig,
@@ -37,6 +38,55 @@ test('user configuration resolves under the injected home and preserves command 
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('parseConfigValue parses valid values and validates .args format', () => {
+  // Non-args keys are returned as-is
+  assert.equal(parseConfigValue('agent.antigravity.command', 'agy-proxy'), 'agy-proxy');
+  assert.equal(parseConfigValue('adapters', '["adapter.mjs"]'), '["adapter.mjs"]');
+  assert.equal(parseConfigValue('some.args.key', 'value'), 'value');
+
+  // Valid JSON string arrays for .args keys are parsed into arrays
+  assert.deepEqual(parseConfigValue('agent.antigravity.args', '["--verbose", "--port", "8080"]'), ['--verbose', '--port', '8080']);
+  assert.deepEqual(parseConfigValue('agent.custom.args', '[]'), []);
+
+  // Invalid JSON syntax throws formatted error
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '{invalid json'),
+    /Invalid args value:/
+  );
+
+  // Non-array JSON values throw formatted error
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '{"key": "value"}'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '123'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', 'true'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', 'null'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+
+  // JSON arrays containing non-string elements throw formatted error
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '[1, 2, 3]'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '["valid", null]'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
+  assert.throws(
+    () => parseConfigValue('agent.antigravity.args', '[["nested"]]'),
+    { message: 'Invalid args value: args must be a JSON array of strings.' }
+  );
 });
 
 test('writing user configuration creates only the user-level directory', () => {
