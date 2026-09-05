@@ -24,6 +24,10 @@ import {
   runtimeSessionFacts,
   runtimeSessionRead,
 } from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import {
+  readWorkspaceTask as readWorkspaceTaskRecord,
+  readWorkspaceTasks as readWorkspaceTaskRecords,
+} from '../../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { observeAgentBus } from '../../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
@@ -784,6 +788,12 @@ export function createInspectorData(root) {
     },
     async readSessions() {
       return readSessions(repository);
+    },
+    async readWorkspaceTasks() {
+      return readWorkspaceTaskRecords(repository);
+    },
+    async readWorkspaceTask(id) {
+      return readWorkspaceTaskRecord(repository, id);
     },
     async readSessionOutput(sessionId, options = {}) {
       return readSessionOutput(repository, sessionId, options);

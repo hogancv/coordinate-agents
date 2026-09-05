@@ -139,8 +139,12 @@ function apiError(response, error) {
   const code = error?.code || '';
   const status = code === 'TASK_NOT_FOUND'
     ? 404
+    : code === 'WORKSPACE_TASK_NOT_FOUND'
+      ? 404
     : code === 'SESSION_NOT_FOUND'
       ? 404
+      : code === 'WORKSPACE_TASK_STATE_CONFLICT'
+        ? 400
       : code === 'SESSION_STATE_CONFLICT'
         ? 400
         : code === 'TASK_GRAPH_INVALID'
@@ -191,6 +195,15 @@ export function createInspectorServer({
     try {
       if (pathname === '/api/repository' && typeof data.readRepository === 'function') {
         json(response, 200, data.readRepository());
+        return;
+      }
+      if (ui === 'workspace' && pathname === '/api/workspace-tasks' && typeof data.readWorkspaceTasks === 'function') {
+        json(response, 200, await data.readWorkspaceTasks());
+        return;
+      }
+      if (ui === 'workspace' && pathname.startsWith('/api/workspace-tasks/') && typeof data.readWorkspaceTask === 'function') {
+        const id = decodeURIComponent(pathname.slice('/api/workspace-tasks/'.length));
+        json(response, 200, await data.readWorkspaceTask(id));
         return;
       }
       if (pathname === '/api/tasks') {

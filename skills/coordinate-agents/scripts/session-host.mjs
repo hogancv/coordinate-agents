@@ -62,6 +62,8 @@ function metadataFromRuntime() {
     outputTail: outputTail(),
     endpoint: session.endpoint,
     hostPid: process.pid,
+    taskId: session.taskId || null,
+    subtaskId: session.subtaskId || null,
   };
 }
 
@@ -264,6 +266,8 @@ try {
         outputTail: outputTail(),
         endpoint: session.endpoint,
         hostPid: process.pid,
+        taskId: session.taskId || null,
+        subtaskId: session.subtaskId || null,
       };
       atomicWrite(session.metadataPath, `${JSON.stringify(failed, null, 2)}\n`, session.tmpDirectory);
     }

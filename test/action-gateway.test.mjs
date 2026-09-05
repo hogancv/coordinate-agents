@@ -438,18 +438,21 @@ test('setup discovery and transactional Agent configuration work through the gua
         assert.equal(serialized.includes(secret), false, `Gateway responses must not echo secrets: ${secret}`);
       }
 
-      // Workspace ships the Agents panel assets.
+      // Workspace no longer exposes setup as a page-level panel; setup stays
+      // available through the guarded backend contract while the page is the
+      // focused dual-terminal workbench.
       const page = await (await fetch(`${base}/`)).text();
-      assert.match(page, /id="agents-panel"/);
-      assert.match(page, /id="discover-agents"/);
-      assert.match(page, /id="agent-configure"/);
+      for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="restart-task-button"', 'id="close-task-button"']) {
+        assert.match(page, new RegExp(expected));
+      }
+      assert.doesNotMatch(page, /agents-panel|discover-agents|agent-configure|chat-feed|composer|graph-map|execution-panel/);
       const js = await (await fetch(`${base}/app.js`)).text();
-      for (const expected of ['renderAgentsDiscovery', 'renderConfiguredAgents', 'discoverAgents', 'applyAgentConfigure', 'setupDiscover', 'setupConfigure', 'configured-agent-row', 'source-badge']) {
-        assert.ok(js.includes(expected), `Workspace app.js must expose Agents setup support: ${expected}`);
+      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionResize', 'onData', 'onBinary']) {
+        assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
       }
       const css = await (await fetch(`${base}/styles.css`)).text();
-      for (const expected of ['.agents-panel', '.agent-form', '.agent-row', '.adapter-card', '.source-badge', '.configured-agent']) {
-        assert.ok(css.includes(expected), `Workspace styles.css must style Agents setup: ${expected}`);
+      for (const expected of ['.terminal-grid', '.terminal-screen', '.workspace-task-list']) {
+        assert.ok(css.includes(expected), `Workspace styles.css must style the dual-terminal UI: ${expected}`);
       }
     } finally {
       await closeServer(started.server);
@@ -568,15 +571,18 @@ test('Task and Task Graph authoring with preflight stays side-effect free until 
     assert.equal(singleTask.payload.command, 'task.create');
     assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'tasks', 'task-author-single.json')), true);
 
-    // Authoring panel assets ship in the Workspace.
+    // The Workspace intentionally exposes only the dual-terminal surface;
+    // standard Task/Graph authoring remains a backend compatibility contract.
     const page = await (await fetch(`${base}/`)).text();
-    for (const expected of ['id="author-panel"', 'id="graph-create-form"', 'id="author-subtask-rows"', 'id="author-graph-preflight"', 'id="task-create-form"']) {
-      assert.ok(page.includes(expected), `Workspace page must include authoring surface: ${expected}`);
+    for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="restart-task-button"', 'id="close-task-button"']) {
+      assert.ok(page.includes(expected), `Workspace page must include dual-terminal surface: ${expected}`);
     }
+    assert.doesNotMatch(page, /author-panel|graph-create-form|task-create-form|chat-feed|composer/);
     const js = await (await fetch(`${base}/app.js`)).text();
-    for (const expected of ['validateGraphNow', 'createGraphNow', 'showGraphPreflight', 'readSubtaskRows', 'refreshAgentSelects', 'taskGraphCreate', 'taskGraphPlan']) {
-      assert.ok(js.includes(expected), `Workspace app.js must expose authoring support: ${expected}`);
+    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionWrite', 'sessionResize']) {
+      assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
     }
+    assert.doesNotMatch(js, /taskGraphCreate|taskGraphPlan|renderGraphMap|\/api\/tasks/);
   } finally {
     await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
@@ -678,16 +684,19 @@ test('execution controls are explicit, bounded, and fail closed without auto-dis
     assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'sessions')), false);
     assert.equal(existsSync(join(repositoryRoot, '.agent-bus', 'worktrees')), false);
 
-    // Execution controls are render-only UI: assets ship but nothing auto-runs.
+    // Standard execution remains a backend compatibility contract; the
+    // Workspace page exposes only the dual-terminal task controls.
     const page = await (await fetch(`${base}/`)).text();
-    assert.match(page, /id="execution-panel"/);
+    assert.match(page, /id="agent-terminal-grid"/);
+    assert.match(page, /id="new-task-button"/);
+    assert.doesNotMatch(page, /execution-panel|execution-confirm|chat-feed|composer|graph-map/);
     const js = await (await fetch(`${base}/app.js`)).text();
-    for (const expected of ['runExecutionAction', 'renderExecution', 'renderExecutionResult', 'taskDispatch', 'taskGraphRun', 'taskGraphAdvance', 'execution-confirm']) {
-      assert.ok(js.includes(expected), `Workspace app.js must expose execution support: ${expected}`);
+    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionWrite', 'sessionResize']) {
+      assert.ok(js.includes(expected), `Workspace app.js must expose terminal task support: ${expected}`);
     }
     const css = await (await fetch(`${base}/styles.css`)).text();
-    for (const expected of ['.execution-panel', '.execution-confirm-row', '.execution-fact', '.execution-ok']) {
-      assert.ok(css.includes(expected), `Workspace styles.css must style execution controls: ${expected}`);
+    for (const expected of ['.terminal-grid', '.task-toolbar', '.danger-button']) {
+      assert.ok(css.includes(expected), `Workspace styles.css must style task controls: ${expected}`);
     }
     } finally {
       await closeServer(started.server);
@@ -774,17 +783,21 @@ test('Session console and recovery controls stay explicit, owned, and idempotent
       const sessionRecords = existsSync(sessionsDir) ? readdirSync(sessionsDir).filter(name => name.endsWith('.json')) : [];
       assert.equal(sessionRecords.length, 0, 'Rejected Session input must not create any Session record');
 
-      // Session and recovery assets ship in the Workspace.
+      // The new Workspace renders the selected pair only; recovery and the
+      // standard Task Graph remain backend compatibility capabilities.
       const page = await (await fetch(base + '/')).text();
-      assert.match(page, /id="sessions"/);
+      assert.match(page, /id="agent-terminal-grid"/);
+      assert.doesNotMatch(page, /id="sessions"|session-input-form|recovery/);
       const js = await (await fetch(base + '/app.js')).text();
-      for (const expected of ['recoveryControls', 'bindSessionActions', 'submitSessionInput', 'closeOwnedSession', 'sessionWrite', 'sessionClose', 'taskGraphCleanup', 'taskResume', 'session-card']) {
-        assert.ok(js.includes(expected), 'Workspace app.js must expose session/recovery support: ' + expected);
+      for (const expected of ['sessionWrite', 'sessionResize', 'enqueueRawInput', 'workspaceTaskClose', 'workspaceTaskRestart']) {
+        assert.ok(js.includes(expected), 'Workspace app.js must expose direct terminal support: ' + expected);
       }
+      assert.doesNotMatch(js, /recoveryControls|submitSessionInput|taskGraphCleanup|taskResume|session-card/);
       const css = await (await fetch(base + '/styles.css')).text();
-      for (const expected of ['.session-controls', '.session-input-form', '.session-control-status', '.recovery-sep']) {
-        assert.ok(css.includes(expected), 'Workspace styles.css must style session/recovery: ' + expected);
+      for (const expected of ['.terminal-grid', '.terminal-screen', '.terminal-card-footer']) {
+        assert.ok(css.includes(expected), 'Workspace styles.css must style direct terminals: ' + expected);
       }
+      assert.doesNotMatch(css, /session-input-form|recovery-sep/);
       } finally {
         await closeServer(started.server);
         await safeRm(repositoryRoot);
@@ -855,23 +868,19 @@ test('review and integrate controls are explicit, conflict-aware, and never rele
       assert.equal(taskReview.payload.ok, false);
       assert.ok(taskReview.payload.error.code, 'Single-Task review must be gated by Runtime state');
 
-      // Review UI explicitly separates review approval from RELEASE_APPROVED and
-      // ships no release control.
+      // Review UI is intentionally absent from the new terminal Workspace;
+      // review remains a backend contract for the standard Task/Graph flows.
       const page = await (await fetch(base + '/')).text();
-      assert.match(page, /id="review-panel"/);
+      assert.match(page, /id="agent-terminal-grid"/);
+      assert.doesNotMatch(page, /id="review-panel"|RELEASE_APPROVED/);
       const js = await (await fetch(base + '/app.js')).text();
-      assert.ok(page.includes('RELEASE_APPROVED'), 'Review UI text must name the human RELEASE_APPROVED gate');
-      for (const expected of ['renderReview', 'integrateGraph', 'submitReview', 'reviewParams', 'taskGraphIntegrate', 'taskGraphReview', 'taskReview']) {
-        assert.ok(js.includes(expected), 'Workspace app.js must expose review/integrate support: ' + expected);
-      }
+      assert.doesNotMatch(js, /renderReview|integrateGraph|submitReview|taskGraphIntegrate|taskGraphReview|taskReview/);
       const htmlLower = (await (await fetch(base + '/')).text()).toLowerCase();
       for (const forbidden of ['>merge<', '>push<', '>publish<', '>deploy<', '>release<', '>tag<']) {
         assert.equal(htmlLower.includes(forbidden), false, 'Review UI must not offer release-like controls: ' + forbidden);
       }
       const css = await (await fetch(base + '/styles.css')).text();
-      for (const expected of ['.review-panel', '.review-form', '.review-confirm-row', '.review-result']) {
-        assert.ok(css.includes(expected), 'Workspace styles.css must style review: ' + expected);
-      }
+      assert.doesNotMatch(css, /\.review-panel|\.review-form|\.review-confirm-row|\.review-result/);
       } finally {
         await closeServer(started.server);
         await safeRm(repositoryRoot);

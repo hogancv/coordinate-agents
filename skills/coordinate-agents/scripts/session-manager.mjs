@@ -509,7 +509,7 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true } = {}) {
     const repository = sessionRoot(root);
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
@@ -519,19 +519,19 @@ export class ExecutionSessionManager {
         root: repository,
       });
     }
-    const preferred = await this.findPreferred(
+    const preferred = reuseExisting ? await this.findPreferred(
       repository,
       sessionId,
       agent,
       resolved?.command || null,
       resolved?.resolvedCommand || null,
-    );
-    const existing = preferred || await this.findReusable(
+    ) : null;
+    const existing = reuseExisting ? (preferred || await this.findReusable(
       repository,
       agent,
       resolved?.command || null,
       resolved?.resolvedCommand || null,
-    );
+    )) : null;
     if (existing) {
       const associated = {
         ...existing,
@@ -613,6 +613,8 @@ export class ExecutionSessionManager {
             maxOutputBytes: this.maxOutputBytes,
             createdAt,
             root: repository,
+            taskId,
+            subtaskId,
           },
         }, error => error ? reject(error) : resolvePromise());
       });

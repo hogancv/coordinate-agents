@@ -20,10 +20,25 @@ export async function runtimeSessionOpen(input = {}) {
     adapter: resolution.adapter,
     initialPrompt: typeof input.initialPrompt === 'string' ? input.initialPrompt : '',
     language: input.language || 'en',
+    taskId: input.taskId || null,
+    subtaskId: input.subtaskId || null,
+    reuseExisting: input.reuseExisting !== false,
   });
   let session = opened.session;
   if (typeof input.initialPrompt === 'string' && input.initialPrompt.length > 0 && !opened.initialInputConsumed) {
-    session = await getExecutionSessionManager().write(root, session.id, input.initialPrompt);
+    try {
+      session = await getExecutionSessionManager().write(root, session.id, input.initialPrompt, {
+        taskId: input.taskId || null,
+        subtaskId: input.subtaskId || null,
+      });
+    } catch (error) {
+      if (!opened.reused) {
+        try {
+          await getExecutionSessionManager().close(root, session.id, { graceful: false, timeoutMs: 1_000 });
+        } catch { /* Startup cleanup remains owned by the Session Manager. */ }
+      }
+      throw error;
+    }
   }
   return jsonSuccess('session.open', {
     root,

@@ -38,11 +38,11 @@ const CORRELATION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 /**
  * Workspace action allow-list. Every entry maps to one shared Runtime
  * operation. Discovery is read-only; `setupConfigure` is the transactional
- * project Agent/role configuration path and is deliberately the only
- * configuration-write action in this slice. Process-launching, Session-input,
- * stop, cleanup, integration, and review operations require explicit UI
- * confirmation and arrive in later tickets. `taskCreate` keeps its
- * deterministic-id conflict as the replay guard.
+ * project Agent/role configuration path. Workspace Task lifecycle actions are
+ * the only browser process controls: they create/close/restart a fixed
+ * Codex+Antigravity pair. Session input and resize remain bounded and owned by
+ * the Runtime, while the legacy Task/Graph actions stay available for
+ * compatibility.
  */
 const ACTION_DEFINITIONS = Object.freeze({
   setupDiscover: {
@@ -71,6 +71,28 @@ const ACTION_DEFINITIONS = Object.freeze({
       planner: { type: 'string', max: 64 },
       implementer: { type: 'string', max: 64 },
       reviewer: { type: 'string', max: 64 },
+    },
+  },
+  workspaceTaskCreate: {
+    operation: 'workspaceTaskCreate',
+    command: 'workspace.task.create',
+    params: {
+      language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
+    },
+  },
+  workspaceTaskClose: {
+    operation: 'workspaceTaskClose',
+    command: 'workspace.task.close',
+    params: {
+      workspaceTaskId: { type: 'string', required: true, max: 128 },
+    },
+  },
+  workspaceTaskRestart: {
+    operation: 'workspaceTaskRestart',
+    command: 'workspace.task.restart',
+    params: {
+      workspaceTaskId: { type: 'string', required: true, max: 128 },
+      language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
     },
   },
   taskStatus: {
@@ -200,6 +222,16 @@ const ACTION_DEFINITIONS = Object.freeze({
     params: {
       sessionId: { type: 'string', required: true, max: 256 },
       input: { type: 'string', required: true, max: 16 * 1024 },
+      submit: { type: 'boolean' },
+    },
+  },
+  sessionResize: {
+    operation: 'sessionResize',
+    command: 'session.resize',
+    params: {
+      sessionId: { type: 'string', required: true, max: 256 },
+      cols: { type: 'integer', required: true, min: 1, max: 1000 },
+      rows: { type: 'integer', required: true, min: 1, max: 500 },
     },
   },
   sessionClose: {
@@ -341,6 +373,8 @@ function validateParams(definition, params) {
       if (value < (rule.min ?? 0) || value > (rule.max ?? Number.MAX_SAFE_INTEGER)) {
         return `Parameter ${key} is outside the supported range.`;
       }
+    } else if (rule.type === 'boolean') {
+      if (typeof value !== 'boolean') return `Parameter ${key} must be a boolean.`;
     }
     if (Array.isArray(rule.enum) && !rule.enum.includes(value)) return `Parameter ${key} has an unsupported value.`;
   }

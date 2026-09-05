@@ -103,7 +103,7 @@ async function closeServer(server) {
   await new Promise(resolvePromise => server.close(resolvePromise));
 }
 
-test('Web Workspace renders the bound Git repository identity and the read-only project overview', async () => {
+test('Web Workspace renders the repository and the dual-terminal task workbench', async () => {
   const repositoryRoot = taskFixture(repository());
   graphFixture(repositoryRoot);
   const expectedBranch = git(repositoryRoot, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
@@ -118,7 +118,10 @@ test('Web Workspace renders the bound Git repository identity and the read-only 
     assert.match(page, /id="repository"/);
     assert.match(page, /id="repo-name"/);
     assert.match(page, /id="repo-branch"/);
-    assert.match(page, /Task Graph topology/);
+    assert.match(page, /id="workspace-task-list"/);
+    assert.match(page, /id="agent-terminal-grid"/);
+    assert.match(page, /Codex and Antigravity terminals/);
+    assert.doesNotMatch(page, /id="composer"|id="chat-feed"|id="graph-map"|id="view-agents"|id="view-sessions"|id="view-activity"/);
 
     const repositoryFacts = await (await fetch(`${started.url}/api/repository`)).json();
     assert.equal(repositoryFacts.root, repositoryRoot);
@@ -139,6 +142,9 @@ test('Web Workspace renders the bound Git repository identity and the read-only 
     assert.equal(graphParent.id, 'task-workspace-graph');
     assert.equal(graphParent.subtaskCount, 2);
 
+    const workspaceTasks = await (await fetch(`${started.url}/api/workspace-tasks`)).json();
+    assert.deepEqual(workspaceTasks, [], 'standard Task and Graph records stay hidden from the Workspace task list');
+
     // Persisted #36 Task Graph records remain readable through the Workspace.
     const graphDetail = await (await fetch(`${started.url}/api/tasks/task-workspace-graph`)).json();
     assert.equal(graphDetail.graph, true);
@@ -147,9 +153,13 @@ test('Web Workspace renders the bound Git repository identity and the read-only 
 
     const js = await (await fetch(`${started.url}/app.js`)).text();
     assert.match(js, /renderRepository/);
-    assert.match(js, /\/api\/repository/);
+    assert.match(js, /\/api\/workspace-tasks/);
+    assert.match(js, /workspaceTaskCreate/);
+    assert.match(js, /sessionResize/);
+    assert.doesNotMatch(js, /\/api\/tasks/);
     const css = await (await fetch(`${started.url}/styles.css`)).text();
-    assert.match(css, /\.repository-panel/);
+    assert.match(css, /\.repository-card/);
+    assert.match(css, /\.terminal-grid/);
     assert.match(css, /\.repo-facts/);
 
     const mutation = await fetch(`${started.url}/api/repository`, { method: 'POST' });
@@ -232,6 +242,7 @@ test('Web Workspace page loads, task selection, and event reads stay strictly re
     await fetch(`${started.url}/api/tasks`);
     await fetch(`${started.url}/api/tasks/task-workspace`);
     await fetch(`${started.url}/api/tasks/task-workspace-graph`);
+    await fetch(`${started.url}/api/workspace-tasks`);
     await fetch(`${started.url}/api/agents`);
     await fetch(`${started.url}/api/sessions`);
     await fetch(`${started.url}/api/events?limit=100`);
@@ -273,28 +284,20 @@ test('Web Workspace fails closed for non-Git, missing, and uncommitted-unsafe en
   }
 });
 
-test('Web Workspace ships the interactive Task Graph map over authoritative graph facts (#47)', async () => {
+test('Web Workspace hides standard Task Graph UI while compatibility APIs remain readable', async () => {
   const repositoryRoot = graphFixture(taskFixture(repository()));
   const started = await startWorkspace({ root: repositoryRoot, port: 0 });
   try {
     const page = await (await fetch(`${started.url}/`)).text();
-    assert.match(page, /id="graph-map-region"/);
-    assert.match(page, /id="graph-map"/);
-    assert.match(page, /id="graph-map-note"/);
-    assert.match(page, /id="graph-legend"/);
-    assert.match(page, /id="graph-node-detail"/);
-    assert.match(page, /Interactive Task Graph dependency map/);
+    assert.doesNotMatch(page, /graph-map|Task Graph|Graph dependency/);
+    assert.match(page, /id="workspace-task-list"/);
+    assert.match(page, /id="agent-terminal-grid"/);
 
     const js = await (await fetch(`${started.url}/app.js`)).text();
-    for (const expected of ['renderGraphMap', 'graphNodeLevels', 'renderGraphNodeDetail', 'renderGraphLegend',
-      'GRAPH_MAP_MAX_NODES', 'data-subtask', 'graph-map-edge', 'graph-map-node']) {
-      assert.ok(js.includes(expected), `Workspace app.js must expose graph map support: ${expected}`);
-    }
+    assert.doesNotMatch(js, /renderGraphMap|graphNodeLevels|GRAPH_MAP_MAX_NODES|graph-map-edge/);
 
     const css = await (await fetch(`${started.url}/styles.css`)).text();
-    for (const expected of ['.graph-map-region', '.graph-map-canvas', '.graph-map-node', '.graph-map-edge', '.graph-node-detail', '.graph-legend']) {
-      assert.ok(css.includes(expected), `Workspace styles.css must style graph map elements: ${expected}`);
-    }
+    assert.doesNotMatch(css, /graph-map-region|graph-map-canvas|graph-map-node|graph-map-edge/);
 
     // The map consumes the bounded authoritative graph detail API; facts are
     // not invented in the browser.
@@ -376,31 +379,30 @@ test('Workspace serves the composer model module for the browser bundle', async 
   }
 });
 
-test('Workspace terminal panes prefer the current Task Session and fall back transparently', () => {
-  const agents = [
-    { id: 'codex', adapter: 'codex-cli' },
-    { id: 'codex', adapter: 'codex-cli' },
-    { id: 'antigravity', adapter: 'antigravity-cli' },
-    { id: 'reviewer', adapter: 'generic-cli' },
-  ];
-  const sessions = [
-    { sessionId: 'session-codex-old', agent: 'codex', status: 'exited', lastActivity: '2026-09-03T08:00:00.000Z' },
-    { sessionId: 'session-codex-new', agent: 'codex', status: 'running', lastActivity: '2026-09-03T09:00:00.000Z' },
-    { sessionId: 'session-task', agent: 'antigravity', status: 'running', lastActivity: '2026-09-03T08:30:00.000Z' },
-  ];
+test('Workspace terminal panes only select the saved Codex and Antigravity pair', () => {
   const panes = selectTerminalPanes({
-    agents,
-    sessions,
-    task: { id: 'task-terminal', sessionId: 'session-task', implementer: 'antigravity' },
+    workspaceTask: {
+      id: 'workspace-terminal-12345678',
+      sessions: {
+        codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId: 'session-codex-new' },
+        antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: 'session-task' },
+      },
+    },
   });
   assert.equal(panes.length, 2);
-  assert.deepEqual(panes.map(pane => pane.agentId), ['antigravity', 'codex']);
-  assert.equal(panes[0].sessionId, 'session-task');
-  assert.equal(panes[0].source, 'task');
-  assert.equal(panes[1].sessionId, 'session-codex-new');
-  assert.equal(panes[1].source, 'latest');
+  assert.deepEqual(panes.map(pane => pane.agentId), ['codex', 'antigravity']);
+  assert.deepEqual(panes.map(pane => pane.sessionId), ['session-codex-new', 'session-task']);
+  assert.ok(panes.every(pane => pane.source === 'workspace-task'));
 
-  const empty = selectTerminalPanes({ agents: [], sessions: [], count: 2 });
+  const empty = selectTerminalPanes({
+    workspaceTask: {
+      sessions: {
+        codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId: null },
+        antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: null },
+      },
+    },
+    count: 2,
+  });
   assert.equal(empty.length, 2);
   assert.ok(empty.every(pane => pane.source === 'none' && pane.sessionId === null));
   assert.equal(isActiveTerminalSession({ status: 'running' }), true);
@@ -624,16 +626,12 @@ test('Session chat entry handles no output, running, ended, failed, and review s
   assert.equal(boundedEntry.body.length, CHAT_MAX_OUTPUT);
 });
 
-test('Bilingual welcome text accurately describes automatic single-task dispatch and explicit graph/recovery controls', () => {
+test('Bilingual Workspace text describes the fixed dual-terminal flow', () => {
   const appJs = readFileSync(join(root, 'inspector', 'web-workspace', 'app.js'), 'utf8');
 
-  // Neither English nor Chinese welcome text may claim "nothing runs automatically"
-  assert.equal(appJs.includes('nothing runs automatically'), false, 'welcome.w4 must not claim nothing runs automatically');
-  assert.equal(appJs.includes('一切都不会自动运行'), false, 'welcome.w4 zh-CN must not claim nothing runs automatically');
-
-  // Both languages must reflect automatic create + dispatch for composer single tasks
-  assert.match(appJs, /Single tasks sent from the composer are automatically created and dispatched/);
-  assert.match(appJs, /Task Graphs, recovery, integration, and review still require explicit action/);
-  assert.match(appJs, /通过 Composer 发送的单任务会自动创建并派发/);
-  assert.match(appJs, /Task Graph、恢复、集成与评审仍需显式操作/);
+  assert.match(appJs, /Create a task to open fresh Codex and Antigravity terminals/);
+  assert.match(appJs, /新建任务会打开全新的 Codex 与 Antigravity 终端/);
+  assert.match(appJs, /workspaceTaskCreate/);
+  assert.match(appJs, /workspaceTaskRestart/);
+  assert.equal(appJs.includes('Nothing runs automatically'), false);
 });
