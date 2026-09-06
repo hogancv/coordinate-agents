@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   defaultUserConfig,
+  getUserConfigValue,
   readUserConfig,
   resolveAgentConfig,
   setUserConfigValue,
@@ -37,6 +38,62 @@ test('user configuration resolves under the injected home and preserves command 
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('getUserConfigValue retrieves configured values and handles edge cases and errors', () => {
+  const config = {
+    version: 1,
+    agents: {
+      antigravity: {
+        command: 'agy-proxy',
+        args: ['--verbose', '--timeout=30'],
+      },
+      codex: {
+        command: 'codex-custom',
+      },
+    },
+  };
+
+  // Happy path retrieval
+  assert.equal(getUserConfigValue(config, 'agent.antigravity.command'), 'agy-proxy');
+  assert.deepEqual(getUserConfigValue(config, 'agent.antigravity.args'), ['--verbose', '--timeout=30']);
+  assert.equal(getUserConfigValue(config, 'agent.codex.command'), 'codex-custom');
+
+  // Returning undefined for missing agent or unset field
+  assert.equal(getUserConfigValue(config, 'agent.codex.args'), undefined);
+  assert.equal(getUserConfigValue(config, 'agent.unknown.command'), undefined);
+  assert.equal(getUserConfigValue(config, 'agent.unknown.args'), undefined);
+
+  // Rejection of invalid key inputs
+  assert.throws(() => getUserConfigValue(config, null), {
+    message: 'Configuration key must be a string.',
+  });
+  assert.throws(() => getUserConfigValue(config, 123), {
+    message: 'Configuration key must be a string.',
+  });
+  assert.throws(() => getUserConfigValue(config, 'invalid.key'), {
+    message: 'Configuration key must look like agent.<agent-id>.command or agent.<agent-id>.args.',
+  });
+  assert.throws(() => getUserConfigValue(config, 'agent.antigravity.invalid'), {
+    message: 'Configuration key must look like agent.<agent-id>.command or agent.<agent-id>.args.',
+  });
+  assert.throws(() => getUserConfigValue(config, 'agent.INVALID_AGENT.command'), {
+    message: 'Configuration key must look like agent.<agent-id>.command or agent.<agent-id>.args.',
+  });
+
+  // Rejection of invalid config objects
+  assert.throws(() => getUserConfigValue(null, 'agent.antigravity.command'), {
+    message: 'User configuration must be a JSON object.',
+  });
+  assert.throws(() => getUserConfigValue({ version: 2, agents: {} }, 'agent.antigravity.command'), {
+    message: 'Unsupported user configuration version: 2. Expected 1.',
+  });
+  assert.throws(() => getUserConfigValue({ version: 1, agents: null }, 'agent.antigravity.command'), {
+    message: 'User configuration must define an "agents" object.',
+  });
+  assert.throws(() => getUserConfigValue({ version: 1, agents: { antigravity: 'not-an-object' } }, 'agent.antigravity.command'), {
+    message: 'User configuration for agent "antigravity" must be an object.',
+  });
 });
 
 test('writing user configuration creates only the user-level directory', () => {
