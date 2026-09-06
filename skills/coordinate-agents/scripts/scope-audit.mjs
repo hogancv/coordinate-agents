@@ -218,9 +218,23 @@ export function auditSubtaskScope({ parentTaskId, subtaskId, graphBaseCommit, im
   const committed = collectCommittedChanges(worktreePath, graphBaseCommit, implementationCommit);
   const dirty = inspectDirty ? collectDirtyChanges(worktreePath) : [];
   const actualPaths = uniquePaths([...committed, ...dirty]);
-  const outsidePaths = actualPaths.filter(path => !pathCoveredByIntent(path, writeIntent));
-  const committedOutside = committed.filter(change => changeIsOutside(change, writeIntent));
-  const dirtyOutside = dirty.filter(change => changeIsOutside(change, writeIntent));
+
+  // Cache path coverage results per audit to eliminate redundant intent matching
+  // across actualPaths, committedChanges, and dirtyChanges.
+  const pathCoveredCache = new Map();
+  const isCovered = path => {
+    let covered = pathCoveredCache.get(path);
+    if (covered === undefined) {
+      covered = pathCoveredByIntent(path, writeIntent);
+      pathCoveredCache.set(path, covered);
+    }
+    return covered;
+  };
+  const isChangeOutside = change => !isCovered(change.path) || Boolean(change.oldPath && !isCovered(change.oldPath));
+
+  const outsidePaths = actualPaths.filter(path => !isCovered(path));
+  const committedOutside = committed.filter(isChangeOutside);
+  const dirtyOutside = dirty.filter(isChangeOutside);
   const drift = outsidePaths.length > 0;
   const evidence = {
     schemaVersion: SCOPE_AUDIT_SCHEMA_VERSION,
