@@ -293,8 +293,12 @@ export function intentSchedulingWave(graph, frontier) {
       conflictDeferred.push(candidate);
       conflicts.push(conflict);
       const other = conflict.subtasks.find(id => id !== candidate);
-      const candidatePattern = conflict.patterns.find(item => item.subtaskId === candidate)?.pattern || '';
-      const otherPattern = conflict.patterns.find(item => item.subtaskId === other)?.pattern || '';
+      let candidatePattern = '';
+      let otherPattern = '';
+      for (const item of conflict.patterns) {
+        if (item.subtaskId === candidate) candidatePattern = item.pattern;
+        else if (item.subtaskId === other) otherPattern = item.pattern;
+      }
       reasons[candidate] = `Write-intent conflict: ${candidate} pattern "${candidatePattern}" conservatively intersects ${other} pattern "${otherPattern}"; deferred from this wave.`.slice(0, 2048);
       continue;
     }
