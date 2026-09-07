@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const PACKAGE_NAME = '@hogancv/coordinate-agents';
@@ -307,13 +308,30 @@ function extractArtifact(artifact, tempRoot) {
   if (!metadata.isFile() || metadata.isSymbolicLink()) throw new VerificationError(`Package artifact is not a regular file: ${artifact}`);
   const extractionRoot = join(tempRoot, 'extract');
   mkdirSync(extractionRoot, { recursive: true });
-  run('tar', ['-xzf', artifact, '-C', extractionRoot], { cwd: tempRoot, env: process.env });
+  const tarFlags = detectTarExtractionFlags();
+  // GNU tar needs --force-local to treat Windows drive-letter paths (C:\…)
+  // as local files instead of remote hosts. BSD tar (macOS/bsdtar) does not
+  // understand that GNU-only flag, so it must never receive it.
+  run('tar', ['-xzf', artifact, '-C', extractionRoot, ...tarFlags], { cwd: tempRoot, env: process.env });
   const packageRoot = join(extractionRoot, 'package');
   if (!existsSync(packageRoot) || !lstatSync(packageRoot).isDirectory()) {
     throw new VerificationError(`Package artifact did not extract a package/ directory: ${basename(artifact)}`);
   }
   assertNoSymlinks(packageRoot);
   return packageRoot;
+}
+
+export function selectTarExtractionFlags(versionOutput) {
+  // Capability detection, not platform guessing: only a GNU tar receives the
+  // GNU-only --force-local flag; BSD tar (bsdtar) handles drive letters and
+  // must not be passed flags it rejects.
+  return /GNU tar/i.test(`${versionOutput || ''}`) ? ['--force-local'] : [];
+}
+
+export function detectTarExtractionFlags() {
+  const probe = spawnSync('tar', ['--version'], { encoding: 'utf8', windowsHide: true });
+  const output = `${probe.stdout || ''}\n${probe.stderr || ''}`;
+  return selectTarExtractionFlags(output);
 }
 
 function main() {
@@ -357,11 +375,15 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  const message = error instanceof VerificationError ? error.message : (error?.message || String(error));
-  console.error(`Release artifact verification failed: ${message}`);
-  if (error?.details) console.error(JSON.stringify(error.details, null, 2));
-  process.exitCode = 1;
+const isDirectExecution = process.argv[1]
+  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectExecution) {
+  try {
+    main();
+  } catch (error) {
+    const message = error instanceof VerificationError ? error.message : (error?.message || String(error));
+    console.error(`Release artifact verification failed: ${message}`);
+    if (error?.details) console.error(JSON.stringify(error.details, null, 2));
+    process.exitCode = 1;
+  }
 }

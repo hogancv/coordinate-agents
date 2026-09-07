@@ -109,6 +109,19 @@ test('Antigravity adapter keeps permission flags explicit', () => {
   assert.equal(resolved.args.includes('--dangerously-skip-permissions'), false);
 });
 
+test('Codex workspace sessions disable hook review without changing standard sessions', () => {
+  const codex = getAdapter('codex-cli', {
+    id: 'codex',
+    command: process.execPath,
+  });
+
+  const standard = codex.resolveSessionLaunch({ root: '.', initialPrompt: '' });
+  assert.equal(standard.args.includes('features.hooks=false'), false);
+
+  const workspace = codex.resolveSessionLaunch({ root: '.', initialPrompt: '', workspace: true });
+  assert.deepEqual(workspace.args.slice(0, 2), ['-c', 'features.hooks=false']);
+});
+
 test('Antigravity persistent sessions provide the required empty prompt value', () => {
   const agy = getAdapter('antigravity-cli', {
     id: 'antigravity',

@@ -245,7 +245,12 @@ export class PtyRuntime {
       this._setState('starting');
       const env = {
         ...this.env,
-        TERM: this.env.TERM || 'xterm-256color',
+        // The Workspace is itself often launched from a non-interactive
+        // process whose inherited TERM is "dumb". That value tells interactive
+        // CLIs to refuse their TUI even though this Session owns a real PTY.
+        // Always provide a terminal-capable TERM for the PTY child while
+        // preserving any useful terminal type supplied by the caller.
+        TERM: !this.env.TERM || this.env.TERM === 'dumb' ? 'xterm-256color' : this.env.TERM,
       };
       if (nativePtyAvailable()) {
         try {

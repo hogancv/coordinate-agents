@@ -1,24 +1,16 @@
-# Runtime and coordination bus
-.agent-bus/
+# WorkBuddy local data and UI verification artifacts
+/.workbuddy/
+/ui-shots/
 
-# Dependencies and build outputs
+# Runtime, build, environment, log, tarball, and OS clutter
+.agent-bus/
 node_modules/
 dist/
 coverage/
-
-# Environment files
 .env
 .env.*
 !.env.example
-
-# Logs and debug
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Release tarballs
 *.tgz
-
-# OS artifacts
 .DS_Store
 Thumbs.db

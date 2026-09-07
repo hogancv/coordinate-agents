@@ -1,9 +1,12 @@
+import { homedir } from 'node:os';
 import {
   existsSync,
+  readFileSync,
   lstatSync,
   readdirSync,
   realpathSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { basename, join, resolve } from 'node:path';
 import {
   assertSafePath,
@@ -19,7 +22,18 @@ import {
 import {
   listRecords,
 } from '../../skills/coordinate-agents/scripts/session-manager.mjs';
-import { runtimeSessionFacts } from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import {
+  readUserConfig,
+  resolveAgentConfig,
+} from '../../skills/coordinate-agents/scripts/user-config.mjs';
+import {
+  runtimeSessionFacts,
+  runtimeSessionRead,
+} from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import {
+  readWorkspaceTask as readWorkspaceTaskRecord,
+  readWorkspaceTasks as readWorkspaceTaskRecords,
+} from '../../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { observeAgentBus } from '../../skills/coordinate-agents/scripts/agent-observer.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
@@ -37,11 +51,17 @@ const MAX_EVENT_SCAN = 600;
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_SPEC_BYTES = 16 * 1024;
 const MAX_SESSION_OUTPUT = 8 * 1024;
+const MAX_TERMINAL_READ_BYTES = 32 * 1024;
+const MAX_TERMINAL_READ_LINES = 200;
 const MAX_GRAPH_ITEMS = 256;
 const MAX_NESTED_ITEMS = 256;
 const MAX_NESTED_KEYS = 64;
 const MAX_NESTED_DEPTH = 8;
 const EMPTY_ARRAY = Object.freeze([]);
+const WORKSPACE_AGENT_DEFAULTS = Object.freeze([
+  Object.freeze({ id: 'codex', adapter: 'codex-cli', command: 'codex' }),
+  Object.freeze({ id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' }),
+]);
 
 function canonicalRoot(root) {
   const candidate = resolve(`${root || process.cwd()}`);
@@ -66,6 +86,60 @@ function busFor(root) {
 function bounded(value, limit = MAX_EVENT_DETAILS) {
   if (value === null || value === undefined) return '';
   return redactOutput(`${value}`, limit);
+}
+
+function safeWorkspaceCommand(value, fallback) {
+  const command = bounded(value || fallback, 512)
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .trim();
+  return command || fallback;
+}
+
+function readCodexModels() {
+  try {
+    const cache = JSON.parse(readFileSync(join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'models_cache.json'), 'utf8'));
+    return (cache.models || []).filter(model => model.visibility !== 'hide' && typeof model.slug === 'string').map(model => ({
+      id: model.slug,
+      name: model.display_name || model.slug,
+      efforts: (model.supported_reasoning_levels || []).map(level => level.effort).filter(effort => typeof effort === 'string'),
+    }));
+  } catch { return []; }
+}
+
+function readWorkspaceSettings(root) {
+  const bus = busFor(root);
+  let projectAgents = [];
+  try {
+    if (bus) projectAgents = readConfig(bus).agents;
+  } catch {
+    projectAgents = [];
+  }
+  let userConfig;
+  try {
+    userConfig = readUserConfig();
+  } catch {
+    userConfig = { version: 1, agents: {} };
+  }
+  return Object.fromEntries(WORKSPACE_AGENT_DEFAULTS.map(({ id, adapter, command: fallback }) => {
+    const projectAgent = projectAgents.find(agent => agent.id === id) || { id, adapter };
+    try {
+      const resolved = resolveAgentConfig(projectAgent, userConfig);
+      return [id, {
+        command: safeWorkspaceCommand(resolved.command, fallback),
+        adapter: resolved.adapter || adapter,
+        source: resolved.commandSource || 'adapter-default',
+        args: resolved.args || [],
+        ...(id === 'codex' ? { models: readCodexModels() } : {}),
+        argsSource: resolved.argsSource,
+      }];
+    } catch {
+      return [id, {
+        command: fallback,
+        adapter,
+        source: 'adapter-default',
+      }];
+    }
+  }));
 }
 
 function sanitizeNested(value, {
@@ -403,6 +477,47 @@ function recordedEvents(root, options = {}) {
   return readRuntimeEvents(root, options).map(inspectorJournalEvent);
 }
 
+// Repository identity facts are derived with read-only Git helpers only. Each
+// invocation stays bounded (short timeout, capped buffers) and spawns no Agent,
+// Session, worktree, or Bus side effect; failures degrade to partial facts so
+// the Workspace overview remains usable outside a fully committed repository.
+function gitFact(root, args) {
+  const result = spawnSync('git', ['-C', root, ...args], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 5_000,
+    maxBuffer: 512 * 1024,
+  });
+  if (result.error || result.status !== 0) return null;
+  return result.stdout.trim();
+}
+
+function repositoryFacts(root) {
+  const headLine = gitFact(root, ['log', '-1', '--format=%h%x1f%s%x1f%cI']);
+  const head = headLine
+    ? (() => {
+      const [shortSha, subject, committedAtRaw] = headLine.split('\x1f');
+      const committedAt = typeof committedAtRaw === 'string' && !Number.isNaN(Date.parse(committedAtRaw))
+        ? committedAtRaw
+        : null;
+      return {
+        short: bounded(shortSha, 64) || null,
+        subject: bounded(subject, 2 * 1024) || null,
+        committedAt,
+      };
+    })()
+    : null;
+  const branch = bounded(gitFact(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']), 256) || null;
+  return {
+    root,
+    name: bounded(basename(root), 256),
+    branch,
+    detached: Boolean(head && !branch),
+    head,
+    remoteUrl: bounded(gitFact(root, ['remote', 'get-url', 'origin']), 2 * 1024) || null,
+  };
+}
+
 function readSessions(root, tasks = readTaskRecords(root)) {
   const bus = busFor(root);
   if (!bus || !existsSync(join(bus, 'sessions'))) return Promise.resolve([]);
@@ -456,6 +571,35 @@ function readSessions(root, tasks = readTaskRecords(root)) {
       historySource: sessionEvents.length > 0 ? 'recorded' : 'derived-legacy',
     };
   }));
+}
+
+async function readSessionOutput(root, sessionId, {
+  cursor = null,
+  maxLines = MAX_TERMINAL_READ_LINES,
+  maxBytes = MAX_TERMINAL_READ_BYTES,
+} = {}) {
+  const result = await runtimeSessionRead({
+    root,
+    sessionId,
+    cursor,
+    maxLines: Math.min(MAX_TERMINAL_READ_LINES, Math.max(1, Number.isInteger(maxLines) ? maxLines : MAX_TERMINAL_READ_LINES)),
+    maxBytes: Math.min(MAX_TERMINAL_READ_BYTES, Math.max(1, Number.isInteger(maxBytes) ? maxBytes : MAX_TERMINAL_READ_BYTES)),
+  });
+  const output = typeof result.output === 'string' ? result.output : '';
+  const session = result.session
+    ? {
+      ...result.session,
+      status: result.session.status || result.session.state || null,
+    }
+    : null;
+  return {
+    session,
+    output: {
+      output: redactOutput(output, MAX_TERMINAL_READ_BYTES),
+      nextCursor: Number.isInteger(result.nextCursor) ? result.nextCursor : null,
+      truncated: result.truncated === true,
+    },
+  };
 }
 
 function taskEvents(tasks) {
@@ -651,6 +795,24 @@ export function createInspectorData(root) {
   const repository = canonicalRoot(root);
   return {
     root: repository,
+    readRepository() {
+      try {
+        return repositoryFacts(repository);
+      } catch (error) {
+        return {
+          root: repository,
+          name: bounded(basename(repository), 256),
+          branch: null,
+          detached: false,
+          head: null,
+          remoteUrl: null,
+          error: bounded(error.message || String(error), 2 * 1024),
+        };
+      }
+    },
+    readWorkspaceSettings() {
+      return readWorkspaceSettings(repository);
+    },
     readTasks() {
       return [
         ...readTaskRecords(repository).map(taskSummary),
@@ -693,6 +855,15 @@ export function createInspectorData(root) {
     },
     async readSessions() {
       return readSessions(repository);
+    },
+    async readWorkspaceTasks() {
+      return readWorkspaceTaskRecords(repository);
+    },
+    async readWorkspaceTask(id) {
+      return readWorkspaceTaskRecord(repository, id);
+    },
+    async readSessionOutput(sessionId, options = {}) {
+      return readSessionOutput(repository, sessionId, options);
     },
     readEvents(options = {}) {
       return readEvents(repository, options);

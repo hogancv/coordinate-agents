@@ -48,6 +48,7 @@ const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_READ_BYTES = 32 * 1024;
 const MAX_READ_LINES = 200;
+const MAX_PERSISTED_OUTPUT_BYTES = 8 * 1024;
 const MAX_INPUT_BYTES = 256 * 1024;
 const HOST_PATH = fileURLToPath(new URL('./session-host.mjs', import.meta.url));
 
@@ -218,6 +219,7 @@ function writeRecord(root, record) {
     exitCode: record.exitCode ?? null,
     signal: record.signal || null,
     error: record.error ? redactOutput(record.error, 2 * 1024) : null,
+    outputTail: record.outputTail ? redactOutput(record.outputTail, MAX_PERSISTED_OUTPUT_BYTES) : '',
     endpoint: record.endpoint,
     hostPid: Number.isInteger(record.hostPid) ? record.hostPid : null,
     taskId: record.taskId || null,
@@ -409,7 +411,7 @@ async function syncHostRecord(root, record) {
   }
 }
 
-function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en' }) {
+function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false }) {
   const contract = getAdapterContract(adapter);
   if (contract) {
     if (!contract.capabilities.persistentSession) {
@@ -421,14 +423,14 @@ function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'e
       });
     }
     return validateLaunchResult(
-      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language }),
+      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace }),
       { kind: 'persistent-session' },
     );
   }
   if (typeof adapter.resolveSessionLaunch === 'function') {
-    return adapter.resolveSessionLaunch({ root, agent, initialPrompt, language });
+    return adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace });
   }
-  const launch = adapter.resolveLaunch({ root, prompt: initialPrompt, agent, language });
+  const launch = adapter.resolveLaunch({ root, prompt: initialPrompt, agent, language, workspace });
   return { ...launch, initialInputConsumed: Boolean(initialPrompt) };
 }
 
@@ -507,7 +509,7 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false } = {}) {
     const repository = sessionRoot(root);
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
@@ -517,19 +519,19 @@ export class ExecutionSessionManager {
         root: repository,
       });
     }
-    const preferred = await this.findPreferred(
+    const preferred = reuseExisting ? await this.findPreferred(
       repository,
       sessionId,
       agent,
       resolved?.command || null,
       resolved?.resolvedCommand || null,
-    );
-    const existing = preferred || await this.findReusable(
+    ) : null;
+    const existing = reuseExisting ? (preferred || await this.findReusable(
       repository,
       agent,
       resolved?.command || null,
       resolved?.resolvedCommand || null,
-    );
+    )) : null;
     if (existing) {
       const associated = {
         ...existing,
@@ -540,7 +542,7 @@ export class ExecutionSessionManager {
       appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
       return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
-    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language });
+    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
     // starting the owned host. This preserves adapter-specific Windows
@@ -573,6 +575,7 @@ export class ExecutionSessionManager {
       exitCode: null,
       signal: null,
       error: null,
+      outputTail: '',
       endpoint,
       hostPid: null,
       taskId,
@@ -610,6 +613,8 @@ export class ExecutionSessionManager {
             maxOutputBytes: this.maxOutputBytes,
             createdAt,
             root: repository,
+            taskId,
+            subtaskId,
           },
         }, error => error ? reject(error) : resolvePromise());
       });
@@ -704,7 +709,7 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    let output = { output: '', nextCursor: null, truncated: false };
+    let output = { output: current.outputTail || '', nextCursor: null, truncated: false };
     if (ACTIVE_STATES.has(current.state)) {
       const boundedLines = Number.isInteger(maxLines) ? Math.min(MAX_READ_LINES, Math.max(1, maxLines)) : 100;
       const boundedBytes = Number.isInteger(maxBytes) ? Math.min(MAX_READ_BYTES, Math.max(1, maxBytes)) : 16 * 1024;
@@ -717,7 +722,17 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) return { session: publicRecord(current), output: '', nextCursor: null, truncated: false };
+    if (!ACTIVE_STATES.has(current.state)) {
+      // A cursor is meaningful only while the owned host is still buffering
+      // live output. Once it has exited, return the bounded persisted tail as
+      // a replacement snapshot so clients do not append the same tail twice.
+      return {
+        session: publicRecord(current),
+        output: current.outputTail || '',
+        nextCursor: null,
+        truncated: Number.isInteger(cursor),
+      };
+    }
     const result = await requestHost(current, {
       op: 'read',
       cursor: Number.isInteger(cursor) ? cursor : null,

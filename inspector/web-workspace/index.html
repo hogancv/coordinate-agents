@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="Coordinate Agents dual-terminal Workspace.">
+    <meta name="coordinate-agents-capability" content="__COORDINATE_AGENTS_CAPABILITY__">
+    <title>Coordinate Agents Workspace</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/vendor/xterm.css">
+  </head>
+  <body data-locale="en">
+    <div class="workspace-app" id="app">
+      <aside class="sidebar" id="sidebar" aria-label="Workspace tasks">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">✦</div>
+          <div>
+            <strong>Coordinate Agents</strong>
+            <span>Web Workspace</span>
+          </div>
+          <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Close sidebar">×</button>
+        </div>
+
+        <section id="repository" class="repository-card" aria-label="Bound repository">
+          <span class="eyebrow" data-i18n="repo.label">BOUND REPOSITORY</span>
+          <div class="repository-title-row">
+            <strong id="repo-name" data-i18n="repo.loading">Loading repository…</strong>
+            <span id="repo-branch" class="branch-badge">—</span>
+          </div>
+          <button id="repo-facts-toggle" class="link-button" type="button" aria-expanded="false" data-i18n="repo.details">Show repository details</button>
+          <div id="repo-facts" class="repo-facts" hidden></div>
+        </section>
+
+        <div class="sidebar-actions">
+          <button id="new-task-button" class="primary-button new-task-button" type="button" data-i18n="task.new">New task</button>
+          <button id="terminal-settings-button" class="secondary-button terminal-settings-button" type="button" data-i18n="settings.open">Terminal settings</button>
+        </div>
+
+        <div class="task-list-heading">
+          <span data-i18n="task.list">Workspace tasks</span>
+          <span id="task-count" class="count-badge">0</span>
+        </div>
+        <div id="workspace-task-list" class="workspace-task-list" aria-live="polite"></div>
+
+        <div class="sidebar-footer">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span data-i18n="status.live">localhost · live</span>
+        </div>
+      </aside>
+
+      <main class="main-column">
+        <header class="topbar">
+          <button id="sidebar-open" class="icon-button mobile-only" type="button" aria-label="Open sidebar">☰</button>
+          <div class="topbar-copy">
+            <span class="eyebrow" data-i18n="workspace.eyebrow">DUAL-TERMINAL WORKSPACE</span>
+            <h1 id="workspace-title" data-i18n="workspace.title">Workspace</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="language-toggle" role="group" aria-label="Language / 语言">
+              <button id="lang-zh" class="language-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
+              <button id="lang-en" class="language-button active" type="button" lang="en-US" aria-pressed="true">English</button>
+            </div>
+            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
+          </div>
+        </header>
+
+        <section id="empty-state" class="empty-state" aria-live="polite">
+          <div class="empty-icon" aria-hidden="true">⌘</div>
+          <h2 data-i18n="empty.title">Start a dual-terminal task</h2>
+          <p data-i18n="empty.body">Create a task to open fresh Codex and Antigravity terminals. Enter the requirement directly in the Codex terminal.</p>
+          <button id="empty-new-task" class="primary-button" type="button" data-i18n="task.new">New task</button>
+        </section>
+
+        <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
+          <header class="task-toolbar">
+            <div class="task-heading">
+              <div class="task-heading-title-row">
+                <h2 id="selected-task-title">—</h2>
+                <span id="selected-task-status" class="status-pill">—</span>
+              </div>
+              <div class="task-meta-row">
+                <code id="selected-task-id">—</code>
+                <span id="selected-task-prompt-version">v2.3.0</span>
+              </div>
+            </div>
+            <div class="task-toolbar-actions">
+              <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
+              <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
+              <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
+            </div>
+          </header>
+          <div id="task-error" class="task-error" role="alert" hidden></div>
+          <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
+        </section>
+
+        <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+      </main>
+    </div>
+
+    <div id="terminal-settings-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title" hidden>
+      <form id="terminal-settings-form" class="settings-modal">
+        <header class="settings-modal-header">
+          <div>
+            <span class="eyebrow" data-i18n="settings.eyebrow">TERMINAL SETTINGS</span>
+            <h2 id="terminal-settings-title" data-i18n="settings.title">Terminal startup commands</h2>
+          </div>
+          <button id="terminal-settings-close" class="icon-button" type="button" aria-label="Close settings">×</button>
+        </header>
+        <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
+        <div class="settings-fields">
+          <label class="settings-field" for="codex-command">
+            <span data-i18n="settings.codex">Codex</span>
+            <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+          </label>
+          <label class="settings-field">
+            <span data-i18n="settings.model">Codex model (optional)</span>
+            <select id="codex-model" aria-describedby="codex-model-hint"></select>
+            <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
+          </label>
+          <label class="settings-field" for="codex-effort">
+            <span data-i18n="settings.effort">Reasoning effort</span>
+            <select id="codex-effort"></select>
+          </label>
+          <label class="settings-field" for="antigravity-command">
+            <span data-i18n="settings.antigravity">Antigravity</span>
+            <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+          </label>
+        </div>
+        <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+        <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
+        <footer class="settings-modal-actions">
+          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>
+          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save settings</button>
+        </footer>
+      </form>
+    </div>
+
+    <script src="/vendor/xterm.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

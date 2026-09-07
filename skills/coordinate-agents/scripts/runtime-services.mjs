@@ -29,7 +29,7 @@ import {
   runtimeTaskGraphReview,
   runtimeTaskGraphDispatch,
   runtimeTaskOperation,
-} from '../../../bin/coordinate-agents.mjs';
+} from '../../../lib/cli-core.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,
@@ -40,6 +40,13 @@ import {
   runtimeSessionStatus,
   runtimeSessionWrite,
 } from './session-service.mjs';
+import {
+  readWorkspaceTask,
+  readWorkspaceTasks,
+  runtimeWorkspaceTaskClose,
+  runtimeWorkspaceTaskCreate,
+  runtimeWorkspaceTaskRestart,
+} from './workspace-task-runtime.mjs';
 
 export {
   runtimeAdapterList,
@@ -74,6 +81,13 @@ export {
   runtimeSessionClose,
   runtimeSessionResize,
   runtimeSessionInterrupt,
+};
+export {
+  readWorkspaceTask,
+  readWorkspaceTasks,
+  runtimeWorkspaceTaskCreate,
+  runtimeWorkspaceTaskClose,
+  runtimeWorkspaceTaskRestart,
 };
 
 export const RUNTIME_OPERATIONS = Object.freeze({
@@ -110,6 +124,9 @@ export const RUNTIME_OPERATIONS = Object.freeze({
   sessionClose: runtimeSessionClose,
   sessionResize: runtimeSessionResize,
   sessionInterrupt: runtimeSessionInterrupt,
+  workspaceTaskCreate: runtimeWorkspaceTaskCreate,
+  workspaceTaskClose: runtimeWorkspaceTaskClose,
+  workspaceTaskRestart: runtimeWorkspaceTaskRestart,
 });
 
 export async function invokeRuntimeOperation(operation, input = {}) {

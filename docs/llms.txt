@@ -1,8 +1,18 @@
 # coordinate-agents
 
-> Codex-native orchestration plugin for external coding agents. The Plugin is
-> the preferred product surface; npm CLI is the Runtime/fallback and advanced
-> debugging surface.
+> Local AI coding-agent workbench with two modes: lightweight Web terminal
+> collaboration and structured Skill / CLI / MCP Tasks. The Plugin is the
+> preferred structured-workflow surface; Web runs through the npm Runtime or source checkout.
+
+Web Workspace uses fresh Codex + Antigravity PTYs, Web-lite role prompts, and
+workspace-message.mjs task-bound terminal messaging. It does not automatically
+invoke the skill, scan Agent Bus, recover old Tasks, or create Task/Graph records.
+Groups live in .agent-bus/workspace-tasks/*.json, separate from standard Tasks.
+Group status is terminal lifecycle, not implementation or review completion;
+prompt-based role boundaries are not an enforced workflow state machine.
+Structured Task/Graph, CLI, MCP, and read-only Inspector contracts remain.
+For current source behavior use node bin/coordinate-agents.mjs web --port 3000;
+merging to main does not publish npm. Never run conflicting worktree writes.
 
 > A local-first coordination protocol and runtime for AI coding agents in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI (agy) serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly. Desktop, MCP, HTTP, IPC, IDE, and other execution surfaces integrate through the adapter extension model. Workflow roles (planner, implementer, reviewer) coordinate through a recoverable local `.agent-bus` without sharing credentials.
 
@@ -29,7 +39,7 @@ capabilities. Discovery does not launch an adapter; configured external Agents
 contribute only their declared detection facts, while exact Agent/Adapter/
 executable identity and project > user > adapter-default precedence remain
 separate through Task and persistent-Session execution.
-Local Inspector Web UI: https://hogancv.github.io/coordinate-agents/inspector.html
+Web Workspace and Local Inspector (interactive dual-terminal Web mode, plus compatible read-only Inspector): https://hogancv.github.io/coordinate-agents/inspector.html
 Durable Runtime Event Journal: https://hogancv.github.io/coordinate-agents/event-journal.html
 MCP tools: https://hogancv.github.io/coordinate-agents/mcp.html
 Task Graph v1 contract: https://hogancv.github.io/coordinate-agents/task-graph-v1.html

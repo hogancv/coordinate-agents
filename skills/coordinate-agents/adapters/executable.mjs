@@ -121,7 +121,10 @@ function windowsEntrypoint(candidate, { windowsEntrypoint } = {}) {
 
 function posixCandidate(command) {
   if (isPathLike(command)) {
-    if (!existsSync(command)) return resultFailure(command, EXECUTABLE_CODES.COMMAND_NOT_FOUND, `Executable does not exist: ${command}`);
+    // Keep the candidate shape consistent with PATH lookup.  The caller
+    // performs the final entrypoint check and expects either a path or null;
+    // returning a failure object here would pass that object to lstatSync.
+    if (!existsSync(command)) return null;
     return command;
   }
 

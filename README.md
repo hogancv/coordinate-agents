@@ -2,9 +2,18 @@
 
 [简体中文](./README.zh-CN.md) · [Documentation](./docs/index.md) · [Security](./SECURITY.md)
 
-Coordinate Agents is a local-first coordination protocol and runtime for Codex and external AI coding agents. It gives planning, implementation, review, recovery, and release approval explicit boundaries while keeping the repository—and its durable `.agent-bus` state—under your control.
+Coordinate Agents is a local collaboration workbench backed by a local-first coordination protocol and runtime for Codex and external AI coding agents. It offers lightweight interactive collaboration and structured task workflows while keeping the repository and local state under your control.
 
-The recommended distribution is the Codex Plugin from this GitHub repository. The npm package remains available for standalone runtime and compatibility workflows.
+Choose **Web Workspace** for a low-overhead Codex + Antigravity terminal pair, or the **Codex Plugin / CLI / MCP** for durable Tasks, structured review, and explicit recovery. The Plugin is the recommended distribution for the structured workflow; Web runs through the standalone npm Runtime or a source checkout.
+
+## Two collaboration modes
+
+| Mode | Execution and guarantees |
+| --- | --- |
+| Web Workspace | Fresh paired PTYs, lightweight role prompts, and task-bound terminal messaging. Enter requirements in Codex; Antigravity implements. No automatic skill invocation or Task/Graph lifecycle. |
+| Structured Skill / CLI / MCP | Agent Bus messages, durable Tasks and Task Graphs, recorded implementation evidence, review decisions, and explicit recovery. |
+
+Web task-group status describes terminal lifecycle, **not implementation or review completion**. Role prompts guide agent behavior; they are not an enforced workflow state machine. Both modes retain explicit user authorization for commit, push, and release as applicable to their workflow. The Web prompt forbids these actions without authorization.
 
 ![End-to-end terminal demo](./assets/demo.gif)
 
@@ -19,7 +28,7 @@ A capable coding agent can work alone. Coordination becomes useful when you want
 - The Agent Bus preserves task, message, review, session, and recovery facts locally.
 - Release actions stay separate from implementation and require explicit user authorization.
 
-## How It Works
+## How the structured workflow works
 
 ```text
 You
@@ -149,25 +158,54 @@ can select an external adapter without merging Agent, Adapter, and executable
 identities, and the canonical Task/persistent-Session path preserves exact
 project command > user command > adapter default precedence.
 
-## Local Inspector
+## Web Workspace and Local Inspector
 
-Start the read-only local Inspector from a repository with an initialized Agent Bus:
+The **Web Workspace** is the primary local browser entry. From any initialized
+Git repository with an Agent Bus it starts a loopback-only dual-terminal
+workbench — no Codex Plugin or global installation required (agent CLIs still use their configured providers):
 
 ```sh
-npx @hogancv/coordinate-agents@latest inspector --port 3000
+npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-It presents task, session, and Event Journal timelines without making the browser the source of truth. Learn more in [Inspector](./docs/inspector.md) and [Event Journal](./docs/event-journal.md).
+The bilingual (`zh-CN` / `en-US`) sidebar lists only Workspace task groups.
+**New task** starts a fresh Codex + Antigravity pair with Web-lite prompts;
+enter requirements directly in the Codex terminal. Terminal settings accept
+custom executable commands such as `agy-proxy`, plus Codex model and reasoning
+choices. Refresh, close, restart, and close-all-terminal controls are available.
+There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.
+
+Workspace groups live in `.agent-bus/workspace-tasks/*.json`, separately from
+standard Tasks. Selection and refresh never launch sessions; explicit actions
+use the guarded `POST /api/action` gateway. Existing Task/Graph, CLI, MCP, and
+read-only `inspector` contracts remain available. For this checkout's new Web
+behavior, run `node bin/coordinate-agents.mjs web --port 3000`; merging to main
+does not publish a new npm version. Learn more in
+[Inspector & Web Workspace](./docs/inspector.md) and
+[Event Journal](./docs/event-journal.md).
 
 ## Standalone npm Runtime
 
-The compatibility package exposes the installer, doctor, quickstart, task, agent, session, MCP, and Inspector commands:
+The compatibility package exposes the installer, doctor, quickstart, task, agent, session, MCP, Inspector, and web commands:
 
 ```sh
 npx @hogancv/coordinate-agents@latest --help
 ```
 
 Use this path for legacy standalone Skill installation, external automation, or protocol debugging. The full command workflows are maintained in [Getting Started](./docs/getting-started.md) and [MCP integration](./docs/mcp.md).
+
+## Local Development
+
+For fast daily regressions run the focused core suite (~20 seconds), which
+covers the CLI dispatcher, Web Workspace, Inspector, documentation, repository
+layout, and shared Runtime contracts:
+
+```sh
+npm run test:core
+```
+
+Run the full `npm test` suite (several minutes, including Task Graph, Session,
+Plugin, and MCP integration guards) before proposing a release.
 
 ## Documentation
 
@@ -183,11 +221,20 @@ Use this path for legacy standalone Skill installation, external automation, or 
 
 `.agent-bus` is local plaintext state and should stay excluded from version control. Never put credentials, tokens, cookies, private keys, or unredacted sensitive output in task records, fixtures, logs, or commits. The runtime refuses unsafe paths and never attaches to arbitrary processes.
 
-Implementation completion and `REVIEW_APPROVED` are not release authorization. Merge, push, tag, publish, deploy, GitHub Release, and release-workflow actions require a separately described plan and the exact user approval `RELEASE_APPROVED`. See [SECURITY.md](./SECURITY.md) for the complete boundary.
+Implementation completion and `REVIEW_APPROVED` are not release authorization.
+Web-lite prompts forbid commit, push, or release without user authorization;
+they do not enforce a technical release gate. The structured workflow retains
+its separately described release plan and exact `RELEASE_APPROVED` gate for
+merge, push, tag, publish, deploy, GitHub Release, and release workflows. See
+[SECURITY.md](./SECURITY.md) for the structured boundary.
 
 ## Project Status
 
-Coordinate Agents is maintained as a plugin-first, local-first project. The GitHub Plugin is the primary distribution; `@hogancv/coordinate-agents` is the compatibility distribution. CI and publishing policy are documented in [AGENTS.md](./AGENTS.md), and npm publishing remains a manual, explicitly approved workflow.
+Coordinate Agents is a local-first project with lightweight Web and structured
+Plugin / CLI / MCP modes. The GitHub Plugin distributes the structured skills;
+`@hogancv/coordinate-agents` distributes the standalone Runtime and Web entry.
+CI and publishing policy are documented in [AGENTS.md](./AGENTS.md); npm
+publishing remains a separate manual, explicitly approved workflow.
 
 ## Development
 

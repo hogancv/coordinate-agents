@@ -39,7 +39,7 @@ export class CodexCliAdapter extends AgentAdapter {
     };
   }
 
-  resolveSessionLaunch({ root, initialPrompt = '' }) {
+  resolveSessionLaunch({ root, initialPrompt = '', workspace = false }) {
     const command = this.config.command || 'codex';
     const resolved = resolveAdapterExecutable(command, {
       windowsEntrypoint: codexWindowsEntrypoint,
@@ -51,6 +51,12 @@ export class CodexCliAdapter extends AgentAdapter {
     const args = configuredArgs
       .filter(arg => initialPrompt || !`${arg}`.includes('{prompt}'))
       .map(arg => `${arg}`.replaceAll('{prompt}', initialPrompt));
+    // The Web Workspace is an explicitly user-started local PTY. Codex's
+    // hook-review screen otherwise blocks the first role prompt whenever the
+    // repository has hooks that changed since the last interactive launch.
+    // Disable hooks for this session instead of auto-approving them; standard
+    // session_open keeps the user's normal hook policy unchanged.
+    if (workspace) args.push('-c', 'features.hooks=false');
     args.push('-C', resolve(root));
     return {
       command: resolved.command,

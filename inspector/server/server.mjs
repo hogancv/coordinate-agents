@@ -2,17 +2,44 @@
 
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInspectorData } from './inspector-data.mjs';
+import {
+  createActionGateway,
+  createWorkspaceCapability,
+  CAPABILITY_PLACEHOLDER,
+} from './action-gateway.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 
-const webRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
-const STATIC_FILES = new Map([
+const inspectorWebRoot = resolve(fileURLToPath(new URL('../web', import.meta.url)));
+const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
+const INSPECTOR_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
 ]);
+
+const WORKSPACE_STATIC_FILES = new Map([
+  ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
+  ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
+  ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/terminal-model.mjs', { file: 'terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
+  ['/vendor/xterm.js', { file: 'vendor/xterm.js', type: 'text/javascript; charset=utf-8' }],
+  ['/vendor/xterm.css', { file: 'vendor/xterm.css', type: 'text/css; charset=utf-8' }],
+]);
+
+const STATIC_FILES = WORKSPACE_STATIC_FILES;
+
+function staticFilesFor(ui) {
+  return ui === 'workspace' ? WORKSPACE_STATIC_FILES : INSPECTOR_STATIC_FILES;
+}
+
+function webAssetsFor(ui) {
+  return ui === 'workspace' ? workspaceWebRoot : inspectorWebRoot;
+}
 
 function json(response, status, payload) {
   const body = `${JSON.stringify(payload)}\n`;
@@ -24,10 +51,17 @@ function json(response, status, payload) {
   response.end(body);
 }
 
-function asset(response, pathname) {
-  const entry = STATIC_FILES.get(pathname) || STATIC_FILES.get('/index.html');
+function asset(response, pathname, assetsRoot, capability = null, staticFiles = WORKSPACE_STATIC_FILES) {
+  const entry = staticFiles.get(pathname) || staticFiles.get('/index.html');
+  if (!entry) {
+    json(response, 404, { error: 'Inspector page not found.' });
+    return;
+  }
   try {
-    const body = readFileSync(resolve(webRoot, entry.file));
+    let body = readFileSync(resolve(assetsRoot, entry.file));
+    if (capability && entry.file === 'index.html') {
+      body = Buffer.from(body.toString('utf8').replaceAll(CAPABILITY_PLACEHOLDER, capability), 'utf8');
+    }
     response.writeHead(200, {
       'Cache-Control': 'no-cache',
       'Content-Type': entry.type,
@@ -35,13 +69,18 @@ function asset(response, pathname) {
     });
     response.end(body);
   } catch {
-    json(response, 500, { error: 'Inspector web assets are unavailable.' });
+    json(response, 500, { error: 'Workspace web assets are unavailable.' });
   }
 }
 
-function parseLimit(value) {
+function parseLimit(value, fallback = 100, maximum = 500) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.min(500, Math.max(1, Math.floor(parsed))) : 100;
+  return Number.isFinite(parsed) ? Math.min(maximum, Math.max(1, Math.floor(parsed))) : fallback;
+}
+
+function parseByteLimit(value, fallback = 32 * 1024) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(32 * 1024, Math.max(1, Math.floor(parsed))) : fallback;
 }
 
 function parseSequence(value, fallback = null) {
@@ -100,20 +139,43 @@ function apiError(response, error) {
   const code = error?.code || '';
   const status = code === 'TASK_NOT_FOUND'
     ? 404
-    : code === 'TASK_GRAPH_INVALID'
-      ? 400
-      : code === 'TASK_STATE_CONFLICT'
-        ? 409
-        : 500;
+    : code === 'WORKSPACE_TASK_NOT_FOUND'
+      ? 404
+    : code === 'SESSION_NOT_FOUND'
+      ? 404
+      : code === 'WORKSPACE_TASK_STATE_CONFLICT'
+        ? 400
+      : code === 'SESSION_STATE_CONFLICT'
+        ? 400
+        : code === 'TASK_GRAPH_INVALID'
+          ? 400
+          : code === 'TASK_STATE_CONFLICT'
+            ? 409
+            : 500;
   json(response, status, {
     error: redactOutput(error?.message || 'Inspector request failed.', 2 * 1024),
     code: code || 'INSPECTOR_READ_FAILED',
   });
 }
 
-export function createInspectorServer({ root, data = createInspectorData(root) } = {}) {
+export function createInspectorServer({
+  root,
+  data = createInspectorData(root),
+  ui = 'inspector',
+  capability = null,
+  gateway = null,
+} = {}) {
+  const assetsRoot = webAssetsFor(ui);
+  const staticFiles = staticFilesFor(ui);
   return createServer(async (request, response) => {
     if (request.method !== 'GET') {
+      // The Workspace action gateway is the only non-GET surface; the
+      // compatibility Inspector path remains strictly GET-only.
+      if (gateway) {
+        const actionUrl = new URL(request.url || '/', 'http://localhost');
+        await gateway.handleAction(request, response, actionUrl.pathname);
+        return;
+      }
       response.setHeader('Allow', 'GET');
       json(response, 405, { error: 'Inspector is read-only; only GET is supported.' });
       return;
@@ -122,8 +184,8 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
     const url = new URL(request.url || '/', 'http://localhost');
     const pathname = url.pathname;
     if (!pathname.startsWith('/api/')) {
-      if (pathname === '/' || STATIC_FILES.has(pathname)) {
-        asset(response, pathname);
+      if (pathname === '/' || staticFiles.has(pathname)) {
+        asset(response, pathname, assetsRoot, capability, staticFiles);
         return;
       }
       json(response, 404, { error: 'Inspector page not found.' });
@@ -131,6 +193,23 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
     }
 
     try {
+      if (pathname === '/api/repository' && typeof data.readRepository === 'function') {
+        json(response, 200, data.readRepository());
+        return;
+      }
+      if (ui === 'workspace' && pathname === '/api/workspace-settings' && typeof data.readWorkspaceSettings === 'function') {
+        json(response, 200, await data.readWorkspaceSettings());
+        return;
+      }
+      if (ui === 'workspace' && pathname === '/api/workspace-tasks' && typeof data.readWorkspaceTasks === 'function') {
+        json(response, 200, await data.readWorkspaceTasks());
+        return;
+      }
+      if (ui === 'workspace' && pathname.startsWith('/api/workspace-tasks/') && typeof data.readWorkspaceTask === 'function') {
+        const id = decodeURIComponent(pathname.slice('/api/workspace-tasks/'.length));
+        json(response, 200, await data.readWorkspaceTask(id));
+        return;
+      }
       if (pathname === '/api/tasks') {
         json(response, 200, data.readTasks());
         return;
@@ -157,6 +236,30 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
         json(response, 200, await data.readSessions());
         return;
       }
+      if (ui === 'workspace' && pathname.startsWith('/api/sessions/')) {
+        const suffix = pathname.slice('/api/sessions/'.length);
+        const match = /^([^/]+)\/read$/.exec(suffix);
+        if (!match) {
+          json(response, 404, { error: 'Workspace Session endpoint not found.' });
+          return;
+        }
+        let sessionId;
+        try {
+          sessionId = decodeURIComponent(match[1]);
+        } catch {
+          json(response, 400, { error: 'Invalid Session id.' });
+          return;
+        }
+        if (typeof data.readSessionOutput !== 'function') {
+          json(response, 404, { error: 'Workspace Session endpoint not found.' });
+          return;
+        }
+        const cursor = parseSequence(url.searchParams.get('cursor'), null);
+        const maxLines = parseLimit(url.searchParams.get('maxLines'), 200, 200);
+        const maxBytes = parseByteLimit(url.searchParams.get('maxBytes'));
+        json(response, 200, await data.readSessionOutput(sessionId, { cursor, maxLines, maxBytes }));
+        return;
+      }
       if (pathname === '/api/events') {
         json(response, 200, data.readEvents(eventOptions(url, request)));
         return;
@@ -172,13 +275,20 @@ export function createInspectorServer({ root, data = createInspectorData(root) }
   });
 }
 
-export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
+export function startInspector({
+  root,
+  host = '127.0.0.1',
+  port = 3000,
+  ui = 'inspector',
+  capability = null,
+  gateway = null,
+} = {}) {
   if (host !== '127.0.0.1') throw new Error('Inspector must listen on localhost only.');
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new Error(`Inspector port must be an integer between 0 and 65535: ${port}`);
   }
   const data = createInspectorData(root);
-  const server = createInspectorServer({ root: data.root, data });
+  const server = createInspectorServer({ root: data.root, data, ui, capability, gateway });
   return new Promise((resolvePromise, reject) => {
     let ipv6Loopback = null;
     const onError = error => {
@@ -196,7 +306,7 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
       // optional IPv6 loopback alias on the same port so the localhost URL is
       // reachable without exposing the Inspector beyond loopback interfaces.
       if (host === '127.0.0.1') {
-        const candidate = createInspectorServer({ root: data.root, data });
+        const candidate = createInspectorServer({ root: data.root, data, ui, capability, gateway });
         try {
           await new Promise((resolveAlias, rejectAlias) => {
             const onAliasError = error => {
@@ -254,11 +364,47 @@ export function startInspector({ root, host = '127.0.0.1', port = 3000 } = {}) {
         host,
         port: boundPort,
         url: `http://localhost:${boundPort}`,
+        capability: capability || null,
+        actionEndpoint: gateway ? '/api/action' : null,
       });
     };
     server.once('error', onError);
     server.once('listening', onListening);
     server.listen(port, host);
+  });
+}
+
+// The Web Workspace is the primary local product entry (#45). It reuses the
+// same read-only server, data adapter, loopback guards, and bounded content as
+// the Inspector compatibility path and only selects the Workspace web assets.
+// Unlike the compatibility Inspector, the Workspace binds exactly one validated
+// Git repository root: unsafe, symlinked, or non-Git roots fail closed before a
+// listener is created. It also mounts the guarded browser-to-Runtime action
+// gateway (#46) with a server-issued per-launch capability.
+export function startWorkspace(options = {}) {
+  const requested = resolve(options.root || process.cwd());
+  const result = spawnSync('git', ['-C', requested, 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 5_000,
+    maxBuffer: 512 * 1024,
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Workspace must start inside an initialized Git repository: ${requested}`);
+  }
+  const canonicalRoot = resolve(result.stdout.trim());
+  const capability = options.capability || createWorkspaceCapability();
+  const gateway = options.gateway || createActionGateway({
+    root: canonicalRoot,
+    capability,
+    maxBodyBytes: options.maxBodyBytes,
+  });
+  return startInspector({
+    ...options,
+    root: canonicalRoot,
+    ui: 'workspace',
+    capability,
+    gateway,
   });
 }
 
@@ -271,11 +417,15 @@ if (isInvokedDirectly()) {
   const args = process.argv.slice(2);
   const rootIndex = args.indexOf('--root');
   const portIndex = args.indexOf('--port');
+  const uiIndex = args.indexOf('--ui');
   const root = rootIndex >= 0 ? args[rootIndex + 1] : process.cwd();
   const port = portIndex >= 0 ? Number(args[portIndex + 1]) : 3000;
+  const ui = uiIndex >= 0 ? args[uiIndex + 1] : 'inspector';
   try {
-    const started = await startInspector({ root, port });
-    console.log(`Inspector running:\n\n${started.url}`);
+    const started = ui === 'workspace'
+      ? await startWorkspace({ root, port })
+      : await startInspector({ root, port });
+    console.log(`${ui === 'workspace' ? 'Workspace' : 'Inspector'} running:\n\n${started.url}`);
   } catch (error) {
     console.error(error.message || String(error));
     process.exitCode = 1;
