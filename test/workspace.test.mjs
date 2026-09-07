@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
+import vm from 'node:vm';
 import { createTask, setTaskStatus } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { createTaskGraph } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import { createInspectorServer, startWorkspace, startInspector } from '../inspector/server/server.mjs';
@@ -652,15 +653,19 @@ test('Bilingual Workspace text describes the fixed dual-terminal flow', () => {
 test('Workspace model selection preserves unrelated startup arguments and supports clearing', () => {
   const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
   const helpers = source.slice(source.indexOf('function readCodexModel('), source.indexOf('async function saveSettings('));
-  const { readCodexModel, replaceCodexModel, readCodexEffort, replaceCodexEffort } = new Function(`${helpers}; return { readCodexModel, replaceCodexModel, readCodexEffort, replaceCodexEffort };`)();
+  // Run only checked-in browser helpers with an explicit test context, as in
+  // terminal-polling.test.mjs; do not compile functions in the host global scope.
+  const context = vm.createContext({});
+  vm.runInContext(helpers, context);
+  const { readCodexModel, replaceCodexModel, readCodexEffort, replaceCodexEffort } = context;
   const args = ['--profile', 'work', '-m', 'old-model', '--config', 'features.foo=true'];
   assert.equal(readCodexModel(args), 'old-model');
   const withEffort = replaceCodexEffort(args, 'high');
   assert.equal(readCodexEffort(withEffort), 'high');
-  assert.deepEqual(replaceCodexEffort(withEffort, ''), args);
+  assert.deepEqual(Array.from(replaceCodexEffort(withEffort, '')), args);
   assert.equal(readCodexEffort(replaceCodexEffort(['--config=model_reasoning_effort=low'], 'medium')), 'medium');
-  assert.deepEqual(replaceCodexModel(args, 'chosen-model'), ['--profile', 'work', '--config', 'features.foo=true', '--model', 'chosen-model']);
-  assert.deepEqual(replaceCodexModel(['--model=old-model', '--profile', 'work'], ''), ['--profile', 'work']);
+  assert.deepEqual(Array.from(replaceCodexModel(args, 'chosen-model')), ['--profile', 'work', '--config', 'features.foo=true', '--model', 'chosen-model']);
+  assert.deepEqual(Array.from(replaceCodexModel(['--model=old-model', '--profile', 'work'], '')), ['--profile', 'work']);
   assert.equal(readCodexModel(replaceCodexModel([], 'chosen-model')), 'chosen-model');
 });
 
@@ -671,13 +676,15 @@ test('Workspace closes every open pair even when one close fails', async () => {
   const busy = [];
   const toasts = [];
   let refreshed = false;
-  const run = new Function('state', 'setBusy', 'fetchJson', 'postAction', 'showToast', 't', 'refresh', 'renderSelectedTask', `${closeSource}; return closeAllTerminals;`)(
-    { actionBusy: false }, value => busy.push(value),
-    async () => [{ id: 'one', status: 'running' }, { id: 'closed', status: 'closed' }, { id: 'two', status: 'running' }],
-    async (action, params) => { calls.push([action, params.workspaceTaskId]); if (params.workspaceTaskId === 'one') throw new Error('close failed'); },
-    (...args) => toasts.push(args), key => key, async () => { refreshed = true; }, () => {},
-  );
-  await run();
+  const context = vm.createContext({
+    state: { actionBusy: false }, setBusy: value => busy.push(value),
+    fetchJson: async () => [{ id: 'one', status: 'running' }, { id: 'closed', status: 'closed' }, { id: 'two', status: 'running' }],
+    postAction: async (action, params) => { calls.push([action, params.workspaceTaskId]); if (params.workspaceTaskId === 'one') throw new Error('close failed'); },
+    showToast: (...args) => toasts.push(args), t: key => key,
+    refresh: async () => { refreshed = true; }, renderSelectedTask() {},
+  });
+  vm.runInContext(closeSource, context);
+  await context.closeAllTerminals();
   assert.deepEqual(calls, [['workspaceTaskClose', 'one'], ['workspaceTaskClose', 'two']]);
   assert.deepEqual(busy, [true, false]);
   assert.equal(refreshed, true);
@@ -689,9 +696,11 @@ test('Workspace closes every open pair even when one close fails', async () => {
 test('Terminal sizing uses rendered cells and usable space without an 80-row cap', () => {
   const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
   const helper = source.slice(source.indexOf('function terminalSize('), source.indexOf('function resizeTerminal('));
-  const size = new Function('window', `${helper}; return terminalSize;`)({
-    getComputedStyle: () => ({ paddingLeft: '10px', paddingRight: '10px', paddingTop: '10px', paddingBottom: '10px' }),
+  const context = vm.createContext({
+    window: { getComputedStyle: () => ({ paddingLeft: '10px', paddingRight: '10px', paddingTop: '10px', paddingBottom: '10px' }) },
   });
+  vm.runInContext(helper, context);
+  const size = context.terminalSize;
   const screen = {
     clientWidth: 835, clientHeight: 1520,
     querySelector: selector => selector === '.xterm-screen'
@@ -699,7 +708,7 @@ test('Terminal sizing uses rendered cells and usable space without an 80-row cap
       : { offsetWidth: 815, clientWidth: 800 },
   };
   const controller = { card: { querySelector: () => screen }, terminal: { cols: 80, rows: 24 } };
-  assert.deepEqual(size(controller), { cols: 100, rows: 100 });
+  assert.deepEqual({ ...size(controller) }, { cols: 100, rows: 100 });
   screen.clientHeight = 0;
   assert.equal(size(controller), null);
 });
