@@ -32,6 +32,12 @@ const I18N = {
     'task.list': 'Workspace tasks',
     'task.none': 'No workspace tasks yet.',
     'task.restart': 'Restart pair',
+    'task.closeAll': 'Close all terminals',
+    'task.allClosed': 'All workspace terminals closed.',
+    'settings.model': 'Codex model',
+    'settings.effort': 'Reasoning effort',
+    'settings.default': 'Use default',
+    'settings.modelHint': 'Choose a model and reasoning effort. Applies to new tasks and restarts.',
     'task.close': 'Close task',
     'task.closed': 'Task closed',
     'task.created': 'New dual-terminal task created.',
@@ -97,6 +103,12 @@ const I18N = {
     'task.error': '任务错误',
     'settings.open': '终端设置',
     'settings.eyebrow': '终端设置',
+    'task.closeAll': '关闭所有终端',
+    'task.allClosed': '所有工作台终端已关闭。',
+    'settings.model': 'Codex 模型',
+    'settings.effort': '推理强度',
+    'settings.default': '使用默认设置',
+    'settings.modelHint': '选择模型和推理强度，新建任务或重启终端组后生效。',
     'settings.title': '两个终端的启动命令',
     'settings.body': '新建任务和重启终端组都会使用这里保存的命令。',
     'settings.codex': 'Codex',
@@ -256,7 +268,7 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'refresh-button', 'terminal-settings-button']) {
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -269,16 +281,37 @@ function settingsError(message = '') {
   element.textContent = message;
 }
 
+function renderModelChoices() {
+  const select = document.querySelector('#codex-model');
+  const models = [...(state.settings.models || [])];
+  const saved = state.settings.model || '';
+  if (saved && !models.some(model => model.id === saved)) models.push({ id: saved, name: saved, efforts: [] });
+  select.innerHTML = `<option value="">${escapeHtml(t('settings.default'))}</option>` + models.map(model => `<option value="${escapeHtml(model.id)}">${escapeHtml(model.name)}</option>`).join('');
+  select.value = saved;
+  renderEffortChoices(state.settings.effort || '');
+}
+
+function renderEffortChoices(saved = '') {
+  const model = (state.settings.models || []).find(item => item.id === document.querySelector('#codex-model').value);
+  const efforts = [...(model?.efforts || [])];
+  if (saved && !efforts.includes(saved)) efforts.push(saved);
+  const labels = state.locale === 'zh' ? { none: '无', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最大', ultra: '极高' } : {};
+  const select = document.querySelector('#codex-effort');
+  select.innerHTML = `<option value="">${escapeHtml(t('settings.default'))}</option>` + efforts.map(effort => `<option value="${escapeHtml(effort)}">${escapeHtml(labels[effort] || effort)}</option>`).join('');
+  select.value = saved;
+}
+
 function renderSettingsForm() {
   const codex = document.querySelector('#codex-command');
   const antigravity = document.querySelector('#antigravity-command');
+  renderModelChoices();
   if (codex) codex.value = state.settings.codex || DEFAULT_TERMINAL_COMMANDS.codex;
   if (antigravity) antigravity.value = state.settings.antigravity || DEFAULT_TERMINAL_COMMANDS.antigravity;
 }
 
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
-  for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'antigravity-command']) {
+  for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -307,6 +340,11 @@ async function openSettings() {
   try {
     const payload = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT);
     state.settings = {
+      models: payload?.codex?.models || [],
+      effort: readCodexEffort(payload?.codex?.args || []),
+      args: payload?.codex?.args || [],
+      argsSource: payload?.codex?.argsSource,
+      model: readCodexModel(payload?.codex?.args || []),
       codex: payload?.codex?.command || DEFAULT_TERMINAL_COMMANDS.codex,
       antigravity: payload?.antigravity?.command || DEFAULT_TERMINAL_COMMANDS.antigravity,
     };
@@ -317,6 +355,50 @@ async function openSettings() {
     dialog.removeAttribute('aria-busy');
     if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
   }
+}
+
+function readCodexModel(args) {
+  let model = '';
+  args.forEach((arg, index) => {
+    if (arg === '--model' || arg === '-m') model = args[index + 1] || '';
+    else if (arg.startsWith('--model=')) model = arg.slice(8);
+  });
+  return model;
+}
+
+function replaceCodexModel(args, model) {
+  const result = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--model' || arg === '-m') { index += 1; continue; }
+    if (arg.startsWith('--model=')) continue;
+    result.push(arg);
+  }
+  if (model) result.push('--model', model);
+  return result;
+}
+
+function readCodexEffort(args) {
+  let effort = '';
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    const value = arg === '-c' || arg === '--config' ? args[++index] : arg.startsWith('--config=') ? arg.slice(9) : '';
+    const match = value?.match(/^model_reasoning_effort\s*=\s*["']?([a-z]+)["']?$/);
+    if (match) effort = match[1];
+  }
+  return effort;
+}
+
+function replaceCodexEffort(args, effort) {
+  const result = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if ((arg === '-c' || arg === '--config') && /^model_reasoning_effort\s*=/.test(args[index + 1] || '')) { index += 1; continue; }
+    if (/^--config=model_reasoning_effort\s*=/.test(arg)) continue;
+    result.push(arg);
+  }
+  if (effort) result.push('-c', `model_reasoning_effort="${effort}"`);
+  return result;
 }
 
 async function saveSettings(event) {
@@ -330,6 +412,17 @@ async function saveSettings(event) {
     settingsError(t('settings.invalid'));
     return;
   }
+  const model = document.querySelector('#codex-model').value.trim();
+  const effort = document.querySelector('#codex-effort').value;
+  if (model && !/^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/.test(model)) {
+    settingsError(state.locale === 'zh' ? '请输入有效的模型 ID。' : 'Enter a valid model ID.');
+    return;
+  }
+  if (state.settings.argsSource === 'project' && (model !== state.settings.model || effort !== state.settings.effort)) {
+    settingsError(state.locale === 'zh' ? '项目配置已覆盖 Codex 启动参数，请先在 .agent-bus/config.json 中移除或修改该覆盖。' : 'Codex arguments are overridden by project configuration (.agent-bus/config.json).');
+    return;
+  }
+  const args = replaceCodexEffort(replaceCodexModel(state.settings.args || [], model), effort);
   setBusy(true);
   setSettingsBusy(true);
   settingsError();
@@ -337,6 +430,7 @@ async function saveSettings(event) {
     await postAction('setupConfigure', {
       agent: 'codex',
       command: commands.codex,
+      args,
       adapter: 'codex-cli',
       role: 'planner',
     });
@@ -346,7 +440,7 @@ async function saveSettings(event) {
       adapter: 'antigravity-cli',
       role: 'implementer',
     });
-    state.settings = commands;
+    state.settings = { ...state.settings, ...commands, model, effort, args };
     closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
   } catch (error) {
@@ -529,6 +623,8 @@ function renderTerminalViews(panes) {
     controller.terminal.onBinary(data => enqueueRawInput(controller, data));
     controller.resizeObserver = new ResizeObserver(() => resizeTerminal(controller));
     controller.resizeObserver.observe(screen);
+    const renderedScreen = screen.querySelector('.xterm-screen');
+    if (renderedScreen) controller.resizeObserver.observe(renderedScreen);
     screen.addEventListener('click', () => controller.terminal?.focus());
     window.requestAnimationFrame(() => resizeTerminal(controller));
   }
@@ -616,10 +712,21 @@ function enqueueRawInput(controller, input) {
 
 function terminalSize(controller) {
   const screen = controller.card.querySelector('[data-terminal-screen]');
-  if (!screen) return null;
+  const terminal = controller.terminal;
+  const rendered = screen?.querySelector('.xterm-screen');
+  if (!screen || !rendered || !terminal) return null;
+  const cellWidth = rendered.getBoundingClientRect().width / terminal.cols;
+  const cellHeight = rendered.getBoundingClientRect().height / terminal.rows;
+  if (!(cellWidth > 0) || !(cellHeight > 0)) return null;
+  const style = window.getComputedStyle(screen);
+  const viewport = screen.querySelector('.xterm-viewport');
+  const scrollbar = viewport ? viewport.offsetWidth - viewport.clientWidth : 0;
+  const width = screen.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - scrollbar;
+  const height = screen.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  if (width <= 0 || height <= 0) return null;
   return {
-    cols: Math.max(20, Math.min(240, Math.floor(screen.clientWidth / 8.2))),
-    rows: Math.max(10, Math.min(80, Math.floor(screen.clientHeight / 17))),
+    cols: Math.max(1, Math.min(1000, Math.floor(width / cellWidth))),
+    rows: Math.max(1, Math.min(500, Math.floor(height / cellHeight))),
   };
 }
 
@@ -629,8 +736,8 @@ function resizeTerminal(controller) {
   if (!size || size.cols < 1 || size.rows < 1) return;
   const key = `${size.cols}x${size.rows}`;
   if (controller.lastSize === key) return;
-  controller.lastSize = key;
   try { controller.terminal.resize(size.cols, size.rows); } catch { return; }
+  controller.lastSize = key;
   controller.resizePromise = controller.resizePromise.then(async () => {
     try {
       await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size });
@@ -770,6 +877,28 @@ async function closeTask() {
   }
 }
 
+async function closeAllTerminals() {
+  if (state.actionBusy) return;
+  setBusy(true);
+  try {
+    const tasks = await fetchJson('/api/workspace-tasks');
+    const failures = [];
+    for (const task of tasks) {
+      if (task.status === 'closed') continue;
+      try { await postAction('workspaceTaskClose', { workspaceTaskId: task.id }); }
+      catch (error) { failures.push(`${task.id}: ${error.payload?.error?.message || error.message}`); }
+    }
+    if (failures.length) showToast(failures.join('\n'), 'error');
+    else showToast(t('task.allClosed'), 'success');
+  } catch (error) {
+    showToast(error.message || t('action.closeError'), 'error');
+  } finally {
+    await refresh();
+    setBusy(false);
+    renderSelectedTask();
+  }
+}
+
 async function restartTask() {
   if (!state.selectedId || state.actionBusy) return;
   disposeTerminalViews();
@@ -801,6 +930,7 @@ function setLocale(locale) {
 function bindEvents() {
   document.querySelector('#new-task-button')?.addEventListener('click', createTask);
   document.querySelector('#empty-new-task')?.addEventListener('click', createTask);
+  document.querySelector('#codex-model')?.addEventListener('change', () => renderEffortChoices());
   document.querySelector('#terminal-settings-button')?.addEventListener('click', () => void openSettings());
   document.querySelector('#terminal-settings-close')?.addEventListener('click', closeSettings);
   document.querySelector('#terminal-settings-cancel')?.addEventListener('click', closeSettings);
@@ -812,6 +942,7 @@ function bindEvents() {
     if (event.key === 'Escape' && state.settingsOpen) closeSettings();
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
   document.querySelector('#restart-task-button')?.addEventListener('click', restartTask);
   document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));

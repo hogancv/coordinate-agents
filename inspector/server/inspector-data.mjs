@@ -1,5 +1,7 @@
+import { homedir } from 'node:os';
 import {
   existsSync,
+  readFileSync,
   lstatSync,
   readdirSync,
   realpathSync,
@@ -93,6 +95,17 @@ function safeWorkspaceCommand(value, fallback) {
   return command || fallback;
 }
 
+function readCodexModels() {
+  try {
+    const cache = JSON.parse(readFileSync(join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'models_cache.json'), 'utf8'));
+    return (cache.models || []).filter(model => model.visibility !== 'hide' && typeof model.slug === 'string').map(model => ({
+      id: model.slug,
+      name: model.display_name || model.slug,
+      efforts: (model.supported_reasoning_levels || []).map(level => level.effort).filter(effort => typeof effort === 'string'),
+    }));
+  } catch { return []; }
+}
+
 function readWorkspaceSettings(root) {
   const bus = busFor(root);
   let projectAgents = [];
@@ -115,6 +128,9 @@ function readWorkspaceSettings(root) {
         command: safeWorkspaceCommand(resolved.command, fallback),
         adapter: resolved.adapter || adapter,
         source: resolved.commandSource || 'adapter-default',
+        args: resolved.args || [],
+        ...(id === 'codex' ? { models: readCodexModels() } : {}),
+        argsSource: resolved.argsSource,
       }];
     } catch {
       return [id, {

@@ -86,6 +86,7 @@
             </div>
             <div class="task-toolbar-actions">
               <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
+              <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
               <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
             </div>
           </header>
@@ -111,6 +112,15 @@
           <label class="settings-field" for="codex-command">
             <span data-i18n="settings.codex">Codex</span>
             <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+          </label>
+          <label class="settings-field">
+            <span data-i18n="settings.model">Codex model (optional)</span>
+            <select id="codex-model" aria-describedby="codex-model-hint"></select>
+            <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
+          </label>
+          <label class="settings-field" for="codex-effort">
+            <span data-i18n="settings.effort">Reasoning effort</span>
+            <select id="codex-effort"></select>
           </label>
           <label class="settings-field" for="antigravity-command">
             <span data-i18n="settings.antigravity">Antigravity</span>
