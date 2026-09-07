@@ -7,9 +7,15 @@ permalink: /zh-CN/
 
 # coordinate-agents
 
+项目同时提供两种模式：日常交互使用 [Web 双终端工作台](../inspector.html)，
+需要持久任务、审查记录和恢复时使用下面介绍的 Skill / CLI / MCP 结构化流程。
+Web 使用全新 Codex + Antigravity PTY、轻量提示词和任务绑定通信，不自动调用
+skill 或创建 Task/Graph。任务组状态只描述终端生命周期，不代表实现或审查完成。
+两种模式共享本地 Session Runtime，但不具备相同的工作流保障。
+
 `coordinate-agents` 是面向 AI 编码代理的本地优先协调协议与运行时。在同一个 Git 仓库中通过可恢复的本地 `.agent-bus` 协调多代理协作。**OpenAI Codex App/CLI** 与 **Google Antigravity CLI (`agy`)** 作为首发官方参考适配器与默认工作流（Codex 负责需求澄清、规格说明、提交审查与发布门禁；Antigravity 独占代码与测试实现），同时支持通过适配器动态注册与配置任意 CLI 代理。任务运行期间，Runtime 可能创建由自己拥有的本地持久 PTY Session Host，但不会控制 Codex App Terminal UI。
 
-## 通过 GitHub 市场安装 Codex 插件（普通用户推荐）
+## 通过 GitHub 市场安装 Codex 插件（结构化模式）
 
 ```sh
 codex plugin marketplace add hogancv/coordinate-agents

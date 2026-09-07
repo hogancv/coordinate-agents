@@ -1,8 +1,8 @@
 /**
- * Canonical v2.3 role prompts shared by CLI quickstart and the Web Workspace.
+ * CLI v2.3 and separately versioned Web-lite role prompts.
  *
  * Keep this module side-effect free.  Both entry points must be able to build
- * the same prompt without importing a transport, a server, or a browser.
+ * their prompts without importing a transport, a server, or a browser.
  */
 
 export const ROLE_PROMPT_VERSION = '2.3.0';

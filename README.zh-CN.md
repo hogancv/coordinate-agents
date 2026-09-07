@@ -2,9 +2,18 @@
 
 [English](./README.md) · [文档](./docs/zh-CN/index.md) · [安全说明](./SECURITY.md)
 
-Coordinate Agents 是一个面向 Codex 与外部 AI 编码代理的本地优先协作协议和运行时。它为需求澄清、实现、审查、恢复和发布授权建立明确边界，同时让代码仓库及持久化 `.agent-bus` 状态始终由你控制。
+Coordinate Agents 是面向 Codex 与外部 AI 编码代理的本地协作工作台，底层提供本地优先协作协议和运行时。同时支持轻量交互与结构化任务两种模式，代码仓库和本地状态始终由你控制。
 
-推荐通过本 GitHub 仓库安装 Codex 插件。npm 包继续用于 standalone Runtime 和兼容性工作流。
+日常低延迟双终端协作使用 **Web Workspace**；需要持久 Task、结构化审查和显式恢复时使用 **Codex Plugin / CLI / MCP**。结构化流程推荐通过本 GitHub 仓库安装 Codex 插件；Web 通过独立 npm Runtime 或源码启动。
+
+## 两种协作模式
+
+| 模式 | 执行方式与保障 |
+| --- | --- |
+| Web Workspace | 全新双 PTY、轻量角色提示词、任务绑定的终端通信。在 Codex 中输入需求，由 Antigravity 实现；不自动调用 skill 或运行 Task/Graph 生命周期。 |
+| 结构化 Skill / CLI / MCP | Agent Bus 消息、持久 Task 与 Task Graph、实现证据、审查记录和显式恢复。 |
+
+Web 任务组状态表示终端生命周期，**不代表实现或审查完成**。角色提示词是行为约定，不是强制执行的工作流状态机。Web 提示词要求未经用户授权不得提交、推送或发布；结构化模式继续遵守原有审查与发布授权流程。
 
 ![完整端到端终端演示](./assets/demo.gif)
 
@@ -19,7 +28,7 @@ Coordinate Agents 是一个面向 Codex 与外部 AI 编码代理的本地优先
 - Agent Bus 在本地持久化任务、消息、审查、Session 和恢复事实。
 - 发布操作与实现流程严格分离，必须由用户单独明确授权。
 
-## 工作原理
+## 结构化流程的工作原理
 
 ```text
 你
@@ -129,25 +138,27 @@ Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼
 身份分离；canonical Task/持久 Session 路径继续遵守项目命令 > 用户命令 >
 适配器默认值的精确优先级。
 
-## 本地 Inspector
+## Web Workspace 与本地 Inspector
 
 **Web Workspace** 是主要的本地浏览器入口。在任何已初始化 Agent Bus 的 Git
-仓库中即可启动一个仅回环、只读的项目总览 —— 无需 Codex Plugin、全局安装或
-远程服务：
+仓库中即可启动一个仅回环的双终端工作台 —— 无需 Codex Plugin 或全局安装
+（代理 CLI 仍使用各自配置的模型服务）：
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-Workspace 是完整支持 `zh-CN` / `en-US` 双语的**三栏 AI 聊天式工作台**
-（右上角语言切换，`localStorage` 持久化）。启动时绑定唯一一个 Git 仓库，
-展示其身份（分支、HEAD、远程）；普通 Task 与 Task Graph parent 以基于权威
-Runtime 记录的**真实对话时间线**呈现，Agents、Sessions、近期 Runtime 事件
-与有界的 Task/Graph 详情分布在侧栏、上下文面板与抽屉中。聊天渲染与刷新
-严格只读；受保护的 `POST /api/action` 端点把显式白名单内的 Runtime
-操作——包括事务式 Agent 发现与配置——路由到与 CLI/MCP 相同的服务。
-`inspector` 命令继续作为同一套 GET 契约上的兼容只读界面保留。浏览器页面
-始终不是事实源，也绝不虚构任何 Agent 思考、回复或状态。详见
+Workspace 支持 `zh-CN` / `en-US` 双语，左侧只列出 Workspace 任务组。
+点击“新建任务”启动全新的 Codex + Antigravity 双终端并注入 Web-lite 提示词；
+需求直接输入 Codex 终端。“终端设置”支持 `agy-proxy` 等自定义启动命令，
+以及 Codex 模型和推理强度设置。保留刷新、关闭、重启和关闭所有终端操作。
+不再提供 Composer、聊天消息流或 Graph / Agents / Sessions / Activity 页面。
+
+任务组独立保存在 `.agent-bus/workspace-tasks/*.json`，不与标准 Task 混用。
+选择与刷新不会启动会话；明确操作通过受保护的 `POST /api/action` 执行。
+原有 Task/Graph、CLI、MCP 和只读 `inspector` 契约继续保留。
+运行本仓库的新 Web 行为请使用 `node bin/coordinate-agents.mjs web --port 3000`；
+合入 main 不等于发布新的 npm 版本。详见
 [Inspector 与 Web Workspace](./docs/inspector.md)
 与 [Event Journal](./docs/event-journal.md)。
 
@@ -188,11 +199,11 @@ npm run test:core
 
 `.agent-bus` 是本地明文状态，应始终排除在版本控制之外。不要把凭据、令牌、Cookie、私钥或未脱敏的敏感输出写入任务记录、fixture、日志或提交。Runtime 会拒绝不安全路径，也不会附加到任意进程。
 
-实现完成与 `REVIEW_APPROVED` 都不构成发布授权。merge、push、tag、publish、deploy、创建 GitHub Release 或运行发布工作流，都必须先说明具体计划，再获得用户原样输入的 `RELEASE_APPROVED`。完整边界见 [SECURITY.md](./SECURITY.md)。
+实现完成与 `REVIEW_APPROVED` 都不构成发布授权。Web-lite 提示词要求提交、推送或发布前取得用户授权，但没有技术上强制执行的发布门禁。结构化流程继续要求对 merge、push、tag、publish、deploy、GitHub Release 与发布工作流先说明计划，再获得原样输入的 `RELEASE_APPROVED`。结构化边界见 [SECURITY.md](./SECURITY.md)。
 
 ## 项目状态
 
-Coordinate Agents 以插件优先、本地优先的方式维护。GitHub 插件是主要分发渠道，`@hogancv/coordinate-agents` 是兼容性分发渠道。CI 与发布策略见 [AGENTS.md](./AGENTS.md)；npm 发布仍是手动且必须获得明确批准的工作流。
+Coordinate Agents 是本地优先项目，同时维护轻量 Web 与结构化 Plugin / CLI / MCP 模式。GitHub 插件分发结构化技能，`@hogancv/coordinate-agents` 分发独立 Runtime 和 Web 入口。CI 与发布策略见 [AGENTS.md](./AGENTS.md)；npm 发布仍是单独的、手动且必须明确批准的工作流。
 
 ## 开发
 

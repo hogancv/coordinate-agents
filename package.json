@@ -1,7 +1,7 @@
 {
   "name": "@hogancv/coordinate-agents",
   "version": "2.3.0",
-  "description": "A local-first coordination protocol, plugin, and runtime for AI coding agents.",
+  "description": "A local AI coding-agent workbench and runtime with lightweight terminal collaboration and structured task workflows.",
   "type": "module",
   "exports": {
     "./adapter-sdk": "./adapter-sdk.mjs",

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
@@ -49,6 +49,7 @@ function fakeAgentCommand(directory, name) {
   }
   const cmd = join(directory, name);
   writeFileSync(cmd, `#!${process.execPath}\nrequire(${JSON.stringify(script)});\n`, 'utf8');
+  chmodSync(cmd, 0o755);
   return cmd;
 }
 

@@ -422,12 +422,15 @@ test('launch passes the generated prompt and repository to Codex without shell i
   try {
     assert.equal(spawnSync('git', ['init', sandbox]).status, 0);
     const task = 'Preserve A&B, %PATH%, $HOME, and "quoted text" exactly';
-    const quickstartResult = invoke(['quickstart', '--root', sandbox, '--template', 'feature', '--task', task, '--lang', 'en']);
+    // Both initialization and launch must resolve only the fixture command,
+    // even when the developer has configured an absolute Codex executable.
+    const env = { ...fakeCodexLauncher(sandbox), COORDINATE_AGENTS_HOME: join(sandbox, '.test-coordinate-agents-home') };
+    const quickstartResult = invoke(['quickstart', '--root', sandbox, '--template', 'feature', '--task', task, '--lang', 'en'], env);
     assert.equal(quickstartResult.status, 0, quickstartResult.stderr);
     const prompt = readFileSync(join(sandbox, '.agent-bus', 'launch', 'codex.txt'), 'utf8').trim();
 
     const launched = invoke(['launch', '--agent', 'codex', '--root', sandbox, '--lang', 'en'], {
-      ...fakeCodexLauncher(sandbox),
+      ...env,
       CAPTURE: capture,
     });
     assert.equal(launched.status, 0, launched.stderr);

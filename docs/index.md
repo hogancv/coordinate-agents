@@ -1,11 +1,18 @@
 ---
 layout: home
 title: coordinate-agents
-description: A local-first coordination protocol and runtime for AI coding agents.
+description: A local AI coding-agent workbench with lightweight Web collaboration and a structured coordination protocol and runtime.
 permalink: /
 ---
 
-# Local-first coordination protocol and runtime for AI coding agents
+# Local collaboration workbench and runtime for AI coding agents
+
+Choose [Web Workspace](./inspector.html) for lightweight Codex + Antigravity
+terminal collaboration, or Skill / CLI / MCP for the structured workflow
+described below. Web uses fresh paired PTYs and task-bound messaging without
+automatically invoking the skill or creating Task/Graph records. Its group
+status describes terminal lifecycle, not implementation or review completion.
+The two modes share the local Session Runtime; their workflow guarantees differ.
 
 `coordinate-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex App/CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC surfaces can integrate via the adapter extension model.
 
@@ -13,7 +20,7 @@ The agents communicate through a recoverable project-local `.agent-bus`. No exte
 database, or shared API key is required. During an explicit Task/Session operation, the Runtime may
 create a local Runtime-owned Session Host for a persistent PTY; it is not Codex Terminal UI control.
 
-## Codex Plugin via GitHub Marketplace (Recommended)
+## Codex Plugin via GitHub Marketplace (Structured mode)
 
 ```sh
 codex plugin marketplace add hogancv/coordinate-agents

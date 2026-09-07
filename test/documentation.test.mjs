@@ -56,11 +56,11 @@ test('AI installation guide defines canonical identity and the complete safe lif
   assert.match(guide, /non-zero[\s\S]*failed installation/);
 });
 
-test('both READMEs are aligned plugin-first landing pages', () => {
+test('both READMEs are aligned two-mode landing pages', () => {
   const english = read('README.md');
   const chinese = read('README.zh-CN.md');
-  const englishHeadings = ['Why Coordinate Agents', 'How It Works', 'Quick Start', 'Example', 'Key Capabilities', 'Supported Agents and Adapters', 'Local Inspector', 'Documentation', 'Safety and Release Boundary', 'Project Status', 'License'];
-  const chineseHeadings = ['为什么使用 Coordinate Agents', '工作原理', '快速开始', '示例', '核心能力', '支持的代理与适配器', '本地 Inspector', '文档导航', '安全与发布边界', '项目状态', '许可证'];
+  const englishHeadings = ['Two collaboration modes', 'Why Coordinate Agents', 'How the structured workflow works', 'Quick Start', 'Example', 'Key Capabilities', 'Supported Agents and Adapters', 'Web Workspace and Local Inspector', 'Documentation', 'Safety and Release Boundary', 'Project Status', 'License'];
+  const chineseHeadings = ['两种协作模式', '为什么使用 Coordinate Agents', '结构化流程的工作原理', '快速开始', '示例', '核心能力', '支持的代理与适配器', 'Web Workspace 与本地 Inspector', '文档导航', '安全与发布边界', '项目状态', '许可证'];
   for (const heading of englishHeadings) assert.match(english, new RegExp(`^## ${heading}$`, 'm'));
   for (const heading of chineseHeadings) assert.match(chinese, new RegExp(`^## ${heading}$`, 'm'));
   assert.ok(english.split(/\r?\n/).length < 400);
@@ -172,6 +172,22 @@ test('evidence-focused docs contain complete workflows, comparison, and concrete
     'npm registry metadata is inconsistent', 'npm ERR! code ETARGET']) {
     assert.ok(troubleshooting.includes(evidence), `troubleshooting is missing ${evidence}`);
   }
+});
+
+test('Web documentation distinguishes lightweight terminal groups from structured Tasks', () => {
+  for (const path of ['README.md', 'README.zh-CN.md', 'docs/inspector.md', 'docs/getting-started.md', 'docs/llms.txt']) {
+    const content = read(path);
+    assert.match(content, /Web/);
+    assert.match(content, /Task/);
+    assert.doesNotMatch(content, /three-column AI-chat|chat-first, three-column|三栏 AI 聊天式|primary read-only local browser entry/);
+  }
+  const web = read('docs/inspector.md');
+  for (const fact of ['2.3.0-web-lite-1', 'workspace-message.mjs', '.agent-bus/workspace-tasks/',
+    'not implementation or', 'not an enforced state machine', 'does not publish npm',
+    'sessionResize', 'x-coordinate-agents-capability', 'does not\ncreate an isolated Git worktree']) {
+    assert.ok(web.includes(fact), `Web documentation missing boundary: ${fact}`);
+  }
+  assert.match(read('README.zh-CN.md'), /不代表实现或审查完成/);
 });
 
 test('repository AI, security, and machine index files have distinct documented roles', () => {

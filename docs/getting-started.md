@@ -6,13 +6,11 @@ description: A verified first-run lifecycle for Codex App or Codex CLI specifica
 
 # Getting started
 
-## Open the local Web Workspace (read-only)
+## Open the local Web Workspace (lightweight mode)
 
-The **Web Workspace** is the primary local browser entry for observing a
-repository: repository identity, Tasks and Task Graph parents, Agents,
-Sessions, recent Runtime events, and bounded Task/Graph detail. From any
-initialized Git repository with an Agent Bus it starts a loopback-only,
-read-only server — no Codex Plugin, global installation, or remote service:
+The **Web Workspace** provides a task list and interactive Codex + Antigravity
+terminal pairs. From an initialized Git repository with an Agent Bus, start
+the loopback-only server using a published version that includes these features:
 
 ```console
 $ npx @hogancv/coordinate-agents@latest web --port 3000
@@ -21,17 +19,21 @@ Workspace running:
 http://localhost:3000
 ```
 
-The Workspace binds exactly one canonical repository root at startup and
-browser requests can never select another root. It is read-only: opening,
-refreshing, selecting Tasks or Task Graphs, and replaying events create no
-process, Session, worktree, Bus message, commit, or state transition. The
-`inspector` command remains available as the compatible read-only UI over the
-same GET contracts. Follow the Plugin or CLI paths below to create, dispatch,
-review, resume, or stop work; later milestones add guarded browser actions.
+For this source checkout, run `node bin/coordinate-agents.mjs web --port 3000`;
+merging to main does not publish npm. In Terminal settings, choose the actual
+commands (such as `agy-proxy`), then click New task to start two fresh PTYs
+with Web-lite prompts. Enter requirements directly in Codex.
+
+Selection and refresh are read-only, but creation and terminal input have real
+side effects. Workspace groups are separate from standard Tasks: running/closed
+does not mean implementation or review completion. Web-lite does not
+automatically invoke the skill or create structured Task, Graph, review, or
+recovery records. Use the structured paths below for those capabilities.
+`inspector` remains read-only. See [Web Workspace](./inspector.md) for details.
 
 ## Codex Plugin-first path
 
-The Codex Plugin is the preferred first-use experience. Its Multi-Skill surface
+The Codex Plugin is the preferred structured-workflow experience. Its Multi-Skill surface
 routes onboarding without exposing Agent Bus folders:
 
 | Intent | Skill | First action |
