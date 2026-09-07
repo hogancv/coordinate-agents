@@ -16,6 +16,8 @@ Task Graph workflows remain available with their existing contracts.
   preserved the read-only Inspector and static Composer compatibility resource.
 - Documented the two modes and their different completion/recovery guarantees.
   Publication remains controlled by the explicit release workflow.
+- The default test command runs the PTY/MCP/Graph suite serially to avoid
+  resource contention in the release gate.
 - Isolated the CLI launcher test from real user configuration and corrected
   executable permissions on user-configuration test fixtures.
 
