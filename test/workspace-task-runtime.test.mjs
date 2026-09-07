@@ -27,6 +27,7 @@ import { listRecords } from '../skills/coordinate-agents/scripts/session-manager
 import { startWorkspace } from '../inspector/server/server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 import { workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
+import { workspaceMessage } from '../skills/coordinate-agents/scripts/workspace-message.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const ACTIVE = new Set(['starting', 'running', 'idle', 'busy']);
@@ -131,7 +132,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.match(first.id, /^workspace-[A-Za-z0-9_-]{8,}$/);
     assert.match(first.title, /^Task · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · [A-Za-z0-9]{6}$/);
     assert.equal(first.status, 'RUNNING');
-    assert.equal(first.promptVersion, '2.3.0');
+    assert.equal(first.promptVersion, '2.3.0-web-lite-1');
     assert.ok(first.sessions.codex.sessionId);
     assert.ok(first.sessions.antigravity.sessionId);
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
@@ -144,7 +145,17 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.deepEqual(new Set(bound.map(session => session.agent)), new Set(['codex', 'antigravity']));
     assert.ok(bound.every(session => session.subtaskId === 'codex' || session.subtaskId === 'antigravity'));
 
+    const sent = await workspaceMessage(root, workspaceTaskId, 'send', 'web-lite-hello');
+    assert.equal(sent.sessionId, first.sessions.antigravity.sessionId);
+    assert.equal(sent.sent, true);
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (readFileSync(antigravity.log, 'utf8').includes(Buffer.from('web-lite-hello\r').toString('hex'))) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.ok(readFileSync(antigravity.log, 'utf8').includes(Buffer.from('web-lite-hello\r').toString('hex')));
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
+    // Closed pairs must not receive additional input through the lightweight helper.
+    await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
     assert.equal(closed.workspaceTask.status, 'CLOSED');
     assert.ok(closed.closedSessions.every(session => !ACTIVE.has(session.state)));
     const closedAgain = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
@@ -162,7 +173,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const saved = JSON.parse(readFileSync(join(root, '.agent-bus', 'workspace-tasks', `${workspaceTaskId}.json`), 'utf8'));
     assert.equal(saved.sessions.codex.sessionId, restarted.workspaceTask.sessions.codex.sessionId);
     assert.equal(saved.sessions.antigravity.sessionId, restarted.workspaceTask.sessions.antigravity.sessionId);
-    assert.equal(saved.promptVersion, '2.3.0');
+    assert.equal(saved.promptVersion, '2.3.0-web-lite-1');
     assert.equal((await readWorkspaceTask(root, workspaceTaskId)).id, workspaceTaskId);
   } finally {
     await closeGroup(root, workspaceTaskId);

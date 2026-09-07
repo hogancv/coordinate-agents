@@ -497,6 +497,10 @@ function renderTerminalViews(panes) {
       resizePromise: Promise.resolve(),
       lastSize: null,
       polling: false,
+      pollTimer: null,
+      readAgain: false,
+      activeUntil: 0,
+      disposed: false,
       finished: false,
       resizeObserver: null,
     };
@@ -555,6 +559,8 @@ function disposeTerminalViews() {
   window.clearTimeout(state.pollTimer);
   state.pollTimer = null;
   for (const controller of state.terminalViews.values()) {
+    controller.disposed = true;
+    window.clearTimeout(controller.pollTimer);
     controller.resizeObserver?.disconnect();
     controller.terminal?.dispose();
   }
@@ -565,6 +571,8 @@ function disposeTerminalViews() {
 }
 
 function enqueueRawInput(controller, input) {
+  if (controller.disposed) return;
+  controller.activeUntil = Date.now() + 1500;
   if (!controller.pane.sessionId || typeof input !== 'string' || input.length === 0) return;
   const knownSession = controller.session || state.selectedTask?.sessions?.[controller.pane.slotId];
   if (sessionState(knownSession) && !sessionIsActive(knownSession)) return;
@@ -591,11 +599,13 @@ function enqueueRawInput(controller, input) {
   controller.queuedInputBytes += bytes;
   controller.inputQueue = controller.inputQueue.then(async () => {
     for (const chunk of chunks) {
+      if (controller.disposed) return;
       await postAction('sessionWrite', {
         sessionId: controller.pane.sessionId,
         input: chunk,
         submit: false,
       });
+      scheduleTerminalRead(controller, 0);
     }
   }).catch(error => {
     showToast(error.payload?.error?.message || t('terminal.inputError'), 'error');
@@ -632,12 +642,21 @@ function resizeTerminal(controller) {
 
 async function pollTerminalViews() {
   const controllers = [...state.terminalViews.values()].filter(controller => controller.pane.sessionId && !controller.polling && !controller.finished);
-  for (const controller of controllers) void readTerminal(controller);
-  window.clearTimeout(state.pollTimer);
-  state.pollTimer = window.setTimeout(() => void pollTerminalViews(), TERMINAL_POLL_MS);
+  for (const controller of controllers) scheduleTerminalRead(controller, 0);
+}
+
+function scheduleTerminalRead(controller, delay) {
+  if (controller.disposed || controller.finished) return;
+  window.clearTimeout(controller.pollTimer);
+  if (controller.polling) {
+    controller.readAgain = true;
+    return;
+  }
+  controller.pollTimer = window.setTimeout(() => void readTerminal(controller), delay);
 }
 
 async function readTerminal(controller) {
+  if (controller.disposed || controller.polling || controller.finished) return;
   controller.polling = true;
   try {
     const params = new URLSearchParams({
@@ -646,8 +665,10 @@ async function readTerminal(controller) {
     });
     if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
     const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`);
+    if (controller.disposed) return;
     controller.session = payload.session || controller.session;
     const output = payload.output?.output || '';
+    if (output) controller.activeUntil = Date.now() + 1500;
     if (controller.terminal && output) controller.terminal.write(output);
     controller.cursor = Number.isInteger(payload.output?.nextCursor) ? payload.output.nextCursor : null;
     if (payload.session && !sessionIsActive(payload.session)) controller.finished = true;
@@ -661,10 +682,15 @@ async function readTerminal(controller) {
       };
     }
   } catch (error) {
+    if (controller.disposed) return;
+    controller.activeUntil = 0;
     if (error.status === 404) controller.finished = true;
     else updateTerminalHeader({ ...controller.pane, session: { state: 'failed' } });
   } finally {
     controller.polling = false;
+    const delay = controller.readAgain ? 0 : Date.now() < controller.activeUntil ? 50 : TERMINAL_POLL_MS;
+    controller.readAgain = false;
+    scheduleTerminalRead(controller, delay);
   }
 }
 

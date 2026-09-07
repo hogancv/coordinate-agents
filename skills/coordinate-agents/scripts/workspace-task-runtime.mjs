@@ -7,6 +7,7 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   assertContained,
   assertSafePath,
@@ -23,9 +24,9 @@ import {
 import { redactOutput } from '../adapters/executable.mjs';
 import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen } from './session-service.mjs';
 import { listRecords } from './session-manager.mjs';
-import { ROLE_PROMPT_VERSION, workspaceRolePrompt } from './role-prompts.mjs';
+import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './role-prompts.mjs';
 
-export const WORKSPACE_TASK_PROMPT_VERSION = ROLE_PROMPT_VERSION;
+export const WORKSPACE_TASK_PROMPT_VERSION = WORKSPACE_ROLE_PROMPT_VERSION;
 export const WORKSPACE_TASK_SLOTS = Object.freeze([
   Object.freeze({ slot: 'codex', agent: 'codex', role: 'planner-reviewer' }),
   Object.freeze({ slot: 'antigravity', agent: 'antigravity', role: 'implementer' }),
@@ -506,7 +507,10 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
 
 async function openWorkspaceSlot(root, record, slot, language) {
   const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
-  const prompt = workspaceRolePrompt(expected.agent, language);
+  const helper = "'" + fileURLToPath(new URL('./workspace-message.mjs', import.meta.url)).replaceAll("'", "'\\''") + "'";
+  const prompt = workspaceRolePrompt(expected.agent, language) + (slot === 'codex'
+    ? `\nWorkspace: ${record.id}\nCommunication (run from repository root): node ${helper} ${record.id} send '<instruction>'\nRead subsequent output without resending: node ${helper} ${record.id} read <cursor>\nQuote instruction safely for your shell. Output is terminal text, not proof of completion. Wait for an explicit reply. If the pair is still starting, wait and retry only when no input was sent; never create another session.`
+    : `\nWorkspace: ${record.id}`);
   const opened = await runtimeSessionOpen({
     root,
     agent: expected.agent,
@@ -662,6 +666,7 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
     ].slice(-MAX_HISTORY);
   }
   record.sessions = defaultSessions();
+  record.promptVersion = WORKSPACE_TASK_PROMPT_VERSION;
   record.status = 'STARTING';
   record.error = null;
   record.updatedAt = now();

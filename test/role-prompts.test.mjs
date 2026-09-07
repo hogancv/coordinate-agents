@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { ROLE_PROMPT_VERSION, workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
+import { ROLE_PROMPT_VERSION, quickstartRolePrompt, workspaceRolePrompt, WORKSPACE_ROLE_PROMPT_VERSION } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents.mjs');
 
-test('CLI quickstart and Workspace use the exact bilingual v2.3 role prompts', () => {
+test('CLI quickstart retains the bilingual v2.3 role prompts', () => {
   assert.equal(ROLE_PROMPT_VERSION, '2.3.0');
   for (const language of ['en', 'zh-CN']) {
     const repository = mkdtempSync(join(tmpdir(), 'coordinate-agents-role-prompts-'));
@@ -30,12 +30,22 @@ test('CLI quickstart and Workspace use the exact bilingual v2.3 role prompts', (
         assert.equal(existsSync(promptPath), true);
         assert.equal(
           readFileSync(promptPath, 'utf8').trim(),
-          workspaceRolePrompt(agent, language),
+          quickstartRolePrompt(agent, language),
           `${agent} ${language} prompt must come from the shared v2.3 source`,
         );
       }
     } finally {
       rmSync(repository, { recursive: true, force: true });
+    }
+  }
+});
+
+test('Web uses a distinct lightweight profile in both languages', () => {
+  assert.equal(WORKSPACE_ROLE_PROMPT_VERSION, '2.3.0-web-lite-1');
+  for (const language of ['en', 'zh-CN']) {
+    for (const agent of ['codex', 'antigravity']) {
+      assert.notEqual(workspaceRolePrompt(agent, language), quickstartRolePrompt(agent, language));
+      assert.match(workspaceRolePrompt(agent, language), /hello|问候|greetings/);
     }
   }
 });
