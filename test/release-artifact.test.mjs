@@ -56,9 +56,8 @@ test('packed release artifact passes isolated payload, example, setup, and docto
   const output = mkdtempSync(join(tmpdir(), 'coordinate-agents-release-artifact-'));
   try {
     const packEnv = { ...process.env };
-    // npm propagates npm_config_dry_run into lifecycle tests when the outer
-    // command is `npm pack --dry-run`; the nested pack must create a real
-    // tarball for artifact verification.
+    // The nested pack must create a real tarball for artifact verification and
+    // must not run package lifecycle scripts recursively.
     delete packEnv.npm_config_dry_run;
     delete packEnv['npm_config_dry-run'];
     const packed = spawnSync(npmCommand(), [

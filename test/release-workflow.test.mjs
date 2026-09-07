@@ -11,6 +11,7 @@ test('release workflow keeps explicit confirmation, exact-tag verification, and 
   assert.match(workflow, /npm run release:verify/);
   assert.match(workflow, /--expected-source-commit/);
   assert.match(workflow, /--expected-tag/);
+  assert.match(workflow, /npm pack --dry-run --ignore-scripts/);
   assert.match(workflow, /id-token:\s*write/);
   assert.match(workflow, /npm publish --ignore-scripts --access public --tag latest/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);

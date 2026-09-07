@@ -153,7 +153,7 @@ the persisted user configuration and project Agent Bus unchanged.
 
 An external adapter must remain outside the built-in registry source. Ship the
 public `adapter-sdk.mjs` entry and the example together, and test the actual
-package payload with `npm pack --dry-run`. Keep these identities distinct:
+package payload with `npm pack --dry-run --ignore-scripts`. Keep these identities distinct:
 
 1. Adapter ID: the Contract descriptor's unique lowercase kebab-case ID.
 2. Agent ID: the project workflow identity selected during setup.

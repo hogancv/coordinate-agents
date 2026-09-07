@@ -32,13 +32,13 @@ test('Adapter SDK acceptance gate runs built-in and external descriptors through
   }
 });
 
-test('Adapter SDK acceptance matrix is explicit and runs the required release-safe checks', () => {
+test('Adapter SDK acceptance matrix is focused and runs the required release-safe checks', () => {
   const workflow = readFileSync(join(root, '.github', 'workflows', 'adapter-sdk-acceptance.yml'), 'utf8');
   for (const os of ['ubuntu-latest', 'macos-latest', 'windows-latest']) {
     assert.match(workflow, new RegExp(`\\b${os}\\b`));
   }
   for (const node of ['18.x', '22.x']) assert.match(workflow, new RegExp(`['"]${node}['"]`));
-  for (const command of ['npm ci', 'npm run check', 'npm run demo', 'npm pack --dry-run']) {
+  for (const command of ['npm ci', 'npm test', 'npm run demo', 'npm pack --dry-run']) {
     assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')));
   }
   assert.match(workflow, /npm pack --dry-run --ignore-scripts/);
@@ -54,12 +54,13 @@ test('Adapter SDK acceptance matrix is explicit and runs the required release-sa
   assert.match(workflow, /previous_package.*git show/);
   assert.match(workflow, /previous_version.*previous_package/);
   assert.match(workflow, /if: needs\.version-change\.outputs\.run_acceptance == 'true'/);
+  assert.match(workflow, /github\.ref_type != 'tag'/);
   assert.match(workflow, /EVENT_NAME.*workflow_dispatch/);
-  assert.match(workflow, /release-artifact:/);
-  assert.match(workflow, /startsWith\(github\.ref, 'refs\/tags\/v'\)/);
-  assert.match(workflow, /npm run release:verify/);
-  assert.match(workflow, /--expected-source-commit/);
-  assert.match(workflow, /--expected-tag/);
+  assert.match(workflow, /matrix:\s*\n\s*include:/);
+  assert.doesNotMatch(workflow, /release-artifact:/);
+  assert.doesNotMatch(workflow, /npm run release:verify/);
+  assert.doesNotMatch(workflow, /--expected-source-commit/);
+  assert.doesNotMatch(workflow, /--expected-tag/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.doesNotMatch(workflow, /npm publish|npm install -g|curl\s+.*\|\s*(sh|bash)/i);

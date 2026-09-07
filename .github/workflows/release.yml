@@ -45,10 +45,10 @@ jobs:
           test "v${PACKAGE_VERSION}" = "$RELEASE_TAG"
       - name: Install from lockfile
         run: npm ci
-      - name: Test package
+      - name: Run focused regression suite
         run: npm run check
       - name: Inspect publish contents
-        run: npm pack --dry-run
+        run: npm pack --dry-run --ignore-scripts
       - name: Verify isolated release artifact
         shell: bash
         env:

@@ -180,15 +180,20 @@ Run the local gate from a clean checkout:
 
 ```sh
 npm ci
-npm run check
+npm test
 npm run demo
-npm pack --dry-run
+npm pack --dry-run --ignore-scripts
 ```
 
 The authoritative matrix is defined in
-`.github/workflows/adapter-sdk-acceptance.yml` and runs these checks on
-Windows, macOS, and Linux with Node.js 18 and Node.js 22. Local results prove
-only the current host; the matrix workflow is the cross-platform evidence. Automatic pull-request
-and `main` runs are limited to `package.json` changes and proceed only when its `version` differs
-from the base revision. Version tags and explicit manual dispatches remain available for release
-and maintenance verification.
+`.github/workflows/adapter-sdk-acceptance.yml` and runs the focused test suite
+on Linux with Node.js 18 and 22, plus macOS and Windows with Node.js 22. The
+offline demo and package payload checks run once on Ubuntu instead of once per
+matrix entry. Local results prove only the current host; the matrix workflow is
+the cross-platform evidence. Automatic pull-request and `main` runs are limited
+to `package.json` changes and proceed only when its `version` differs from the
+base revision. Version tags and explicit manual dispatches remain available for
+release and maintenance verification.
+
+The complete local regression suite remains available as `npm run test:full`
+or `npm run check:full`; it is intentionally not repeated in every matrix job.

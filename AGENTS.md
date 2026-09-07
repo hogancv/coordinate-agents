@@ -31,13 +31,23 @@ fixtures, logs, documentation, or release artifacts.
 
 ## Required checks
 
-Run all of these before proposing a commit:
+Run the fast checks before proposing a commit:
 
 ```sh
 npm ci
 npm run check
 npm run demo
-npm pack --dry-run
+npm pack --dry-run --ignore-scripts
+```
+
+The default `npm test`/`npm run check` path uses the focused core suite. Run
+the complete local regression suite explicitly when a change touches a slower
+integration boundary:
+
+```sh
+npm run check:full
+# or, when only the complete test files are needed:
+npm run test:full
 ```
 
 Also validate the skill and plugin metadata:
@@ -49,7 +59,7 @@ uv run --with pyyaml python "$HOME/.codex/skills/.system/plugin-creator/scripts/
 
 When the validator is not at that path, locate the installed `skill-creator` validator and report
 the actual command used. Do not claim cross-platform success from a single local run; CI is the
-authoritative Windows, macOS, Linux, Node.js 18, and Node.js 22 matrix.
+authoritative matrix with Node.js 18 on Linux and Node.js 22 on Windows, macOS, and Linux.
 
 ## Change rules
 

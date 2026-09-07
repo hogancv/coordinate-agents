@@ -144,11 +144,11 @@ Adapter example](./examples/minimal-external-adapter/README.md) remains outside
 the built-in registry and requires no provider access.
 
 The repository [Adapter SDK acceptance gate](./docs/adapter-conformance.md#repository-acceptance-gate)
-automatically runs its full cross-platform matrix only when the package version changes. Tag and
+automatically runs a focused cross-platform matrix only when the package version changes. Tag and
 explicit manual runs remain available for release and maintenance verification. The gate
-runs built-in and external descriptors through the same kit and covers the
-Windows/macOS/Linux × Node.js 18/22 matrix without changing Task, Bus, Event
-Journal, Inspector, MCP, review, or release ownership.
+runs built-in and external descriptors through the same kit and covers Node.js 18 on Linux plus
+Node.js 22 on Windows, macOS, and Linux without changing Task, Bus, Event Journal, Inspector,
+MCP, review, or release ownership.
 
 Setup discovery and the existing MCP setup/Task tools expose the same additive
 `adapters` registry snapshot, including registered external identities and
@@ -196,16 +196,24 @@ Use this path for legacy standalone Skill installation, external automation, or 
 
 ## Local Development
 
-For fast daily regressions run the focused core suite (~20 seconds), which
+The default test command runs the focused core suite (~20–30 seconds), which
 covers the CLI dispatcher, Web Workspace, Inspector, documentation, repository
-layout, and shared Runtime contracts:
+layout, shared Runtime contracts, and Web terminal messaging:
 
 ```sh
-npm run test:core
+npm test
 ```
 
-Run the full `npm test` suite (several minutes, including Task Graph, Session,
-Plugin, and MCP integration guards) before proposing a release.
+For the complete local regression suite, use the explicit command below. It is
+kept out of the default and cross-platform CI paths because it includes slower
+Task Graph, Session, Plugin, and MCP integration guards:
+
+```sh
+npm run test:full
+```
+
+`npm run check` is the fast help/index/core check; `npm run check:full` adds
+the complete local regression suite.
 
 ## Documentation
 

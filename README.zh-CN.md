@@ -129,7 +129,7 @@ npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边�
 
 面向第三方作者的[外部 Adapter 作者指南](./docs/adapter-author-guide.md)说明了公共导入、Contract v1 方法、离线 fixture、显式 trusted-local 注册和包内容校验。完整的[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)位于内置 registry 之外，不需要访问 Provider。
 
-仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)只在包版本变化时自动运行完整矩阵；标签和显式手动触发仍可用于发布与维护校验。门禁会让内置与外部 descriptor 通过同一套 kit，并在 Windows/macOS/Linux × Node.js 18/22 矩阵中运行；Task、Bus、Event Journal、Inspector、MCP、审查和发布权责保持不变。
+仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)只在包版本变化时自动运行精简跨平台矩阵；标签和显式手动触发仍可用于发布与维护校验。门禁会让内置与外部 descriptor 通过同一套 kit，并覆盖 Linux 上的 Node.js 18 以及 Windows、macOS、Linux 上的 Node.js 22；Task、Bus、Event Journal、Inspector、MCP、审查和发布权责保持不变。
 
 Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼容的
 `adapters` registry snapshot，其中包含已注册外部适配器的身份和 Contract
@@ -174,15 +174,21 @@ npx @hogancv/coordinate-agents@latest --help
 
 ## 本地开发
 
-日常快速回归请运行精简核心测试（约 20 秒），覆盖 CLI 分发、Web Workspace、
-Inspector、文档、仓库布局与共享 Runtime 契约：
+默认测试命令运行精简核心测试（约 20–30 秒），覆盖 CLI 分发、Web Workspace、
+Inspector、文档、仓库布局、共享 Runtime 契约与 Web 终端消息：
 
 ```sh
-npm run test:core
+npm test
 ```
 
-发布前再运行完整 `npm test`（数分钟，包含 Task Graph、Session、Plugin 与 MCP
-集成守卫）。
+需要完整本地回归时再显式运行以下命令。它包含较慢的 Task Graph、Session、Plugin
+与 MCP 集成守卫，不会被默认命令或跨平台 CI 隐式重复触发：
+
+```sh
+npm run test:full
+```
+
+`npm run check` 是快速的帮助/索引/核心检查；`npm run check:full` 会额外运行完整本地回归。
 
 ## 文档导航
 
