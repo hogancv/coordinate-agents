@@ -26,7 +26,7 @@ function sourceCommit() {
 }
 
 test('release candidate metadata and notes cover the Task Graph v1 scope', () => {
-  assert.equal(packageJson.version, '2.3.0');
+  assert.equal(packageJson.version, '2.4.0');
   assert.equal(pluginJson.version, packageJson.version);
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
   assert.equal(pluginJson.name, 'coordinate-agents');
@@ -34,6 +34,9 @@ test('release candidate metadata and notes cover the Task Graph v1 scope', () =>
 
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
   for (const phrase of [
+    'Lightweight Web Workspace',
+    'dual-terminal',
+    'Web-lite role prompts',
     'Multi-Agent Task Graph v1',
     'Bounded parallel execution',
     'Runtime-owned Git worktree',

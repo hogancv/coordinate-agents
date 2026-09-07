@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -39,11 +39,6 @@ test('Task Graph gate documentation keeps review and release authorization separ
   assert.match(documentation, /does not authorize merge, push, tag, publish, deploy, or release/i);
 });
 
-test('Plugin security scan runs for pull requests and manual checks but not push events', () => {
-  const workflow = readFileSync(join(root, '.github', 'workflows', 'plugin-security-scan.yml'), 'utf8');
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /workflow_dispatch:/);
-  assert.doesNotMatch(workflow, /^\s*push:/m);
-  assert.match(workflow, /hashgraph-online\/ai-plugin-scanner-action@[0-9a-f]{40}/);
-  assert.match(workflow, /fail_on_severity: high/);
+test('Plugin security scan workflow is intentionally removed', () => {
+  assert.equal(existsSync(join(root, '.github', 'workflows', 'plugin-security-scan.yml')), false);
 });

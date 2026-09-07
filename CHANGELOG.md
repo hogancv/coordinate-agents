@@ -1,17 +1,21 @@
 # Changelog
 
-## Unreleased — v2.4 planning
+## 2.4.0 — Lightweight Web Workspace
 
-- Rebuilt Web Workspace as a bilingual task list and fresh Codex + Antigravity
+This release publishes the bilingual dual-terminal Web Workspace and its
+low-overhead collaboration path. The structured Skill / CLI / MCP Task and
+Task Graph workflows remain available with their existing contracts.
+
+- Rebuilt Web Workspace as a bilingual dual-terminal task list with fresh Codex + Antigravity
   terminal pairs, with independent Workspace records, custom launch commands,
   model/reasoning settings, raw input, resize, and explicit pair lifecycle controls.
-- Added separately versioned Web-lite prompts and task-bound terminal messaging
+- Added separately versioned Web-lite role prompts and task-bound terminal messaging
   for low-overhead collaboration; structured Skill/CLI/MCP Task and Graph
   workflows remain available with their original contracts.
 - Replaced the Web chat/Composer and management pages with interactive PTYs;
   preserved the read-only Inspector and static Composer compatibility resource.
 - Documented the two modes and their different completion/recovery guarantees.
-  These source changes do not by themselves publish a new npm version.
+  Publication remains controlled by the explicit release workflow.
 - Isolated the CLI launcher test from real user configuration and corrected
   executable permissions on user-configuration test fixtures.
 
