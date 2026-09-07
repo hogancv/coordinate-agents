@@ -1841,6 +1841,7 @@ function graphFacts(record) {
     maxConcurrency: record.maxConcurrency,
     subtasks: record.subtasks,
   });
+  const subtasksById = new Map(record.subtasks.map(item => [item.id, item]));
   return {
     parent: {
       ...base.parent,
@@ -1849,7 +1850,7 @@ function graphFacts(record) {
       evidence: boundedEvidence(record.parentTask.evidence || record.evidence),
     },
     subtasks: base.subtasks.map(fact => {
-      const subtask = record.subtasks.find(item => item.id === fact.subtaskId);
+      const subtask = subtasksById.get(fact.subtaskId);
       return {
         ...fact,
         title: subtask?.title,
