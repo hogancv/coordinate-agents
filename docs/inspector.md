@@ -67,7 +67,10 @@ a static compatibility resource, unused by the current Workspace UI.
 
 ## Project storage and routing
 
-New project opens a directory-only browser with absolute-path entry, parent
+New project opens the operating system folder chooser (macOS, Windows, or
+Linux with Zenity). Cancel leaves project data unchanged. Plain folders require
+initialization confirmation after selection. If the native chooser is unavailable,
+the page falls back to a directory-only browser with absolute-path entry, parent
 navigation, 100-entry pages, and a hidden-directory toggle. Ordinary folders
 show an explicit **Add and initialize** confirmation. Initialization failures
 identify the failed stage and keep any generated data for manual recovery.

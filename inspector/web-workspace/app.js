@@ -615,7 +615,33 @@ async function browseProjectFolder(path, offset = 0) {
     confirm.disabled = false;
   } catch (error) { if (request === folderRequest) { folderPage = null; errorBox.textContent = error.message; } }
 }
-function openProjectDialog() {
+async function openProjectDialog() {
+  const button = document.querySelector('#new-project-button');
+  if (button.disabled) return;
+  button.disabled = true;
+  let selection;
+  try {
+    ({ selection } = await postAction('projectPick', {}, null));
+  } catch (error) {
+    showToast(projectText('无法打开系统选择器，已切换到手动选择。', 'System chooser unavailable; use the manual browser.'), 'error');
+    openManualProjectDialog();
+    return;
+  } finally { button.disabled = false; }
+  if (!selection || selection.cancelled) return;
+  if (selection.needsInitialization && !window.confirm(projectText(
+    `将为以下文件夹初始化 Git 和 Agent Bus，不创建提交：\n${selection.path}\n\n添加并初始化？`,
+    `Initialize Git and Agent Bus without a commit in:\n${selection.path}\n\nAdd and initialize?`))) return;
+  button.disabled = true;
+  try {
+    const result = await postAction('projectAdd', { path: selection.path, initialize: selection.needsInitialization }, null);
+    const payload = await fetchJson('/api/projects', { projectId: null });
+    state.projects = payload.projects;
+    await selectProject(result.project.id, null);
+  } catch (error) { showToast(error.message, 'error'); }
+  finally { button.disabled = false; }
+}
+
+function openManualProjectDialog() {
   const dialog = document.querySelector('#project-dialog');
   dialog.querySelector('h2').textContent = projectText('新增项目', 'New project');
   document.querySelector('#project-browse').textContent = projectText('打开路径', 'Open path');

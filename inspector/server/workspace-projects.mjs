@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { userConfigPath } from '../../skills/coordinate-agents/scripts/user-config.mjs';
+import { pickNativeFolder } from './native-folder-picker.mjs';
 
 const busTool = fileURLToPath(new URL('../../skills/coordinate-agents/scripts/agent-bus.mjs', import.meta.url));
 function directory(path) {
@@ -102,5 +103,11 @@ export function createProjectStore({ home } = {}) {
     } finally { handle.closeSync(); }
     return { path: root, parent: dirname(root), entries, nextOffset, needsInitialization: !gitRoot(root) };
   }
-  return { register, get, list, browse };
+  async function pick() {
+    const selected = await pickNativeFolder();
+    if (selected.cancelled) return selected;
+    const path = directory(selected.path);
+    return { path, cancelled: false, needsInitialization: !gitRoot(path) };
+  }
+  return { register, get, list, browse, pick };
 }

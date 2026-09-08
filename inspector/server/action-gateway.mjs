@@ -473,13 +473,13 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
       const correlationValue = typeof correlationId === 'string' && CORRELATION_PATTERN.test(correlationId)
         ? correlationId
         : correlation;
-      if (projectStore && ['projectAdd', 'projectBrowse'].includes(action)) {
+      if (projectStore && ['projectAdd', 'projectBrowse', 'projectPick'].includes(action)) {
         try {
           if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)) throw new Error('Invalid project parameters.');
-          const allowed = action === 'projectAdd' ? ['path', 'initialize'] : ['path', 'offset', 'hidden'];
+          const allowed = action === 'projectPick' ? [] : action === 'projectAdd' ? ['path', 'initialize'] : ['path', 'offset', 'hidden'];
           if (Object.keys(rawParams).some(key => !allowed.includes(key))) throw new Error('Unknown project parameter.');
           if (rawParams.initialize !== undefined && typeof rawParams.initialize !== 'boolean') throw new Error('Invalid initialization flag.');
-          const result = action === 'projectAdd'
+          const result = action === 'projectPick' ? { selection: await projectStore.pick() } : action === 'projectAdd'
             ? { project: projectStore.register(rawParams.path, rawParams.initialize === true) }
             : { directory: projectStore.browse(rawParams) };
           send(200, { ok: true, ...result });
