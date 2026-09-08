@@ -16,7 +16,8 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { startWorkspace, startInspector } from '../inspector/server/server.mjs';
+import { startInspector } from '../inspector/server/server.mjs';
+import { startWorkspace } from './support/workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 
 const root = process.cwd();
@@ -447,7 +448,7 @@ test('setup discovery and transactional Agent configuration work through the gua
       }
       assert.doesNotMatch(page, /agents-panel|discover-agents|agent-configure|chat-feed|composer|graph-map|execution-panel/);
       const js = await (await fetch(`${base}/app.js`)).text();
-      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'workspace-settings', 'setupConfigure', 'sessionResize', 'onData', 'onBinary']) {
+      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'workspace-settings', 'workspaceSettingsSave', 'sessionResize', 'onData', 'onBinary']) {
         assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
       }
       const css = await (await fetch(`${base}/styles.css`)).text();

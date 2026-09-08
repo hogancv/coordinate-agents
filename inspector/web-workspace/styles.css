@@ -72,6 +72,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .primary-button:hover { background: #bfd0ff; }
 .new-task-button { width: 100%; }
 .sidebar-actions { display: grid; min-width: 0; gap: .55rem; }
+.sidebar-secondary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.sidebar-secondary-actions > button { min-width: 0; padding: .6rem .35rem; font-size: .7rem; white-space: nowrap; }
 .terminal-settings-button { width: 100%; }
 .secondary-button, .danger-button { padding: .55rem .75rem; border-radius: .5rem; color: var(--text); background: rgba(157, 181, 255, .1); }
 .secondary-button { border-color: rgba(157, 181, 255, .3); }
@@ -82,13 +84,15 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .icon-button:hover { border-color: var(--line-strong); color: var(--text); }
 
 .task-list-heading { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.sidebar > :not(.workspace-task-list) { flex-shrink: 0; }
+.sidebar > :not(.workspace-task-list):not(.project-list) { flex-shrink: 0; }
 .workspace-task-list { display: grid; flex: 1; min-height: 0; align-content: start; grid-auto-rows: max-content; overscroll-behavior: contain; min-width: 0; max-width: 100%; gap: .55rem; overflow-x: hidden; overflow-y: auto; padding-right: .15rem; }
 .workspace-task-item { display: grid; min-width: 0; max-width: 100%; gap: .5rem; width: 100%; padding: .75rem; border: 1px solid var(--line); border-radius: .65rem; color: var(--text); background: rgba(255, 255, 255, .025); text-align: left; cursor: pointer; overflow: hidden; }
 .workspace-task-item:hover, .workspace-task-item.selected { border-color: var(--line-strong); background: rgba(110, 140, 255, .12); }
+.workspace-task-item { grid-template-columns: minmax(0, 1fr); }
+.workspace-task-item > span { min-width: 0; max-width: 100%; }
 .task-item-top { justify-content: space-between; gap: .5rem; }
 .task-item-top strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .78rem; }
-.task-item-meta { justify-content: space-between; gap: .5rem; color: var(--muted); font-size: .65rem; }
+.task-item-meta { justify-content: space-between; gap: .5rem; color: var(--muted); font-size: .65rem; flex-wrap: wrap; }
 .task-item-agents { gap: .35rem; }
 .mini-agent { padding: .18rem .35rem; border-radius: .3rem; color: var(--muted); background: rgba(255, 255, 255, .06); font-size: .58rem; }
 .mini-agent.running, .mini-agent.idle, .mini-agent.busy { color: var(--green); background: rgba(95, 224, 160, .1); }
@@ -187,3 +191,41 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
   .settings-modal-actions { flex-direction: column-reverse; }
   .settings-modal-actions button { width: 100%; }
 }
+/* Project navigation shares one bounded vertical scroll area. */
+.project-list { flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.project-group, .project-group > div { min-width: 0; max-width: 100%; }
+.project-group + .project-group { margin-top: .7rem; }
+.project-heading { width: 100%; display: flex; gap: .4rem; align-items: center; padding: .65rem .45rem; border: 1px solid transparent; border-radius: .5rem; background: transparent; color: var(--muted); text-align: left; cursor: pointer; font-size: .76rem; }
+.project-heading strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.project-heading:hover { background: rgba(157, 181, 255, .06); color: var(--text); }
+.project-heading.selected { background: rgba(157, 181, 255, .07); color: var(--text); }
+.project-chevron, .project-folder-icon { width: 1rem; height: 1rem; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.project-chevron { width: .7rem; height: .7rem; transition: transform .15s ease; }
+.project-heading[aria-expanded="true"] .project-chevron { transform: rotate(90deg); }
+.project-heading:focus-visible, .project-task-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.project-task-link { display: block; width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 10px 20px; background: transparent; color: inherit; border: 0; }
+.project-list .workspace-task-list { width: 100%; grid-template-columns: minmax(0, 1fr); overflow: visible; padding: .4rem 0 0; }
+.project-list .workspace-task-item { padding: .7rem .65rem; border-color: transparent; border-radius: .5rem; background: transparent; }
+.project-list .workspace-task-item:hover { background: rgba(157, 181, 255, .05); }
+.project-list .workspace-task-item.selected { border-color: rgba(157, 181, 255, .22); background: rgba(110, 140, 255, .09); }
+.project-dialog { color: #e7efff; background: #111827; border: 1px solid #465576; border-radius: 16px; padding: 22px; width: min(620px, 90vw); max-height: 85vh; overflow-y: auto; }
+.project-dialog::backdrop { background: #0009; }
+.project-dialog header, .project-path-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.project-dialog header { justify-content: space-between; }
+.project-dialog input:not([type=checkbox]) { flex: 1; min-width: 0; padding: 10px; }
+.project-dialog button { cursor: pointer; padding: 8px 12px; }
+#project-folders { height: 260px; overflow-y: auto; }
+#project-folders button { display: block; width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent; color: inherit; border: 0; }
+#project-folders button:hover { background: #24304d; }
+#project-error { color: #ff8297; }
+
+/* Zen changes presentation only: mounted terminals and their input stay alive. */
+.zen-exit { position: fixed; top: .45rem; right: .6rem; z-index: 40; padding: .3rem .5rem; font-size: .65rem; opacity: .45; background: var(--panel); }
+.zen-exit:hover, .zen-exit:focus-visible { opacity: 1; }
+.zen-mode .workspace-app { grid-template-columns: minmax(0, 1fr); }
+.zen-mode .sidebar, .zen-mode .topbar, .zen-mode .task-toolbar,
+.zen-mode .terminal-card-header, .zen-mode .terminal-card-footer,
+.zen-mode #task-error { display: none; }
+.zen-mode .workspace-panel { padding: 0; }
+.zen-mode .terminal-grid { gap: 1px; background: var(--line); }
+.zen-mode .terminal-card { border: 0; border-radius: 0; box-shadow: none; }

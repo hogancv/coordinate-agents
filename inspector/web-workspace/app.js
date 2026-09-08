@@ -19,6 +19,8 @@ const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: '
 
 const I18N = {
   en: {
+    'zen.enter': 'Zen mode',
+    'zen.exit': 'Exit Zen mode',
     'repo.label': 'BOUND REPOSITORY',
     'repo.loading': 'Loading repository…',
     'repo.details': 'Show repository details',
@@ -83,6 +85,8 @@ const I18N = {
     'action.retry': 'Retry',
   },
   zh: {
+    'zen.enter': '禅模式',
+    'zen.exit': '退出禅模式',
     'repo.label': '当前仓库',
     'repo.loading': '正在读取仓库…',
     'repo.details': '显示仓库详情',
@@ -149,6 +153,12 @@ const I18N = {
 };
 
 const state = {
+  projects: [],
+  projectId: null,
+  projectEpoch: 0,
+  projectTasks: new Map(),
+  projectSelections: new Map(),
+  expandedProjects: new Set(),
   locale: loadLocale(),
   repository: null,
   tasks: [],
@@ -226,11 +236,16 @@ function sessionIsActive(session) {
 }
 
 async function fetchJson(path, options = {}) {
-  const response = await fetch(path, { cache: 'no-store', ...options });
+  const projectId = options.projectId === undefined ? state.projectId : options.projectId;
+  const { projectId: ignoredProjectId, ...requestOptions } = options;
+  const scoped = projectId && path.startsWith('/api/') && path !== '/api/projects';
+  const endpoint = scoped ? `/api/projects/${encodeURIComponent(projectId)}${path}` : path;
+  const response = await fetch(endpoint, { cache: 'no-store', ...requestOptions,
+    headers: { ...requestOptions.headers, [CAPABILITY_HEADER]: capability } });
   let payload = null;
   try { payload = await response.json(); } catch { /* The error below is enough. */ }
   if (!response.ok) {
-    const error = new Error(payload?.error || `Request failed with status ${response.status}`);
+    const error = new Error(payload?.error?.message || payload?.error || `Request failed with status ${response.status}`);
     error.payload = payload;
     error.status = response.status;
     throw error;
@@ -238,8 +253,9 @@ async function fetchJson(path, options = {}) {
   return payload;
 }
 
-async function postAction(action, params = {}) {
+async function postAction(action, params = {}, projectId = state.projectId) {
   const payload = await fetchJson(ACTION_ENDPOINT, {
+    projectId,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -329,6 +345,8 @@ function closeSettings({ force = false } = {}) {
 }
 
 async function openSettings() {
+  const projectId = state.projectId;
+  const epoch = state.projectEpoch;
   if (state.actionBusy || state.settingsBusy) return;
   const dialog = document.querySelector('#terminal-settings-dialog');
   if (!dialog) return;
@@ -339,6 +357,7 @@ async function openSettings() {
   dialog.setAttribute('aria-busy', 'true');
   try {
     const payload = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     state.settings = {
       models: payload?.codex?.models || [],
       effort: readCodexEffort(payload?.codex?.args || []),
@@ -350,10 +369,12 @@ async function openSettings() {
     };
     if (state.settingsOpen) renderSettingsForm();
   } catch (error) {
-    settingsError(error.message || t('settings.loadError'));
+    if (projectId === state.projectId && epoch === state.projectEpoch) settingsError(error.message || t('settings.loadError'));
   } finally {
-    dialog.removeAttribute('aria-busy');
-    if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+    if (projectId === state.projectId && epoch === state.projectEpoch) {
+      dialog.removeAttribute('aria-busy');
+      if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+    }
   }
 }
 
@@ -418,28 +439,12 @@ async function saveSettings(event) {
     settingsError(state.locale === 'zh' ? '请输入有效的模型 ID。' : 'Enter a valid model ID.');
     return;
   }
-  if (state.settings.argsSource === 'project' && (model !== state.settings.model || effort !== state.settings.effort)) {
-    settingsError(state.locale === 'zh' ? '项目配置已覆盖 Codex 启动参数，请先在 .agent-bus/config.json 中移除或修改该覆盖。' : 'Codex arguments are overridden by project configuration (.agent-bus/config.json).');
-    return;
-  }
   const args = replaceCodexEffort(replaceCodexModel(state.settings.args || [], model), effort);
   setBusy(true);
   setSettingsBusy(true);
   settingsError();
   try {
-    await postAction('setupConfigure', {
-      agent: 'codex',
-      command: commands.codex,
-      args,
-      adapter: 'codex-cli',
-      role: 'planner',
-    });
-    await postAction('setupConfigure', {
-      agent: 'antigravity',
-      command: commands.antigravity,
-      adapter: 'antigravity-cli',
-      role: 'implementer',
-    });
+    await postAction('workspaceSettingsSave', { ...commands, args });
     state.settings = { ...state.settings, ...commands, model, effort, args };
     closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
@@ -466,6 +471,19 @@ function renderLocale() {
   renderSelectedTask();
 }
 
+function setZenMode(enabled) {
+  const active = Boolean(enabled && state.selectedTask);
+  document.body.classList.toggle('zen-mode', active);
+  document.querySelector('#zen-button')?.setAttribute('aria-pressed', String(active));
+  const exit = document.querySelector('#zen-exit');
+  if (exit) exit.hidden = !active;
+  // Keep the same PTYs and xterm instances; only recompute their visible size.
+  window.requestAnimationFrame(() => {
+    for (const controller of state.terminalViews.values()) resizeTerminal(controller);
+    (active ? exit : document.querySelector('#zen-button'))?.focus();
+  });
+}
+
 function renderRepository() {
   const repository = state.repository;
   const name = document.querySelector('#repo-name');
@@ -489,7 +507,150 @@ function renderRepository() {
   ].join('');
 }
 
+function projectText(zh, en) { return state.locale === 'zh' ? zh : en; }
+
+function rememberSelection() {
+  if (!state.projectId) return;
+  state.projectSelections.set(state.projectId, state.selectedId);
+  try {
+    localStorage.setItem(`workspace-selection-${state.projectId}`, state.selectedId || '');
+    window.history.replaceState(null, '', `#${state.projectId}${state.selectedId ? `/${encodeURIComponent(state.selectedId)}` : ''}`);
+  } catch { /* Optional browser persistence. */ }
+}
+
+function renderProjects() {
+  const host = document.querySelector('#project-list');
+  const list = document.querySelector('#workspace-task-list');
+  if (!host || !list) return;
+  const renderKey = JSON.stringify([state.locale, state.projectId, state.projects, [...state.expandedProjects],
+    state.projects.filter(project => project.id !== state.projectId).map(project => state.projectTasks.get(project.id) || [])]);
+  if (host.dataset.renderKey === renderKey) return;
+  host.dataset.renderKey = renderKey;
+  list.remove();
+  host.innerHTML = state.projects.map(project => `<section class="project-group">
+    <button type="button" class="project-heading${project.id === state.projectId ? ' selected' : ''}" data-project="${escapeHtml(project.id)}" aria-expanded="${state.expandedProjects.has(project.id)}" title="${escapeHtml(project.root)}">
+      <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+      <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
+      <strong>${escapeHtml(project.name)}</strong>
+      ${project.available ? '' : `<small>${projectText('不可用', 'Unavailable')}</small>`}
+    </button><div data-project-tasks="${escapeHtml(project.id)}" ${state.expandedProjects.has(project.id) ? '' : 'hidden'}></div></section>`).join('');
+  for (const project of state.projects) {
+    const container = host.querySelector(`[data-project-tasks="${project.id}"]`);
+    if (project.id === state.projectId) container.append(list);
+    else for (const task of state.projectTasks.get(project.id) || []) {
+      const button = document.createElement('button');
+      button.className = 'project-task-link';
+      button.textContent = task.title;
+      button.title = task.title;
+      button.onclick = () => void selectProject(project.id, task.id);
+      container.append(button);
+    }
+  }
+  if (!list.isConnected) host.append(list);
+  host.querySelectorAll('[data-project]').forEach(button => {
+    button.onclick = async () => {
+      const id = button.dataset.project;
+      if (id === state.projectId) {
+        if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
+        renderProjects();
+      } else await selectProject(id);
+    };
+  });
+  const add = document.querySelector('#new-project-button');
+  if (add) add.textContent = projectText('＋ 新增项目', '＋ New project');
+}
+
+async function selectProject(id, taskId) {
+  if (state.actionBusy || state.settingsBusy) return;
+  const project = state.projects.find(item => item.id === id);
+  if (!project) return;
+  if (state.projectId) state.projectSelections.set(state.projectId, state.selectedId);
+  closeSettings();
+  disposeTerminalViews();
+  state.projectEpoch++;
+  state.projectId = id;
+  state.expandedProjects.add(id);
+  let stored = null;
+  try { stored = localStorage.getItem(`workspace-selection-${id}`); } catch { /* Optional. */ }
+  state.selectedId = taskId === undefined ? state.projectSelections.get(id) || stored || null : taskId;
+  state.selectedTask = null;
+  state.tasks = [];
+  state.repository = { name: project.name, root: project.root };
+  renderRepository(); renderTaskList(); renderSelectedTask(); rememberSelection();
+  if (!project.available) { showToast(projectText('项目目录不可用', 'Project directory unavailable'), 'error'); return; }
+  await refresh({ showError: true });
+}
+
+let folderPage = null;
+let folderRequest = 0;
+async function browseProjectFolder(path, offset = 0) {
+  const request = ++folderRequest;
+  const errorBox = document.querySelector('#project-error');
+  const confirm = document.querySelector('#project-add');
+  confirm.disabled = true;
+  errorBox.textContent = '';
+  try {
+    const params = { offset, hidden: document.querySelector('#project-hidden').checked };
+    if (path) params.path = path;
+    const payload = await postAction('projectBrowse', params, null);
+    if (request !== folderRequest) return;
+    folderPage = payload.directory;
+    document.querySelector('#project-path').value = folderPage.path;
+    const entries = document.querySelector('#project-folders');
+    entries.innerHTML = '';
+    for (const folder of folderPage.entries) {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = `▣ ${folder.name}`;
+      button.onclick = () => void browseProjectFolder(folder.path);
+      entries.append(button);
+    }
+    confirm.textContent = folderPage.needsInitialization
+      ? projectText('添加并初始化', 'Add and initialize') : projectText('添加项目', 'Add project');
+    document.querySelector('#project-init-note').textContent = folderPage.needsInitialization
+      ? projectText('此文件夹将初始化 Git 和 Agent Bus，不创建提交。', 'This folder will initialize Git and Agent Bus without creating a commit.')
+      : projectText('将使用 Git 仓库根目录并准备 Agent Bus。', 'Use the Git repository root and prepare Agent Bus.');
+    document.querySelector('#project-next').disabled = folderPage.nextOffset === null;
+    document.querySelector('#project-prev').disabled = offset === 0;
+    folderPage.offset = offset;
+    confirm.disabled = false;
+  } catch (error) { if (request === folderRequest) { folderPage = null; errorBox.textContent = error.message; } }
+}
+function openProjectDialog() {
+  const dialog = document.querySelector('#project-dialog');
+  dialog.querySelector('h2').textContent = projectText('新增项目', 'New project');
+  document.querySelector('#project-browse').textContent = projectText('打开路径', 'Open path');
+  document.querySelector('#project-hidden-label').textContent = projectText('显示隐藏目录', 'Show hidden folders');
+  document.querySelector('#project-up').textContent = projectText('上级目录', 'Parent folder');
+  document.querySelector('#project-prev').textContent = projectText('上一页', 'Previous');
+  document.querySelector('#project-next').textContent = projectText('下一页', 'Next');
+  dialog.showModal();
+  void browseProjectFolder();
+}
+function bindProjectDialog() {
+  document.querySelector('#project-cancel').onclick = () => { folderRequest++; document.querySelector('#project-dialog').close(); };
+  document.querySelector('#project-browse').onclick = () => void browseProjectFolder(document.querySelector('#project-path').value);
+  document.querySelector('#project-path').oninput = () => { folderRequest++; folderPage = null; document.querySelector('#project-add').disabled = true; };
+  document.querySelector('#project-path').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); void browseProjectFolder(event.target.value); } };
+  document.querySelector('#project-up').onclick = () => folderPage && void browseProjectFolder(folderPage.parent);
+  document.querySelector('#project-hidden').onchange = () => void browseProjectFolder(document.querySelector('#project-path').value);
+  document.querySelector('#project-next').onclick = () => folderPage && void browseProjectFolder(folderPage.path, folderPage.nextOffset);
+  document.querySelector('#project-prev').onclick = () => folderPage && void browseProjectFolder(folderPage.path, Math.max(0, folderPage.offset - 100));
+  document.querySelector('#project-add').onclick = async () => {
+    if (!folderPage) return;
+    const button = document.querySelector('#project-add'); button.disabled = true;
+    try {
+      const result = await postAction('projectAdd', { path: folderPage.path, initialize: folderPage.needsInitialization }, null);
+      const payload = await fetchJson('/api/projects', { projectId: null });
+      state.projects = payload.projects;
+      document.querySelector('#project-dialog').close();
+      await selectProject(result.project.id, null);
+    } catch (error) { document.querySelector('#project-error').textContent = error.message; }
+    finally { button.disabled = false; }
+  };
+}
+
 function renderTaskList() {
+  renderProjects();
   const list = document.querySelector('#workspace-task-list');
   const count = document.querySelector('#task-count');
   if (!list) return;
@@ -502,7 +663,7 @@ function renderTaskList() {
     const selected = task.id === state.selectedId ? ' selected' : '';
     const codexState = statusKey(sessionState(task.sessions?.codex));
     const agyState = statusKey(sessionState(task.sessions?.antigravity));
-    return `<button class="workspace-task-item${selected}" type="button" data-workspace-task-id="${escapeHtml(task.id)}">
+    return `<button class="workspace-task-item${selected}" type="button" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}">
       <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-label="${escapeHtml(statusLabel(task.status))}"></span></span>
       <span class="task-item-meta"><span>${escapeHtml(statusLabel(task.status))}</span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
       <span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span>
@@ -514,6 +675,9 @@ function renderTaskList() {
 }
 
 function renderSelectedTask() {
+  const zenButton = document.querySelector('#zen-button');
+  if (zenButton) zenButton.disabled = !state.selectedTask;
+  if (!state.selectedTask && document.body.classList.contains('zen-mode')) setZenMode(false);
   const empty = document.querySelector('#empty-state');
   const panel = document.querySelector('#workspace-panel');
   if (!state.selectedTask) {
@@ -581,6 +745,7 @@ function renderTerminalViews(panes) {
     const card = grid.querySelector(`[data-terminal-slot="${CSS.escape(pane.slotId)}"]`);
     if (!card) continue;
     const controller = {
+      projectId: state.projectId,
       pane,
       card,
       terminal: null,
@@ -700,7 +865,7 @@ function enqueueRawInput(controller, input) {
         sessionId: controller.pane.sessionId,
         input: chunk,
         submit: false,
-      });
+      }, controller.projectId);
       scheduleTerminalRead(controller, 0);
     }
   }).catch(error => {
@@ -740,7 +905,7 @@ function resizeTerminal(controller) {
   controller.lastSize = key;
   controller.resizePromise = controller.resizePromise.then(async () => {
     try {
-      await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size });
+      await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size }, controller.projectId);
     } catch (error) {
       showToast(error.payload?.error?.message || t('terminal.resizeError'), 'error');
     }
@@ -771,7 +936,7 @@ async function readTerminal(controller) {
       maxBytes: `${TERMINAL_MAX_BYTES}`,
     });
     if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
-    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`);
+    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`, { projectId: controller.projectId });
     if (controller.disposed) return;
     controller.session = payload.session || controller.session;
     const output = payload.output?.output || '';
@@ -802,15 +967,23 @@ async function readTerminal(controller) {
 }
 
 async function loadRepository() {
-  state.repository = await fetchJson('/api/repository');
+  const projectId = state.projectId;
+  const epoch = state.projectEpoch;
+  const repository = await fetchJson('/api/repository');
+  if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+  state.repository = repository;
   renderRepository();
 }
 
 async function loadTaskList({ selectFirst = true } = {}) {
+  const projectId = state.projectId;
+  const epoch = state.projectEpoch;
   const tasks = await fetchJson('/api/workspace-tasks');
+  if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
   state.tasks = Array.isArray(tasks) ? tasks : [];
+  state.projectTasks.set(projectId, state.tasks);
   if (state.selectedId && !state.tasks.some(task => task.id === state.selectedId)) state.selectedId = null;
-  if (!state.selectedId && state.tasks.length > 0) state.selectedId = state.tasks[0].id;
+  if (selectFirst && !state.selectedId && state.tasks.length > 0) state.selectedId = state.tasks[0].id;
   renderTaskList();
 }
 
@@ -821,29 +994,46 @@ async function loadSelectedTask() {
     renderSelectedTask();
     return;
   }
-  state.selectedTask = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(state.selectedId)}`);
+  const projectId = state.projectId;
+  const selectedId = state.selectedId;
+  const epoch = state.projectEpoch;
+  const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(selectedId)}`);
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId) return;
+  state.selectedTask = task;
+  rememberSelection();
   renderSelectedTask();
 }
 
 async function refresh({ showError = false } = {}) {
+  const projectId = state.projectId;
+  const epoch = state.projectEpoch;
   try {
+    if (showError) {
+      const payload = await fetchJson('/api/projects', { projectId: null });
+      if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+      state.projects = payload.projects;
+      renderProjects();
+    }
+    if (state.projects.find(project => project.id === projectId)?.available === false) return;
     await Promise.all([loadRepository(), loadTaskList({ selectFirst: !state.selectedId })]);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     await loadSelectedTask();
   } catch (error) {
-    if (showError) showToast(error.message || t('action.refreshError'), 'error');
+    if (showError && projectId === state.projectId && epoch === state.projectEpoch) showToast(error.message || t('action.refreshError'), 'error');
   }
 }
 
 async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
-  try { window.history.replaceState(null, '', `#${encodeURIComponent(id)}`); } catch { /* Selection still works without a hash. */ }
+  rememberSelection();
   renderTaskList();
   await loadSelectedTask();
 }
 
 async function createTask() {
   if (state.actionBusy) return;
+  if (!state.projectId || state.projects.find(project => project.id === state.projectId)?.available === false) return;
   setBusy(true);
   try {
     const payload = await postAction('workspaceTaskCreate', { language: localeCode() });
@@ -928,6 +1118,8 @@ function setLocale(locale) {
 }
 
 function bindEvents() {
+  document.querySelector('#zen-button')?.addEventListener('click', () => setZenMode(true));
+  document.querySelector('#zen-exit')?.addEventListener('click', () => setZenMode(false));
   document.querySelector('#new-task-button')?.addEventListener('click', createTask);
   document.querySelector('#empty-new-task')?.addEventListener('click', createTask);
   document.querySelector('#codex-model')?.addEventListener('change', () => renderEffortChoices());
@@ -954,8 +1146,9 @@ function bindEvents() {
   document.querySelector('#sidebar-open')?.addEventListener('click', () => document.querySelector('#sidebar')?.classList.add('open'));
   document.querySelector('#sidebar-close')?.addEventListener('click', () => document.querySelector('#sidebar')?.classList.remove('open'));
   window.addEventListener('hashchange', () => {
-    const id = decodeURIComponent(window.location.hash.slice(1));
-    if (id && id !== state.selectedId && state.tasks.some(task => task.id === id)) void selectTask(id);
+    const [projectId, taskId] = window.location.hash.slice(1).split('/').map(decodeURIComponent);
+    if (projectId.startsWith('project-')) void selectProject(projectId, taskId || null);
+    else if (projectId) void selectTask(projectId);
   });
 }
 
@@ -968,6 +1161,19 @@ async function boot() {
   bindEvents();
   initialSelection();
   renderLocale();
+  try {
+    const payload = await fetchJson('/api/projects', { projectId: null });
+    state.projects = payload.projects;
+    const [projectId, taskId] = window.location.hash.slice(1).split('/').map(decodeURIComponent);
+    state.projectId = state.projects.some(project => project.id === projectId) ? projectId : payload.defaultProjectId;
+    if (projectId.startsWith('project-')) state.selectedId = taskId || null;
+    if (!state.selectedId) {
+      try { state.selectedId = localStorage.getItem(`workspace-selection-${state.projectId}`) || null; } catch { /* Optional. */ }
+    }
+    state.expandedProjects.add(state.projectId);
+    document.querySelector('#new-project-button')?.addEventListener('click', openProjectDialog);
+    bindProjectDialog();
+  } catch (error) { showToast(error.message, 'error'); }
   await refresh({ showError: true });
   state.refreshTimer = window.setInterval(() => void refresh(), REFRESH_MS);
 }

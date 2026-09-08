@@ -24,7 +24,7 @@ import {
   workspaceTerminalReady,
 } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
-import { startWorkspace } from '../inspector/server/server.mjs';
+import { startWorkspace } from './support/workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 import { workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
 import { workspaceMessage } from '../skills/coordinate-agents/scripts/workspace-message.mjs';

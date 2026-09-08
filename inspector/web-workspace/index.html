@@ -34,14 +34,17 @@
 
         <div class="sidebar-actions">
           <button id="new-task-button" class="primary-button new-task-button" type="button" data-i18n="task.new">New task</button>
-          <button id="terminal-settings-button" class="secondary-button terminal-settings-button" type="button" data-i18n="settings.open">Terminal settings</button>
+          <div class="sidebar-secondary-actions">
+            <button id="new-project-button" class="secondary-button" type="button">＋ New project</button>
+            <button id="terminal-settings-button" class="secondary-button terminal-settings-button" type="button" data-i18n="settings.open">Terminal settings</button>
+          </div>
         </div>
 
         <div class="task-list-heading">
           <span data-i18n="task.list">Workspace tasks</span>
           <span id="task-count" class="count-badge">0</span>
         </div>
-        <div id="workspace-task-list" class="workspace-task-list" aria-live="polite"></div>
+        <div id="project-list" class="project-list"><div id="workspace-task-list" class="workspace-task-list" aria-live="polite"></div></div>
 
         <div class="sidebar-footer">
           <span class="live-dot" aria-hidden="true"></span>
@@ -49,6 +52,15 @@
         </div>
       </aside>
 
+      <dialog id="project-dialog" class="project-dialog">
+        <header><h2>New project</h2><button id="project-cancel" type="button" aria-label="Close / 关闭">×</button></header>
+        <div class="project-path-row"><input id="project-path" aria-label="Folder path / 文件夹路径"><button id="project-browse" type="button">Open path</button></div>
+        <div class="project-path-row"><button id="project-up" type="button">Parent folder</button><label><input id="project-hidden" type="checkbox"><span id="project-hidden-label">Show hidden folders</span></label></div>
+        <div id="project-folders"></div>
+        <div class="project-path-row"><button id="project-prev" type="button">Previous</button><button id="project-next" type="button">Next</button></div>
+        <p id="project-init-note"></p><p id="project-error" role="alert"></p>
+        <button id="project-add" type="button" class="primary-button" disabled>Add project</button>
+      </dialog>
       <main class="main-column">
         <header class="topbar">
           <button id="sidebar-open" class="icon-button mobile-only" type="button" aria-label="Open sidebar">☰</button>
@@ -57,6 +69,7 @@
             <h1 id="workspace-title" data-i18n="workspace.title">Workspace</h1>
           </div>
           <div class="topbar-actions">
+            <button id="zen-button" class="secondary-button" type="button" aria-pressed="false" data-i18n="zen.enter" disabled>Zen mode</button>
             <div class="language-toggle" role="group" aria-label="Language / 语言">
               <button id="lang-zh" class="language-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
               <button id="lang-en" class="language-button active" type="button" lang="en-US" aria-pressed="true">English</button>
@@ -64,6 +77,8 @@
             <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
           </div>
         </header>
+
+        <button id="zen-exit" class="secondary-button zen-exit" type="button" data-i18n="zen.exit" hidden>Exit Zen mode</button>
 
         <section id="empty-state" class="empty-state" aria-live="polite">
           <div class="empty-icon" aria-hidden="true">⌘</div>

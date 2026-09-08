@@ -140,15 +140,18 @@ Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼
 
 ## Web Workspace 与本地 Inspector
 
-**Web Workspace** 是主要的本地浏览器入口。在任何已初始化 Agent Bus 的 Git
-仓库中即可启动一个仅回环的双终端工作台 —— 无需 Codex Plugin 或全局安装
+**Web Workspace** 是主要的本地浏览器入口。在文件夹中即可启动一个仅回环的
+多项目双终端工作台 —— 无需 Codex Plugin 或全局安装
 （代理 CLI 仍使用各自配置的模型服务）：
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-Workspace 支持 `zh-CN` / `en-US` 双语，左侧只列出 Workspace 任务组。
+Workspace 支持 `zh-CN` / `en-US` 双语，左侧按“项目 → 任务”分组。
+启动目录自动登记为项目，Git 子目录归并到仓库根目录；普通启动目录自动初始化。
+“新增项目”支持浏览本地文件夹，普通目录需确认初始化 Git 和 Agent Bus，不创建提交。
+切换项目不会关闭后台终端；终端设置与“关闭所有终端”仅作用于当前项目。
 点击“新建任务”启动全新的 Codex + Antigravity 双终端并注入 Web-lite 提示词；
 需求直接输入 Codex 终端。“终端设置”支持 `agy-proxy` 等自定义启动命令，
 以及 Codex 模型和推理强度设置。保留刷新、关闭、重启和关闭所有终端操作。

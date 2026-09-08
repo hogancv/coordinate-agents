@@ -3,13 +3,13 @@
  *
  * The Web Workspace is read-only on GET paths; this module is the narrow,
  * additive action boundary for later Workspace controls. It binds one
- * canonical repository root to the server process, requires a server-issued
+ * canonical repository root to each gateway, requires a server-issued
  * per-launch capability on every non-GET request, validates loopback
  * Host/Origin and bounded JSON bodies, exposes only an explicit allow-list of
- * structured operations, and routes them exclusively to the shared
- * `runtime-services.mjs` operation map used by CLI and MCP.
+ * structured operations. Runtime actions share the CLI/MCP operation map;
+ * project registry operations and project settings use dedicated local stores.
  *
- * The gateway never shells out, parses CLI stdout, proxies MCP, accepts an
+ * The gateway never accepts arbitrary shell text, proxies MCP, accepts an
  * arbitrary operation name, or lets a request choose a different repository
  * root. Concurrency and replay safety are delegated to the existing Runtime
  * locks/deduplication rules (deterministic Task IDs, atomic Task records,
@@ -25,6 +25,8 @@ import {
   normalizeRuntimeError,
 } from '../../skills/coordinate-agents/scripts/runtime-contract.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
+import { withConfigTransaction } from '../../skills/coordinate-agents/scripts/config.mjs';
+import { join } from 'node:path';
 
 export const ACTION_ENDPOINT = '/api/action';
 export const CAPABILITY_HEADER = 'x-coordinate-agents-capability';
@@ -381,7 +383,12 @@ function validateParams(definition, params) {
   return null;
 }
 
-export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_MAX_BODY_BYTES } = {}) {
+export function workspaceRequestAuthorized(request, capability) {
+  return LOOPBACK_HOSTS.has(parseHost(request)) && originAllowed(request)
+    && capabilityMatches(request.headers[CAPABILITY_HEADER], capability);
+}
+
+export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_MAX_BODY_BYTES, projectStore = null } = {}) {
   const boundRoot = resolve(root || process.cwd());
   return {
     capability,
@@ -466,7 +473,41 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
       const correlationValue = typeof correlationId === 'string' && CORRELATION_PATTERN.test(correlationId)
         ? correlationId
         : correlation;
+      if (projectStore && ['projectAdd', 'projectBrowse'].includes(action)) {
+        try {
+          if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)) throw new Error('Invalid project parameters.');
+          const allowed = action === 'projectAdd' ? ['path', 'initialize'] : ['path', 'offset', 'hidden'];
+          if (Object.keys(rawParams).some(key => !allowed.includes(key))) throw new Error('Unknown project parameter.');
+          if (rawParams.initialize !== undefined && typeof rawParams.initialize !== 'boolean') throw new Error('Invalid initialization flag.');
+          const result = action === 'projectAdd'
+            ? { project: projectStore.register(rawParams.path, rawParams.initialize === true) }
+            : { directory: projectStore.browse(rawParams) };
+          send(200, { ok: true, ...result });
+        } catch (error) { send(400, gatewayError('PROJECT_OPERATION_FAILED', redactOutput(error.message, 2048))); }
+        return;
+      }
       const definition = ACTION_DEFINITIONS[action];
+      if (action === 'workspaceSettingsSave') {
+        try {
+          if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)
+            || Object.keys(rawParams).some(key => !['codex', 'antigravity', 'args'].includes(key))) throw new Error('Invalid settings.');
+          for (const key of ['codex', 'antigravity']) {
+            if (typeof rawParams[key] !== 'string' || !rawParams[key].trim() || rawParams[key].length > 512 || /[\x00-\x1f\x7f]/.test(rawParams[key])) throw new Error('Invalid executable command.');
+          }
+          if (!Array.isArray(rawParams.args) || rawParams.args.length > 64 || rawParams.args.some(arg => typeof arg !== 'string' || arg.length > 512 || /[\x00-\x1f]/.test(arg))) throw new Error('Invalid executable arguments.');
+          withConfigTransaction(join(boundRoot, '.agent-bus'), config => {
+            for (const id of ['codex', 'antigravity']) {
+              let agent = config.agents.find(item => item.id === id);
+              if (!agent) { agent = { id, adapter: `${id}-cli` }; config.agents.push(agent); }
+              agent.command = rawParams[id].trim();
+              if (id === 'codex') agent.args = rawParams.args;
+            }
+            return config;
+          });
+          send(200, { ok: true });
+        } catch (error) { send(400, gatewayError('WORKSPACE_SETTINGS_INVALID', redactOutput(error.message, 2048))); }
+        return;
+      }
       if (!definition) {
         send(404, gatewayError('ACTION_NOT_ALLOWED', `Unknown Workspace action: ${action}`));
         return;

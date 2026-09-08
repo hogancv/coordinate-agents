@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { startWorkspace } from '../inspector/server/server.mjs';
+import { startWorkspace } from './support/workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 
 const root = process.cwd();
@@ -241,7 +241,7 @@ test('Web acceptance gate: complete local browser workflow over the guarded gate
 test('Web acceptance gate: incompatible roots and read-only guarantees stay closed (#53)', async () => {
   const plain = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-web-gate-plain-'));
   try {
-    assert.throws(() => startWorkspace({ root: plain, port: 0 }), /initialized Git repository/);
+    assert.throws(() => startWorkspace({ root: join(plain, 'missing'), port: 0 }), /ENOENT/);
     const repo = repository();
     try {
       const started = await startWorkspace({ root: repo, port: 0 });

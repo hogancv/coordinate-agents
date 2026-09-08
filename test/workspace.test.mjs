@@ -18,7 +18,8 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { createTask, setTaskStatus } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { createTaskGraph } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
-import { createInspectorServer, startWorkspace, startInspector } from '../inspector/server/server.mjs';
+import { createInspectorServer, startInspector } from '../inspector/server/server.mjs';
+import { startWorkspace } from './support/workspace-server.mjs';
 import {
   COMPOSER_TITLE_MAX,
   CHAT_MAX_OUTPUT,
@@ -166,7 +167,7 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.match(js, /\/api\/workspace-tasks/);
     assert.match(js, /workspaceTaskCreate/);
     assert.match(js, /workspace-settings/);
-    assert.match(js, /setupConfigure/);
+    assert.match(js, /workspaceSettingsSave/);
     assert.match(js, /sessionResize/);
     assert.doesNotMatch(js, /\/api\/tasks/);
     const css = await (await fetch(`${started.url}/styles.css`)).text();
@@ -188,6 +189,7 @@ test('coordinate-agents web CLI starts the localhost Workspace on a selected por
   const repositoryRoot = taskFixture(repository());
   const port = await freePort();
   const child = spawn(process.execPath, [cli, 'web', '--root', repositoryRoot, '--port', `${port}`], {
+    env: { ...process.env, COORDINATE_AGENTS_HOME: join(repositoryRoot, '.test-home') },
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -273,23 +275,24 @@ test('Web Workspace page loads, task selection, and event reads stay strictly re
   }
 });
 
-test('Web Workspace fails closed for non-Git, missing, and uncommitted-unsafe entry points', async () => {
+test('Web Workspace initializes plain folders and rejects missing entry points', async () => {
   const repositoryRoot = taskFixture(repository());
   const plainDirectory = mkdtempSync(join(tmpdir(), 'coordinate-agents-workspace-plain-'));
   try {
-    // Direct server entry requires an initialized Git repository.
-    assert.throws(() => startWorkspace({ root: plainDirectory, port: 0 }), /initialized Git repository/);
-    assert.throws(() => startWorkspace({ root: join(plainDirectory, 'missing'), port: 0 }), /initialized Git repository/);
+    const started = await startWorkspace({ root: plainDirectory, port: 0 });
+    await closeServer(started.server);
+    assert.ok(existsSync(join(plainDirectory, '.git')));
+    assert.throws(() => startWorkspace({ root: join(plainDirectory, 'missing'), port: 0 }), /ENOENT/);
 
     // CLI entry fails closed with the documented repository error.
-    for (const badRoot of [plainDirectory, join(plainDirectory, 'missing')]) {
+    for (const badRoot of [join(plainDirectory, 'missing')]) {
       const result = spawnSync(process.execPath, [cli, 'web', '--root', badRoot], {
         cwd: root,
         encoding: 'utf8',
         windowsHide: true,
       });
       assert.equal(result.status, 1, badRoot);
-      assert.match(result.stderr || result.stdout, /Not a Git repository/);
+      assert.match(result.stderr || result.stdout, /ENOENT/);
     }
   } finally {
     rmSync(repositoryRoot, { recursive: true, force: true });

@@ -46,6 +46,7 @@
     "test": "npm run test:core",
     "test:core": "node --test --test-concurrency=4 test/web-acceptance-gate.test.mjs test/action-gateway.test.mjs test/workspace.test.mjs test/workspace-message.test.mjs test/terminal-polling.test.mjs test/role-prompts.test.mjs test/runtime-contract.test.mjs test/inspector.test.mjs test/cli-modules.test.mjs test/documentation.test.mjs test/repository-layout.test.mjs test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/adapter-acceptance-gate.test.mjs test/user-config.test.mjs test/intent-map-v1.test.mjs test/task-graph-contract.test.mjs test/task-graph-scheduler.test.mjs test/task-graph-persistence.test.mjs test/task-graph-intent-scheduler.test.mjs test/runtime-events.test.mjs test/task-graph-acceptance-gate.test.mjs test/release-workflow.test.mjs",
     "test:full": "node --test --test-concurrency=1",
+    "test:projects": "node --test test/workspace-projects.test.mjs",
     "sync:llms": "node scripts/sync-llms.mjs",
     "check:llms": "node scripts/sync-llms.mjs --check",
     "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm run test:core",

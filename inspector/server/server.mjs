@@ -2,14 +2,15 @@
 
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInspectorData } from './inspector-data.mjs';
+import { createProjectStore } from './workspace-projects.mjs';
 import {
   createActionGateway,
   createWorkspaceCapability,
   CAPABILITY_PLACEHOLDER,
+  workspaceRequestAuthorized,
 } from './action-gateway.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 
@@ -160,14 +161,41 @@ function apiError(response, error) {
 
 export function createInspectorServer({
   root,
-  data = createInspectorData(root),
+  data: defaultData = createInspectorData(root),
   ui = 'inspector',
   capability = null,
-  gateway = null,
+  gateway: defaultGateway = null,
+  projects = null,
 } = {}) {
   const assetsRoot = webAssetsFor(ui);
   const staticFiles = staticFilesFor(ui);
   return createServer(async (request, response) => {
+    let data = defaultData;
+    let gateway = defaultGateway;
+    if (projects) {
+      const projectUrl = new URL(request.url || '/', 'http://localhost');
+      if (projectUrl.pathname === '/api/projects' || projectUrl.pathname.startsWith('/api/projects/')) {
+        if (!workspaceRequestAuthorized(request, capability)) {
+          json(response, 403, { error: 'Project access requires an authorized local request.' }); return;
+        }
+        try {
+          if (projectUrl.pathname === '/api/projects' && request.method === 'GET') {
+            json(response, 200, { projects: projects.store.list(), defaultProjectId: projects.defaultId }); return;
+          }
+          const match = /^\/api\/projects\/([^/]+)(\/api\/.*)$/.exec(projectUrl.pathname);
+          if (!match) { json(response, 404, { error: 'Project endpoint not found.' }); return; }
+          const project = projects.store.get(decodeURIComponent(match[1]));
+          let context = projects.contexts.get(project.id);
+          if (!context) {
+            context = { data: createInspectorData(project.root), gateway: createActionGateway({ root: project.root, capability }) };
+            projects.contexts.set(project.id, context);
+          }
+          data = context.data;
+          gateway = context.gateway;
+          request.url = match[2] + projectUrl.search;
+        } catch (error) { json(response, 400, { error: redactOutput(error.message, 2048) }); return; }
+      }
+    }
     if (request.method !== 'GET') {
       // The Workspace action gateway is the only non-GET surface; the
       // compatibility Inspector path remains strictly GET-only.
@@ -282,13 +310,14 @@ export function startInspector({
   ui = 'inspector',
   capability = null,
   gateway = null,
+  projects = null,
 } = {}) {
   if (host !== '127.0.0.1') throw new Error('Inspector must listen on localhost only.');
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
     throw new Error(`Inspector port must be an integer between 0 and 65535: ${port}`);
   }
   const data = createInspectorData(root);
-  const server = createInspectorServer({ root: data.root, data, ui, capability, gateway });
+  const server = createInspectorServer({ root: data.root, data, ui, capability, gateway, projects });
   return new Promise((resolvePromise, reject) => {
     let ipv6Loopback = null;
     const onError = error => {
@@ -306,7 +335,7 @@ export function startInspector({
       // optional IPv6 loopback alias on the same port so the localhost URL is
       // reachable without exposing the Inspector beyond loopback interfaces.
       if (host === '127.0.0.1') {
-        const candidate = createInspectorServer({ root: data.root, data, ui, capability, gateway });
+        const candidate = createInspectorServer({ root: data.root, data, ui, capability, gateway, projects });
         try {
           await new Promise((resolveAlias, rejectAlias) => {
             const onAliasError = error => {
@@ -377,27 +406,22 @@ export function startInspector({
 // The Web Workspace is the primary local product entry (#45). It reuses the
 // same read-only server, data adapter, loopback guards, and bounded content as
 // the Inspector compatibility path and only selects the Workspace web assets.
-// Unlike the compatibility Inspector, the Workspace binds exactly one validated
-// Git repository root: unsafe, symlinked, or non-Git roots fail closed before a
-// listener is created. It also mounts the guarded browser-to-Runtime action
-// gateway (#46) with a server-issued per-launch capability.
+// Workspace registers the startup project and routes explicit project IDs to
+// independent data adapters and gateways. Legacy APIs stay bound to startup.
+// Plain startup folders are initialized without creating a Git commit.
 export function startWorkspace(options = {}) {
+  if (options.host !== undefined && options.host !== '127.0.0.1') throw new Error('Inspector must listen on localhost only.');
+  if (options.port !== undefined && (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535)) throw new Error('Inspector port must be an integer between 0 and 65535.');
   const requested = resolve(options.root || process.cwd());
-  const result = spawnSync('git', ['-C', requested, 'rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 5_000,
-    maxBuffer: 512 * 1024,
-  });
-  if (result.error || result.status !== 0) {
-    throw new Error(`Workspace must start inside an initialized Git repository: ${requested}`);
-  }
-  const canonicalRoot = resolve(result.stdout.trim());
+  const store = createProjectStore({ home: options.projectHome || process.env.COORDINATE_AGENTS_HOME });
+  const project = store.register(requested, true);
+  const canonicalRoot = project.root;
   const capability = options.capability || createWorkspaceCapability();
   const gateway = options.gateway || createActionGateway({
     root: canonicalRoot,
     capability,
     maxBodyBytes: options.maxBodyBytes,
+    projectStore: store,
   });
   return startInspector({
     ...options,
@@ -405,6 +429,7 @@ export function startWorkspace(options = {}) {
     ui: 'workspace',
     capability,
     gateway,
+    projects: { store, defaultId: project.id, contexts: new Map() },
   });
 }
 

@@ -160,15 +160,19 @@ project command > user command > adapter default precedence.
 
 ## Web Workspace and Local Inspector
 
-The **Web Workspace** is the primary local browser entry. From any initialized
-Git repository with an Agent Bus it starts a loopback-only dual-terminal
+The **Web Workspace** is the primary local browser entry. From a folder
+it starts a loopback-only, multi-project dual-terminal
 workbench — no Codex Plugin or global installation required (agent CLIs still use their configured providers):
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --port 3000
 ```
 
-The bilingual (`zh-CN` / `en-US`) sidebar lists only Workspace task groups.
+The bilingual (`zh-CN` / `en-US`) sidebar groups Workspace tasks by project.
+The startup folder is registered automatically (Git subfolders use their repository root).
+**New project** browses local folders; ordinary folders require explicit Git and
+Agent Bus initialization, without a commit. Switching projects keeps terminals running.
+Terminal settings and close-all apply only to the selected project.
 **New task** starts a fresh Codex + Antigravity pair with Web-lite prompts;
 enter requirements directly in the Codex terminal. Terminal settings accept
 custom executable commands such as `agy-proxy`, plus Codex model and reasoning

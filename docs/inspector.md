@@ -15,7 +15,7 @@ The `inspector` command remains the compatible read-only observation UI.
 
 ## Start the Web Workspace
 
-From an initialized Git repository with an Agent Bus, using an npm version
+From a local folder, using an npm version
 that includes the desired Web features:
 
 ```sh
@@ -28,9 +28,11 @@ To run the current source checkout (a merge does not publish npm):
 node bin/coordinate-agents.mjs web --port 3000
 ```
 
-Open the printed URL, normally `http://localhost:3000`. The server binds one
-canonical regular Git repository root and rejects unsafe or symlinked roots.
-Requests cannot switch repositories. It listens on `127.0.0.1` and, when
+Open the printed URL, normally `http://localhost:3000`. The startup directory
+(or `--root`) is registered and selected automatically. Git subdirectories
+normalize to the repository root; ordinary startup folders initialize Git and
+Agent Bus without a commit. Symlinked roots are rejected.
+It listens on `127.0.0.1` and, when
 available, the same port on `::1`. Stop the server with `Ctrl-C`; use the
 explicit terminal-close controls to close persistent sessions.
 The workbench needs no Codex Plugin or remote coordination service;
@@ -38,7 +40,7 @@ agent CLIs still require their own provider configuration and login.
 
 ## Layout and first use
 
-- **Sidebar:** repository and expandable Git identity, New task, Terminal
+- **Sidebar:** expandable project groups, New project, New task, Terminal
   settings, and Workspace groups only. Standard Tasks and Task Graphs are
   hidden, not deleted.
 - **New task:** starts two new persistent PTYs, waits for CLI readiness, and
@@ -48,12 +50,12 @@ agent CLIs still require their own provider configuration and login.
   sent as ordered raw PTY data. Size follows the visible space; bounded,
   redacted output is polled independently, faster while active and after input.
 - **Controls:** refresh, close, restart the pair, or close all Workspace
-  terminal groups. Selecting or reloading never launches or retries an agent.
+  terminal groups in the selected project. Selecting or reloading never launches or retries an agent.
   Restart explicitly creates two new Sessions.
 - **Settings:** customize the two fixed agents' commands, for example
   `agy-proxy` for Antigravity. Codex model and reasoning choices use the local
-  model cache. Project-level arguments cannot be silently replaced by
-  user-level model choices. Changes apply to future launches, not running
+  model cache. Settings are saved in the selected project's configuration,
+  preserving unrelated arguments. Changes apply to future launches, not running
   CLIs. Project > user > adapter-default precedence still applies.
 - **Language and layout:** `zh-CN` / `en-US` toggle persisted in localStorage,
   scrollable task list and viewport-sized terminal panels. Narrow screens
@@ -62,6 +64,27 @@ agent CLIs still require their own provider configuration and login.
 There is no Composer, synthetic chat timeline, right context panel, or
 Graph / Agents / Sessions / Activity navigation. `composer-model.mjs` remains
 a static compatibility resource, unused by the current Workspace UI.
+
+## Project storage and routing
+
+New project opens a directory-only browser with absolute-path entry, parent
+navigation, 100-entry pages, and a hidden-directory toggle. Ordinary folders
+show an explicit **Add and initialize** confirmation. Initialization failures
+identify the failed stage and keep any generated data for manual recovery.
+
+The user configuration directory contains `workspace-projects.json`, an
+atomically written, locked registry with stable IDs and canonical paths. Each
+project retains its own `.agent-bus/workspace-tasks/`; nothing is migrated.
+Unavailable directories remain visible. Refresh reloads the shared registry.
+Switching projects preserves background terminals and restores the last task.
+URLs use `#project-ID/workspace-ID`; old task-only links use the startup project.
+
+`GET /api/projects` returns the registry and startup ID. Guarded `projectBrowse`
+and `projectAdd` actions use `POST /api/action`. Project APIs use
+`/api/projects/:projectId/api/...`, including the action gateway. These routes
+require the launch capability and loopback Host/Origin checks. Each request
+resolves its own project; tabs never change a server-global selection. Legacy
+single-repository APIs remain bound to startup; read-only Inspector is unchanged.
 
 ## Web-lite collaboration and its limits
 
