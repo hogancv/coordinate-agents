@@ -2726,8 +2726,9 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
       }
     }
     if (details.requireIntentCompatible === true && nextState === 'RUNNING' && target.state !== 'RUNNING') {
+      const declarations = current.intentMap ? new Map(current.intentMap.subtasks.map(item => [item.id, item.writeIntent])) : null;
       for (const running of current.subtasks.filter(subtask => subtask.state === 'RUNNING').sort((left, right) => compareIds(left.id, right.id))) {
-        const conflict = writeIntentConflictBetween(current, target.id, running.id);
+        const conflict = writeIntentConflictBetween(current, target.id, running.id, declarations);
         if (!conflict) continue;
         throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${parentTaskId} cannot run ${subtaskId} concurrently with ${running.id} because their write intents conflict.`, {
           recoverable: true,
