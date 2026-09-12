@@ -17,11 +17,20 @@ function tail(value, limit = MAX_OUTPUT_TAIL) {
   return text.length > limit ? text.slice(-limit) : text;
 }
 
+// Pre-compiled regular expressions for redactOutput sensitivity detection and replacements.
+const SENSITIVE_TEST = /authorization|bearer|token|password|passwd|secret|api[_-]?key|cookie/i;
+const REGEX_AUTH = /(authorization\s*[:=]\s*bearer\s+)[^\s\r\n]+/gi;
+const REGEX_BEARER = /(bearer\s+)[^\s\r\n]+/gi;
+const REGEX_KEY = /((?:token|password|passwd|secret|api[_-]?key|cookie)\s*[:=]\s*)[^\s,;]+/gi;
+
 export function redactOutput(value, limit = MAX_OUTPUT_TAIL) {
-  return tail(value, limit)
-    .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s\r\n]+/gi, '$1[REDACTED]')
-    .replace(/(bearer\s+)[^\s\r\n]+/gi, '$1[REDACTED]')
-    .replace(/((?:token|password|passwd|secret|api[_-]?key|cookie)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]');
+  const text = tail(value, limit);
+  // Fast path: skip expensive regex replacements if no sensitive keywords exist in output.
+  if (!SENSITIVE_TEST.test(text)) return text;
+  return text
+    .replace(REGEX_AUTH, '$1[REDACTED]')
+    .replace(REGEX_BEARER, '$1[REDACTED]')
+    .replace(REGEX_KEY, '$1[REDACTED]');
 }
 
 function resultFailure(command, code, details, extra = {}) {
