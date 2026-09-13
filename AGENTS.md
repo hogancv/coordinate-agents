@@ -31,40 +31,28 @@ fixtures, logs, documentation, or release artifacts.
 
 ## Required checks
 
-Run the fast checks before proposing a commit:
+Choose validation for the changed surface:
 
-```sh
-npm ci
-npm run check
-npm run demo
-npm pack --dry-run --ignore-scripts
-```
+- Run focused tests for behavior changes; use `npm run check` for shared core changes
+  and `npm run check:full` when slower integration boundaries are affected.
+- Run `npm ci` when dependencies changed or the installed environment is missing or stale.
+- Run `npm run demo` when the demo flow changes, and
+  `npm pack --dry-run --ignore-scripts` when package contents change.
+- Validate changed Skill metadata with the installed skill-creator
+  `scripts/quick_validate.py`; validate Plugin metadata with plugin-creator
+  `scripts/validate_plugin.py` when that metadata changes.
 
-The default `npm test`/`npm run check` path uses the focused core suite. Run
-the complete local regression suite explicitly when a change touches a slower
-integration boundary:
-
-```sh
-npm run check:full
-# or, when only the complete test files are needed:
-npm run test:full
-```
-
-Also validate the skill and plugin metadata:
-
-```sh
-uv run --with pyyaml python "$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py" skills/coordinate-agents
-uv run --with pyyaml python "$HOME/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py" .
-```
-
-When the validator is not at that path, locate the installed `skill-creator` validator and report
-the actual command used. Do not claim cross-platform success from a single local run; CI is the
-authoritative matrix with Node.js 18 on Linux and Node.js 22 on Windows, macOS, and Linux.
+Local tests use disposable fixtures and must not access production or live model
+accounts. Run affected tests, fix failures caused by the requested change, and rerun
+those tests without asking at each step. Once relevant checks pass, stop expanding
+validation unless new evidence warrants it. Do not claim cross-platform success
+from a single local run; report the environments actually verified.
 
 ## Change rules
 
-1. Preserve the role boundary: Codex clarifies, specifies, reviews, and performs separately
-   authorized releases; Antigravity writes product code and tests.
+1. Apply configured Planner/Implementer/Reviewer roles only within an explicitly
+   selected Coordinate Agents workflow. Ordinary repository development may be
+   completed directly by the current agent. The formal Reviewer remains read-only.
 2. Keep the Execution Session boundary explicit: Task records may reference `sessionId`, but
    Session Manager owns persistent PTY lifecycle, reuse, bounded I/O, recovery facts, and cleanup.
    Never automate the Codex App Terminal UI or attach to an arbitrary process. A healthy Session is
@@ -77,14 +65,13 @@ authoritative matrix with Node.js 18 on Linux and Node.js 22 on Windows, macOS, 
    metacharacters. Do not introduce shell-string interpolation when argument arrays are possible.
 5. Refuse symlinks, junctions, path escapes, unrecognized installs, and destructive recovery by
    default. Preserve atomic publication, deduplication, leases, quarantine, and explicit cleanup.
-6. Add or update focused tests for every behavior change. Tests must use isolated temporary
+6. Add or update focused tests when needed to verify changed behavior. Tests must use isolated temporary
    repositories and must not invoke live model accounts or modify a user's real project.
 7. Keep `SKILL.md` concise. Put detailed protocol or template material one level down in
    `references/` and link it directly from `SKILL.md`.
-8. Keep English and Simplified Chinese user flows semantically synchronized. If commands,
-   prerequisites, paths, role behavior, or security rules change, review all of:
-   `README.md`, `README.zh-CN.md`, `docs/`, `AI_INSTALL.md`, `SKILL.md`, `SECURITY.md`, and
-   `docs/llms.txt`. Never edit the generated root `llms.txt` directly.
+8. Update documentation that directly describes the changed behavior. Keep corresponding
+   English and Simplified Chinese pages semantically synchronized when affected.
+   Update `docs/llms.txt` only when its index changes; never edit generated root `llms.txt` directly.
 9. If installation payload contents change, update `package.json` `files`, package tests, and the
    package version as appropriate. Keep `package-lock.json` synchronized.
 10. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens
@@ -102,8 +89,9 @@ authoritative matrix with Node.js 18 on Linux and Node.js 22 on Windows, macOS, 
 
 - Passing review or CI is not release authorization.
 - Never merge, tag, push, publish, deploy, create a GitHub Release, or run a release workflow
-  unless the user has approved the exact described action. The collaboration protocol requires
-  the exact text `RELEASE_APPROVED` for a described release plan.
+  unless the user has approved the described action. Reuse existing explicit authorization
+  for that same plan. The exact text `RELEASE_APPROVED` is required only for a Task
+  using the Coordinate Agents release protocol; do not impose it on ordinary development.
 - Keep GitHub Actions pinned to full commit SHAs.
 - npm publishing must use the existing environment-limited trusted publisher with OIDC and
   provenance; never introduce `NPM_TOKEN` or `NODE_AUTH_TOKEN`.

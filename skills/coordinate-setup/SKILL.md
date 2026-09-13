@@ -1,9 +1,8 @@
 ---
 name: coordinate-setup
 description: >-
-  Discover coding CLIs on the current computer and configure a Coordinate
-  Agents implementation agent. Use for setup, executable checks, registered
-  agents, user-level configuration, and project-over-user precedence.
+  Discover or configure implementation agents for Coordinate Agents when
+  setting up or changing its agent configuration.
 ---
 
 # Coordinate Setup
