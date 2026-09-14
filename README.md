@@ -15,6 +15,16 @@ Choose **Web Workspace** for a low-overhead Codex + Antigravity terminal pair, o
 
 Web task-group status describes terminal lifecycle, **not implementation or review completion**. Role prompts guide agent behavior; they are not an enforced workflow state machine. Both modes retain explicit user authorization for commit, push, and release as applicable to their workflow. The Web prompt forbids these actions without authorization.
 
+### Web Workspace preview
+
+The Web Workspace pairs Codex with a configured Implementer in a local,
+side-by-side browser workspace:
+
+![Web Workspace preview](./assets/web-workspace.jpg)
+
+The end-to-end terminal recording below shows the same lightweight workflow
+in action:
+
 ![End-to-end terminal demo](./assets/demo.gif)
 
 The recording comes from `npm run demo` in an isolated Git repository. Its sanitized source transcript is available at [assets/demo-transcript.txt](./assets/demo-transcript.txt).
