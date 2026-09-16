@@ -379,6 +379,8 @@ function implementationMessages(root, task) {
   const bus = taskBusPath(root);
   const inbox = join(bus, 'inbox', task.planner);
   const messages = [];
+  // Reuse compiled regex outside the inbox message scan loop
+  const taskIdRegex = new RegExp(`(?:^|\\n)Task ID\\s*:\\s*${escapeRegex(task.id)}(?:\\s|$)`, 'i');
   for (const stage of ['new', 'processing', 'processed']) {
     const directory = join(inbox, stage);
     if (!existsSync(directory)) continue;
@@ -390,7 +392,7 @@ function implementationMessages(root, task) {
         if (!parsed || parsed.fields.type !== 'IMPLEMENTATION_DONE') continue;
         if (parsed.fields.from !== task.implementer || parsed.fields.to !== task.planner) continue;
         const refersToTask = parsed.fields.dedupe_key?.includes(task.id)
-          || new RegExp(`(?:^|\\n)Task ID\\s*:\\s*${escapeRegex(task.id)}(?:\\s|$)`, 'i').test(parsed.body);
+          || taskIdRegex.test(parsed.body);
         if (!refersToTask) continue;
         messages.push({ path, ...parsed });
       } catch {
