@@ -205,6 +205,11 @@ For desktop GUI, MCP, HTTP, or IPC execution surfaces:
 
 ## Git ownership and release gate
 
+These role and exact-token rules apply to Tasks using the Coordinate Agents
+protocol, not ordinary development in the repository. Reuse authorization for
+the same described action; do not add a second confirmation after the required
+authorization has already been given.
+
 - **Sole Implementer Rule**: Only the agent in the `implementer` role may edit product code, tests, and configuration.
 - **Planner/Reviewer**: Inspects repository state in read-only mode during development rounds.
 - **Human Release Gate**: `REVIEW_APPROVED` does **not** authorize release or deployment. Only the exact user authorization string `RELEASE_APPROVED` permits merge, tag, push, deploy, or publish actions.

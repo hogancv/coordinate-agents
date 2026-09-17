@@ -45,16 +45,19 @@ inspection is read-only: do not restart, replay input, attach to a different
 PID, or resume the Task while collecting facts. Do not claim a missing
 capability as a successful result.
 
-Only after the user explicitly asks to continue, invoke:
+When the user has explicitly authorized repair and continuation, invoke:
 
 ```text
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task resume --root "<repository>" --id task-... --json
 ```
 
 `task resume` only clears the explicit recovery gate; it does not launch an
-Implementer. After the user confirms the repair, use `task dispatch` so the
-Task API performs executable validation, Bus handoff, launch, and state/error
-propagation as one operation.
+Implementer. The same authorization covers the in-scope repair, resume, and
+subsequent `task dispatch`; do not ask twice. If the proposed repair exceeds
+that authorization, explain the concrete repair and request only the missing
+decision. Dispatch performs executable validation, Bus handoff, launch, and
+state/error propagation as one operation. If that activation fails, inspect the
+new facts and report the blocker instead of automatically repeating recovery.
 
 For graph recovery, `task graph-recover` inspects durable Session, worktree,
 commit, and evidence records and records an interrupted `FAILED` subtask only

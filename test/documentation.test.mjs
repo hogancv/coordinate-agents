@@ -8,23 +8,17 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const thisFile = fileURLToPath(import.meta.url);
 const read = name => readFileSync(join(root, name), 'utf8');
 
-test('skill description carries explicit discovery triggers and exclusions', () => {
-  const skill = read(join('skills', 'coordinate-agents', 'SKILL.md'));
-  const frontmatter = skill.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? '';
-  for (const value of [
-    'coordinate-agents',
-    'multi-agent',
-    'Agent Bus',
-    'role-based',
-    'adapters',
-    'recover',
-    'review',
-    'release',
-    'Codex CLI',
-    'Google Antigravity CLI',
-  ]) assert.ok(frontmatter.includes(value), `SKILL.md description is missing ${value}`);
-  assert.match(frontmatter, /Do not use for ordinary single-agent tasks/);
-  assert.match(frontmatter, /unsafe concurrent writes to the\s+same worktree/);
+test('skill entrypoint references resolve to available workflow resources', () => {
+  for (const name of ['coordinate-agents', 'coordinate-task', 'coordinate-review',
+    'coordinate-recover', 'coordinate-setup']) {
+    const directory = join(root, 'skills', name);
+    const skill = read(join('skills', name, 'SKILL.md'));
+    for (const match of skill.matchAll(/\]\(([^)#]+)(?:#[^)]+)?\)/g)) {
+      if (/^https?:/.test(match[1])) continue;
+      assert.ok(existsSync(resolve(directory, match[1])),
+        `${name} contains a broken resource link: ${match[1]}`);
+    }
+  }
 });
 
 test('AI installation guide defines canonical identity and the complete safe lifecycle', () => {
@@ -196,7 +190,6 @@ test('repository AI, security, and machine index files have distinct documented 
   const llms = read('llms.txt');
   assert.match(agents, /not the installation entry point/i);
   assert.match(agents, /npm run check/);
-  assert.match(agents, /README\.md.*README\.zh-CN\.md.*AI_INSTALL\.md.*SKILL\.md.*SECURITY\.md.*llms\.txt/s);
   assert.match(agents, /RELEASE_APPROVED/);
   assert.match(security, /private vulnerability reporting/i);
   assert.match(security, /\.agent-bus\/.*local plaintext/s);

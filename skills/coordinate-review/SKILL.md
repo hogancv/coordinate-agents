@@ -22,7 +22,9 @@ Review only observable evidence tied to the current Task and repository:
 
 1. Read `coordinate_agents_task_inspect` and the approved specification.
 2. Verify the implementation commit exists and inspect its diff.
-3. Re-run the relevant tests and check the recorded validation evidence.
+3. Check validation evidence for the current commit. Re-run relevant tests when
+   evidence is missing, stale, from a different environment, or leaves a concrete
+   doubt; independently verify high-risk changes when warranted.
 4. Compare every acceptance criterion and negative control.
 5. Return exactly one decision: `REVIEW_APPROVED` or `CHANGES_REQUESTED`.
 6. Record that decision through the MCP Task API; never edit a task JSON file
@@ -35,7 +37,9 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task review \
 ```
 
 For changes, include concrete feedback. The Runtime preserves it and the next
-explicit `task dispatch` includes it in the new `IMPLEMENT` activation. When
+explicit `task dispatch` includes it in the new `IMPLEMENT` activation. In an
+implementation workflow, the coordinator continues authorized rework without
+asking again; a review-only request ends after the recorded review. When
 the recorded Session is healthy, that activation reuses the same
 `ExecutionSession`; review feedback is written into the existing PTY context.
 Do not use Codex App Terminal UI automation to reach the Implementer.
