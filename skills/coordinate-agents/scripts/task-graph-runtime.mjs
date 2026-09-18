@@ -1279,9 +1279,25 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
+/**
+ * WeakMap cache for indexing intentMap subtasks by subtask ID to eliminate O(N) Array.prototype.find()
+ * lookups during subtask scope evidence validation.
+ */
+const graphIntentSubtaskMapCache = new WeakMap();
+
+function getGraphIntentSubtaskMap(intentMap) {
+  if (!intentMap) return null;
+  let map = graphIntentSubtaskMapCache.get(intentMap);
+  if (!map) {
+    map = new Map((intentMap.subtasks || []).map(item => [item.id, item]));
+    graphIntentSubtaskMapCache.set(intentMap, map);
+  }
+  return map;
+}
+
 function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const declaration = getGraphIntentSubtaskMap(graph.intentMap)?.get(subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration

@@ -10,3 +10,7 @@
 ## 2025-05-20 - Write-intent conflict detection and wave scheduling
 **Learning:** `patternLiteralPrefix` repeatedly performed string splits and regex matching per pair comparison in `writeIntentPatternsMayOverlap`, and `writeIntentConflictBetween` reconstructed a subtask-declarations Map on every pair check within wave scheduling loops.
 **Action:** Cache literal prefixes in a bounded Map and pass pre-constructed declarations Maps across batch conflict checks in scheduling loops.
+
+## 2025-05-21 - IntentMap subtask declaration indexing with WeakMap
+**Learning:** `subtaskScopeIntent` and `validateSubtaskScopeEvidenceAgainstGraph` executed O(N) `Array.prototype.find()` on `intentMap.subtasks` for every subtask iteration, resulting in O(N^2) total work when validating or auditing graphs.
+**Action:** Index subtask declarations into a Map cached by `intentMap` reference using a `WeakMap`.
