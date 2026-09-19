@@ -10,3 +10,7 @@
 ## 2025-05-20 - Write-intent conflict detection and wave scheduling
 **Learning:** `patternLiteralPrefix` repeatedly performed string splits and regex matching per pair comparison in `writeIntentPatternsMayOverlap`, and `writeIntentConflictBetween` reconstructed a subtask-declarations Map on every pair check within wave scheduling loops.
 **Action:** Cache literal prefixes in a bounded Map and pass pre-constructed declarations Maps across batch conflict checks in scheduling loops.
+
+## 2025-05-21 - Canonical path resolution in Task Graph runtime
+**Learning:** `canonicalPathForComparison` executed `realpathSync.native` on every path comparison when iterating through worktrees and comparing task graph identities, creating synchronous I/O overhead.
+**Action:** Use a bounded Map cache for canonicalized path lookups in path comparison helpers.
