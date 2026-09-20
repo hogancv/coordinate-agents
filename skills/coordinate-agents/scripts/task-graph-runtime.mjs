@@ -1279,9 +1279,12 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationMap = null) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  // Use pre-built declaration Map if provided to avoid O(N) array search per subtask
+  const declaration = declarationMap
+    ? declarationMap.get(subtask.id)
+    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1387,6 +1390,7 @@ function validateStoredGraph(record, parentTaskId = null) {
       throw runtimeError('TASK_STATE_CONFLICT', `Task Graph ${id} has an invalid dependency edge for ${subtask.id}.`, { recoverable: false, taskId: id });
     }
   }
+  let declarationMap = null;
   if (record.intentMap !== undefined) {
     let normalized;
     try {
@@ -1403,8 +1407,11 @@ function validateStoredGraph(record, parentTaskId = null) {
         taskId: id,
       });
     }
+    if (Array.isArray(record.intentMap.subtasks)) {
+      declarationMap = new Map(record.intentMap.subtasks.map(item => [item.id, item]));
+    }
   }
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationMap);
   return record;
 }
 
