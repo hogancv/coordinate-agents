@@ -10,3 +10,7 @@
 ## 2025-05-20 - Write-intent conflict detection and wave scheduling
 **Learning:** `patternLiteralPrefix` repeatedly performed string splits and regex matching per pair comparison in `writeIntentPatternsMayOverlap`, and `writeIntentConflictBetween` reconstructed a subtask-declarations Map on every pair check within wave scheduling loops.
 **Action:** Cache literal prefixes in a bounded Map and pass pre-constructed declarations Maps across batch conflict checks in scheduling loops.
+
+## 2025-05-21 - Precomputed adapter lookup Map in CLI discovery
+**Learning:** `discoverCodingClis`, `setupSnapshot`, and `adapterRecordsWithUsage` performed `registry.find(adapter => adapter.id === record.agent.adapter)` inside loops over configured records, creating unnecessary O(N*M) array iterations on every discovery check.
+**Action:** Always precompute a Map from array registries when resolving multiple records against registered entries in loops.
