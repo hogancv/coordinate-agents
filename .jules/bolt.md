@@ -10,3 +10,7 @@
 ## 2025-05-20 - Write-intent conflict detection and wave scheduling
 **Learning:** `patternLiteralPrefix` repeatedly performed string splits and regex matching per pair comparison in `writeIntentPatternsMayOverlap`, and `writeIntentConflictBetween` reconstructed a subtask-declarations Map on every pair check within wave scheduling loops.
 **Action:** Cache literal prefixes in a bounded Map and pass pre-constructed declarations Maps across batch conflict checks in scheduling loops.
+
+## 2025-05-21 - Pre-built Map lookups in graph subtask validation and Inspector views
+**Learning:** `validateStoredGraph` and `graphDetail` repeatedly called `Array.prototype.find` inside subtask iteration loops to look up intent declarations and agent facts, resulting in O(N^2) search overhead.
+**Action:** Pre-construct `Map` instances (e.g. `intentMapSubtasksById`, `agentsById`) before subtask loops to reduce element lookups to O(1).
