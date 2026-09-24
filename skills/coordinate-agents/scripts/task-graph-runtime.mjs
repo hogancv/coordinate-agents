@@ -1279,9 +1279,16 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+/**
+ * Validate Scope Audit evidence against graph Intent Map facts.
+ * Accepts an optional precomputed `declarationsMap` Map<string, SubtaskDeclaration>
+ * to avoid O(N^2) array `.find()` lookups during batch subtask iteration.
+ */
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationsMap = null) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const declaration = declarationsMap
+    ? declarationsMap.get(subtask.id)
+    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1404,7 +1411,11 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
+  // Precompute the Intent Map declarations Map once to avoid O(N^2) `.find()` lookups.
+  const declarationsMap = record.intentMap?.subtasks
+    ? new Map(record.intentMap.subtasks.map(item => [item.id, item]))
+    : null;
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationsMap);
   return record;
 }
 
