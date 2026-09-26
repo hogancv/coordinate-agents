@@ -74,9 +74,10 @@ function requiredAgent(value, field, { parentTaskId = null, subtaskId = null } =
 
 function validSubtaskId(value) {
   if (typeof value !== 'string' || !SUBTASK_ID_PATTERN.test(value)) return false;
-  const lower = value.toLowerCase();
-  const base = lower.split('.')[0];
-  return !RESERVED_DEVICE_NAMES.has(base) && !RESERVED_DEVICE_NAMES.has(lower);
+  // SUBTASK_ID_PATTERN guarantees value consists solely of lowercase alphanumeric
+  // characters, underscores, or hyphens (no uppercase, no dots). Avoid
+  // redundant .toLowerCase(), .split('.'), and duplicate Set lookups.
+  return !RESERVED_DEVICE_NAMES.has(value);
 }
 
 function validateParentTask(input) {
@@ -244,7 +245,7 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
       invalid(`Task Graph v1 subtask "${subtask.id}" dependsOn must be an array.`, { parentTaskId: parentTask.id, subtaskId: subtask.id });
     }
     const dependsOn = subtask.dependsOn === undefined ? [] : [...subtask.dependsOn];
-    if ([...dependsOn].some(dependency => !validSubtaskId(dependency))) {
+    if (dependsOn.some(dependency => !validSubtaskId(dependency))) {
       invalid(`Task Graph v1 subtask "${subtask.id}" has a malformed dependency identifier.`, { parentTaskId: parentTask.id, subtaskId: subtask.id });
     }
     if (new Set(dependsOn).size !== dependsOn.length) {

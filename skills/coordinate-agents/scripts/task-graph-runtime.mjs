@@ -142,9 +142,10 @@ export function validateSubtaskId(id) {
       stage: 'graph-validation',
     });
   }
-  const lower = id.toLowerCase();
-  const base = lower.split('.')[0];
-  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(lower)) {
+  // SUBTASK_ID_PATTERN guarantees id consists solely of lowercase alphanumeric
+  // characters, underscores, or hyphens (no uppercase, no dots). Avoid
+  // redundant .toLowerCase(), .split('.'), and duplicate Set lookups.
+  if (RESERVED_DEVICE_NAMES.has(id)) {
     throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph subtask identifier: ${id}.`, {
       recoverable: false,
       stage: 'graph-validation',
