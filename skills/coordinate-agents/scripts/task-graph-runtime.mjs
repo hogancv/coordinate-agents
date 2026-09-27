@@ -1279,9 +1279,11 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationsById = null) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const declaration = declarationsById
+    ? declarationsById.get(subtask.id)
+    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1404,7 +1406,11 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
+  // Pre-build Map lookup table for intent map subtask declarations to make batch scope evidence checks O(N) instead of O(N^2)
+  const declarationsById = record.intentMap?.subtasks
+    ? new Map(record.intentMap.subtasks.map(item => [item.id, item]))
+    : null;
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationsById);
   return record;
 }
 

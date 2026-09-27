@@ -156,9 +156,10 @@ function externalAgentRecord(record, detection = null) {
 
 function adapterRecordsWithUsage(registry, records, detections = new Map()) {
   const byAdapter = new Map();
+  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
   for (const record of records) {
     const list = byAdapter.get(record.agent.adapter) || [];
-    const registryRecord = registry.find(adapter => adapter.id === record.agent.adapter);
+    const registryRecord = registryById.get(record.agent.adapter);
     list.push(configuredAdapterFact(record, {
       detection: registryRecord && !registryRecord.builtin
         ? detections.get(record.agent.id) || detectConfiguredAdapter(record)
@@ -208,8 +209,9 @@ export function discoverCodingClis({
     };
   });
   const knownCommands = new Set(commands.map(command => command.toLowerCase()));
+  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
   for (const record of records) {
-    const registered = registry.find(adapter => adapter.id === record.agent.adapter);
+    const registered = registryById.get(record.agent.adapter);
     if (!registered || registered.builtin) continue;
     const command = record.resolved?.command;
     if (typeof command === 'string' && knownCommands.has(command.toLowerCase())) continue;
@@ -220,10 +222,11 @@ export function discoverCodingClis({
 
 export function setupSnapshot({ root = process.cwd(), userConfig = null, adapterRegistry = null } = {}) {
   const registry = Array.isArray(adapterRegistry) ? adapterRegistry : getAdapterRegistrySnapshot();
+  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
   const records = configuredAgentRecords(root, userConfig || { version: 1, agents: {} });
   const adapterDetections = new Map();
   for (const record of records) {
-    const registered = registry.find(adapter => adapter.id === record.agent.adapter);
+    const registered = registryById.get(record.agent.adapter);
     if (registered && !registered.builtin) adapterDetections.set(record.agent.id, detectConfiguredAdapter(record));
   }
   const agents = discoverCodingClis({
