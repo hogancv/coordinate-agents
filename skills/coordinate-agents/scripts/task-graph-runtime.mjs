@@ -1141,16 +1141,44 @@ function frontierFor(subtasks, maxConcurrency) {
 }
 
 function parentStateFor(previous, subtasks) {
-  const states = subtasks.map(subtask => subtask.state);
-  if (states.some(state => state === 'FAILED' || state === 'BLOCKED')) return 'ERROR';
-  if (states.some(state => state === 'STOPPED')) return 'STOPPED';
-  if (states.length > 0 && states.every(state => state === 'SUCCEEDED')) return 'REVIEWING';
-  if (states.some(state => state === 'RUNNING')) return 'RUNNING';
+  if (!Array.isArray(subtasks) || subtasks.length === 0) {
+    if (previous === 'CREATED' || previous === 'REVIEWING') return previous;
+    return previous || 'CREATED';
+  }
+
+  // Single-pass check to determine parent lifecycle state without array allocations or redundant scans
+  let hasStopped = false;
+  let hasRunning = false;
+  let hasReadyWaitingBlocked = false;
+  let allSucceeded = true;
+
+  for (let index = 0; index < subtasks.length; index += 1) {
+    const state = subtasks[index].state;
+    if (state === 'FAILED' || state === 'BLOCKED') {
+      return 'ERROR';
+    }
+    if (state === 'STOPPED') {
+      hasStopped = true;
+    }
+    if (state !== 'SUCCEEDED') {
+      allSucceeded = false;
+    }
+    if (state === 'RUNNING') {
+      hasRunning = true;
+    }
+    if (state === 'READY' || state === 'WAITING') {
+      hasReadyWaitingBlocked = true;
+    }
+  }
+
+  if (hasStopped) return 'STOPPED';
+  if (allSucceeded) return 'REVIEWING';
+  if (hasRunning) return 'RUNNING';
   // A newly persisted graph remains CREATED even though its deterministic
   // frontier contains READY and WAITING subtasks.  Once a graph has moved out
   // of CREATED, keep its explicit lifecycle state until execution changes it.
   if (previous === 'CREATED' || previous === 'REVIEWING') return previous;
-  if (states.some(state => ['READY', 'WAITING', 'BLOCKED'].includes(state))) return 'RUNNING';
+  if (hasReadyWaitingBlocked) return 'RUNNING';
   return previous || 'CREATED';
 }
 
@@ -1279,9 +1307,12 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationsMap = null) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  // Use pre-built declarations Map during batch validation to avoid O(N^2) subtask searches
+  const declaration = declarationsMap
+    ? declarationsMap.get(subtask.id)
+    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1404,7 +1435,10 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
+  const declarationsMap = record.intentMap?.subtasks
+    ? new Map(record.intentMap.subtasks.map(item => [item.id, item]))
+    : null;
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationsMap);
   return record;
 }
 
