@@ -1142,16 +1142,41 @@ function frontierFor(subtasks, maxConcurrency) {
 }
 
 function parentStateFor(previous, subtasks) {
-  const states = subtasks.map(subtask => subtask.state);
-  if (states.some(state => state === 'FAILED' || state === 'BLOCKED')) return 'ERROR';
-  if (states.some(state => state === 'STOPPED')) return 'STOPPED';
-  if (states.length > 0 && states.every(state => state === 'SUCCEEDED')) return 'REVIEWING';
-  if (states.some(state => state === 'RUNNING')) return 'RUNNING';
+  if (subtasks.length === 0) return previous || 'CREATED';
+
+  // Evaluate lifecycle precedence in one pass without allocating a states array.
+  let hasStopped = false;
+  let hasRunning = false;
+  let hasReadyOrWaiting = false;
+  let allSucceeded = true;
+
+  for (let index = 0; index < subtasks.length; index += 1) {
+    const state = subtasks[index].state;
+    if (state === 'FAILED' || state === 'BLOCKED') {
+      return 'ERROR';
+    }
+    if (state === 'STOPPED') {
+      hasStopped = true;
+    }
+    if (state !== 'SUCCEEDED') {
+      allSucceeded = false;
+    }
+    if (state === 'RUNNING') {
+      hasRunning = true;
+    }
+    if (state === 'READY' || state === 'WAITING') {
+      hasReadyOrWaiting = true;
+    }
+  }
+
+  if (hasStopped) return 'STOPPED';
+  if (allSucceeded) return 'REVIEWING';
+  if (hasRunning) return 'RUNNING';
   // A newly persisted graph remains CREATED even though its deterministic
   // frontier contains READY and WAITING subtasks.  Once a graph has moved out
   // of CREATED, keep its explicit lifecycle state until execution changes it.
   if (previous === 'CREATED' || previous === 'REVIEWING') return previous;
-  if (states.some(state => ['READY', 'WAITING', 'BLOCKED'].includes(state))) return 'RUNNING';
+  if (hasReadyOrWaiting) return 'RUNNING';
   return previous || 'CREATED';
 }
 
