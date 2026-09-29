@@ -1141,15 +1141,12 @@ function frontierFor(subtasks, maxConcurrency) {
 }
 
 function parentStateFor(previous, subtasks) {
-  if (!Array.isArray(subtasks) || subtasks.length === 0) {
-    if (previous === 'CREATED' || previous === 'REVIEWING') return previous;
-    return previous || 'CREATED';
-  }
+  if (subtasks.length === 0) return previous || 'CREATED';
 
-  // Single-pass check to determine parent lifecycle state without array allocations or redundant scans
+  // Evaluate lifecycle precedence in one pass without allocating a states array.
   let hasStopped = false;
   let hasRunning = false;
-  let hasReadyWaitingBlocked = false;
+  let hasReadyOrWaiting = false;
   let allSucceeded = true;
 
   for (let index = 0; index < subtasks.length; index += 1) {
@@ -1167,7 +1164,7 @@ function parentStateFor(previous, subtasks) {
       hasRunning = true;
     }
     if (state === 'READY' || state === 'WAITING') {
-      hasReadyWaitingBlocked = true;
+      hasReadyOrWaiting = true;
     }
   }
 
@@ -1178,7 +1175,7 @@ function parentStateFor(previous, subtasks) {
   // frontier contains READY and WAITING subtasks.  Once a graph has moved out
   // of CREATED, keep its explicit lifecycle state until execution changes it.
   if (previous === 'CREATED' || previous === 'REVIEWING') return previous;
-  if (hasReadyWaitingBlocked) return 'RUNNING';
+  if (hasReadyOrWaiting) return 'RUNNING';
   return previous || 'CREATED';
 }
 
@@ -1307,12 +1304,9 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationsMap = null) {
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
   if (subtask.scopeEvidence === undefined) return;
-  // Use pre-built declarations Map during batch validation to avoid O(N^2) subtask searches
-  const declaration = declarationsMap
-    ? declarationsMap.get(subtask.id)
-    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1435,10 +1429,7 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
-  const declarationsMap = record.intentMap?.subtasks
-    ? new Map(record.intentMap.subtasks.map(item => [item.id, item]))
-    : null;
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationsMap);
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
   return record;
 }
 
