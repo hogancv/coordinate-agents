@@ -5,8 +5,19 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { parseArgs } from '../lib/cli/parse-args.mjs';
+import { discoverCodingClis } from '../skills/coordinate-agents/scripts/discovery.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+
+test('discovery keeps the first adapter record when injected registry IDs repeat', () => {
+  const agents = discoverCodingClis({
+    commands: [],
+    configuredRecords: [{ agent: { id: 'sample', adapter: 'duplicate' }, resolved: { command: 'example' } }],
+    adapterRegistry: [{ id: 'duplicate', builtin: true }, { id: 'duplicate', builtin: false }],
+  });
+
+  assert.deepEqual(agents, []);
+});
 
 test('canonical bin is a thin executable and compatibility export surface', () => {
   const content = readFileSync(join(root, 'bin', 'coordinate-agents.mjs'), 'utf8');

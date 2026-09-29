@@ -154,9 +154,17 @@ function externalAgentRecord(record, detection = null) {
   };
 }
 
+function indexRegistryById(registry) {
+  const byId = new Map();
+  for (const adapter of registry) {
+    if (!byId.has(adapter.id)) byId.set(adapter.id, adapter);
+  }
+  return byId;
+}
+
 function adapterRecordsWithUsage(registry, records, detections = new Map()) {
   const byAdapter = new Map();
-  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
+  const registryById = indexRegistryById(registry);
   for (const record of records) {
     const list = byAdapter.get(record.agent.adapter) || [];
     const registryRecord = registryById.get(record.agent.adapter);
@@ -209,7 +217,7 @@ export function discoverCodingClis({
     };
   });
   const knownCommands = new Set(commands.map(command => command.toLowerCase()));
-  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
+  const registryById = indexRegistryById(registry);
   for (const record of records) {
     const registered = registryById.get(record.agent.adapter);
     if (!registered || registered.builtin) continue;
@@ -222,7 +230,7 @@ export function discoverCodingClis({
 
 export function setupSnapshot({ root = process.cwd(), userConfig = null, adapterRegistry = null } = {}) {
   const registry = Array.isArray(adapterRegistry) ? adapterRegistry : getAdapterRegistrySnapshot();
-  const registryById = new Map(registry.map(adapter => [adapter.id, adapter]));
+  const registryById = indexRegistryById(registry);
   const records = configuredAgentRecords(root, userConfig || { version: 1, agents: {} });
   const adapterDetections = new Map();
   for (const record of records) {
