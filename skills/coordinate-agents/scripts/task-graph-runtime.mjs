@@ -142,9 +142,10 @@ export function validateSubtaskId(id) {
       stage: 'graph-validation',
     });
   }
-  const lower = id.toLowerCase();
-  const base = lower.split('.')[0];
-  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(lower)) {
+  // SUBTASK_ID_PATTERN guarantees id consists solely of lowercase alphanumeric
+  // characters, underscores, or hyphens (no uppercase, no dots). Avoid
+  // redundant .toLowerCase(), .split('.'), and duplicate Set lookups.
+  if (RESERVED_DEVICE_NAMES.has(id)) {
     throw runtimeError('TASK_GRAPH_INVALID', `Invalid Task Graph subtask identifier: ${id}.`, {
       recoverable: false,
       stage: 'graph-validation',
@@ -1304,9 +1305,11 @@ function validateStoredReview(review, parentTaskId) {
   }
 }
 
-function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask) {
+function validateSubtaskScopeEvidenceAgainstGraph(graph, subtask, declarationsById = null) {
   if (subtask.scopeEvidence === undefined) return;
-  const declaration = graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
+  const declaration = declarationsById
+    ? declarationsById.get(subtask.id)
+    : graph.intentMap?.subtasks?.find(item => item.id === subtask.id);
   const expectedPolicy = graph.intentMap?.scopePolicy || (graph.intentMap ? 'warn' : null);
   const expectedBase = subtask.baseCommit || graph.baseCommit || graph.parentTask?.baseCommit || null;
   if (!declaration
@@ -1429,7 +1432,11 @@ function validateStoredGraph(record, parentTaskId = null) {
       });
     }
   }
-  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask);
+  // Pre-build Map lookup table for intent map subtask declarations to make batch scope evidence checks O(N) instead of O(N^2)
+  const declarationsById = record.intentMap?.subtasks
+    ? new Map(record.intentMap.subtasks.map(item => [item.id, item]))
+    : null;
+  for (const subtask of record.subtasks) validateSubtaskScopeEvidenceAgainstGraph(record, subtask, declarationsById);
   return record;
 }
 

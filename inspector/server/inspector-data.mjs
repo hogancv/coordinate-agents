@@ -120,8 +120,9 @@ function readWorkspaceSettings(root) {
   } catch {
     userConfig = { version: 1, agents: {} };
   }
+  const projectAgentsById = new Map(projectAgents.map(agent => [agent.id, agent]));
   return Object.fromEntries(WORKSPACE_AGENT_DEFAULTS.map(({ id, adapter, command: fallback }) => {
-    const projectAgent = projectAgents.find(agent => agent.id === id) || { id, adapter };
+    const projectAgent = projectAgentsById.get(id) || { id, adapter };
     try {
       const resolved = resolveAgentConfig(projectAgent, userConfig);
       return [id, {
@@ -383,8 +384,8 @@ function inspectorJournalEvent(event) {
   };
 }
 
-function graphAgentFacts(config, implementer) {
-  const agent = config.agents.find(item => item.id === implementer);
+function graphAgentFacts(config, implementer, agentsById = null) {
+  const agent = agentsById ? agentsById.get(implementer) : config.agents.find(item => item.id === implementer);
   if (!agent) return { id: implementer, registered: false, adapter: null };
   return {
     id: agent.id,
@@ -393,7 +394,7 @@ function graphAgentFacts(config, implementer) {
   };
 }
 
-function graphSubtaskView(config, subtask, recovery) {
+function graphSubtaskView(config, subtask, recovery, agentsById = null) {
   return {
     id: subtask.id,
     subtaskId: subtask.id,
@@ -404,7 +405,7 @@ function graphSubtaskView(config, subtask, recovery) {
     reason: bounded(subtask.reason, 8 * 1024) || null,
     dependsOn: subtask.dependsOn.slice(0, MAX_GRAPH_ITEMS),
     implementer: subtask.implementer,
-    agent: graphAgentFacts(config, subtask.implementer),
+    agent: graphAgentFacts(config, subtask.implementer, agentsById),
     executable: {
       effectiveCommand: bounded(subtask.effectiveCommand || subtask.command, 2 * 1024) || null,
       resolvedCommand: bounded(subtask.resolvedCommand, 2 * 1024) || null,
@@ -437,8 +438,9 @@ function graphDetail(root, graph) {
   const recoveryById = new Map(recovery.map(item => [item.subtaskId, item]));
   const events = recordedEvents(root, { taskId: graph.parentTaskId, limit: 300 });
   const parent = graph.parentTask;
+  const agentsById = new Map((config.agents || []).map(agent => [agent.id, agent]));
   const subtasks = graph.subtasks.slice(0, MAX_GRAPH_ITEMS)
-    .map(item => graphSubtaskView(config, item, recoveryById.get(item.id)));
+    .map(item => graphSubtaskView(config, item, recoveryById.get(item.id), agentsById));
   const detail = {
     ...graphSummary(graph),
     schemaVersion: graph.schemaVersion,
