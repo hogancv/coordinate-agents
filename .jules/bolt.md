@@ -10,3 +10,7 @@
 ## 2025-05-20 - Write-intent conflict detection and wave scheduling
 **Learning:** `patternLiteralPrefix` repeatedly performed string splits and regex matching per pair comparison in `writeIntentPatternsMayOverlap`, and `writeIntentConflictBetween` reconstructed a subtask-declarations Map on every pair check within wave scheduling loops.
 **Action:** Cache literal prefixes in a bounded Map and pass pre-constructed declarations Maps across batch conflict checks in scheduling loops.
+
+## 2025-05-21 - Regex-guaranteed lowercase ASCII strings in Agent and Subtask ID validation
+**Learning:** `validateAgentId`, `validSubtaskId`, and `validateSubtaskId` performed `.toLowerCase()`, `.split('.')[0]`, and duplicate Set lookups after checking `/^[a-z][a-z0-9_-]{0,63}$/`. The regex strictly guarantees lowercase ASCII characters without dots, making lowercasing and splitting redundant string/array allocations.
+**Action:** When a preceding regex enforces strict lowercase ASCII character sets without delimiters, skip redundant `.toLowerCase()` and `.split()` calls.
