@@ -32,8 +32,10 @@ export function validateAgentId(id) {
   if (!/^[a-z][a-z0-9_-]{0,63}$/.test(id)) {
     throw new Error(`Invalid agent ID "${id}". Agent ID must be 1-64 lowercase alphanumeric characters, underscores, or hyphens, starting with a lowercase letter.`);
   }
-  const base = id.toLowerCase().split('.')[0];
-  if (RESERVED_DEVICE_NAMES.has(base) || RESERVED_DEVICE_NAMES.has(id.toLowerCase())) {
+  // The regex above guarantees id consists solely of lowercase alphanumeric
+  // characters, underscores, or hyphens (no uppercase, no dots). Avoid
+  // redundant .toLowerCase(), .split('.'), and duplicate Set lookups.
+  if (RESERVED_DEVICE_NAMES.has(id)) {
     throw new Error(`Invalid agent ID "${id}". Cannot use reserved device name.`);
   }
   return id;
