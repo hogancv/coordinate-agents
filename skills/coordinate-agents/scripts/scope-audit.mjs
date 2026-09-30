@@ -334,9 +334,20 @@ export function validateScopeAuditEvidence(value, expected = {}) {
   return Object.freeze(value);
 }
 
+/**
+ * WeakMap cache for intent map declarations by intentMap instance to avoid repeated
+ * O(N) array scans when looking up subtask scope intents across pipeline passes.
+ */
+const intentDeclarationsCache = new WeakMap();
+
 export function subtaskScopeIntent(graph, subtaskId) {
   if (!graph?.intentMap) return { writeIntent: null, scopePolicy: null };
-  const declaration = graph.intentMap.subtasks?.find(subtask => subtask.id === subtaskId);
+  let map = intentDeclarationsCache.get(graph.intentMap);
+  if (!map) {
+    map = new Map((graph.intentMap.subtasks || []).map(subtask => [subtask.id, subtask]));
+    intentDeclarationsCache.set(graph.intentMap, map);
+  }
+  const declaration = map.get(subtaskId);
   if (!declaration) throw auditError(`Intent Map has no scope declaration for subtask ${subtaskId}.`);
   return { writeIntent: declaration.writeIntent, scopePolicy: graph.intentMap.scopePolicy || 'warn' };
 }
