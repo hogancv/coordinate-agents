@@ -22,3 +22,7 @@
 ## 2026-09-17 - Single-pass parent state evaluation
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
+
+## 2026-09-18 - Pre-built recoveryMap in task graph recover and stop CLI commands
+**Learning:** `taskGraphRecoverCommand` and `taskGraphStopCommand` repeatedly executed `inspectTaskGraphRecovery` (spawning child `git` processes) inside per-subtask iteration loops.
+**Action:** Pre-build a `recoveryMap` once before subtask iteration and pass cached recovery objects during batch recovery and stop operations.
