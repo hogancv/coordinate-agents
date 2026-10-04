@@ -1467,10 +1467,14 @@ export function readTaskGraph(root, parentTaskId) {
  * commit, evidence, Session record, and Runtime-owned worktree facts are
  * reported.
  */
-export function inspectTaskGraphRecovery(root, record, { probeGit = false } = {}) {
+export function inspectTaskGraphRecovery(root, record, { probeGit = false, subtaskId = null } = {}) {
   const graph = validateStoredGraph(record);
   const repository = repositoryRoot(root);
-  return graph.subtasks
+  // Optimization: Filter target subtasks by subtaskId if provided to avoid O(N^2) worktree and Git probes
+  const targetSubtasks = subtaskId
+    ? graph.subtasks.filter(subtask => subtask.id === subtaskId)
+    : graph.subtasks;
+  return targetSubtasks
     .slice()
     .sort((left, right) => compareIds(left.id, right.id))
     .map(subtask => {
@@ -2805,10 +2809,13 @@ export function setTaskGraphSubtaskState(root, parentTaskId, subtaskId, nextStat
       reason,
       evidence,
     };
+    const declarationsById = current.intentMap?.subtasks
+      ? new Map(current.intentMap.subtasks.map(item => [item.id, item]))
+      : null;
     validateSubtaskScopeEvidenceAgainstGraph({
       ...current,
       baseCommit: suppliedBaseCommit || current.baseCommit || current.parentTask?.baseCommit || null,
-    }, candidateSubtask);
+    }, candidateSubtask, declarationsById);
     const nextSubtasks = current.subtasks.map(subtask => subtask.id === subtaskId
       ? { ...candidateSubtask, updatedAt: current.updatedAt }
       : { ...subtask });
