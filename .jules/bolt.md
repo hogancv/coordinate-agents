@@ -22,3 +22,7 @@
 ## 2026-09-17 - Single-pass parent state evaluation
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
+
+## 2026-09-18 - Precomputed conflictDeferred Set in taskGraphPlanCommand
+**Learning:** `taskGraphPlanCommand` searched `scheduling.wave.conflictDeferred` using `Array.includes()` for every subtask in every scheduling wave conflict, creating $O(M \times N)$ linear array scans when building `conflictById`.
+**Action:** Always wrap array lookup collections into a `Set` before running batch `.find()` or `.map()` loops over related items.
