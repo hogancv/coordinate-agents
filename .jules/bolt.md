@@ -23,6 +23,9 @@
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
 
+## 2026-09-18 - Allocation-free subtask frontier state evaluation
+**Learning:** `deriveFrontierState` allocated temporary `{ id, state }` objects via `dependencyStates` and chained `.map()`, `.filter()`, `.some()`, and `.every()` on every pass of `reconcileSubtasks`.
+**Action:** Query dependency states directly from `byId` Map in single-pass loops to evaluate subtask frontier states without intermediate object or array allocations.
 ## 2026-09-18 - Targeted subtask filtering in inspectTaskGraphRecovery
 **Learning:** `inspectTaskGraphRecovery` inspected worktrees and Git facts for every subtask in the graph on every call. Loops in `taskGraphRecoverCommand`, `cleanupGraphSubtask`, and `taskGraphStopCommand` called `inspectTaskGraphRecovery` per subtask, causing O(N^2) worktree inspections and Git process invocations.
 **Action:** Support an optional `subtaskId` parameter in `inspectTaskGraphRecovery` to filter target subtasks before running worktree and Git probes.
