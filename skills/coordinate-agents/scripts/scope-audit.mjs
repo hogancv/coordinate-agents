@@ -335,19 +335,21 @@ export function validateScopeAuditEvidence(value, expected = {}) {
 }
 
 /**
- * WeakMap cache for intent map declarations by intentMap instance to avoid repeated
- * O(N) array scans when looking up subtask scope intents across pipeline passes.
+ * Cache immutable declaration arrays only. Persisted graph records are mutable
+ * and must keep observing edits between scope intent lookups.
  */
 const intentDeclarationsCache = new WeakMap();
 
 export function subtaskScopeIntent(graph, subtaskId) {
   if (!graph?.intentMap) return { writeIntent: null, scopePolicy: null };
-  let map = intentDeclarationsCache.get(graph.intentMap);
-  if (!map) {
-    map = new Map((graph.intentMap.subtasks || []).map(subtask => [subtask.id, subtask]));
-    intentDeclarationsCache.set(graph.intentMap, map);
+  const declarations = graph.intentMap.subtasks;
+  let map = intentDeclarationsCache.get(declarations);
+  if (!map && Array.isArray(declarations) && Object.isFrozen(declarations)
+    && declarations.every(Object.isFrozen)) {
+    map = new Map(declarations.map(subtask => [subtask.id, subtask]));
+    intentDeclarationsCache.set(declarations, map);
   }
-  const declaration = map.get(subtaskId);
+  const declaration = map ? map.get(subtaskId) : declarations?.find(subtask => subtask.id === subtaskId);
   if (!declaration) throw auditError(`Intent Map has no scope declaration for subtask ${subtaskId}.`);
   return { writeIntent: declaration.writeIntent, scopePolicy: graph.intentMap.scopePolicy || 'warn' };
 }
