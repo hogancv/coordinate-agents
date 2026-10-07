@@ -23,6 +23,9 @@
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
 
+## 2026-09-18 - Targeted subtask filtering in inspectTaskGraphRecovery
+**Learning:** `inspectTaskGraphRecovery` inspected worktrees and Git facts for every subtask in the graph on every call. Loops in `taskGraphRecoverCommand`, `cleanupGraphSubtask`, and `taskGraphStopCommand` called `inspectTaskGraphRecovery` per subtask, causing O(N^2) worktree inspections and Git process invocations.
+**Action:** Support an optional `subtaskId` parameter in `inspectTaskGraphRecovery` to filter target subtasks before running worktree and Git probes.
 ## 2026-09-18 - Single-pass subtask state counting and pre-aggregated agent roles in Inspector data
 **Learning:** `graphSummary` performed 7 separate `.filter()` array-allocating passes over subtasks per task graph, and `readAgents` scanned workflow config per agent. Switch-based single-pass state counting avoided 7 array allocations per graph call and improved summary calculation speed by ~4x.
 **Action:** Accumulate state counts in a single loop using fixed-property switches or object counters instead of multiple `.filter()` passes over subtasks.
