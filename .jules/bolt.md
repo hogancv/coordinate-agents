@@ -23,6 +23,9 @@
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
 
+## 2026-09-18 - WeakMap declarations lookup cache and Set lookups in task graph scheduling
+**Learning:** `subtaskScopeIntent` performed O(N) `.find()` searches on `graph.intentMap.subtasks` on every scope intent lookup, and `taskGraphPlanCommand` scanned `scheduling.wave.conflictDeferred` with O(N) `.includes()` inside conflict mapping loops.
+**Action:** Cache frozen declaration arrays with frozen entries in a `WeakMap` for O(1) lookups. Mutable graph records retain live array lookups; pre-convert candidate arrays to `Set` instances before iteration loops.
 ## 2026-09-18 - Allocation-free subtask frontier state evaluation
 **Learning:** `deriveFrontierState` allocated temporary `{ id, state }` objects via `dependencyStates` and chained `.map()`, `.filter()`, `.some()`, and `.every()` on every pass of `reconcileSubtasks`.
 **Action:** Query dependency states directly from `byId` Map in single-pass loops to evaluate subtask frontier states without intermediate object or array allocations.

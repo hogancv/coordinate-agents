@@ -1019,3 +1019,37 @@ test('auditSubtaskScope: deterministic — same inputs produce identical normali
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('subtaskScopeIntent observes replacement, addition, and removal of mutable declarations', () => {
+  const graph = { intentMap: { scopePolicy: 'warn', subtasks: [{ id: 'backend', writeIntent: ['old/**'] }] } };
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend').writeIntent, ['old/**']);
+  graph.intentMap.subtasks[0] = { id: 'backend', writeIntent: ['new/**'] };
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend').writeIntent, ['new/**']);
+  graph.intentMap.subtasks.push({ id: 'docs', writeIntent: ['docs/**'] });
+  assert.deepEqual(subtaskScopeIntent(graph, 'docs').writeIntent, ['docs/**']);
+  graph.intentMap.subtasks.splice(0, 1);
+  assert.throws(() => subtaskScopeIntent(graph, 'backend'), /no scope declaration/);
+});
+
+test('subtaskScopeIntent observes mutable IDs even inside a frozen declaration array', () => {
+  const declaration = { id: 'backend', writeIntent: ['src/**'] };
+  const graph = { intentMap: { subtasks: Object.freeze([declaration]) } };
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend').writeIntent, ['src/**']);
+  declaration.id = 'renamed';
+  assert.throws(() => subtaskScopeIntent(graph, 'backend'), /no scope declaration/);
+  assert.deepEqual(subtaskScopeIntent(graph, 'renamed').writeIntent, ['src/**']);
+});
+
+test('subtaskScopeIntent reads current policy and replacement of immutable declaration arrays', () => {
+  const graph = { intentMap: { scopePolicy: 'warn', subtasks: Object.freeze([
+    Object.freeze({ id: 'backend', writeIntent: Object.freeze(['src/**']) }),
+    Object.freeze({ id: 'docs', writeIntent: Object.freeze(['docs/**']) }),
+  ]) } };
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend'), { writeIntent: ['src/**'], scopePolicy: 'warn' });
+  assert.deepEqual(subtaskScopeIntent(graph, 'docs').writeIntent, ['docs/**']);
+  graph.intentMap.scopePolicy = 'strict';
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend'), { writeIntent: ['src/**'], scopePolicy: 'strict' });
+  graph.intentMap.subtasks = Object.freeze([Object.freeze({ id: 'backend', writeIntent: Object.freeze(['replacement/**']) })]);
+  assert.deepEqual(subtaskScopeIntent(graph, 'backend').writeIntent, ['replacement/**']);
+  assert.throws(() => subtaskScopeIntent(graph, 'docs'), /no scope declaration/);
+});
