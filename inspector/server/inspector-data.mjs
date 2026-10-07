@@ -559,6 +559,17 @@ function readSessions(root, tasks = readTaskRecords(root)) {
   } catch {
     return Promise.resolve([]);
   }
+  // Performance optimization: pre-index tasks by sessionId once to avoid O(S * T) filter calls
+  const tasksBySessionId = new Map();
+  for (const task of tasks) {
+    if (!task.sessionId) continue;
+    let list = tasksBySessionId.get(task.sessionId);
+    if (!list) {
+      list = [];
+      tasksBySessionId.set(task.sessionId, list);
+    }
+    list.push(task.id);
+  }
   return Promise.all(records.map(async record => {
     let current = record;
     let recentOutput = '';
@@ -573,9 +584,7 @@ function readSessions(root, tasks = readTaskRecords(root)) {
         error: bounded(error.message || String(error), 2 * 1024),
       };
     }
-    const taskIds = tasks
-      .filter(task => task.sessionId === record.id)
-      .map(task => task.id);
+    const taskIds = tasksBySessionId.get(record.id) || [];
     const sessionEvents = recordedEvents(root, { sessionId: record.id, limit: 200 });
     return {
       sessionId: current.id,
