@@ -23,6 +23,9 @@
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
 
+## 2026-09-18 - Pre-built adapterMap in task graph planning
+**Learning:** `taskGraphPlanCommand` scanned the adapter registry for every implementer. Batch recovery caches can retain outdated worktree ownership after asynchronous operations.
+**Action:** Pre-index registered adapters once during planning. Recovery and stop operations retain fresh targeted subtask inspections rather than caching worktree ownership.
 ## 2026-09-18 - WeakMap declarations lookup cache and Set lookups in task graph scheduling
 **Learning:** `subtaskScopeIntent` performed O(N) `.find()` searches on `graph.intentMap.subtasks` on every scope intent lookup, and `taskGraphPlanCommand` scanned `scheduling.wave.conflictDeferred` with O(N) `.includes()` inside conflict mapping loops.
 **Action:** Cache frozen declaration arrays with frozen entries in a `WeakMap` for O(1) lookups. Mutable graph records retain live array lookups; pre-convert candidate arrays to `Set` instances before iteration loops.
