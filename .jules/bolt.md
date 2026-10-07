@@ -44,3 +44,7 @@
 ## 2026-09-18 - Precomputed conflictDeferred Set in taskGraphPlanCommand
 **Learning:** `taskGraphPlanCommand` searched `scheduling.wave.conflictDeferred` using `Array.includes()` for every subtask in every scheduling wave conflict, creating $O(M \times N)$ linear array scans when building `conflictById`.
 **Action:** Always wrap array lookup collections into a `Set` before running batch `.find()` or `.map()` loops over related items.
+
+## 2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation
+**Learning:** `validateTaskGraphV1` converted `configuredAgents` to array via spread operator, `.map()`, and `.filter(Boolean)`, sorted normalized subtasks twice, allocated `Set` instances for empty or 1-item dependency arrays, and `cyclePath` re-copied and re-sorted already-sorted `dependsOn` arrays and `dependencies.keys()`.
+**Action:** Populate Sets via `for...of` loops without intermediate array allocations, sort collections once, skip Set lookups for length <= 1, and reuse already-sorted subtask array properties in graph graph processing.
