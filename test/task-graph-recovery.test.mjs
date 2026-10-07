@@ -27,6 +27,7 @@ import {
   cleanupTaskGraphWorktree,
   ensureSubtaskWorktree,
   ensureSubtaskWorktreeBus,
+  inspectTaskGraphRecovery,
   readTaskGraph,
   taskGraphBranchRef,
   taskGraphPath,
@@ -77,6 +78,23 @@ async function removeRepository(root) {
   try { execFileSync('git', ['worktree', 'prune'], { cwd: root, stdio: 'ignore', windowsHide: true }); } catch { /* best effort */ }
   rmSync(root, { recursive: true, force: true });
 }
+
+test('recovery inspection selects only the requested subtask and handles unknown IDs', async () => {
+  const root = repository('coordinate-agents-graph-targeted-recovery-');
+  const parentTaskId = 'task-targeted-recovery';
+  try {
+    await runtimeTaskGraphCreate({ root, graph: graph(parentTaskId) });
+    const record = readTaskGraph(root, parentTaskId);
+    const selected = inspectTaskGraphRecovery(root, record, { probeGit: true, subtaskId: 'backend' });
+    assert.deepEqual(selected.map(item => item.subtaskId), ['backend']);
+    assert.equal(selected[0].classification, 'ready');
+    assert.equal(selected[0].worktree.exists, false);
+    assert.deepEqual(inspectTaskGraphRecovery(root, record, { subtaskId: 'unknown' }), []);
+    assert.deepEqual(inspectTaskGraphRecovery(root, record).map(item => item.subtaskId), ['backend', 'frontend']);
+  } finally {
+    await removeRepository(root);
+  }
+});
 
 test('graph recovery reports durable interruption facts, blocks dependents, and requires explicit resume', async () => {
   const root = repository('coordinate-agents-graph-interrupted-');

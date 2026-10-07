@@ -23,6 +23,24 @@
 **Learning:** `parentStateFor` created a temporary state array and made repeated passes over it for each subtask state check.
 **Action:** Evaluate lifecycle precedence in one pass with early returns and no state array allocation.
 
-## 2026-09-18 - Pre-built recoveryMap in task graph recover and stop CLI commands
-**Learning:** `taskGraphRecoverCommand` and `taskGraphStopCommand` repeatedly executed `inspectTaskGraphRecovery` (spawning child `git` processes) inside per-subtask iteration loops.
-**Action:** Pre-build a `recoveryMap` once before subtask iteration and pass cached recovery objects during batch recovery and stop operations.
+## 2026-09-18 - Pre-built adapterMap in task graph planning
+**Learning:** `taskGraphPlanCommand` scanned the adapter registry for every implementer. Batch recovery caches can retain outdated worktree ownership after asynchronous operations.
+**Action:** Pre-index registered adapters once during planning. Recovery and stop operations retain fresh targeted subtask inspections rather than caching worktree ownership.
+## 2026-09-18 - WeakMap declarations lookup cache and Set lookups in task graph scheduling
+**Learning:** `subtaskScopeIntent` performed O(N) `.find()` searches on `graph.intentMap.subtasks` on every scope intent lookup, and `taskGraphPlanCommand` scanned `scheduling.wave.conflictDeferred` with O(N) `.includes()` inside conflict mapping loops.
+**Action:** Cache frozen declaration arrays with frozen entries in a `WeakMap` for O(1) lookups. Mutable graph records retain live array lookups; pre-convert candidate arrays to `Set` instances before iteration loops.
+## 2026-09-18 - Allocation-free subtask frontier state evaluation
+**Learning:** `deriveFrontierState` allocated temporary `{ id, state }` objects via `dependencyStates` and chained `.map()`, `.filter()`, `.some()`, and `.every()` on every pass of `reconcileSubtasks`.
+**Action:** Query dependency states directly from `byId` Map in single-pass loops to evaluate subtask frontier states without intermediate object or array allocations.
+## 2026-09-18 - Targeted subtask filtering in inspectTaskGraphRecovery
+**Learning:** `inspectTaskGraphRecovery` inspected worktrees and Git facts for every subtask in the graph on every call. Loops in `taskGraphRecoverCommand`, `cleanupGraphSubtask`, and `taskGraphStopCommand` called `inspectTaskGraphRecovery` per subtask, causing O(N^2) worktree inspections and Git process invocations.
+**Action:** Support an optional `subtaskId` parameter in `inspectTaskGraphRecovery` to filter target subtasks before running worktree and Git probes.
+## 2026-09-18 - Single-pass subtask state counting and pre-aggregated agent roles in Inspector data
+**Learning:** `graphSummary` performed 7 separate `.filter()` array-allocating passes over subtasks per task graph, and `readAgents` scanned workflow config per agent. Switch-based single-pass state counting avoided 7 array allocations per graph call and improved summary calculation speed by ~4x.
+**Action:** Accumulate state counts in a single loop using fixed-property switches or object counters instead of multiple `.filter()` passes over subtasks.
+## 2026-09-18 - Pre-indexed tasks Map in readSessions
+**Learning:** `readSessions` performed `tasks.filter(task => task.sessionId === record.id)` inside `records.map`, causing O(S * T) array filtering allocations for every session lookup.
+**Action:** Pre-index tasks by `sessionId` into a `Map` once before mapping session records to reduce lookup complexity to O(S + T).
+## 2026-09-18 - Precomputed conflictDeferred Set in taskGraphPlanCommand
+**Learning:** `taskGraphPlanCommand` searched `scheduling.wave.conflictDeferred` using `Array.includes()` for every subtask in every scheduling wave conflict, creating $O(M \times N)$ linear array scans when building `conflictById`.
+**Action:** Always wrap array lookup collections into a `Set` before running batch `.find()` or `.map()` loops over related items.
