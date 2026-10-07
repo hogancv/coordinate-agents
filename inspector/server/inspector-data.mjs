@@ -293,9 +293,29 @@ function taskSummary(task) {
 
 function graphSummary(graph) {
   const parent = graph.parentTask;
-  const counts = Object.fromEntries([
-    'READY', 'WAITING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'BLOCKED', 'STOPPED',
-  ].map(state => [state.toLowerCase(), graph.subtasks.filter(item => item.state === state).length]));
+  // Single-pass subtask state count accumulation to avoid 7 temporary array allocations per graph summary
+  const counts = {
+    ready: 0,
+    waiting: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    blocked: 0,
+    stopped: 0,
+  };
+  const subtasks = graph.subtasks || EMPTY_ARRAY;
+  for (let index = 0; index < subtasks.length; index += 1) {
+    switch (subtasks[index]?.state) {
+      case 'READY': case 'ready': counts.ready += 1; break;
+      case 'WAITING': case 'waiting': counts.waiting += 1; break;
+      case 'RUNNING': case 'running': counts.running += 1; break;
+      case 'SUCCEEDED': case 'succeeded': counts.succeeded += 1; break;
+      case 'FAILED': case 'failed': counts.failed += 1; break;
+      case 'BLOCKED': case 'blocked': counts.blocked += 1; break;
+      case 'STOPPED': case 'stopped': counts.stopped += 1; break;
+      default: break;
+    }
+  }
   return {
     kind: 'task-graph-parent',
     graph: true,
@@ -313,21 +333,31 @@ function graphSummary(graph) {
     sessionId: null,
     reviewDecision: graph.review?.decision || null,
     maxConcurrency: graph.maxConcurrency,
-    subtaskCount: graph.subtasks.length,
+    subtaskCount: subtasks.length,
     counts,
   };
 }
 
-function rolesFor(config, agentId) {
-  return Object.entries(config.workflow || {})
-    .filter(([, configuredAgent]) => configuredAgent === agentId)
-    .map(([role]) => role);
+function rolesByAgent(config) {
+  const rolesMap = new Map();
+  for (const [role, agentId] of Object.entries(config.workflow || {})) {
+    if (typeof agentId === 'string' && agentId) {
+      let roles = rolesMap.get(agentId);
+      if (!roles) {
+        roles = [];
+        rolesMap.set(agentId, roles);
+      }
+      roles.push(role);
+    }
+  }
+  return rolesMap;
 }
 
 function readAgents(root) {
   const bus = busFor(root);
   if (!bus) return [];
   const config = readConfig(bus);
+  const rolesMap = rolesByAgent(config);
   return config.agents.map(agent => {
     let observation = null;
     try {
@@ -335,13 +365,13 @@ function readAgents(root) {
     } catch (error) {
       observation = { error: bounded(error.message || String(error), 2 * 1024) };
     }
-    const roles = rolesFor(config, agent.id);
+    const roles = rolesMap.get(agent.id) || EMPTY_ARRAY;
     const state = observation?.state || null;
     const pending = (observation?.pendingNew || 0) + (observation?.pendingProcessing || 0);
     return {
       id: agent.id,
       role: roles.join(' / ') || null,
-      roles,
+      roles: [...roles],
       adapter: agent.adapter,
       status: state?.state || (pending > 0 ? 'WAITING' : 'IDLE'),
       lastActivity: state?.updated_at || null,
@@ -529,6 +559,17 @@ function readSessions(root, tasks = readTaskRecords(root)) {
   } catch {
     return Promise.resolve([]);
   }
+  // Performance optimization: pre-index tasks by sessionId once to avoid O(S * T) filter calls
+  const tasksBySessionId = new Map();
+  for (const task of tasks) {
+    if (!task.sessionId) continue;
+    let list = tasksBySessionId.get(task.sessionId);
+    if (!list) {
+      list = [];
+      tasksBySessionId.set(task.sessionId, list);
+    }
+    list.push(task.id);
+  }
   return Promise.all(records.map(async record => {
     let current = record;
     let recentOutput = '';
@@ -543,9 +584,7 @@ function readSessions(root, tasks = readTaskRecords(root)) {
         error: bounded(error.message || String(error), 2 * 1024),
       };
     }
-    const taskIds = tasks
-      .filter(task => task.sessionId === record.id)
-      .map(task => task.id);
+    const taskIds = tasksBySessionId.get(record.id) || [];
     const sessionEvents = recordedEvents(root, { sessionId: record.id, limit: 200 });
     return {
       sessionId: current.id,
