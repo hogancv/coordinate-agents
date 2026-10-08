@@ -50,13 +50,14 @@ export function assertContained(root, candidate) {
 
 export function assertSafePath(root, candidate) {
   assertContained(root, candidate);
+  const rootCanonical = existsSync(root) ? realpathSync(root) : root;
   let cursor = candidate;
   while (cursor !== root) {
     if (existsSync(cursor)) {
       const metadata = lstatSync(cursor);
       if (metadata.isSymbolicLink()) throw new Error(`Refusing symbolic link or junction in agent-bus path: ${cursor}`);
       const canonical = realpathSync(cursor);
-      assertContained(root, canonical);
+      assertContained(rootCanonical, canonical);
     }
     cursor = dirname(cursor);
   }
@@ -69,7 +70,8 @@ export function safeInternalStat(bus, path) {
   if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.nlink !== 1) {
     throw new Error(`Refusing linked or non-regular agent-bus file: ${path}`);
   }
-  assertContained(bus, realpathSync(path));
+  const busCanonical = existsSync(bus) ? realpathSync(bus) : bus;
+  assertContained(busCanonical, realpathSync(path));
   return metadata;
 }
 
