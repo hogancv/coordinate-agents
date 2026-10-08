@@ -132,7 +132,8 @@ function validateConfiguredAgent(agent, configuredAgents, parentTaskId, subtaskI
 }
 
 function cyclePath(subtasks) {
-  const dependencies = new Map(subtasks.map(subtask => [subtask.id, [...subtask.dependsOn].sort()]));
+  // dependsOn is already sorted during subtask normalization; reuse array reference
+  const dependencies = new Map(subtasks.map(subtask => [subtask.id, subtask.dependsOn]));
   const visited = new Set();
   const active = new Set();
   const path = [];
@@ -155,8 +156,9 @@ function cyclePath(subtasks) {
     return null;
   }
 
-  for (const id of [...dependencies.keys()].sort()) {
-    const cycle = visit(id);
+  // subtasks is already ordered by subtask.id
+  for (const subtask of subtasks) {
+    const cycle = visit(subtask.id);
     if (cycle) return cycle;
   }
   return null;
@@ -173,15 +175,10 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
     invalid(`Unsupported Task Graph schemaVersion: ${boundedText(input.schemaVersion ?? '(missing)')}. Expected 1.`);
   }
 
+  // validateParentTask validates and normalizes planner, reviewer, and optional implementer via requiredAgent
   const parentTask = validateParentTask(input);
-  let planner;
-  let reviewer;
-  try {
-    planner = validateAgentId(parentTask.planner);
-    reviewer = validateAgentId(parentTask.reviewer);
-  } catch (error) {
-    invalid(`Task Graph v1 parent Task has a malformed Agent identity: ${error.message}`, { parentTaskId: parentTask.id });
-  }
+  const planner = parentTask.planner;
+  const reviewer = parentTask.reviewer;
 
   if (!Array.isArray(input.subtasks) || input.subtasks.length === 0) {
     invalid('Task Graph v1 requires at least one subtask.', { parentTaskId: parentTask.id });
@@ -203,10 +200,12 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
   if (!Array.isArray(configuredSource) && !(configuredSource instanceof Set)) {
     invalid('Task Graph v1 configuredAgents must be an array or Set of Agent identities.', { parentTaskId: parentTask.id });
   }
-  const configuredList = configuredSource instanceof Set ? [...configuredSource] : configuredSource;
-  const configured = new Set(configuredList.map(agent => (
-    typeof agent === 'string' ? agent : agent?.id
-  )).filter(Boolean));
+  // Single pass Set population to avoid intermediate array allocations (.map / .filter)
+  const configured = new Set();
+  for (const agent of configuredSource) {
+    const id = typeof agent === 'string' ? agent : agent?.id;
+    if (id) configured.add(id);
+  }
   validateConfiguredAgent(parentTask.planner, configured, parentTask.id, null, 'parent planner');
   validateConfiguredAgent(parentTask.reviewer, configured, parentTask.id, null, 'parent reviewer');
   if (parentTask.implementer) validateConfiguredAgent(parentTask.implementer, configured, parentTask.id, null, 'parent Implementer');
@@ -248,7 +247,7 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
     if (dependsOn.some(dependency => !validSubtaskId(dependency))) {
       invalid(`Task Graph v1 subtask "${subtask.id}" has a malformed dependency identifier.`, { parentTaskId: parentTask.id, subtaskId: subtask.id });
     }
-    if (new Set(dependsOn).size !== dependsOn.length) {
+    if (dependsOn.length > 1 && new Set(dependsOn).size !== dependsOn.length) {
       invalid(`Task Graph v1 subtask "${subtask.id}" contains a duplicate dependency edge.`, { parentTaskId: parentTask.id, subtaskId: subtask.id });
     }
     if (dependsOn.includes(subtask.id)) {
@@ -270,7 +269,9 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
     });
   }
 
-  for (const subtask of [...normalized].sort((a, b) => (a.id < b.id ? -1 : (a.id > b.id ? 1 : 0)))) {
+  // Sort normalized subtasks once into orderedSubtasks to avoid sorting twice and allocating extra arrays
+  const orderedSubtasks = normalized.sort((a, b) => (a.id < b.id ? -1 : (a.id > b.id ? 1 : 0)));
+  for (const subtask of orderedSubtasks) {
     for (const dependency of subtask.dependsOn) {
       if (!ids.has(dependency)) {
         invalid(`Task Graph v1 subtask "${subtask.id}" references missing dependency "${dependency}".`, {
@@ -280,7 +281,7 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
       }
     }
   }
-  const cycle = cyclePath(normalized);
+  const cycle = cyclePath(orderedSubtasks);
   if (cycle) {
     const boundedCycle = cycle.length > 9
       ? [...cycle.slice(0, 8), '...', cycle.at(-1)]
@@ -288,7 +289,6 @@ export function validateTaskGraphV1(input, { configuredAgents = [] } = {}) {
     invalid(`Task Graph v1 contains a dependency cycle: ${boundedCycle.join(' -> ')}.`, { parentTaskId: parentTask.id });
   }
 
-  const orderedSubtasks = [...normalized].sort((a, b) => (a.id < b.id ? -1 : (a.id > b.id ? 1 : 0)));
   return Object.freeze({
     schemaVersion: TASK_GRAPH_SCHEMA_VERSION,
     kind: 'task-graph',
