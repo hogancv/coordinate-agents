@@ -313,30 +313,51 @@ function sessionView(slot, facts) {
 
 function statusFromFacts(record, sessions) {
   if (record.status === 'ERROR' || record.status === 'CLOSED') return record.status;
-  const states = sessions.map(session => session.state).filter(Boolean);
-  const active = states.filter(state => ACTIVE_SESSION_STATES.has(state)).length;
+  // Performance optimization: evaluate active count and terminal state flags in a single pass without array allocations
+  let active = 0;
+  let totalStates = 0;
+  let hasTerminal = false;
+  let allTerminal = true;
+  for (let i = 0; i < sessions.length; i += 1) {
+    const state = sessions[i]?.state;
+    if (state) {
+      totalStates += 1;
+      if (ACTIVE_SESSION_STATES.has(state)) active += 1;
+      if (TERMINAL_SESSION_STATES.has(state)) hasTerminal = true;
+      else allTerminal = false;
+    } else {
+      allTerminal = false;
+    }
+  }
   if (active === 2) return 'RUNNING';
   if (active === 1) return 'DEGRADED';
-  if (record.status === 'STARTING') return states.some(state => TERMINAL_SESSION_STATES.has(state)) ? 'ERROR' : 'STARTING';
-  if (states.length === 2 && states.every(state => TERMINAL_SESSION_STATES.has(state))) return 'EXITED';
+  if (record.status === 'STARTING') return hasTerminal ? 'ERROR' : 'STARTING';
+  if (totalStates === 2 && allTerminal) return 'EXITED';
   return record.status;
 }
 
 function workspaceTaskView(record, facts = new Map()) {
-  const sessions = Object.fromEntries(WORKSPACE_TASK_SLOTS.map(expected => [
-    expected.slot,
-    sessionView(record.sessions[expected.slot], facts),
-  ]));
+  // Performance optimization: iterate WORKSPACE_TASK_SLOTS with a single loop to avoid Object.fromEntries() and .map() array allocations
+  const sessions = {};
+  const sessionIds = {};
+  const sessionList = [];
+  for (let i = 0; i < WORKSPACE_TASK_SLOTS.length; i += 1) {
+    const slot = WORKSPACE_TASK_SLOTS[i].slot;
+    const view = sessionView(record.sessions[slot], facts);
+    sessions[slot] = view;
+    sessionIds[slot] = record.sessions[slot].sessionId;
+    sessionList.push(view);
+  }
   return {
     id: record.id,
     title: record.title,
-    status: statusFromFacts(record, Object.values(sessions)),
+    status: statusFromFacts(record, sessionList),
     promptVersion: record.promptVersion,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
-    sessionIds: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, record.sessions[slot].sessionId])),
+    sessionIds,
     sessionHistory: record.sessionHistory,
     error: record.error,
   };

@@ -48,3 +48,7 @@
 ## 2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation
 **Learning:** `validateTaskGraphV1` converted `configuredAgents` to array via spread operator, `.map()`, and `.filter(Boolean)`, sorted normalized subtasks twice, allocated `Set` instances for empty or 1-item dependency arrays, and `cyclePath` re-copied and re-sorted already-sorted `dependsOn` arrays and `dependencies.keys()`.
 **Action:** Populate Sets via `for...of` loops without intermediate array allocations, sort collections once, skip Set lookups for length <= 1, and reuse already-sorted subtask array properties in graph graph processing.
+
+## 2026-09-20 - Single-pass status evaluation and direct slot iteration in Workspace Task runtime
+**Learning:** `statusFromFacts` allocated multiple intermediate arrays via `.map()` and `.filter()`, and `workspaceTaskView` allocated temporary arrays using `Object.fromEntries(WORKSPACE_TASK_SLOTS.map(...))`. Evaluating status in one pass and using a single `for` loop over `WORKSPACE_TASK_SLOTS` reduced slot view execution time by ~3.2x while preserving `WORKSPACE_TASK_SLOTS` as the single source of truth.
+**Action:** Replace `Object.fromEntries(SLOTS.map(...))` and chained array filtering with single-pass `for` loops when mapping fixed slot definitions into record views.

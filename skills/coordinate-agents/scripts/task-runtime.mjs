@@ -384,11 +384,14 @@ function implementationMessages(root, task) {
   for (const stage of ['new', 'processing', 'processed']) {
     const directory = join(inbox, stage);
     if (!existsSync(directory)) continue;
-    for (const name of readdirSync(directory).filter(item => item.endsWith('.md')).sort()) {
+    const names = readdirSync(directory).sort();
+    for (let i = 0; i < names.length; i += 1) {
+      const name = names[i];
+      if (!name.endsWith('.md')) continue;
       const path = join(directory, name);
       try {
         safeInternalStat(bus, path);
-        const parsed = parseBusMessage(readInternalFile(taskBusPath(root), path));
+        const parsed = parseBusMessage(readInternalFile(bus, path));
         if (!parsed || parsed.fields.type !== 'IMPLEMENTATION_DONE') continue;
         if (parsed.fields.from !== task.implementer || parsed.fields.to !== task.planner) continue;
         const refersToTask = parsed.fields.dedupe_key?.includes(task.id)
