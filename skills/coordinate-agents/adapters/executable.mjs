@@ -125,6 +125,15 @@ function windowsEntrypoint(candidate, { windowsEntrypoint } = {}) {
     }
     return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_FOUND, `PowerShell host is unavailable for: ${candidate}`, { resolvedCommand: candidate, prefix: [], safe: false });
   }
+  if (extension === '' || extension === '.sh') {
+    const shebang = readShebang(candidate);
+    if (shebang) {
+      if (shebang.invalid) {
+        return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Command has an invalid shebang: ${candidate}`, { resolvedCommand: candidate });
+      }
+      return resolveShebangInterpreter(shebang[0], shebang.slice(1), candidate);
+    }
+  }
   return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Unsupported Windows executable entrypoint: ${candidate}`);
 }
 
