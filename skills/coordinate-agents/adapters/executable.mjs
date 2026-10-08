@@ -185,7 +185,9 @@ function resolveShebangInterpreter(interpreter, args, candidate) {
   }
   const interpreterCandidate = isPathLike(interpreterName)
     ? interpreterName
-    : posixCandidate(interpreterName);
+    : (process.platform === 'win32'
+      ? (basename(interpreterName, '.exe') === 'node' ? process.execPath : (windowsCandidates(interpreterName)[0] || null))
+      : posixCandidate(interpreterName));
   let canonicalInterpreter = interpreterCandidate;
   try {
     // System shebangs commonly use stable symlinks such as /bin/sh. Resolve
@@ -194,6 +196,18 @@ function resolveShebangInterpreter(interpreter, args, candidate) {
     canonicalInterpreter = interpreterCandidate ? realpathSync(interpreterCandidate) : null;
   } catch {
     canonicalInterpreter = null;
+  }
+  if (process.platform === 'win32') {
+    if (!canonicalInterpreter || !existsSync(canonicalInterpreter)) {
+      return resultFailure(candidate, EXECUTABLE_CODES.COMMAND_NOT_EXECUTABLE, `Shebang interpreter is unavailable: ${interpreterName}`, { resolvedCommand: candidate });
+    }
+    return {
+      available: true,
+      command: canonicalInterpreter,
+      prefix: [...interpreterArgs, candidate],
+      resolvedCommand: candidate,
+      safe: true,
+    };
   }
   const resolved = posixEntrypoint(interpreterName, canonicalInterpreter);
   if (!resolved.available) {
