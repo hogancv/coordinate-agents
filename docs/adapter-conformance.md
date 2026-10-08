@@ -7,6 +7,9 @@ permalink: /adapter-conformance.html
 
 # Adapter Conformance Kit
 
+> **V3 distribution / 分发说明:** Adapter conformance remains a source/Plugin gate, independent of the Web-first npm 3.x payload. npm 3 no longer packages this kit or the author example. Web package installation has its own cross-platform acceptance workflow.
+
+
 The public Adapter Conformance Kit lets an adapter author run the same
 Contract v1 checks used by the project without a provider account, token,
 network connection, or real user configuration. It accepts a validated

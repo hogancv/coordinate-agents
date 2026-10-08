@@ -13,36 +13,22 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const PACKAGE_NAME = '@hogancv/coordinate-agents';
-const PLUGIN_NAME = 'coordinate-agents';
 const REPOSITORY_URL = 'https://github.com/hogancv/coordinate-agents';
 const MAX_OUTPUT = 20_000;
 
 const REQUIRED_FILES = [
-  'adapter-sdk.mjs',
-  '.codex-plugin/plugin.json',
-  '.mcp.json',
-  'bin/coordinate-agents.mjs',
-  'lib/cli-core.mjs',
-  'lib/cli/parse-args.mjs',
-  'lib/commands/index.mjs',
-  'skills/coordinate-agents/SKILL.md',
-  'skills/coordinate-setup/SKILL.md',
-  'skills/coordinate-agents/adapters/contract-v1.mjs',
-  'skills/coordinate-agents/adapters/conformance.mjs',
-  'skills/coordinate-agents/scripts/runtime-entry.mjs',
-  'docs/adapter-conformance.md',
-  'docs/adapter-author-guide.md',
-  'docs/llms.txt',
-  'llms.txt',
-  'CHANGELOG.md',
-  'examples/minimal-external-adapter/adapter.mjs',
-  'examples/minimal-external-adapter/fake-agent.mjs',
-  'examples/minimal-external-adapter/README.md',
-  'examples/minimal-external-adapter/run-conformance.mjs',
+  'bin/coordinate-agents.mjs', 'lib/web-cli.mjs',
+  'inspector/server/workspace-server.mjs', 'inspector/server/http-server.mjs',
+  'inspector/server/workspace-data.mjs', 'inspector/server/action-gateway.mjs',
+  'inspector/server/workspace-projects.mjs', 'inspector/server/native-folder-picker.mjs',
+  ...['index.html', 'app.js', 'styles.css', 'composer-model.mjs', 'terminal-model.mjs', 'vendor/xterm.js', 'vendor/xterm.css', 'vendor/xterm.LICENSE'].map(file => `inspector/web-workspace/${file}`),
+  ...['pty-runtime', 'session-host', 'session-manager', 'session-service', 'workspace-task-runtime', 'workspace-message', 'workspace-services', 'workspace-init', 'config', 'user-config', 'runtime-contract', 'runtime-events', 'workspace-role-prompts'].map(file => `skills/coordinate-agents/scripts/${file}.mjs`),
+  ...['index', 'base', 'codex-cli', 'antigravity-cli', 'generic-cli', 'executable', 'contract-v1', 'trusted-local'].map(file => `skills/coordinate-agents/adapters/${file}.mjs`),
+  'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'LICENSE', 'package.json',
 ];
 
 class VerificationError extends Error {
@@ -175,31 +161,13 @@ function isolatedEnvironment(home, extra = {}) {
 
 function verifyIdentity(packageRoot, expectedVersion) {
   const packageJson = readJson(join(packageRoot, 'package.json'), 'package.json');
-  const pluginJson = readJson(join(packageRoot, '.codex-plugin', 'plugin.json'), '.codex-plugin/plugin.json');
   if (packageJson.name !== PACKAGE_NAME) throw new VerificationError(`Unexpected package name: ${packageJson.name}`);
-  if (pluginJson.name !== PLUGIN_NAME) throw new VerificationError(`Unexpected Plugin name: ${pluginJson.name}`);
-  if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(packageJson.version)) {
-    throw new VerificationError(`Package version is not stable SemVer: ${packageJson.version}`);
-  }
-  if (expectedVersion && packageJson.version !== expectedVersion) {
-    throw new VerificationError(`Expected package version ${expectedVersion}, received ${packageJson.version}`);
-  }
-  if (pluginJson.version !== packageJson.version) {
-    throw new VerificationError(`Package/Plugin version mismatch: ${packageJson.version} vs ${pluginJson.version}`);
-  }
-  if (packageJson.repository?.url !== `git+${REPOSITORY_URL}.git`) {
-    throw new VerificationError(`Unexpected package repository URL: ${packageJson.repository?.url}`);
-  }
-  if (pluginJson.repository !== REPOSITORY_URL) {
-    throw new VerificationError(`Unexpected Plugin repository URL: ${pluginJson.repository}`);
-  }
-  if (pluginJson.skills !== './skills/' || pluginJson.mcpServers !== './.mcp.json') {
-    throw new VerificationError('Plugin manifest does not point at the packaged skills and MCP server payload.');
-  }
-  if (packageJson.exports?.['./adapter-sdk'] !== './adapter-sdk.mjs') {
-    throw new VerificationError('The public ./adapter-sdk export is missing or points at another file.');
-  }
-  return { packageJson, pluginJson };
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(packageJson.version) || packageJson.version !== expectedVersion) throw new VerificationError(`Expected stable package version ${expectedVersion}, received ${packageJson.version}`);
+  if (packageJson.repository?.url !== `git+${REPOSITORY_URL}.git`) throw new VerificationError('Unexpected package repository URL.');
+  if (packageJson.bin?.['coordinate-agents'] !== 'bin/coordinate-agents.mjs') throw new VerificationError('npm bin does not point at the Web executable.');
+  if (JSON.stringify(packageJson.exports) !== JSON.stringify({ './package.json': './package.json' })) throw new VerificationError('npm exports must contain only package metadata.');
+  if (packageJson.dependencies?.['node-pty'] !== '1.1.0') throw new VerificationError('Expected production node-pty dependency.');
+  return { packageJson };
 }
 
 function verifyCandidateFacts(packageJson, expectedSourceCommit, expectedTag) {
@@ -219,87 +187,47 @@ function verifyCandidateFacts(packageJson, expectedSourceCommit, expectedTag) {
   };
 }
 
-function verifyPayload(packageRoot) {
+export function verifyPayload(packageRoot) {
+  const manifest = readJson(join(packageRoot, 'package.json'), 'package.json');
+  const allowed = new Set(REQUIRED_FILES);
+  if (!Array.isArray(manifest.files) || manifest.files.some(file => !allowed.has(file))) throw new VerificationError('Package files must be an exact Web runtime whitelist.');
+  const files = [];
+  function scan(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) scan(path);
+      else { assertRegularFile(path, 'payload entry'); files.push(relative(packageRoot, path).split(sep).join('/')); }
+    }
+  }
+  scan(packageRoot);
   for (const file of REQUIRED_FILES) assertRegularFile(join(packageRoot, file), file);
-  const llms = readFileSync(join(packageRoot, 'llms.txt'), 'utf8');
-  const docsLlms = readFileSync(join(packageRoot, 'docs', 'llms.txt'), 'utf8');
-  if (llms !== docsLlms) throw new VerificationError('Packaged llms.txt is not synchronized with docs/llms.txt.');
-  return { files: REQUIRED_FILES.length, llmsSynchronized: true };
-}
-
-function verifyExternalExample(packageRoot, env) {
-  const result = run(process.execPath, [
-    join('examples', 'minimal-external-adapter', 'run-conformance.mjs'),
-  ], { cwd: packageRoot, env });
-  const report = parseChildJson(result, 'external Adapter example');
-  if (report.ok !== true || report.contractVersion !== 1 || report.summary?.failed !== 0) {
-    throw new VerificationError('Packaged external Adapter example did not pass offline conformance.', report);
+  for (const file of files) if (!allowed.has(file)) throw new VerificationError(`Unexpected or Legacy payload file: ${file}`);
+  const imports = [];
+  for (const file of files.filter(file => file.endsWith('.mjs') || file.endsWith('.js'))) {
+    const source = readFileSync(join(packageRoot, file), 'utf8');
+    const pattern = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["']([^"']+)["']|new URL\(\s*["']([^"']+)["']\s*,\s*import.meta.url/g;
+    for (const match of source.matchAll(pattern)) {
+      const specifier = match[1] || match[2];
+      if (!specifier.startsWith('.')) continue;
+      const target = resolve(packageRoot, file, '..', specifier);
+      const local = relative(packageRoot, target).split(sep).join('/');
+      if (local.startsWith('../') || !existsSync(target)) throw new VerificationError(`Unresolved runtime reference: ${file} -> ${specifier}`);
+      imports.push({ file, target: local });
+    }
   }
-  return {
-    adapter: report.adapter,
-    contractVersion: report.contractVersion,
-    kitVersion: report.kitVersion,
-    summary: report.summary,
-  };
+  return { files: files.length, runtimeReferences: imports.length, legacyAbsent: true };
 }
 
-function createCodexFixture(tempRoot) {
-  const bin = join(tempRoot, 'doctor-bin');
-  mkdirSync(bin, { recursive: true });
+function npmInstall(artifact, consumer, env) {
+  const npmEntry = process.env.npm_execpath;
+  if (npmEntry && existsSync(npmEntry)) return run(process.execPath, [npmEntry, 'install', '--omit=dev', '--no-audit', '--no-fund', artifact], { cwd: consumer, env });
   if (process.platform === 'win32') {
-    const script = join(bin, 'codex.cjs');
-    writeFileSync(script, "console.log('codex-fixture-1.0.0');\n", 'utf8');
-    writeFileSync(join(bin, 'codex.cmd'), `@"${process.execPath}" "${script}" %*\r\n`, 'utf8');
-  } else {
-    const executable = join(bin, 'codex');
-    writeFileSync(executable, '#!/bin/sh\necho codex-fixture-1.0.0\n', 'utf8');
-    chmodSync(executable, 0o755);
+    const nodeDir = resolve(process.execPath, '..');
+    const candidate = join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    if (!existsSync(candidate)) throw new VerificationError('Cannot locate npm-cli.js; run via npm run release:verify.');
+    return run(process.execPath, [candidate, 'install', '--omit=dev', '--no-audit', '--no-fund', artifact], { cwd: consumer, env });
   }
-  return bin;
-}
-
-function verifyRuntime(packageRoot, tempRoot, env, expectedVersion) {
-  const cli = join(packageRoot, 'bin', 'coordinate-agents.mjs');
-  const repository = join(tempRoot, 'consumer-repository');
-  const home = join(tempRoot, 'consumer-home');
-  const fixtureBin = createCodexFixture(tempRoot);
-  const existingPath = env.PATH || env.Path || process.env.PATH || process.env.Path || '';
-  const doctorEnv = {
-    ...env,
-    PATH: `${fixtureBin}${delimiter}${existingPath}`,
-  };
-  mkdirSync(repository, { recursive: true });
-  mkdirSync(home, { recursive: true });
-  run('git', ['init', repository], { cwd: packageRoot, env });
-
-  const version = run(process.execPath, [cli, '--version'], { cwd: packageRoot, env }).stdout.trim();
-  if (version !== expectedVersion) throw new VerificationError(`Packaged Runtime reports ${version}, expected ${expectedVersion}.`);
-  const setup = parseChildJson(run(process.execPath, [cli, 'setup', '--root', repository, '--json'], { cwd: packageRoot, env }), 'Plugin setup discovery');
-  if (setup.ok !== true || !Array.isArray(setup.adapters)) {
-    throw new VerificationError('Packaged Plugin setup discovery did not return a valid registry snapshot.', setup);
-  }
-  const adapterIds = new Set(setup.adapters.map(adapter => adapter.id));
-  for (const id of ['codex-cli', 'antigravity-cli', 'generic-cli']) {
-    if (!adapterIds.has(id)) throw new VerificationError(`Packaged setup discovery is missing built-in adapter ${id}.`, setup);
-  }
-
-  run(process.execPath, [
-    cli, 'install', '--codex', '--codex-home', join(home, '.codex'),
-  ], { cwd: packageRoot, env: isolatedEnvironment(home) });
-
-  const doctor = parseChildJson(run(process.execPath, [
-    cli, 'doctor', '--codex', '--codex-home', join(home, '.codex'),
-    '--root', repository, '--json',
-  ], { cwd: packageRoot, env: doctorEnv }), 'Plugin doctor');
-  if (doctor.ok !== true) throw new VerificationError('Packaged Plugin doctor did not pass in an isolated home.', doctor);
-
-  return {
-    version,
-    setup: { ok: setup.ok, adapterCount: setup.adapters.length },
-    doctor: { ok: doctor.ok },
-    isolatedRepository: true,
-    isolatedHome: true,
-  };
+  return run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', artifact], { cwd: consumer, env });
 }
 
 function extractArtifact(artifact, tempRoot) {
@@ -312,6 +240,8 @@ function extractArtifact(artifact, tempRoot) {
   // GNU tar needs --force-local to treat Windows drive-letter paths (C:\…)
   // as local files instead of remote hosts. BSD tar (macOS/bsdtar) does not
   // understand that GNU-only flag, so it must never receive it.
+  const entries = run('tar', ['-tzf', artifact, ...tarFlags], { cwd: tempRoot }).stdout.trim().split(/\r?\n/);
+  if (entries.some(entry => !entry.startsWith('package/') || entry.split(/[\\/]/).includes('..'))) throw new VerificationError('Unsafe artifact entry path.');
   run('tar', ['-xzf', artifact, '-C', extractionRoot, ...tarFlags], { cwd: tempRoot, env: process.env });
   const packageRoot = join(extractionRoot, 'package');
   if (!existsSync(packageRoot) || !lstatSync(packageRoot).isDirectory()) {
@@ -334,52 +264,45 @@ export function detectTarExtractionFlags() {
   return selectTarExtractionFlags(output);
 }
 
-function main() {
-  const {
-    artifact,
-    expectedVersion,
-    expectedSourceCommit,
-    expectedTag,
-  } = parseArgs(process.argv.slice(2));
+export function loaderNodeOptions(loader) {
+  return `--experimental-loader=${pathToFileURL(loader).href}`;
+}
+
+async function main() {
+  const { artifact, expectedVersion, expectedSourceCommit, expectedTag } = parseArgs(process.argv.slice(2));
   const tempRoot = mkdtempSync(join(tmpdir(), 'coordinate-agents-release-'));
   try {
     const packageRoot = extractArtifact(artifact, tempRoot);
-    const identity = verifyIdentity(packageRoot, expectedVersion);
-    const candidate = verifyCandidateFacts(identity.packageJson, expectedSourceCommit, expectedTag);
+    const { packageJson } = verifyIdentity(packageRoot, expectedVersion);
+    const candidate = verifyCandidateFacts(packageJson, expectedSourceCommit, expectedTag);
     const payload = verifyPayload(packageRoot);
-    const home = join(tempRoot, 'example-home');
-    mkdirSync(home, { recursive: true });
-    const env = isolatedEnvironment(home);
-    const example = verifyExternalExample(packageRoot, env);
-    const runtime = verifyRuntime(packageRoot, tempRoot, env, identity.packageJson.version);
-    console.log(JSON.stringify({
-      ok: true,
-      artifact,
-      candidate,
-      package: {
-        name: identity.packageJson.name,
-        version: identity.packageJson.version,
-        repository: identity.packageJson.repository.url,
-      },
-      plugin: {
-        name: identity.pluginJson.name,
-        version: identity.pluginJson.version,
-        repository: identity.pluginJson.repository,
-      },
-      payload,
-      externalExample: example,
-      runtime,
-    }, null, 2));
-  } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
-  }
+    const home = join(tempRoot, 'isolated-home');
+    const consumer = join(tempRoot, 'consumer');
+    mkdirSync(home, { recursive: true }); mkdirSync(consumer, { recursive: true });
+    const env = isolatedEnvironment(home, { NODE_PATH: '', NODE_OPTIONS: '' });
+    // npm must execute dependency installation scripts, unlike pack/publish.
+    npmInstall(artifact, consumer, env);
+    const installed = join(consumer, 'node_modules', '@hogancv', 'coordinate-agents');
+    verifyPayload(installed);
+    const checker = join(consumer, 'verify-workspace-install.mjs');
+    writeFileSync(checker, readFileSync(new URL('./verify-workspace-install.mjs', import.meta.url)));
+    const loader = join(consumer, 'trace-loader.mjs');
+    const trace = join(consumer, 'loaded-modules.txt');
+    writeFileSync(loader, `import { appendFileSync } from 'node:fs';
+export async function load(url, context, next) { if (url.startsWith('file:')) appendFileSync(${JSON.stringify(trace)},url+'\\n'); return next(url,context); }`);
+    const runtime = parseChildJson(run(process.execPath, [checker, installed, consumer, expectedVersion], { cwd: consumer, env: { ...env, NODE_OPTIONS: loaderNodeOptions(loader) } }), 'installed Web acceptance');
+    if (runtime.ok !== true) throw new VerificationError('Installed Workspace acceptance failed.', runtime);
+    const loaded = readFileSync(trace, 'utf8').trim().split(/\r?\n/);
+    if (loaded.some(url => /cli-core|task-graph|\/task-runtime\.mjs|agent-bus\.mjs|runtime-services\.mjs|inspector-data|conformance/.test(url))) throw new VerificationError('Workspace loaded Legacy code.');
+    console.log(JSON.stringify({ ok: true, artifact, candidate, package: { name: packageJson.name, version: packageJson.version, repository: packageJson.repository.url }, payload, installation: { productionDependencies: true, isolatedHome: true, isolatedConsumer: true, loadedModules: new Set(loaded).size }, runtime }, null, 2));
+  } finally { rmSync(tempRoot, { recursive: true, force: true }); }
 }
 
 const isDirectExecution = process.argv[1]
   && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isDirectExecution) {
   try {
-    main();
+    await main();
   } catch (error) {
     const message = error instanceof VerificationError ? error.message : (error?.message || String(error));
     console.error(`Release artifact verification failed: ${message}`);

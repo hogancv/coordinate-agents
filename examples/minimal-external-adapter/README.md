@@ -1,16 +1,19 @@
 # Minimal external Adapter example
 
+This example remains in GitHub source/Plugin and npm 2.4.0; npm 3.x excludes the SDK and example.
+
 This directory is intentionally outside the built-in Adapter registry. It is
 an offline example of the public Contract v1 boundary:
 
 - `adapter.mjs` imports the SDK only from
-  `@hogancv/coordinate-agents/adapter-sdk.mjs`;
+  `../../adapter-sdk.mjs` in this checkout (external npm 2.4.0 authors use
+  `@hogancv/coordinate-agents/adapter-sdk.mjs`);
 - `fake-agent.mjs` is a deterministic local executable with one-shot and
   persistent input behavior; and
 - `run-conformance.mjs` runs the public Conformance Kit without a provider,
   account, token, network request, or real user configuration.
 
-Run the example from the repository or a packed package checkout:
+Run the example from the repository or a packed npm 2.4.0 checkout:
 
 ```sh
 node examples/minimal-external-adapter/run-conformance.mjs

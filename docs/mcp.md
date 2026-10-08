@@ -6,6 +6,9 @@ description: Local stdio MCP tools over the canonical Coordinate Agents Runtime.
 
 # Coordinate Agents MCP
 
+> **V3 distribution / 分发说明:** MCP is distributed through the GitHub Plugin/source (or npm 2.4.0), independently of npm 3.0 Web Workspace. The npm 3 tarball contains no MCP server.
+
+
 Coordinate Agents exposes a local, stdio-only MCP server for Codex Plugins.
 The MCP layer is a structured transport over the existing Runtime, Task API,
 and Agent Bus; it is not a second workflow engine.

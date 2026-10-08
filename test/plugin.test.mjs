@@ -80,7 +80,7 @@ test('skill relative file references resolve strictly within the self-contained 
   assert.ok(existsSync(join(skillRoot, 'references', 'protocol.md')));
 
   // Ensure references in SKILL.md use relative subpaths
-  assert.match(skillContent, /scripts\/agent-bus\.mjs/);
+  assert.match(skillContent, /scripts\/runtime-entry\.mjs/);
   assert.match(skillContent, /references\/task-templates\.md/);
   assert.match(skillContent, /references\/protocol\.md/);
 });
@@ -93,40 +93,11 @@ test('single source invariant: root does not contain duplicate runtime copies', 
   assert.equal(existsSync(join(root, 'scripts', 'agent-bus.mjs')), false, 'Root scripts/agent-bus.mjs must not exist (canonical source is in skills/)');
 });
 
-test('npm pack payload includes plugin manifest and canonical skill tree', () => {
-  const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.ok(packageJson.files.includes('adapter-sdk.mjs'), 'public Adapter SDK entry must be in package.json files');
-  assert.ok(packageJson.files.includes('.codex-plugin'), '.codex-plugin must be in package.json files');
-  assert.ok(packageJson.files.includes('skills'), 'skills must be in package.json files');
-  assert.ok(packageJson.files.includes('lib'), 'modular CLI implementation must be in package.json files');
-  assert.ok(packageJson.files.includes('examples'), 'external Adapter examples must be in package.json files');
-  assert.ok(packageJson.files.includes('docs/adapter-author-guide.md'), 'Adapter author guide must be in package.json files');
-
-  // Disable lifecycle scripts for the nested payload inspection so npm does
-  // not invoke another package lifecycle while the payload is inspected.
-  const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', windowsHide: true, shell: true });
-  if (result.status === 0) {
-    try {
-      const packMeta = JSON.parse(result.stdout);
-      const filenames = packMeta[0]?.files?.map(f => f.path) || [];
-      assert.ok(filenames.some(f => f.startsWith('.codex-plugin/')), 'Pack must contain .codex-plugin files');
-      assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/SKILL.md')), 'Pack must contain skills/coordinate-agents/SKILL.md');
-      assert.ok(filenames.some(f => f.startsWith('skills/coordinate-agents/scripts/agent-bus.mjs')), 'Pack must contain skills/coordinate-agents/scripts/agent-bus.mjs');
-      assert.ok(filenames.some(f => f === 'bin/coordinate-agents.mjs'), 'Pack must contain the canonical Runtime bin');
-      assert.ok(filenames.some(f => f === 'lib/cli-core.mjs'), 'Pack must contain the CLI core');
-      assert.ok(filenames.some(f => f === 'lib/cli/parse-args.mjs'), 'Pack must contain the argument parser');
-      assert.ok(filenames.some(f => f === 'lib/commands/index.mjs'), 'Pack must contain the command dispatcher');
-      assert.ok(filenames.some(f => f === 'adapter-sdk.mjs'), 'Pack must contain the public Adapter SDK entry');
-      assert.ok(filenames.some(f => f === 'skills/coordinate-agents/adapters/contract-v1.mjs'), 'Pack must contain Adapter Contract v1');
-      assert.ok(filenames.some(f => f === 'skills/coordinate-agents/scripts/runtime-entry.mjs'), 'Pack must contain the Plugin Runtime resolver');
-      assert.ok(filenames.some(f => f === 'examples/minimal-external-adapter/adapter.mjs'), 'Pack must contain the external Adapter example');
-      assert.ok(filenames.some(f => f === 'examples/minimal-external-adapter/fake-agent.mjs'), 'Pack must contain the example executable fixture');
-      assert.ok(filenames.some(f => f === 'docs/adapter-author-guide.md'), 'Pack must contain the Adapter author guide');
-    } catch {
-      // If npm pack json output is wrapped or formatted differently, fallback to checking stdout
-      assert.match(result.stdout, /\.codex-plugin/);
-      assert.match(result.stdout, /skills/);
-    }
+test('Plugin source remains complete while npm excludes its manifest and Skills', () => {
+  const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  for (const path of ['adapter-sdk.mjs', '.codex-plugin/plugin.json', 'skills/coordinate-agents/SKILL.md', 'skills/coordinate-agents/adapters/conformance.mjs', 'examples/minimal-external-adapter/adapter.mjs', 'bin/coordinate-agents-legacy.mjs']) {
+    assert.ok(existsSync(join(root, path)), path);
+    assert.ok(!manifest.files.includes(path), path);
   }
 });
 
@@ -179,5 +150,5 @@ test('repository marketplace manifest exists and conforms to Codex Marketplace s
   assert.equal(entry.category, 'Productivity');
 
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.ok(packageJson.files.includes('.agents'), '.agents must be included in package.json files');
+  assert.ok(!packageJson.files.includes('.agents'), 'npm does not distribute the GitHub marketplace');
 });

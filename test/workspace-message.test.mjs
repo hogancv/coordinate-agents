@@ -29,3 +29,20 @@ test('invalid inputs are rejected before lookup', async () => {
   await assert.rejects(workspaceMessage('/repo', 'task-a', 'read', '-1', {}));
   await assert.rejects(workspaceMessage('/repo', 'task-a', 'send', '', {}));
 });
+
+test('message helper executes through an npm-style symlink', async t => {
+  if (process.platform === 'win32') { t.skip('Windows npm uses a command shim rather than a file symlink'); return; }
+  const { mkdtempSync, symlinkSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const { spawnSync } = await import('node:child_process');
+  const temporary = mkdtempSync(join(tmpdir(), 'workspace-message-link-'));
+  try {
+    const linked = join(temporary, 'message.mjs');
+    symlinkSync(fileURLToPath(new URL('../skills/coordinate-agents/scripts/workspace-message.mjs', import.meta.url)), linked);
+    const result = spawnSync(process.execPath, [linked, 'invalid', 'send', 'hello'], { cwd: temporary, encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.equal(JSON.parse(result.stderr).ok, false);
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+});

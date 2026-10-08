@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  unlinkSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,8 +24,8 @@ import {
 } from './runtime-contract.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
 import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen } from './session-service.mjs';
-import { listRecords } from './session-manager.mjs';
-import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './role-prompts.mjs';
+import { listRecords, readRecord } from './session-manager.mjs';
+import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './workspace-role-prompts.mjs';
 
 export const WORKSPACE_TASK_PROMPT_VERSION = WORKSPACE_ROLE_PROMPT_VERSION;
 export const WORKSPACE_TASK_SLOTS = Object.freeze([
@@ -200,6 +201,9 @@ function validateWorkspaceTaskRecord(value) {
       };
     }).filter(Boolean)
     : [];
+  if (value.archivedAt !== undefined && (typeof value.archivedAt !== 'string' || Number.isNaN(Date.parse(value.archivedAt)) || value.status !== 'CLOSED')) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Invalid archived Workspace Task record.', { recoverable: false, taskId: value.id });
+  }
   const error = value.error && typeof value.error === 'object' && !Array.isArray(value.error)
     ? serializeRuntimeError(value.error, { includeLegacy: true })
     : null;
@@ -211,6 +215,7 @@ function validateWorkspaceTaskRecord(value) {
     promptVersion: redactOutput(value.promptVersion, 64),
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
+    ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
     sessionHistory,
     error,
@@ -329,6 +334,7 @@ function workspaceTaskView(record, facts = new Map()) {
     promptVersion: record.promptVersion,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
     sessionIds: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
@@ -336,10 +342,10 @@ function workspaceTaskView(record, facts = new Map()) {
   };
 }
 
-export async function readWorkspaceTasks(root) {
+export async function readWorkspaceTasks(root, { includeArchived = false } = {}) {
   const repository = repositoryRoot(root);
   const facts = sessionFactMap(repository);
-  return listWorkspaceTaskRecords(repository).map(record => workspaceTaskView(record, facts));
+  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts));
 }
 
 export async function readWorkspaceTask(root, id) {
@@ -640,6 +646,7 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
   const root = repositoryRoot(input.root);
   const language = normalizeLanguage(input.language);
   let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  if (record.archivedAt) throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Cannot restart an archived Workspace Task.', { recoverable: false, taskId: record.id });
   const oldSessionIds = sessionIdsFor(record);
   const closed = await closeSessionIds(root, oldSessionIds);
   const stillActive = closed.results.filter(session => ACTIVE_SESSION_STATES.has(`${session?.state || ''}`));
@@ -692,6 +699,61 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
     writeWorkspaceTask(root, record);
     throw normalized;
   }
+}
+
+function allTaskSessionIds(record) {
+  return [...new Set([...sessionIdsFor(record), ...record.sessionHistory.flatMap(entry => [entry.codexSessionId, entry.antigravitySessionId])].filter(Boolean))];
+}
+
+function ownedTaskSessionFiles(root, record) {
+  const directory = join(root, '.agent-bus', 'sessions');
+  assertSafePath(root, directory);
+  const owned = existsSync(directory) ? listRecords(root).filter(session => session.taskId === record.id && WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) : [];
+  // Restart history is bounded, but transcript cleanup must cover every owned Session.
+  return [...new Set([...allTaskSessionIds(record), ...owned.map(session => session.id)])].flatMap(id => {
+    const path = join(root, '.agent-bus', 'sessions', `${id}.json`);
+    assertSafePath(root, path);
+    if (!existsSync(path)) return [];
+    const session = readRecord(root, id);
+    if (session.id !== id || session.cwd !== root || session.taskId !== record.id || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) {
+      throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to modify a Session owned by another task.', { recoverable: false, taskId: record.id, sessionId: id });
+    }
+    return [{ id, path, session }];
+  });
+}
+
+export async function runtimeWorkspaceTaskArchive(input = {}) {
+  const root = repositoryRoot(input.root);
+  let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  if (record.archivedAt) return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(record, sessionFactMap(root)) });
+  const files = ownedTaskSessionFiles(root, record);
+  const closed = await closeSessionIds(root, files.map(file => file.id));
+  if (closed.errors.length || closed.results.some(session => ACTIVE_SESSION_STATES.has(session?.state))) {
+    throw closed.errors[0] || runtimeError('WORKSPACE_TASK_CLOSE_FAILED', 'A Workspace terminal is still active; archive was not completed.', { recoverable: true, taskId: record.id });
+  }
+  record = updateRecord(record, { status: 'CLOSED', archivedAt: now() });
+  writeWorkspaceTask(root, record);
+  return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(record, sessionFactMap(root)) });
+}
+
+export async function runtimeWorkspaceArchivesClear(input = {}) {
+  const root = repositoryRoot(input.root);
+  const records = listWorkspaceTaskRecords(root);
+  let deletedTasks = 0, deletedSessions = 0;
+  for (const record of records.filter(task => task.archivedAt)) {
+    const files = ownedTaskSessionFiles(root, record);
+    for (const file of files) {
+      if (ACTIVE_SESSION_STATES.has(file.session.state) || records.some(other => other.id !== record.id && allTaskSessionIds(other).includes(file.id))) {
+        throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to clear a Session still active or referenced by another task.', { recoverable: false, sessionId: file.id });
+      }
+    }
+    // Validate all paths before deleting any record; never recurse into a project.
+    const taskFile = workspaceTaskFile(root, record.id);
+    safeInternalStat(workspaceTaskDirectory(root).directory, taskFile);
+    for (const file of files) { safeInternalStat(join(root, '.agent-bus', 'sessions'), file.path); unlinkSync(file.path); deletedSessions++; }
+    unlinkSync(taskFile); deletedTasks++;
+  }
+  return jsonSuccess('workspace.archives.clear', { deletedTasks, deletedSessions });
 }
 
 export { validateWorkspaceTaskRecord };

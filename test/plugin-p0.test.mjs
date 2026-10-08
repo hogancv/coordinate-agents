@@ -8,7 +8,7 @@ import test from 'node:test';
 import { discoverCodingClis } from '../skills/coordinate-agents/scripts/discovery.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 
 function invoke(args, env = {}) {
   return spawnSync(process.execPath, [cli, ...args], {
@@ -34,7 +34,7 @@ test('Plugin exposes all P0 Skills with valid metadata and exact onboarding prom
     const content = readFileSync(path, 'utf8');
     const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] || '';
     assert.match(frontmatter, new RegExp(`(?:^|\\n)name:\\s*${name}(?:\\s|$)`));
-    assert.match(frontmatter, /description:\s*>?-/);
+    assert.match(frontmatter, /description:\s*\S/);
   }
 
   const manifest = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));

@@ -33,7 +33,7 @@ automation or hosts without direct Codex App Skill execution.
 
 Plugin-only installation does not require `npm install -g @hogancv/coordinate-agents`. Every Skill
 uses the bundled resolver convention `node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs"`
-to start the one canonical `bin/coordinate-agents.mjs` from the active Plugin payload. The resolver
+to start the one canonical `bin/coordinate-agents-legacy.mjs` from the active Plugin payload. The resolver
 does not depend on a `coordinate-agents` executable being present on `PATH` and handles cached Git
 marketplaces, personal local marketplaces, and Windows paths with spaces.
 

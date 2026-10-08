@@ -22,7 +22,7 @@ import {
   runtimeTaskGraphInspect,
   runtimeTaskGraphPlan,
   runtimeTaskGraphStatus,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import { createMcpServer } from '../mcp/server.mjs';
 
 const unusualIntentPattern = [
@@ -260,7 +260,7 @@ test('CLI companion file and MCP object create the same normalized durable Inten
     writeFileSync(graphPath, `${JSON.stringify(graph('task-intent-cli'))}\n`, 'utf8');
     writeFileSync(intentPath, `${JSON.stringify(intentMap('task-intent-cli'))}\n`, 'utf8');
     const cliOutput = execFileSync(process.execPath, [
-      join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-create',
+      join(process.cwd(), 'bin', 'coordinate-agents-legacy.mjs'), 'task', 'graph-create',
       '--root', root, '--input', graphPath, '--intent-map', intentPath, '--json',
     ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: '' } });
     const cliMap = JSON.parse(cliOutput).graph.intentMap;

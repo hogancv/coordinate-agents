@@ -1,0 +1,31 @@
+{
+  "fileModuleCount": 26,
+  "modules": [
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/bin/coordinate-agents.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/action-gateway.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/http-server.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/native-folder-picker.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/workspace-data.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/workspace-projects.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/inspector/server/workspace-server.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/lib/web-cli.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/antigravity-cli.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/base.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/codex-cli.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/contract-v1.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/executable.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/generic-cli.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/index.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/adapters/trusted-local.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/config.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/runtime-contract.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/runtime-events.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/session-manager.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/session-service.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/user-config.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/workspace-init.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/workspace-role-prompts.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/workspace-services.mjs",
+    "final-measurement/consumer/node_modules/@hogancv/coordinate-agents/skills/coordinate-agents/scripts/workspace-task-runtime.mjs"
+  ]
+}

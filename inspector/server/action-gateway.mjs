@@ -1,25 +1,11 @@
 /**
- * Guarded browser-to-Runtime action gateway (#46).
- *
- * The Web Workspace is read-only on GET paths; this module is the narrow,
- * additive action boundary for later Workspace controls. It binds one
- * canonical repository root to each gateway, requires a server-issued
- * per-launch capability on every non-GET request, validates loopback
- * Host/Origin and bounded JSON bodies, exposes only an explicit allow-list of
- * structured operations. Runtime actions share the CLI/MCP operation map;
- * project registry operations and project settings use dedicated local stores.
- *
- * The gateway never accepts arbitrary shell text, proxies MCP, accepts an
- * arbitrary operation name, or lets a request choose a different repository
- * root. Concurrency and replay safety are delegated to the existing Runtime
- * locks/deduplication rules (deterministic Task IDs, atomic Task records,
- * graph validation, claim/state conflicts); the HTTP seam only serializes
- * through the single-threaded Node event loop.
+ * Loopback-only browser actions with bounded JSON, per-launch capability,
+ * fixed project roots and Workspace-owned Session operations. Structured
+ * operations live in the repository-only legacy-action-gateway module.
  */
-
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { resolve } from 'node:path';
-import { invokeRuntimeOperation } from '../../skills/coordinate-agents/scripts/runtime-services.mjs';
+import { invokeRuntimeOperation } from '../../skills/coordinate-agents/scripts/workspace-services.mjs';
 import {
   jsonFailure,
   normalizeRuntimeError,
@@ -37,50 +23,17 @@ export const CAPABILITY_PLACEHOLDER = '__COORDINATE_AGENTS_CAPABILITY__';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const CORRELATION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
-/**
- * Workspace action allow-list. Every entry maps to one shared Runtime
- * operation. Discovery is read-only; `setupConfigure` is the transactional
- * project Agent/role configuration path. Workspace Task lifecycle actions are
- * the only browser process controls: they create/close/restart a fixed
- * Codex+Antigravity pair. Session input and resize remain bounded and owned by
- * the Runtime, while the legacy Task/Graph actions stay available for
- * compatibility.
- */
 const ACTION_DEFINITIONS = Object.freeze({
-  setupDiscover: {
-    operation: 'setupDiscover',
-    command: 'setup',
-    params: {},
-  },
-  setupConfigure: {
-    operation: 'setupConfigure',
-    command: 'setup.configure',
-    params: {
-      agent: { type: 'string', required: true, max: 64 },
-      command: { type: 'string', required: true, max: 512 },
-      adapter: { type: 'string', max: 128 },
-      role: { type: 'string', max: 32 },
-      args: { type: 'array', max: 64, itemMax: 512 },
-    },
-  },
-  taskCreate: {
-    operation: 'taskCreate',
-    command: 'task.create',
-    params: {
-      title: { type: 'string', required: true, max: 1024 },
-      id: { type: 'string', max: 128 },
-      spec: { type: 'string', max: 256 * 1024 },
-      planner: { type: 'string', max: 64 },
-      implementer: { type: 'string', max: 64 },
-      reviewer: { type: 'string', max: 64 },
-    },
-  },
   workspaceTaskCreate: {
     operation: 'workspaceTaskCreate',
     command: 'workspace.task.create',
     params: {
       language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
     },
+  },
+  workspaceTaskArchive: {
+    operation: 'workspaceTaskArchive', command: 'workspace.task.archive',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
   },
   workspaceTaskClose: {
     operation: 'workspaceTaskClose',
@@ -96,112 +49,6 @@ const ACTION_DEFINITIONS = Object.freeze({
       workspaceTaskId: { type: 'string', required: true, max: 128 },
       language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
     },
-  },
-  taskStatus: {
-    operation: 'taskStatus',
-    command: 'task.status',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
-  },
-  taskInspect: {
-    operation: 'taskInspect',
-    command: 'task.inspect',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
-  },
-  taskGraphStatus: {
-    operation: 'taskGraphStatus',
-    command: 'task.graph-status',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
-  },
-  taskGraphInspect: {
-    operation: 'taskGraphInspect',
-    command: 'task.graph-inspect',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
-  },
-  taskGraphPlan: {
-    operation: 'taskGraphPlan',
-    command: 'task.graph-plan',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
-  },
-  taskGraphValidate: {
-    operation: 'taskGraphValidate',
-    command: 'task.graph-validate',
-    params: {
-      graph: { type: 'object', required: true, max: 512 * 1024 },
-      intentMap: { type: 'object', max: 512 * 1024 },
-    },
-  },
-  taskGraphCreate: {
-    operation: 'taskGraphCreate',
-    command: 'task.graph-create',
-    params: {
-      graph: { type: 'object', required: true, max: 512 * 1024 },
-      intentMap: { type: 'object', max: 512 * 1024 },
-    },
-  },
-  taskDispatch: {
-    operation: 'taskDispatch',
-    command: 'task.dispatch',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-      spec: { type: 'string', max: 256 * 1024 },
-    },
-  },
-  taskGraphRun: {
-    operation: 'taskGraphRun',
-    command: 'task.graph-run',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-      sessionWaitMs: { type: 'integer', min: 0, max: 10_000 },
-    },
-  },
-  taskGraphAdvance: {
-    operation: 'taskGraphAdvance',
-    command: 'task.graph-advance',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-      maxWaves: { type: 'integer', required: true, min: 1, max: 32 },
-      sessionWaitMs: { type: 'integer', min: 0, max: 10_000 },
-    },
-  },
-  taskStop: {
-    operation: 'taskStop',
-    command: 'task.stop',
-    params: { taskId: { type: 'string', required: true, max: 128 } },
-  },
-  taskResume: {
-    operation: 'taskResume',
-    command: 'task.resume',
-    params: { taskId: { type: 'string', required: true, max: 128 } },
-  },
-  taskGraphStop: {
-    operation: 'taskGraphStop',
-    command: 'task.graph-stop',
-    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
-  },
-  taskGraphRecover: {
-    operation: 'taskGraphRecover',
-    command: 'task.graph-recover',
-    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
-  },
-  taskGraphResume: {
-    operation: 'taskGraphResume',
-    command: 'task.graph-resume',
-    params: { taskId: { type: 'string', required: true, max: 128 }, subtaskId: { type: 'string', max: 128 } },
-  },
-  taskGraphCleanup: {
-    operation: 'taskGraphCleanup',
-    command: 'task.graph-cleanup',
-    params: { taskId: { type: 'string', required: true, max: 128 } },
   },
   sessionStatus: {
     operation: 'sessionStatus',
@@ -240,38 +87,6 @@ const ACTION_DEFINITIONS = Object.freeze({
     operation: 'sessionClose',
     command: 'session.close',
     params: { sessionId: { type: 'string', required: true, max: 256 } },
-  },
-  taskGraphIntegrate: {
-    operation: 'taskGraphIntegrate',
-    command: 'task.graph-integrate',
-    params: { taskId: { type: 'string', required: true, max: 128 } },
-  },
-  taskReview: {
-    operation: 'taskReview',
-    command: 'task.review',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-      decision: { type: 'string', required: true, max: 32, enum: ['REVIEW_APPROVED', 'CHANGES_REQUESTED'] },
-      feedback: { type: 'string', max: 16 * 1024 },
-      evidence: { type: 'object', max: 64 * 1024 },
-    },
-  },
-  taskGraphReview: {
-    operation: 'taskGraphReview',
-    command: 'task.graph-review',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-      decision: { type: 'string', required: true, max: 32, enum: ['REVIEW_APPROVED', 'CHANGES_REQUESTED'] },
-      feedback: { type: 'string', max: 16 * 1024 },
-      evidence: { type: 'object', max: 64 * 1024 },
-    },
-  },
-  recoverInspect: {
-    operation: 'recoverInspect',
-    command: 'recover.inspect',
-    params: {
-      taskId: { type: 'string', required: true, max: 128 },
-    },
   },
 });
 
@@ -320,8 +135,7 @@ function readBody(request, maxBytes) {
 
 function parseHost(request) {
   const header = request.headers.host || '';
-  const hostname = (header.split(':')[0] || '').trim().toLowerCase();
-  return hostname;
+  try { return new URL(`http://${header}`).hostname.toLowerCase(); } catch { return ''; }
 }
 
 function originAllowed(request) {
@@ -383,12 +197,16 @@ function validateParams(definition, params) {
   return null;
 }
 
+export function workspaceRequestLocal(request) {
+  return LOOPBACK_HOSTS.has(parseHost(request)) && originAllowed(request);
+}
+
 export function workspaceRequestAuthorized(request, capability) {
-  return LOOPBACK_HOSTS.has(parseHost(request)) && originAllowed(request)
+  return workspaceRequestLocal(request)
     && capabilityMatches(request.headers[CAPABILITY_HEADER], capability);
 }
 
-export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_MAX_BODY_BYTES, projectStore = null } = {}) {
+export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_MAX_BODY_BYTES, projectStore = null, definitions = ACTION_DEFINITIONS, invoke = invokeRuntimeOperation } = {}) {
   const boundRoot = resolve(root || process.cwd());
   return {
     capability,
@@ -473,22 +291,27 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
       const correlationValue = typeof correlationId === 'string' && CORRELATION_PATTERN.test(correlationId)
         ? correlationId
         : correlation;
-      if (projectStore && ['projectAdd', 'projectBrowse', 'projectPick'].includes(action)) {
+      if (projectStore && ['projectAdd', 'projectBrowse', 'projectPick', 'projectArchive', 'workspaceArchivesStatus', 'workspaceArchivesClear'].includes(action)) {
         try {
           if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)) throw new Error('Invalid project parameters.');
-          const allowed = action === 'projectPick' ? [] : action === 'projectAdd' ? ['path', 'initialize'] : ['path', 'offset', 'hidden'];
+          const allowed = action === 'projectAdd' ? ['path', 'initialize'] : action === 'projectBrowse' ? ['path', 'offset', 'hidden'] : action === 'projectArchive' ? ['projectId'] : [];
           if (Object.keys(rawParams).some(key => !allowed.includes(key))) throw new Error('Unknown project parameter.');
           if (rawParams.initialize !== undefined && typeof rawParams.initialize !== 'boolean') throw new Error('Invalid initialization flag.');
-          const result = action === 'projectPick' ? { selection: await projectStore.pick() } : action === 'projectAdd'
-            ? { project: projectStore.register(rawParams.path, rawParams.initialize === true) }
-            : { directory: projectStore.browse(rawParams) };
+          let result;
+          if (action === 'projectPick') result = { selection: await projectStore.pick() };
+          else if (action === 'projectAdd') result = { project: projectStore.register(rawParams.path, rawParams.initialize === true, { restoreArchived: true }) };
+          else if (action === 'projectBrowse') result = { directory: projectStore.browse(rawParams) };
+          else if (action === 'projectArchive') result = { project: await projectStore.archive(rawParams.projectId) };
+          else if (action === 'workspaceArchivesStatus') result = await projectStore.archiveStatus();
+          else result = await projectStore.clearArchives();
           send(200, { ok: true, ...result });
         } catch (error) { send(400, gatewayError('PROJECT_OPERATION_FAILED', redactOutput(error.message, 2048))); }
         return;
       }
-      const definition = ACTION_DEFINITIONS[action];
+      const definition = Object.hasOwn(definitions, action) ? definitions[action] : null;
       if (action === 'workspaceSettingsSave') {
         try {
+          if (projectStore?.isArchived(boundRoot)) throw new Error('Project is archived.');
           if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)
             || Object.keys(rawParams).some(key => !['codex', 'antigravity', 'args'].includes(key))) throw new Error('Invalid settings.');
           for (const key of ['codex', 'antigravity']) {
@@ -542,7 +365,7 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
       }
 
       try {
-        const payload = await invokeRuntimeOperation(definition.operation, params);
+        const payload = await invoke(definition.operation, params, { before: () => { if (projectStore?.isArchived(boundRoot)) throw new Error('Project is archived.'); } });
         send(200, actionEnvelope(payload || {}, { action, correlation: correlationValue }));
       } catch (error) {
         const payload = jsonFailure(definition.command, normalizeRuntimeError(error));

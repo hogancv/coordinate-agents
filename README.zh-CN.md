@@ -2,9 +2,32 @@
 
 [English](./README.md) · [文档](./docs/zh-CN/index.md) · [安全说明](./SECURITY.md)
 
-Coordinate Agents 是面向 Codex 与外部 AI 编码代理的本地协作工作台，底层提供本地优先协作协议和运行时。同时支持轻量交互与结构化任务两种模式，代码仓库和本地状态始终由你控制。
+Coordinate Agents 是面向 Codex + Antigravity 协作的本地 Web Workspace。
+**npm 3.0.0 是 Web-first 分发版本**：独立运行的轻量工作台，保留双终端、
+项目与任务持久化，以及轻量角色提示词。
 
-日常低延迟双终端协作使用 **Web Workspace**；需要持久 Task、结构化审查和显式恢复时使用 **Codex Plugin / CLI / MCP**。结构化流程推荐通过本 GitHub 仓库安装 Codex 插件；Web 通过独立 npm Runtime 或源码启动。
+```sh
+npx @hogancv/coordinate-agents@latest web
+# 指定目录和端口（0 表示自动分配空闲端口）：
+npx @hogancv/coordinate-agents@3.0.0 web --root "/path/to/project" --port 3000
+```
+
+先安装 Node.js >=18、Git、Codex 和 Antigravity CLI，并分别登录代理 CLI。
+打开输出的 localhost 地址，在终端设置中配置 `agy-proxy` 等自定义命令、
+Codex 模型及推理强度。创建任务后，在 Codex 终端输入需求；Codex 通过
+`workspace-message` 向该任务的 Antigravity 派发实现要求，收到回复后审查并汇报。
+多项目、原始终端输入输出、尺寸调整、关闭/重启、刷新和独立 Session Host 重连均保留。
+
+原有 PTY 平台策略保持不变：Node 18 和 Windows Node >=22 使用受管 stdio
+回退后端，支持的原生组合使用 node-pty。回退后端保留会话输入输出与生命周期，
+但可能无法运行代理完整交互 TUI。继续支持 Node 18；如果所用 CLI 必须使用原生
+终端，应选择相应的较新 Node 环境。
+
+**GitHub 中完整的 Plugin / Legacy CLI / MCP / Task Graph 源码仍然保留**，包括原有本地优先协作协议和运行时。
+结构化协作使用 GitHub Plugin；其版本独立管理，目前仍为 2.4.0。
+npm 3.x 不再携带插件 manifest、Skill 资源、MCP、Task Graph、Adapter SDK、
+conformance kit、示例、测试及开发脚本。tarball 的 `skills/` 路径只保留必要共享
+`.mjs` 模块，并不分发 Codex Skill。打包无需构建或 prepack 步骤。
 
 ## 两种协作模式
 
@@ -15,7 +38,7 @@ Coordinate Agents 是面向 Codex 与外部 AI 编码代理的本地协作工作
 
 Web 任务组状态表示终端生命周期，**不代表实现或审查完成**。角色提示词是行为约定，不是强制执行的工作流状态机。Web 提示词要求未经用户授权不得提交、推送或发布；结构化模式继续遵守原有审查与发布授权流程。
 
-![完整端到端终端演示](./assets/demo.gif)
+![完整端到端终端演示](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/assets/demo.gif)
 
 该动图由 `npm run demo` 在隔离 Git 仓库中生成；脱敏后的原始记录见 [assets/demo-transcript.txt](./assets/demo-transcript.txt)。
 
@@ -121,7 +144,7 @@ worktree 并记录可恢复失败。该审计不会创建依赖边，也不会�
 
 ### Adapter Contract v1
 
-npm 包与 Plugin payload 通过 `adapter-sdk.mjs` 提供带版本的验证边界；npm 使用者从 `@hogancv/coordinate-agents/adapter-sdk.mjs` 导入。Contract v1 约束适配器身份、能力、检测、配置兼容性、参数数组形式的启动计划、持久 Session 首次输入与启动策略。可执行文件和路径验证、进程与 Session 生命周期、有限输出、持久化状态、审查及发布门禁仍完全由 Runtime 管理。
+GitHub 源码/Plugin 与 **npm 2.4.0** 通过 `adapter-sdk.mjs` 提供带版本的验证边界；npm 2.x 使用者从 `@hogancv/coordinate-agents/adapter-sdk.mjs` 导入。npm 3.x 移除了 SDK 导出和 conformance 资源。Contract v1 约束适配器身份、能力、检测、配置兼容性、参数数组形式的启动计划、持久 Session 首次输入与启动策略。可执行文件和路径验证、进程与 Session 生命周期、有限输出、持久化状态、审查及发布门禁仍完全由 Runtime 管理。
 
 公开的 [Adapter Conformance Kit](./docs/adapter-conformance.md) 会在隔离临时根目录中的确定性 fake executable 上运行同一套 Contract v1 检查，覆盖包含空格和 shell 元字符的路径，并返回有界、适合 CI 的诊断；它不会连接 Provider，也不会修改用户配置。本地模块只能通过 `coordinate-agents adapter register <local-file>` 显式注册；Runtime 只加载选中的正规 `.mjs`、`.js` 或 `.cjs` 文件，descriptor/配置失败时不会改变用户配置或项目状态。模块属于在当前 Node.js 权限下运行的可信代码，契约验证不是针对恶意 JavaScript 的沙箱。详见随包提供的 [Adapter Contract v1 参考](./skills/coordinate-agents/references/adapter-contract-v1.md)。
 
@@ -150,8 +173,9 @@ npx @hogancv/coordinate-agents@latest web --port 3000
 
 Workspace 支持 `zh-CN` / `en-US` 双语，左侧按“项目 → 任务”分组。
 启动目录自动登记为项目，Git 子目录归并到仓库根目录；普通启动目录自动初始化。
-“新增项目”支持浏览本地文件夹，普通目录需确认初始化 Git 和 Agent Bus，不创建提交。
+“新增项目”支持浏览本地文件夹，普通目录需确认初始化 Git 和 Workspace 存储，不创建提交。
 切换项目不会关闭后台终端；终端设置与“关闭所有终端”仅作用于当前项目。
+右键对话记录或项目标题可直接归档；归档会关闭对应终端并隐藏记录，保留项目源码。设置中可一键永久清除所有登记项目的已归档对话。归档项目刷新和重启后仍隐藏；重新添加同一文件夹可恢复项目入口。
 点击“新建任务”启动全新的 Codex + Antigravity 双终端并注入 Web-lite 提示词；
 需求直接输入 Codex 终端。“终端设置”支持 `agy-proxy` 等自定义启动命令，
 以及 Codex 模型和推理强度设置。保留刷新、关闭、重启和关闭所有终端操作。
@@ -159,21 +183,34 @@ Workspace 支持 `zh-CN` / `en-US` 双语，左侧按“项目 → 任务”分�
 
 任务组独立保存在 `.agent-bus/workspace-tasks/*.json`，不与标准 Task 混用。
 选择与刷新不会启动会话；明确操作通过受保护的 `POST /api/action` 执行。
-原有 Task/Graph、CLI、MCP 和只读 `inspector` 契约继续保留。
+默认 Web API 不再暴露结构化 Task/Graph 的读写操作。原有 CLI、MCP 和只读 `inspector` 契约仍保留在 GitHub 源码的 Legacy 入口中。
 运行本仓库的新 Web 行为请使用 `node bin/coordinate-agents.mjs web --port 3000`；
 合入 main 不等于发布新的 npm 版本。详见
 [Inspector 与 Web Workspace](./docs/inspector.md)
 与 [Event Journal](./docs/event-journal.md)。
 
-## Standalone npm Runtime
+## npm 3.0 迁移
 
-兼容性 npm 包提供 installer、doctor、quickstart、task、agent、session、MCP、Inspector 和 web 命令：
+npm 公共 CLI 保留 `coordinate-agents web`、`coordinate-agents --help`、
+`coordinate-agents --version`，以及 Web 的 `--root`、`--port`、`--json`。
+旧版 `install`、`update`、`uninstall`、`doctor`、`quickstart`、`launch`、`setup`、
+`discover`、`config`、`adapter`、`agent`、`task`、`status`、`inspector` 不再作为
+npm 3.x 命令提供。不支持的命令会明确显示迁移说明，不尝试加载缺失模块。
+移除通配内部导出和 `./adapter-sdk` / `./adapter-sdk.mjs`，仅公开 `./package.json`。
+Codex 角色提示词会提供绑定当前任务的消息脚本路径。
+
+需要旧 npm CLI 时，请固定版本：
 
 ```sh
-npx @hogancv/coordinate-agents@latest --help
+npx @hogancv/coordinate-agents@2.4.0 --help
+npx @hogancv/coordinate-agents@2.4.0 doctor
+# GitHub 源码中的完整结构化 CLI：
+node bin/coordinate-agents-legacy.mjs --help
+node bin/coordinate-agents-legacy.mjs inspector --port 3000
 ```
 
-该路径适用于旧版 standalone Skill 安装、外部自动化或协议调试。完整命令工作流见[快速入门](./docs/getting-started.md)与 [MCP 集成](./docs/mcp.md)。
+Plugin 自动选择自身携带的 Legacy 入口。npm 与 Plugin 的验证和版本分别管理。
+参见 [V3 分发与发布验证记录](./docs/releases/v3-web-first.md)。
 
 ## 本地开发
 

@@ -10,7 +10,7 @@
  *
  * The `skills/` tree is therefore not a reliable working directory and the
  * `coordinate-agents` npm bin is not guaranteed to be on PATH.  This entry
- * point starts the one canonical `bin/coordinate-agents.mjs` found beside the
+ * point starts the one canonical `bin/coordinate-agents-legacy.mjs` (or a v2 bin) found beside the
  * active Plugin payload.  It is intentionally a small resolver/launcher, not
  * a second Runtime implementation.
  */
@@ -58,8 +58,17 @@ function readJson(path) {
   }
 }
 
+function runtimePathFor(root) {
+  const legacy = join(root, 'bin', 'coordinate-agents-legacy.mjs');
+  if (isRegularFile(legacy)) return legacy;
+  const packageJson = readJson(join(root, 'package.json'));
+  if (Number.parseInt(packageJson?.version || '2', 10) >= 3) return null;
+  return join(root, 'bin', RUNTIME_FILE_NAME);
+}
+
 function hasCanonicalRuntime(root) {
-  const runtime = join(root, 'bin', RUNTIME_FILE_NAME);
+  const runtime = runtimePathFor(root);
+  if (!runtime) return false;
   if (!isRegularFile(runtime)) return false;
 
   // A package manifest or Plugin manifest makes the candidate unambiguous and
@@ -180,8 +189,8 @@ function globalPackageRoots(env) {
 function packageRequireRoot(entryPath) {
   try {
     const require = createRequire(entryPath);
-    const resolved = require.resolve('@hogancv/coordinate-agents/bin/coordinate-agents.mjs');
-    const root = dirname(dirname(resolve(resolved)));
+    const resolved = require.resolve('@hogancv/coordinate-agents/package.json');
+    const root = dirname(resolve(resolved));
     return hasCanonicalRuntime(root) ? root : null;
   } catch {
     return null;
@@ -211,7 +220,7 @@ export function resolveCanonicalRuntime({ entryPath = fileURLToPath(import.meta.
     const canonicalRoot = resolve(root);
     if (seen.has(canonicalRoot)) continue;
     seen.add(canonicalRoot);
-    const runtimePath = join(canonicalRoot, 'bin', RUNTIME_FILE_NAME);
+    const runtimePath = runtimePathFor(canonicalRoot);
     if (hasCanonicalRuntime(canonicalRoot)) {
       return {
         kind: 'file',
@@ -230,7 +239,7 @@ function resolverError(entryPath) {
     'The bundled Coordinate Agents Runtime could not be found from the active Plugin payload.',
     {
       recoverable: false,
-      details: `Resolver: ${entryPath}. Install the Plugin again or use the standalone npm Runtime for debugging.`,
+      details: `Resolver: ${entryPath}. Install the Plugin again or use the repository Legacy CLI or npm 2.4.0 for debugging.`,
       stage: 'resolve',
     },
   );

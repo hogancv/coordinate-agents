@@ -10,7 +10,7 @@ import {
   runtimeSetupConfigure,
   runtimeTaskCreate,
   runtimeTaskOperation,
-} from '../../bin/coordinate-agents.mjs';
+} from '../../bin/coordinate-agents-legacy.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,

@@ -19,6 +19,20 @@ const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: '
 
 const I18N = {
   en: {
+    'archive.task': 'Archive conversation',
+    'archive.project': 'Archive project and conversations',
+    'archive.title': 'Archived conversations',
+    'archive.hint': 'Permanently clear archived conversation records across all projects. Project source files are preserved.',
+    'archive.clear': 'Clear archived conversations',
+    'archive.summary': '{tasks} conversations · {projects} projects archived',
+    'archive.unavailable': '{count} project directories unavailable',
+    'archive.done': 'Archived.',
+    'archive.cleared': 'Cleared {count} archived conversations.',
+    'archive.partial': 'Some project directories could not be cleared.',
+    'archive.failed': 'Archive operation failed.',
+    'project.none': 'No active project',
+    'empty.archivedTitle': 'All projects are archived',
+    'empty.archivedBody': 'Add a project to continue, or open settings to clear archived conversations.',
     'zen.enter': 'Zen mode',
     'zen.exit': 'Exit Zen mode',
     'repo.label': 'BOUND REPOSITORY',
@@ -85,6 +99,20 @@ const I18N = {
     'action.retry': 'Retry',
   },
   zh: {
+    'archive.task': '归档对话',
+    'archive.project': '归档项目及其对话',
+    'archive.title': '已归档对话',
+    'archive.hint': '永久清除所有项目的已归档对话记录。项目源码文件会保留。',
+    'archive.clear': '一键清除归档对话',
+    'archive.summary': '已归档 {tasks} 个对话 · {projects} 个项目',
+    'archive.unavailable': '有 {count} 个项目目录不可用',
+    'archive.done': '已归档。',
+    'archive.cleared': '已清除 {count} 个归档对话。',
+    'archive.partial': '部分项目目录无法访问，未完成全部清除。',
+    'archive.failed': '归档操作失败。',
+    'project.none': '暂无活动项目',
+    'empty.archivedTitle': '所有项目均已归档',
+    'empty.archivedBody': '新增项目继续工作，或进入设置清除已归档对话。',
     'zen.enter': '禅模式',
     'zen.exit': '退出禅模式',
     'repo.label': '当前仓库',
@@ -174,6 +202,9 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
+  contextTarget: null,
+  contextTrigger: null,
 };
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
@@ -284,7 +315,7 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button']) {
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -325,6 +356,8 @@ function renderSettingsForm() {
   if (antigravity) antigravity.value = state.settings.antigravity || DEFAULT_TERMINAL_COMMANDS.antigravity;
 }
 
+function canEditProjectSettings() { return Boolean(state.projectId) && state.projects.find(project => project.id === state.projectId)?.available !== false; }
+
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
   for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
@@ -332,7 +365,11 @@ function setSettingsBusy(busy) {
     if (element) element.disabled = busy;
   }
   const save = document.querySelector('#terminal-settings-save');
-  if (save) save.textContent = busy ? t('settings.saving') : t('settings.save');
+  if (save) { save.textContent = busy ? t('settings.saving') : t('settings.save'); save.disabled = busy || !canEditProjectSettings(); }
+  for (const id of ['codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
+    const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
+  }
+  renderArchiveSummary();
 }
 
 function closeSettings({ force = false } = {}) {
@@ -348,16 +385,22 @@ async function openSettings() {
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   if (state.actionBusy || state.settingsBusy) return;
+  closeContextMenu();
   const dialog = document.querySelector('#terminal-settings-dialog');
   if (!dialog) return;
   state.settingsOpen = true;
   settingsError();
   renderSettingsForm();
   dialog.hidden = false;
+  setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
   try {
-    const payload = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT);
+    const [settingsResult, archiveResult] = await Promise.allSettled([fetchJson(WORKSPACE_SETTINGS_ENDPOINT), postAction('workspaceArchivesStatus', {}, null)]);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    if (archiveResult.status === 'fulfilled') { state.archives = archiveResult.value; renderArchiveSummary(); }
+    else settingsError(archiveResult.reason?.message || t('settings.loadError'));
+    if (settingsResult.status !== 'fulfilled') { settingsError(settingsResult.reason?.message || t('settings.loadError')); return; }
+    const payload = settingsResult.value;
     state.settings = {
       models: payload?.codex?.models || [],
       effort: readCodexEffort(payload?.codex?.args || []),
@@ -373,6 +416,7 @@ async function openSettings() {
   } finally {
     if (projectId === state.projectId && epoch === state.projectEpoch) {
       dialog.removeAttribute('aria-busy');
+      setSettingsBusy(false);
       if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
     }
   }
@@ -424,7 +468,7 @@ function replaceCodexEffort(args, effort) {
 
 async function saveSettings(event) {
   event?.preventDefault();
-  if (state.actionBusy || state.settingsBusy) return;
+  if (state.actionBusy || state.settingsBusy || !canEditProjectSettings()) return;
   const commands = {
     codex: `${document.querySelector('#codex-command')?.value || ''}`.trim(),
     antigravity: `${document.querySelector('#antigravity-command')?.value || ''}`.trim(),
@@ -469,6 +513,7 @@ function renderLocale() {
   renderRepository();
   renderTaskList();
   renderSelectedTask();
+  renderArchiveSummary();
 }
 
 function setZenMode(enabled) {
@@ -540,6 +585,7 @@ function renderProjects() {
     else for (const task of state.projectTasks.get(project.id) || []) {
       const button = document.createElement('button');
       button.className = 'project-task-link';
+      button.dataset.workspaceTaskId = task.id; button.dataset.projectId = project.id;
       button.textContent = task.title;
       button.title = task.title;
       button.onclick = () => void selectProject(project.id, task.id);
@@ -566,6 +612,7 @@ async function selectProject(id, taskId) {
   if (!project) return;
   if (state.projectId) state.projectSelections.set(state.projectId, state.selectedId);
   closeSettings();
+  closeContextMenu();
   disposeTerminalViews();
   state.projectEpoch++;
   state.projectId = id;
@@ -676,11 +723,15 @@ function bindProjectDialog() {
 }
 
 function renderTaskList() {
+  for (const id of ['new-task-button', 'empty-new-task']) { const button = document.querySelector(`#${id}`); if (button) button.disabled = state.actionBusy || !state.projectId; }
   renderProjects();
   const list = document.querySelector('#workspace-task-list');
   const count = document.querySelector('#task-count');
   if (!list) return;
   if (count) count.textContent = `${state.tasks.length}`;
+  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.tasks]);
+  if (list.dataset.renderKey === renderKey) return;
+  list.dataset.renderKey = renderKey;
   if (state.tasks.length === 0) {
     list.innerHTML = `<p class="task-list-empty">${escapeHtml(t('task.none'))}</p>`;
     return;
@@ -689,7 +740,7 @@ function renderTaskList() {
     const selected = task.id === state.selectedId ? ' selected' : '';
     const codexState = statusKey(sessionState(task.sessions?.codex));
     const agyState = statusKey(sessionState(task.sessions?.antigravity));
-    return `<button class="workspace-task-item${selected}" type="button" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}">
+    return `<button class="workspace-task-item${selected}" type="button" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(state.projectId || '')}">
       <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-label="${escapeHtml(statusLabel(task.status))}"></span></span>
       <span class="task-item-meta"><span>${escapeHtml(statusLabel(task.status))}</span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
       <span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span>
@@ -707,7 +758,12 @@ function renderSelectedTask() {
   const empty = document.querySelector('#empty-state');
   const panel = document.querySelector('#workspace-panel');
   if (!state.selectedTask) {
-    if (empty) empty.hidden = false;
+    if (empty) {
+      empty.hidden = false;
+      const title = empty.querySelector('h2'), body = empty.querySelector('p');
+      if (title) title.textContent = t(state.projectId ? 'empty.title' : 'empty.archivedTitle');
+      if (body) body.textContent = t(state.projectId ? 'empty.body' : 'empty.archivedBody');
+    }
     if (panel) panel.hidden = true;
     return;
   }
@@ -1031,6 +1087,10 @@ async function loadSelectedTask() {
 }
 
 async function refresh({ showError = false } = {}) {
+  if (!state.projectId) {
+    if (showError) await reloadProjectsAfterArchive(); else renderNoProject();
+    return;
+  }
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   try {
@@ -1143,7 +1203,106 @@ function setLocale(locale) {
   renderLocale();
 }
 
+function renderNoProject() {
+  disposeTerminalViews(); state.repository = { name: t('project.none'), root: '', branch: null }; state.tasks = []; state.selectedId = null; state.selectedTask = null;
+  renderRepository(); renderTaskList(); renderSelectedTask();
+  for (const id of ['new-task-button', 'empty-new-task']) { const button = document.querySelector(`#${id}`); if (button) button.disabled = true; }
+}
+
+function renderArchiveSummary() {
+  const summary = document.querySelector('#archive-summary'), button = document.querySelector('#archive-clear-button');
+  if (summary) summary.textContent = t('archive.summary').replace('{tasks}', state.archives.tasks).replace('{projects}', state.archives.projects)
+    + (state.archives.unavailableProjects ? ` · ${t('archive.unavailable').replace('{count}', state.archives.unavailableProjects)}` : '');
+  if (button) button.disabled = state.actionBusy || state.settingsBusy || (!state.archives.tasks && !state.archives.unavailableProjects);
+}
+
+function closeContextMenu({ restoreFocus = false } = {}) {
+  const trigger = state.contextTrigger, target = state.contextTarget;
+  const menu = document.querySelector('#workspace-context-menu'); if (menu) menu.hidden = true;
+  state.contextTarget = null; state.contextTrigger = null;
+  if (restoreFocus && target) {
+    const selector = target.kind === 'task' ? `[data-workspace-task-id="${CSS.escape(target.taskId)}"][data-project-id="${CSS.escape(target.projectId)}"]` : `.project-heading[data-project="${CSS.escape(target.projectId)}"]`;
+    (trigger?.isConnected ? trigger : document.querySelector(selector))?.focus();
+  }
+}
+function showArchiveMenu(event, target) {
+  if (state.actionBusy || state.settingsBusy || state.settingsOpen) return;
+  const row = target?.closest?.('[data-workspace-task-id], .project-heading');
+  if (!row) return;
+  event.preventDefault();
+  const menu = document.querySelector('#workspace-context-menu');
+  const taskId = row.dataset.workspaceTaskId;
+  state.contextTrigger = row;
+  state.contextTarget = taskId ? { kind: 'task', taskId, projectId: row.dataset.projectId || state.projectId }
+    : { kind: 'project', projectId: row.dataset.project };
+  document.querySelector('#archive-context-label').textContent = row.title || row.textContent.trim();
+  document.querySelector('#archive-context-action').textContent = t(taskId ? 'archive.task' : 'archive.project');
+  menu.setAttribute('aria-label', t(taskId ? 'archive.task' : 'archive.project'));
+  menu.hidden = false;
+  const rect = row.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - menu.offsetHeight - 8))}px`;
+  document.querySelector('#archive-context-action').focus();
+}
+
+async function reloadProjectsAfterArchive(target) {
+  const payload = await fetchJson('/api/projects', { projectId: null });
+  state.projects = payload.projects;
+  if (target) {
+    state.projectTasks.delete(target.projectId);
+    if (target.kind === 'project') { state.projectSelections.delete(target.projectId); state.expandedProjects.delete(target.projectId); }
+    else if (state.projects.some(project => project.id === target.projectId)) {
+      const tasks = await fetchJson('/api/workspace-tasks', { projectId: target.projectId });
+      state.projectTasks.set(target.projectId, tasks);
+    }
+  }
+  if (!state.projects.some(project => project.id === state.projectId)) {
+    disposeTerminalViews(); state.projectEpoch++;
+    state.projectId = payload.defaultProjectId || state.projects[0]?.id || null;
+    state.selectedId = null; state.selectedTask = null; state.tasks = [];
+    if (state.projectId) state.expandedProjects.add(state.projectId);
+    try { window.history.replaceState(null, '', state.projectId ? `#${state.projectId}` : window.location.pathname); } catch { /* Optional. */ }
+  }
+  renderProjects();
+  if (state.projectId) await refresh(); else renderNoProject();
+}
+
+async function archiveContextTarget() {
+  const target = state.contextTarget; closeContextMenu();
+  if (!target || state.actionBusy || state.settingsBusy) return;
+  setBusy(true); state.projectEpoch++;
+  try {
+    if (target.kind === 'project') await postAction('projectArchive', { projectId: target.projectId }, null);
+    else await postAction('workspaceTaskArchive', { workspaceTaskId: target.taskId }, target.projectId);
+    await reloadProjectsAfterArchive(target); showToast(t('archive.done'), 'success');
+  } catch (error) { showToast(error.message || t('archive.failed'), 'error'); }
+  finally { setBusy(false); if (!state.projectId) renderNoProject(); }
+}
+
+async function clearArchivedConversations() {
+  if (state.actionBusy || state.settingsBusy) return;
+  setBusy(true); setSettingsBusy(true); settingsError();
+  try {
+    const result = await postAction('workspaceArchivesClear', {}, null);
+    state.archives = await postAction('workspaceArchivesStatus', {}, null);
+    renderArchiveSummary();
+    if (result.failedProjects?.length) settingsError(t('archive.partial'));
+    else showToast(t('archive.cleared').replace('{count}', result.deletedTasks), 'success');
+  } catch (error) { settingsError(error.message || t('archive.failed')); }
+  finally { setBusy(false); setSettingsBusy(false); if (!state.projectId) renderNoProject(); }
+}
+
 function bindEvents() {
+  document.querySelector('#project-list')?.addEventListener('contextmenu', event => showArchiveMenu(event, event.target));
+  document.querySelector('#project-list')?.addEventListener('keydown', event => {
+    if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) showArchiveMenu(event, event.target);
+  });
+  document.querySelector('#archive-context-action')?.addEventListener('click', () => void archiveContextTarget());
+  document.querySelector('#archive-clear-button')?.addEventListener('click', () => void clearArchivedConversations());
+  document.addEventListener('pointerdown', event => { if (!document.querySelector('#workspace-context-menu')?.contains(event.target)) closeContextMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeContextMenu({ restoreFocus: true }); });
+  window.addEventListener('resize', closeContextMenu);
+  document.querySelector('#project-list')?.addEventListener('scroll', closeContextMenu);
   document.querySelector('#zen-button')?.addEventListener('click', () => setZenMode(true));
   document.querySelector('#zen-exit')?.addEventListener('click', () => setZenMode(false));
   document.querySelector('#new-task-button')?.addEventListener('click', createTask);
@@ -1191,7 +1350,7 @@ async function boot() {
     const payload = await fetchJson('/api/projects', { projectId: null });
     state.projects = payload.projects;
     const [projectId, taskId] = window.location.hash.slice(1).split('/').map(decodeURIComponent);
-    state.projectId = state.projects.some(project => project.id === projectId) ? projectId : payload.defaultProjectId;
+    state.projectId = state.projects.some(project => project.id === projectId) ? projectId : payload.defaultProjectId || state.projects[0]?.id || null;
     if (projectId.startsWith('project-')) state.selectedId = taskId || null;
     if (!state.selectedId) {
       try { state.selectedId = localStorage.getItem(`workspace-selection-${state.projectId}`) || null; } catch { /* Optional. */ }

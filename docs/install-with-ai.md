@@ -15,7 +15,7 @@ and prove the result with `doctor`. It must not treat a successful npm command a
 
 For a Codex Plugin installation, **do not require or perform**
 `npm install -g @hogancv/coordinate-agents`. The Plugin payload contains the
-canonical `bin/coordinate-agents.mjs`; each Skill invokes it through the single
+canonical `bin/coordinate-agents-legacy.mjs`; each Skill invokes it through the single
 resolver convention below, rather than through a PATH lookup:
 
 ```text

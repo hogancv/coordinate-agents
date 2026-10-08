@@ -34,7 +34,7 @@ absolute directory containing this file and use:
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 ```
 
-The fallback resolves the active payload to `bin/coordinate-agents.mjs`. Do not
+The fallback resolves the active payload to `bin/coordinate-agents-legacy.mjs`. Do not
 silently retry a failed mutation through another transport. Runtime errors stop
 the current activation; inspect facts before an authorized recovery. Classify
 `AUTH_REQUIRED` only from an explicit authentication failure.

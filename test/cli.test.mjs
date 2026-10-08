@@ -9,12 +9,14 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const currentVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
 function invoke(args, env = {}) {
-  return spawnSync(process.execPath, [cli, ...args], {
+  const isolatedArgs = args[0] === 'doctor' && !args.includes('--root') && env.COORDINATE_AGENTS_HOME
+    ? [...args, '--root', resolve(env.COORDINATE_AGENTS_HOME, '..')] : args;
+  return spawnSync(process.execPath, [cli, ...isolatedArgs], {
     cwd: root,
     encoding: 'utf8',
     env: { ...process.env, ...env },
@@ -591,7 +593,7 @@ test('doctor prints a repair command for every missing component and skill', () 
     assert.match(result.stderr, /Codex: not installed[\s\S]*Fix:/);
     assert.match(result.stderr, /@openai\/codex@latest/);
     assert.match(result.stderr, /antigravity\.google\/cli\/install/);
-    assert.ok(result.stderr.includes(`coordinate-agents@${currentVersion}`));
+    assert.ok(result.stderr.includes(`coordinate-agents@2.4.0`));
     assert.match(result.stderr, /install.*--codex/s);
   } finally {
     rmSync(sandbox, { recursive: true, force: true });

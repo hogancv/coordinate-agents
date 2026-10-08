@@ -10,7 +10,10 @@ invoke the skill, scan Agent Bus, recover old Tasks, or create Task/Graph record
 Groups live in .agent-bus/workspace-tasks/*.json, separate from standard Tasks.
 Group status is terminal lifecycle, not implementation or review completion;
 prompt-based role boundaries are not an enforced workflow state machine.
-Structured Task/Graph, CLI, MCP, and read-only Inspector contracts remain.
+npm 3.0.0 is Web-first; only web/help/version and package metadata are public.
+Structured Task/Graph, Legacy CLI, MCP, Inspector and Adapter SDK/conformance remain in GitHub source/Plugin (version 2.4.0) or npm 2.4.0.
+The default Web API excludes Task/Graph. Pack/publish --ignore-scripts need no build.
+The Plugin resolver selects bin/coordinate-agents-legacy.mjs; versions are independent.
 For current source behavior use node bin/coordinate-agents.mjs web --port 3000;
 merging to main does not publish npm. Never run conflicting worktree writes.
 

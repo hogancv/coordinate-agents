@@ -17,7 +17,7 @@ import {
   runtimeSetupConfigure,
   runtimeTaskCreate,
   runtimeTaskOperation,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   runtimeSessionClose,
   runtimeSessionInspect,
@@ -329,5 +329,32 @@ test('missing executable fails fast and a crashed session becomes inspectable wi
   } finally {
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('a delayed detached host receives its initialization before parent IPC disconnect', async () => {
+  const { resolveConfiguredSessionAgent } = await import('../skills/coordinate-agents/scripts/session-manager.mjs');
+  const root = repository('coordinate-delayed-host-');
+  const home = isolatedHome();
+  const command = persistentExecutable(root, 'delayed-agent', { silent: true });
+  process.env.FIXTURE_STARTS = join(root, 'starts.txt');
+  process.env.FIXTURE_DONE = join(root, 'done.txt');
+  process.env.FIXTURE_ROOT = root;
+  process.env.FIXTURE_AGENT = 'antigravity';
+  process.env.BUS_TOOL = busTool;
+  const delayed = join(root, 'delayed-host.mjs');
+  writeFileSync(delayed, `await new Promise(done => setTimeout(done, 250));\nawait import(${JSON.stringify(new URL('../skills/coordinate-agents/scripts/session-host.mjs', import.meta.url).href)});\n`);
+  const manager = new ExecutionSessionManager({ hostPath: delayed });
+  let sessionId;
+  try {
+    await configure(root, command);
+    const resolution = await resolveConfiguredSessionAgent(root, 'antigravity');
+    const opened = await manager.open({ root, agent: 'antigravity', resolved: resolution.resolved, adapter: resolution.adapter });
+    sessionId = opened.session.id;
+    assert.ok(['running', 'idle', 'busy'].includes(opened.session.state), JSON.stringify(opened));
+    assert.ok(opened.session.pid > 0);
+  } finally {
+    if (sessionId) { try { await manager.close(root, sessionId, { graceful: false, timeoutMs: 1000 }); } catch {} }
+    await removeTree(root); rmSync(home, { recursive: true, force: true });
   }
 });

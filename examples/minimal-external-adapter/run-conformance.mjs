@@ -1,6 +1,6 @@
 import {
   assertAdapterConformance,
-} from '@hogancv/coordinate-agents/adapter-sdk.mjs';
+} from '../../adapter-sdk.mjs';
 
 import descriptor from './adapter.mjs';
 

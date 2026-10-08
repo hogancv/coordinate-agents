@@ -19,11 +19,12 @@ test('discovery keeps the first adapter record when injected registry IDs repeat
   assert.deepEqual(agents, []);
 });
 
-test('canonical bin is a thin executable and compatibility export surface', () => {
+test('npm bin is a thin Web executable; Legacy exports remain source-only', () => {
   const content = readFileSync(join(root, 'bin', 'coordinate-agents.mjs'), 'utf8');
   assert.ok(content.split(/\r?\n/).length <= 30, 'bin entry must remain thin');
-  assert.match(content, /import \{ runCli \} from '\.\.\/lib\/cli-core\.mjs'/);
-  assert.match(content, /export \* from '\.\.\/lib\/cli-core\.mjs'/);
+  assert.match(content, /import \{ runCli \} from '\.\.\/lib\/web-cli\.mjs'/);
+  assert.doesNotMatch(content, /cli-core/);
+  assert.match(readFileSync(join(root, 'bin/coordinate-agents-legacy.mjs'), 'utf8'), /export \* from/);
   assert.doesNotMatch(content, /function (task|setup|adapter|doctor|quickstart|launchAgent)/);
 });
 

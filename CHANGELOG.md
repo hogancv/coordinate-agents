@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.0.0 — Web-first npm distribution
+
+- Added right-click archiving for Workspace conversations and whole project folders. Archive closes owned terminals, persists records and hides them; settings can clear archived conversation and owned Session transcripts across projects while preserving project source. Archived folders remain hidden on restart and explicit re-add restores their navigation entry.
+
+- npm now ships only the lightweight Web Workspace, HTTP APIs, xterm assets, required shared Session/PTY/Workspace runtime and launch validation. Plugin manifests/Skills, MCP, Task Graph, Adapter SDK/conformance/examples, development tooling and large demo assets remain in GitHub and are excluded from the tarball.
+- The Web command no longer imports the Legacy CLI, Inspector data model, Task Graph or Agent Bus. Default Web APIs expose projects, Workspace tasks, owned sessions and settings; structured operations remain source-only.
+- Preserve dual terminals, custom commands and spaced paths/arguments, Codex model/reasoning settings, role injection, task-bound messaging, persistence, resize, close/restart and independent Session Host reconnection. Keep the existing platform PTY fallbacks and Node >=18 floor.
+- Breaking npm API changes: only web/help/version remain; remove wildcard and Adapter SDK exports. Use `npx @hogancv/coordinate-agents@2.4.0 <command>` for the old npm CLI or `node bin/coordinate-agents-legacy.mjs <command>` in GitHub source. The Plugin resolver selects its complete bundled Legacy entry; Plugin version remains independently at 2.4.0.
+- Replace Plugin-based npm artifact gates with an isolated production install, import/payload checks, offline mock dual terminals, role/message/task isolation, project/settings/reconnect/restart and cleanup checks. Plugin/MCP tests remain independent. Add a Windows/macOS/Linux × Node 18/22/24 acceptance matrix.
+- Fix absent terminal read limits being treated as one byte/line, ensure the message helper runs through symlink/realpath aliases, and let the Session Host consume initialization before disconnecting IPC (validated with delayed imports and Node 22). Preserve loopback, Host/Origin, capability, bounded input and filesystem guards.
+- No generated build is required for `npm pack --ignore-scripts`. The manually authorized Trusted Publishing/OIDC workflow publishes the exact verified tarball. No publication is performed by this change.
+- Exact size/install/startup measurements and validation limitations: [V3 release evidence](docs/releases/v3-web-first.md).
+
 ## 2.4.0 — Lightweight Web Workspace
 
 This release publishes the bilingual dual-terminal Web Workspace and its

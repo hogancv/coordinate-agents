@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "candidate": {
+    "sourceCommit": "4eb64be0cbf0338b5c6807d69603ff8f7182d947",
+    "tag": "v3.0.0",
+    "version": "3.0.0"
+  },
+  "package": {
+    "name": "@hogancv/coordinate-agents",
+    "version": "3.0.0",
+    "repository": "git+https://github.com/hogancv/coordinate-agents.git"
+  },
+  "payload": {
+    "files": 42,
+    "runtimeReferences": 75,
+    "legacyAbsent": true
+  },
+  "installation": {
+    "productionDependencies": true,
+    "isolatedHome": true,
+    "isolatedConsumer": true,
+    "loadedModules": 32
+  },
+  "runtime": {
+    "ok": true,
+    "version": "3.0.0",
+    "dualTerminals": true,
+    "rolePrompts": true,
+    "messageRoundTrip": true,
+    "taskIsolation": true,
+    "customPathsAndArgs": true,
+    "resize": true,
+    "settings": true,
+    "multipleProjects": true,
+    "serverReconnect": true,
+    "restart": true,
+    "cleanup": true,
+    "backend": "node-pty",
+    "sessionCount": 6
+  },
+  "verificationContext": "Local uncommitted working tree; expected-source-commit is the repository base, not a published release commit."
+}

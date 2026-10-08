@@ -113,6 +113,11 @@
       </main>
     </div>
 
+    <div id="workspace-context-menu" class="workspace-context-menu" role="menu" aria-label="Archive" hidden>
+      <span id="archive-context-label" class="context-menu-label"></span>
+      <button id="archive-context-action" type="button" role="menuitem">Archive conversation</button>
+    </div>
+
     <div id="terminal-settings-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title" hidden>
       <form id="terminal-settings-form" class="settings-modal">
         <header class="settings-modal-header">
@@ -143,6 +148,14 @@
           </label>
         </div>
         <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+        <section class="archive-settings" aria-labelledby="archive-settings-title">
+          <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
+          <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
+          <div class="archive-settings-actions">
+            <span id="archive-summary" aria-live="polite"></span>
+            <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
+          </div>
+        </section>
         <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
         <footer class="settings-modal-actions">
           <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>

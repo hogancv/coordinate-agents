@@ -1,0 +1,224 @@
+{
+  "id": "@hogancv/coordinate-agents@3.0.0",
+  "name": "@hogancv/coordinate-agents",
+  "version": "3.0.0",
+  "size": 227407,
+  "unpackedSize": 888776,
+  "shasum": "b274dfb6997187d7987364685dbb34bec8dcc06f",
+  "integrity": "sha512-ejz/E3o+EI8l3d/rySLO9DJlvYLsP/Br+mzKI5hgz+Hs36rRn8Z4FGqv7ltix/QbYy4CnxA7FU2VUcMbrwuxjA==",
+  "filename": "hogancv-coordinate-agents-3.0.0.tgz",
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "size": 9065,
+      "mode": 420
+    },
+    {
+      "path": "LICENSE",
+      "size": 1064,
+      "mode": 420
+    },
+    {
+      "path": "README.md",
+      "size": 18647,
+      "mode": 420
+    },
+    {
+      "path": "README.zh-CN.md",
+      "size": 17105,
+      "mode": 420
+    },
+    {
+      "path": "bin/coordinate-agents.mjs",
+      "size": 531,
+      "mode": 493
+    },
+    {
+      "path": "inspector/server/action-gateway.mjs",
+      "size": 15547,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/http-server.mjs",
+      "size": 15766,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/native-folder-picker.mjs",
+      "size": 1952,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/workspace-data.mjs",
+      "size": 6927,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/workspace-projects.mjs",
+      "size": 6042,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/workspace-server.mjs",
+      "size": 1298,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/app.js",
+      "size": 53922,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/composer-model.mjs",
+      "size": 7610,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/index.html",
+      "size": 9460,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/styles.css",
+      "size": 19218,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/terminal-model.mjs",
+      "size": 2302,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.css",
+      "size": 7112,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.js",
+      "size": 488663,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.LICENSE",
+      "size": 1261,
+      "mode": 420
+    },
+    {
+      "path": "lib/web-cli.mjs",
+      "size": 3561,
+      "mode": 420
+    },
+    {
+      "path": "package.json",
+      "size": 5000,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/antigravity-cli.mjs",
+      "size": 3804,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/base.mjs",
+      "size": 2859,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/codex-cli.mjs",
+      "size": 3496,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "size": 12797,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/executable.mjs",
+      "size": 14602,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/generic-cli.mjs",
+      "size": 4925,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/index.mjs",
+      "size": 4712,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/trusted-local.mjs",
+      "size": 11193,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/config.mjs",
+      "size": 8711,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/pty-runtime.mjs",
+      "size": 14691,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "size": 6069,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "size": 14378,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-host.mjs",
+      "size": 9803,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-manager.mjs",
+      "size": 37970,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-service.mjs",
+      "size": 4259,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/user-config.mjs",
+      "size": 7370,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-init.mjs",
+      "size": 1170,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-message.mjs",
+      "size": 2661,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-role-prompts.mjs",
+      "size": 2817,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-services.mjs",
+      "size": 1849,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-task-runtime.mjs",
+      "size": 26587,
+      "mode": 420
+    }
+  ],
+  "entryCount": 42,
+  "bundled": []
+}

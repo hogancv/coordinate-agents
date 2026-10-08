@@ -229,3 +229,14 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .zen-mode .workspace-panel { padding: 0; }
 .zen-mode .terminal-grid { gap: 1px; background: var(--line); }
 .zen-mode .terminal-card { border: 0; border-radius: 0; box-shadow: none; }
+
+/* Archive actions are independent of terminal input and project source files. */
+.workspace-context-menu { position: fixed; z-index: 60; min-width: 13rem; max-width: min(22rem, calc(100vw - 1rem)); padding: .4rem; border: 1px solid var(--line-strong); border-radius: .65rem; background: var(--panel); color: var(--text); box-shadow: 0 .8rem 2.5rem #0008; }
+.workspace-context-menu[hidden] { display: none; }
+.context-menu-label { display: block; padding: .4rem .6rem; font-size: .68rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-context-menu button { display: block; width: 100%; padding: .65rem .6rem; border: 0; border-radius: .4rem; color: var(--text); background: transparent; text-align: left; cursor: pointer; font: inherit; font-size: .78rem; }
+.workspace-context-menu button:hover, .workspace-context-menu button:focus-visible { background: rgba(157, 181, 255, .13); outline: none; }
+.archive-settings { display: grid; gap: .6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.archive-settings h3 { margin: 0; font-size: .85rem; }
+.archive-settings p, #archive-summary { margin: 0; font-size: .72rem; line-height: 1.5; color: var(--muted); }
+.archive-settings-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }

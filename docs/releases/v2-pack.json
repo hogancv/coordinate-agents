@@ -1,0 +1,624 @@
+{
+  "id": "@hogancv/coordinate-agents@2.4.0",
+  "name": "@hogancv/coordinate-agents",
+  "version": "2.4.0",
+  "size": 811800,
+  "unpackedSize": 2175886,
+  "shasum": "d211226e098a796efe2a37b7de0b63cb5a7444ad",
+  "integrity": "sha512-3OJYUnDV76cCaAY5nku434rMrorrnZwGVqALxmdMnn4zClSjapTJCQ7dHWJUkxboP+AyYj6/bqQwXE+w5lSqYg==",
+  "filename": "hogancv-coordinate-agents-2.4.0.tgz",
+  "files": [
+    {
+      "path": ".agents/plugins/marketplace.json",
+      "size": 373,
+      "mode": 420
+    },
+    {
+      "path": ".codex-plugin/plugin.json",
+      "size": 1688,
+      "mode": 420
+    },
+    {
+      "path": ".mcp.json",
+      "size": 148,
+      "mode": 420
+    },
+    {
+      "path": "AI_INSTALL.md",
+      "size": 31076,
+      "mode": 420
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size": 6878,
+      "mode": 420
+    },
+    {
+      "path": "LICENSE",
+      "size": 1064,
+      "mode": 420
+    },
+    {
+      "path": "README.md",
+      "size": 16357,
+      "mode": 420
+    },
+    {
+      "path": "README.zh-CN.md",
+      "size": 14896,
+      "mode": 420
+    },
+    {
+      "path": "SECURITY.md",
+      "size": 9784,
+      "mode": 420
+    },
+    {
+      "path": "adapter-sdk.mjs",
+      "size": 1624,
+      "mode": 420
+    },
+    {
+      "path": "assets/demo-transcript.txt",
+      "size": 658,
+      "mode": 420
+    },
+    {
+      "path": "assets/demo.gif",
+      "size": 134197,
+      "mode": 420
+    },
+    {
+      "path": "assets/web-workspace.jpg",
+      "size": 253166,
+      "mode": 420
+    },
+    {
+      "path": "bin/coordinate-agents.mjs",
+      "size": 569,
+      "mode": 493
+    },
+    {
+      "path": "docs/adapter-author-guide.md",
+      "size": 6604,
+      "mode": 420
+    },
+    {
+      "path": "docs/adapter-conformance.md",
+      "size": 7994,
+      "mode": 420
+    },
+    {
+      "path": "docs/event-journal.md",
+      "size": 3244,
+      "mode": 420
+    },
+    {
+      "path": "docs/inspector.md",
+      "size": 10443,
+      "mode": 420
+    },
+    {
+      "path": "docs/llms.txt",
+      "size": 13857,
+      "mode": 420
+    },
+    {
+      "path": "docs/MCP_TROUBLESHOOTING.md",
+      "size": 7029,
+      "mode": 420
+    },
+    {
+      "path": "docs/mcp.md",
+      "size": 16456,
+      "mode": 420
+    },
+    {
+      "path": "docs/security.md",
+      "size": 5571,
+      "mode": 420
+    },
+    {
+      "path": "docs/session-runtime.md",
+      "size": 4316,
+      "mode": 420
+    },
+    {
+      "path": "docs/task-graph-v1.md",
+      "size": 23707,
+      "mode": 420
+    },
+    {
+      "path": "examples/minimal-external-adapter/adapter.mjs",
+      "size": 4018,
+      "mode": 420
+    },
+    {
+      "path": "examples/minimal-external-adapter/fake-agent.mjs",
+      "size": 2352,
+      "mode": 420
+    },
+    {
+      "path": "examples/minimal-external-adapter/README.md",
+      "size": 853,
+      "mode": 420
+    },
+    {
+      "path": "examples/minimal-external-adapter/run-conformance.mjs",
+      "size": 414,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/action-gateway.mjs",
+      "size": 21719,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/inspector-data.mjs",
+      "size": 30827,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/native-folder-picker.mjs",
+      "size": 1952,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/server.mjs",
+      "size": 17961,
+      "mode": 420
+    },
+    {
+      "path": "inspector/server/workspace-projects.mjs",
+      "size": 6172,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/app.js",
+      "size": 53922,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/composer-model.mjs",
+      "size": 7610,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/index.html",
+      "size": 9460,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/styles.css",
+      "size": 19218,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/terminal-model.mjs",
+      "size": 2302,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.css",
+      "size": 7112,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.js",
+      "size": 488663,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web-workspace/vendor/xterm.LICENSE",
+      "size": 1261,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web/app.js",
+      "size": 15293,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web/index.html",
+      "size": 4440,
+      "mode": 420
+    },
+    {
+      "path": "inspector/web/styles.css",
+      "size": 13690,
+      "mode": 420
+    },
+    {
+      "path": "lib/cli-core.mjs",
+      "size": 222747,
+      "mode": 420
+    },
+    {
+      "path": "lib/cli/parse-args.mjs",
+      "size": 6212,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/adapter.mjs",
+      "size": 5915,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/agent.mjs",
+      "size": 492,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/config.mjs",
+      "size": 4870,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/index.mjs",
+      "size": 1331,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/inspector.mjs",
+      "size": 314,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/maintenance.mjs",
+      "size": 6716,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/setup.mjs",
+      "size": 680,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/status.mjs",
+      "size": 513,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/task.mjs",
+      "size": 896,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/web.mjs",
+      "size": 302,
+      "mode": 420
+    },
+    {
+      "path": "lib/commands/workspace.mjs",
+      "size": 656,
+      "mode": 420
+    },
+    {
+      "path": "llms.txt",
+      "size": 13857,
+      "mode": 420
+    },
+    {
+      "path": "mcp/self-test.mjs",
+      "size": 4198,
+      "mode": 420
+    },
+    {
+      "path": "mcp/server.mjs",
+      "size": 30679,
+      "mode": 420
+    },
+    {
+      "path": "package.json",
+      "size": 3418,
+      "mode": 420
+    },
+    {
+      "path": "schemas/event.schema.json",
+      "size": 906,
+      "mode": 420
+    },
+    {
+      "path": "schemas/evidence.schema.json",
+      "size": 578,
+      "mode": 420
+    },
+    {
+      "path": "schemas/intent-map-v1.schema.json",
+      "size": 1078,
+      "mode": 420
+    },
+    {
+      "path": "schemas/runtime-error.schema.json",
+      "size": 1986,
+      "mode": 420
+    },
+    {
+      "path": "schemas/scope-audit-v1.schema.json",
+      "size": 3722,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-advance.schema.json",
+      "size": 3525,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-integrate.schema.json",
+      "size": 3991,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-plan.schema.json",
+      "size": 9496,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-record.schema.json",
+      "size": 9550,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-recovery.schema.json",
+      "size": 6256,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-review.schema.json",
+      "size": 2326,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1-run.schema.json",
+      "size": 2587,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task-graph-v1.schema.json",
+      "size": 1885,
+      "mode": 420
+    },
+    {
+      "path": "schemas/task.schema.json",
+      "size": 2134,
+      "mode": 420
+    },
+    {
+      "path": "scripts/benchmark-agent-lookup.mjs",
+      "size": 1505,
+      "mode": 420
+    },
+    {
+      "path": "scripts/demo.mjs",
+      "size": 6283,
+      "mode": 420
+    },
+    {
+      "path": "scripts/sync-llms.mjs",
+      "size": 807,
+      "mode": 420
+    },
+    {
+      "path": "scripts/verify-release-artifact.mjs",
+      "size": 15107,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/antigravity-cli.mjs",
+      "size": 3804,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/base.mjs",
+      "size": 2859,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/codex-cli.mjs",
+      "size": 3496,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/conformance.mjs",
+      "size": 22778,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "size": 12797,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/executable.mjs",
+      "size": 14602,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/generic-cli.mjs",
+      "size": 4925,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/index.mjs",
+      "size": 4712,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/adapters/trusted-local.mjs",
+      "size": 11193,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/agents/openai.yaml",
+      "size": 240,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/references/adapter-contract-v1.md",
+      "size": 4878,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/references/adapter-workflow.md",
+      "size": 1624,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/references/protocol.md",
+      "size": 10550,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/references/session-runtime.md",
+      "size": 7597,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/references/task-templates.md",
+      "size": 1917,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/agent-bus.mjs",
+      "size": 26676,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/agent-bus.ps1",
+      "size": 284,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/agent-observer.mjs",
+      "size": 3165,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/config.mjs",
+      "size": 8711,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/discovery.mjs",
+      "size": 9147,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/intent-map-contract.mjs",
+      "size": 14426,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/pty-runtime.mjs",
+      "size": 14691,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/role-prompts.mjs",
+      "size": 11544,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "size": 6069,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-entry.mjs",
+      "size": 10206,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "size": 14378,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/runtime-services.mjs",
+      "size": 4204,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/scope-audit.mjs",
+      "size": 15813,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-host.mjs",
+      "size": 9803,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-manager.mjs",
+      "size": 38340,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/session-service.mjs",
+      "size": 4259,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/task-graph-contract.mjs",
+      "size": 13470,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/task-graph-runtime.mjs",
+      "size": 125204,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/task-runtime.mjs",
+      "size": 19583,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/user-config.mjs",
+      "size": 7370,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-message.mjs",
+      "size": 2423,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/scripts/workspace-task-runtime.mjs",
+      "size": 26577,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-agents/SKILL.md",
+      "size": 2707,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-recover/SKILL.md",
+      "size": 4216,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-review/SKILL.md",
+      "size": 2293,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-setup/SKILL.md",
+      "size": 4116,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-task/references/task-graph.md",
+      "size": 4744,
+      "mode": 420
+    },
+    {
+      "path": "skills/coordinate-task/SKILL.md",
+      "size": 5039,
+      "mode": 420
+    }
+  ],
+  "entryCount": 122,
+  "bundled": []
+}

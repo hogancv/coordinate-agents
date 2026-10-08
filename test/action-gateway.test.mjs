@@ -17,11 +17,11 @@ import { delimiter, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { startInspector } from '../inspector/server/server.mjs';
-import { startWorkspace } from './support/workspace-server.mjs';
+import { startWorkspace } from './support/legacy-workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 
 const root = process.cwd();
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function git(repositoryRoot, args) {

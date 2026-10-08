@@ -16,7 +16,7 @@ import { createMcpServer } from '../mcp/server.mjs';
 import {
   runtimeTaskGraphCreate,
   runtimeTaskGraphPlan,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   readTaskGraph,
   setTaskGraphSubtaskState,
@@ -24,7 +24,7 @@ import {
 } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
-const cli = join(process.cwd(), 'bin', 'coordinate-agents.mjs');
+const cli = join(process.cwd(), 'bin', 'coordinate-agents-legacy.mjs');
 
 function repository(prefix = 'coordinate-agents-graph-plan-') {
   const root = mkdtempSync(join(tmpdir(), prefix));

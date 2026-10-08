@@ -19,7 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createMcpServer } from '../mcp/server.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const serverPath = join(root, 'mcp', 'server.mjs');
 const selfTestPath = join(root, 'mcp', 'self-test.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
@@ -884,7 +884,8 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
   assert.match(packageJson.version, /^\d+\.\d+\.\d+$/);
-  assert.equal(pluginJson.version, packageJson.version);
+  assert.equal(pluginJson.version, '2.4.0');
+  assert.equal(packageJson.version, '3.0.0');
   assert.equal(pluginJson.mcpServers, './.mcp.json');
   const mcpConfig = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8'));
   const serverIds = Object.keys(mcpConfig.mcpServers);
@@ -894,7 +895,8 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   assert.equal(mcpConfig.mcpServers.coordinate_agents.cwd, '.');
   assert.equal(existsSync(join(root, 'mcp', 'self-test.mjs')), true);
   assert.equal(packageJson.scripts['mcp:self-test'], 'node mcp/self-test.mjs');
-  assert.equal(packageJson.files.includes('docs/MCP_TROUBLESHOOTING.md'), true);
+  assert.equal(packageJson.files.includes('docs/MCP_TROUBLESHOOTING.md'), false);
+  assert.equal(existsSync(join(root, 'docs/MCP_TROUBLESHOOTING.md')), true);
   for (const name of ['task.schema.json', 'task-graph-v1.schema.json', 'task-graph-v1-record.schema.json', 'task-graph-v1-plan.schema.json', 'task-graph-v1-run.schema.json', 'task-graph-v1-advance.schema.json', 'task-graph-v1-recovery.schema.json', 'scope-audit-v1.schema.json', 'runtime-error.schema.json', 'evidence.schema.json']) {
     const schema = JSON.parse(readFileSync(join(root, 'schemas', name), 'utf8'));
     assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');

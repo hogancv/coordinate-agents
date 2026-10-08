@@ -9,7 +9,7 @@ import { createMcpServer } from '../mcp/server.mjs';
 import {
   runtimeTaskGraphCreate,
   runtimeTaskGraphPlan,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   readTaskGraph,
   setTaskGraphSubtaskState,
@@ -153,7 +153,7 @@ test('CLI and MCP plan expose equivalent additive conflict and wave facts', asyn
       intentMap: intentMap('task-intent-parity'),
     });
     const cli = spawnSync(process.execPath, [
-      join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-plan',
+      join(process.cwd(), 'bin', 'coordinate-agents-legacy.mjs'), 'task', 'graph-plan',
       '--root', root, '--id', 'task-intent-parity', '--json',
     ], { encoding: 'utf8', windowsHide: true });
     assert.equal(cli.status, 0, cli.stderr || cli.stdout);

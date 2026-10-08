@@ -11,7 +11,7 @@ import {
   runtimeTaskGraphInspect,
   runtimeTaskGraphStatus,
   runtimeTaskOperation,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   readTaskGraph,
   setTaskGraphSubtaskState,
@@ -82,12 +82,12 @@ test('Task Graph status and inspect use the same durable record through Runtime,
     const input = graph({ parentTask: { ...graph().parentTask, id: 'task-graph-views' } });
     writeFileSync(inputPath, JSON.stringify(input) + '\n', 'utf8');
     const cli = spawnSync(process.execPath, [
-      join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'graph-create',
+      join(process.cwd(), 'bin', 'coordinate-agents-legacy.mjs'), 'task', 'graph-create',
       '--root', root, '--input', inputPath, '--json',
     ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, PATH: '' } });
     assert.equal(cli.status, 0, cli.stderr || cli.stdout);
     const cliStatus = spawnSync(process.execPath, [
-      join(process.cwd(), 'bin', 'coordinate-agents.mjs'), 'task', 'status',
+      join(process.cwd(), 'bin', 'coordinate-agents-legacy.mjs'), 'task', 'status',
       '--root', root, '--id', 'task-graph-views', '--json',
     ], { encoding: 'utf8', windowsHide: true });
     assert.equal(cliStatus.status, 0, cliStatus.stderr || cliStatus.stdout);

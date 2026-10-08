@@ -7,7 +7,7 @@ import test from 'node:test';
 import { ROLE_PROMPT_VERSION, quickstartRolePrompt, workspaceRolePrompt, WORKSPACE_ROLE_PROMPT_VERSION } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
 
 const root = process.cwd();
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 
 test('CLI quickstart retains the bilingual v2.3 role prompts', () => {
   assert.equal(ROLE_PROMPT_VERSION, '2.3.0');

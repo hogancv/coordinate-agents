@@ -21,7 +21,7 @@ import {
   runtimeTaskGraphResume,
   runtimeTaskGraphStatus,
   runtimeTaskGraphStop,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   captureGraphBaseCommit,
   cleanupTaskGraphWorktree,

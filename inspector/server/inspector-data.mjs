@@ -1,3 +1,4 @@
+import { canonicalRoot, busFor, bounded, readWorkspaceSettings, repositoryFacts, readSessionOutput } from './workspace-data.mjs';
 import { homedir } from 'node:os';
 import {
   existsSync,
@@ -63,85 +64,11 @@ const WORKSPACE_AGENT_DEFAULTS = Object.freeze([
   Object.freeze({ id: 'antigravity', adapter: 'antigravity-cli', command: 'agy' }),
 ]);
 
-function canonicalRoot(root) {
-  const candidate = resolve(`${root || process.cwd()}`);
-  const metadata = lstatSync(candidate);
-  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-    throw new Error(`Inspector root is not a regular directory: ${candidate}`);
-  }
-  return realpathSync(candidate);
-}
 
-function busFor(root) {
-  const bus = join(root, '.agent-bus');
-  if (!existsSync(bus)) return null;
-  assertSafePath(root, bus);
-  const metadata = lstatSync(bus);
-  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
-    throw new Error(`Refusing unsafe Agent Bus root: ${bus}`);
-  }
-  return bus;
-}
 
-function bounded(value, limit = MAX_EVENT_DETAILS) {
-  if (value === null || value === undefined) return '';
-  return redactOutput(`${value}`, limit);
-}
 
-function safeWorkspaceCommand(value, fallback) {
-  const command = bounded(value || fallback, 512)
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
-    .trim();
-  return command || fallback;
-}
 
-function readCodexModels() {
-  try {
-    const cache = JSON.parse(readFileSync(join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'models_cache.json'), 'utf8'));
-    return (cache.models || []).filter(model => model.visibility !== 'hide' && typeof model.slug === 'string').map(model => ({
-      id: model.slug,
-      name: model.display_name || model.slug,
-      efforts: (model.supported_reasoning_levels || []).map(level => level.effort).filter(effort => typeof effort === 'string'),
-    }));
-  } catch { return []; }
-}
 
-function readWorkspaceSettings(root) {
-  const bus = busFor(root);
-  let projectAgents = [];
-  try {
-    if (bus) projectAgents = readConfig(bus).agents;
-  } catch {
-    projectAgents = [];
-  }
-  let userConfig;
-  try {
-    userConfig = readUserConfig();
-  } catch {
-    userConfig = { version: 1, agents: {} };
-  }
-  const projectAgentsById = new Map(projectAgents.map(agent => [agent.id, agent]));
-  return Object.fromEntries(WORKSPACE_AGENT_DEFAULTS.map(({ id, adapter, command: fallback }) => {
-    const projectAgent = projectAgentsById.get(id) || { id, adapter };
-    try {
-      const resolved = resolveAgentConfig(projectAgent, userConfig);
-      return [id, {
-        command: safeWorkspaceCommand(resolved.command, fallback),
-        adapter: resolved.adapter || adapter,
-        source: resolved.commandSource || 'adapter-default',
-        args: resolved.args || [],
-        ...(id === 'codex' ? { models: readCodexModels() } : {}),
-        argsSource: resolved.argsSource,
-      }];
-    } catch {
-      return [id, {
-        command: fallback,
-        adapter,
-        source: 'adapter-default',
-      }];
-    }
-  }));
-}
 
 function sanitizeNested(value, {
   depth = 0,
@@ -513,42 +440,7 @@ function recordedEvents(root, options = {}) {
 // invocation stays bounded (short timeout, capped buffers) and spawns no Agent,
 // Session, worktree, or Bus side effect; failures degrade to partial facts so
 // the Workspace overview remains usable outside a fully committed repository.
-function gitFact(root, args) {
-  const result = spawnSync('git', ['-C', root, ...args], {
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 5_000,
-    maxBuffer: 512 * 1024,
-  });
-  if (result.error || result.status !== 0) return null;
-  return result.stdout.trim();
-}
 
-function repositoryFacts(root) {
-  const headLine = gitFact(root, ['log', '-1', '--format=%h%x1f%s%x1f%cI']);
-  const head = headLine
-    ? (() => {
-      const [shortSha, subject, committedAtRaw] = headLine.split('\x1f');
-      const committedAt = typeof committedAtRaw === 'string' && !Number.isNaN(Date.parse(committedAtRaw))
-        ? committedAtRaw
-        : null;
-      return {
-        short: bounded(shortSha, 64) || null,
-        subject: bounded(subject, 2 * 1024) || null,
-        committedAt,
-      };
-    })()
-    : null;
-  const branch = bounded(gitFact(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']), 256) || null;
-  return {
-    root,
-    name: bounded(basename(root), 256),
-    branch,
-    detached: Boolean(head && !branch),
-    head,
-    remoteUrl: bounded(gitFact(root, ['remote', 'get-url', 'origin']), 2 * 1024) || null,
-  };
-}
 
 function readSessions(root, tasks = readTaskRecords(root)) {
   const bus = busFor(root);
@@ -614,34 +506,6 @@ function readSessions(root, tasks = readTaskRecords(root)) {
   }));
 }
 
-async function readSessionOutput(root, sessionId, {
-  cursor = null,
-  maxLines = MAX_TERMINAL_READ_LINES,
-  maxBytes = MAX_TERMINAL_READ_BYTES,
-} = {}) {
-  const result = await runtimeSessionRead({
-    root,
-    sessionId,
-    cursor,
-    maxLines: Math.min(MAX_TERMINAL_READ_LINES, Math.max(1, Number.isInteger(maxLines) ? maxLines : MAX_TERMINAL_READ_LINES)),
-    maxBytes: Math.min(MAX_TERMINAL_READ_BYTES, Math.max(1, Number.isInteger(maxBytes) ? maxBytes : MAX_TERMINAL_READ_BYTES)),
-  });
-  const output = typeof result.output === 'string' ? result.output : '';
-  const session = result.session
-    ? {
-      ...result.session,
-      status: result.session.status || result.session.state || null,
-    }
-    : null;
-  return {
-    session,
-    output: {
-      output: redactOutput(output, MAX_TERMINAL_READ_BYTES),
-      nextCursor: Number.isInteger(result.nextCursor) ? result.nextCursor : null,
-      truncated: result.truncated === true,
-    },
-  };
-}
 
 function taskEvents(tasks) {
   const events = [];

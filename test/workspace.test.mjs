@@ -138,14 +138,7 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.equal(repositoryFacts.remoteUrl, null);
     assert.equal(repositoryFacts.error, undefined);
 
-    const tasks = await (await fetch(`${started.url}/api/tasks`)).json();
-    assert.equal(tasks.length, 2);
-    assert.ok(tasks.some(item => item.id === 'task-workspace' && item.graph === false));
-    const graphParent = tasks.find(item => item.graph === true);
-    assert.ok(graphParent, 'Task Graph parent must appear in the Workspace overview');
-    assert.equal(graphParent.id, 'task-workspace-graph');
-    assert.equal(graphParent.subtaskCount, 2);
-
+    assert.equal((await fetch(`${started.url}/api/tasks`)).status, 404);
     const workspaceTasks = await (await fetch(`${started.url}/api/workspace-tasks`)).json();
     assert.deepEqual(workspaceTasks, [], 'standard Task and Graph records stay hidden from the Workspace task list');
 
@@ -156,12 +149,7 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.ok(workspaceSettings.codex.command);
     assert.ok(workspaceSettings.antigravity.command);
 
-    // Persisted #36 Task Graph records remain readable through the Workspace.
-    const graphDetail = await (await fetch(`${started.url}/api/tasks/task-workspace-graph`)).json();
-    assert.equal(graphDetail.graph, true);
-    assert.equal(graphDetail.subtasks.length, 2);
-    assert.deepEqual(graphDetail.subtasks.find(item => item.id === 'sub-b').dependsOn, ['sub-a']);
-
+    assert.equal((await fetch(`${started.url}/api/tasks/task-workspace-graph`)).status, 404);
     const js = await (await fetch(`${started.url}/app.js`)).text();
     assert.match(js, /renderRepository/);
     assert.match(js, /\/api\/workspace-tasks/);
@@ -218,8 +206,8 @@ test('coordinate-agents web CLI starts the localhost Workspace on a selected por
     assert.match(page, /Coordinate Agents Workspace/);
     const repositoryFacts = await (await fetch(`http://localhost:${port}/api/repository`)).json();
     assert.equal(repositoryFacts.root, repositoryRoot);
-    const tasks = await (await fetch(`http://localhost:${port}/api/tasks`)).json();
-    assert.equal(tasks[0].id, 'task-workspace');
+    const tasks = await (await fetch(`http://localhost:${port}/api/workspace-tasks`)).json();
+    assert.deepEqual(tasks, []);
   } finally {
     child.kill('SIGTERM');
     await once(child, 'exit');
@@ -300,7 +288,7 @@ test('Web Workspace initializes plain folders and rejects missing entry points',
   }
 });
 
-test('Web Workspace hides standard Task Graph UI while compatibility APIs remain readable', async () => {
+test('Web Workspace hides Task Graph UI and exposes no default graph read API', async () => {
   const repositoryRoot = graphFixture(taskFixture(repository()));
   const started = await startWorkspace({ root: repositoryRoot, port: 0 });
   try {
@@ -315,15 +303,8 @@ test('Web Workspace hides standard Task Graph UI while compatibility APIs remain
     const css = await (await fetch(`${started.url}/styles.css`)).text();
     assert.doesNotMatch(css, /graph-map-region|graph-map-canvas|graph-map-node|graph-map-edge/);
 
-    // The map consumes the bounded authoritative graph detail API; facts are
-    // not invented in the browser.
-    const detail = await (await fetch(`${started.url}/api/graphs/task-workspace-graph`)).json();
-    assert.equal(detail.graph, true);
-    assert.ok(detail.subtasks.length >= 2);
-    for (const subtask of detail.subtasks) {
-      assert.ok(typeof subtask.implementer === 'string');
-      assert.ok(subtask.agent && typeof subtask.agent.adapter === 'string');
-    }
+    assert.equal((await fetch(`${started.url}/api/graphs/task-workspace-graph`)).status, 404);
+    assert.ok(existsSync(join(repositoryRoot, '.agent-bus', 'tasks', 'task-workspace.json')));
   } finally {
     await closeServer(started.server);
     rmSync(repositoryRoot, { recursive: true, force: true });
@@ -332,14 +313,14 @@ test('Web Workspace hides standard Task Graph UI while compatibility APIs remain
 
 test('Workspace metadata ships in the package payload, CLI help, and web assets directory', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.ok(packageJson.files.includes('inspector'));
+  assert.ok(packageJson.files.includes('inspector/web-workspace/index.html'));
   assert.ok(existsSync(join(root, 'inspector', 'web-workspace', 'index.html')));
   assert.ok(existsSync(join(root, 'inspector', 'web-workspace', 'app.js')));
   assert.ok(existsSync(join(root, 'inspector', 'web-workspace', 'styles.css')));
-  const help = spawnSync(process.execPath, [cli, 'help', '--lang', 'en'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  const help = spawnSync(process.execPath, [cli, '--help'], { cwd: root, encoding: 'utf8', windowsHide: true });
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /web\s+Launch the local Web Workspace over the selected Git repository/);
-  assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);
+  assert.match(help.stdout, /coordinate-agents web/);
+  assert.match(help.stdout, /2\.4\.0/);
 });
 
 test('chat composer keeps the full single-line input as the Task spec', () => {

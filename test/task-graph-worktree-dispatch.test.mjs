@@ -22,7 +22,7 @@ import {
   runtimeTaskGraphCreate,
   runtimeTaskGraphDispatch,
   runtimeTaskGraphStatus,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   runtimeSessionClose,
 } from '../skills/coordinate-agents/scripts/session-service.mjs';
@@ -37,7 +37,7 @@ import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-e
 import { getExecutionSessionManager } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const cli = join(packageRoot, 'bin', 'coordinate-agents.mjs');
+const cli = join(packageRoot, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(packageRoot, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const canonicalTmpdir = realpathSync(tmpdir());
 

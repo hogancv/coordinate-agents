@@ -77,11 +77,12 @@ test('public Adapter SDK freezes Contract v1 independently from the package vers
   assert.ok(Object.isFrozen(descriptor.capabilities));
 });
 
-test('package self-reference resolves both supported Adapter SDK subpaths', async () => {
-  const explicit = await import('@hogancv/coordinate-agents/adapter-sdk.mjs');
-  const extensionless = await import('@hogancv/coordinate-agents/adapter-sdk');
-  assert.equal(explicit.ADAPTER_CONTRACT_VERSION, 1);
-  assert.equal(extensionless.defineAdapter, explicit.defineAdapter);
+test('source SDK remains available while npm 3 SDK subpaths are private', async () => {
+  const source = await import('../adapter-sdk.mjs');
+  assert.equal(source.ADAPTER_CONTRACT_VERSION, 1);
+  for (const path of ['@hogancv/coordinate-agents/adapter-sdk.mjs', '@hogancv/coordinate-agents/adapter-sdk']) {
+    await assert.rejects(import(path), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
+  }
 });
 
 test('adapter identity rejects invalid, reserved, and duplicate IDs deterministically', () => {

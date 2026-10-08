@@ -72,6 +72,14 @@ jobs:
             --expected-source-commit "$source_commit" \
             --expected-tag "$RELEASE_TAG"
 
+      - name: Preserve verified npm tarball
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-npm-tarball
+          path: ${{ runner.temp }}/coordinate-agents-artifact/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     needs: verify
     runs-on: ubuntu-latest
@@ -93,5 +101,16 @@ jobs:
         run: |
           IFS=. read -r major minor patch <<< "$(npm --version)"
           (( major > 11 || (major == 11 && minor >= 5) ))
+      - name: Download verified npm tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-npm-tarball
+          path: ${{ runner.temp }}/coordinate-agents-artifact
       - name: Publish with npm trusted publishing and provenance
-        run: npm publish --ignore-scripts --access public --tag latest
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          artifact="$RUNNER_TEMP/coordinate-agents-artifact/hogancv-coordinate-agents-${version}.tgz"
+          test -f "$artifact"
+          npm publish --ignore-scripts --access public --tag latest "$artifact"

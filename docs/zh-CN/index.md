@@ -63,9 +63,9 @@ Session 工具只提供有界的状态、读写、输出和关闭操作，不会
 ## CLI 备用安装与快速开始
 
 ```sh
-npx @hogancv/coordinate-agents@latest install --lang zh-CN
-npx @hogancv/coordinate-agents@latest doctor --lang zh-CN
-npx @hogancv/coordinate-agents@latest quickstart --template feature --task "开发 Todo Web 应用" --lang zh-CN
+npx @hogancv/coordinate-agents@2.4.0 install --lang zh-CN
+npx @hogancv/coordinate-agents@2.4.0 doctor --lang zh-CN
+npx @hogancv/coordinate-agents@2.4.0 quickstart --template feature --task "开发 Todo Web 应用" --lang zh-CN
 ```
 
 机器相关的 CLI 命令配置在 `~/.coordinate-agents/config.json`，优先级为项目级显式命令 >

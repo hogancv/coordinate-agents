@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import {
   ADAPTER_CONTRACT_VERSION,
   defineAdapter,
-} from '@hogancv/coordinate-agents/adapter-sdk.mjs';
+} from '../../adapter-sdk.mjs';
 
 export const MINIMAL_EXTERNAL_ADAPTER_ID = 'minimal-external-adapter';
 export const MINIMAL_EXTERNAL_ADAPTER_VERSION = '1.0.0';

@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function invoke(args, env = {}) {
@@ -48,7 +48,7 @@ process.exit(Number(process.env.EXIT_CODE || ${exitCode}));
 }
 
 function homeEnvironment(home, extra = {}) {
-  return { HOME: home, USERPROFILE: home, ...extra };
+  return { HOME: home, USERPROFILE: home, COORDINATE_AGENTS_HOME: home, CODEX_HOME: join(home, '.codex'), GEMINI_HOME: join(home, '.gemini'), ...extra };
 }
 
 function state(repository) {

@@ -21,7 +21,7 @@ import {
   runtimeTaskGraphCreate,
   runtimeTaskGraphDispatch,
   runtimeTaskGraphRun,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import { runtimeSessionClose } from '../skills/coordinate-agents/scripts/session-service.mjs';
 import {
   captureGraphBaseCommit,
@@ -31,7 +31,7 @@ import {
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const canonicalTmpdir = realpathSync(tmpdir());
-const cli = resolve('bin/coordinate-agents.mjs');
+const cli = resolve('bin/coordinate-agents-legacy.mjs');
 const busTool = resolve('skills/coordinate-agents/scripts/agent-bus.mjs');
 
 function repository(prefix = 'coordinate-agents-parallel-') {

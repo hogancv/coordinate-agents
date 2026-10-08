@@ -14,11 +14,11 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { startWorkspace } from './support/workspace-server.mjs';
+import { startWorkspace } from './support/legacy-workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 
 const root = process.cwd();
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const canonicalTmpdir = realpathSync(tmpdir());
 
@@ -125,7 +125,7 @@ async function capabilityFromPage(url) {
   return (page.match(/name="coordinate-agents-capability" content="([^"]+)"/) || [])[1];
 }
 
-test('Web acceptance gate: complete local browser workflow over the guarded gateway (#53)', { timeout: 90_000 }, async () => {
+test('Source Legacy gateway acceptance: complete local browser workflow over the guarded gateway (#53)', { timeout: 90_000 }, async () => {
   const repo = repository();
   const home = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-web-gate-home-'));
   const previous = {
@@ -238,7 +238,7 @@ test('Web acceptance gate: complete local browser workflow over the guarded gate
   }
 });
 
-test('Web acceptance gate: incompatible roots and read-only guarantees stay closed (#53)', async () => {
+test('Source Legacy gateway acceptance: incompatible roots and read-only guarantees stay closed (#53)', async () => {
   const plain = mkdtempSync(join(canonicalTmpdir, 'coordinate-agents-web-gate-plain-'));
   try {
     assert.throws(() => startWorkspace({ root: join(plain, 'missing'), port: 0 }), /ENOENT/);
@@ -280,7 +280,7 @@ test('Web acceptance gate: incompatible roots and read-only guarantees stay clos
   }
 });
 
-test('Web acceptance gate: CLI entry remains documented and help-consistent (#53)', () => {
+test('Source Legacy gateway acceptance: CLI entry remains documented and help-consistent (#53)', () => {
   const help = spawnSync(process.execPath, [cli, 'help', '--lang', 'en'], { cwd: root, encoding: 'utf8', windowsHide: true });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /web\s+Launch the local Web Workspace over the selected Git repository/);

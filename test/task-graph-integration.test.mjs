@@ -17,7 +17,7 @@ import {
   runtimeTaskGraphCleanup,
   runtimeTaskGraphCreate,
   runtimeTaskGraphIntegrate,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 import {
   captureGraphBaseCommit,
   ensureSubtaskWorktree,

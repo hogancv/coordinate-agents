@@ -6,6 +6,9 @@ description: A localhost-only dual-terminal workbench with lightweight collabora
 
 # Web Workspace and Local Inspector
 
+> **V3 distribution / 分发说明:** npm 3.x starts the Web Workspace only and exposes no structured Task/Graph API. The read-only Inspector remains in GitHub via `node bin/coordinate-agents-legacy.mjs inspector` or npm 2.4.0. Web startup initializes config/persistence directly without executing Agent Bus.
+
+
 The **Web Workspace** is the lightweight interactive entry for Coordinate
 Agents. Each Workspace task group owns a fresh **Codex + Antigravity** terminal
 pair. The **Skill / CLI / MCP** path remains the structured workflow for durable

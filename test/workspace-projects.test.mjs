@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import vm from 'node:vm';
 import { createProjectStore } from '../inspector/server/workspace-projects.mjs';
-import { startWorkspace } from '../inspector/server/server.mjs';
+import { startWorkspace } from '../inspector/server/workspace-server.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
 
 test('concurrent project registration deduplicates and failed initialization can recover', async () => {
@@ -16,7 +16,7 @@ test('concurrent project registration deduplicates and failed initialization can
     const store = createProjectStore({ home });
     mkdirSync(join(folder, '.agent-bus'));
     writeFileSync(join(folder, '.agent-bus', 'config.json'), '{invalid');
-    assert.throws(() => store.register(folder, true), /Agent Bus initialization failed/);
+    assert.throws(() => store.register(folder, true), /Failed to load valid .agent-bus\/config.json/);
     assert.equal(store.list().length, 0);
     assert.ok(existsSync(join(folder, '.git')));
     rmSync(join(folder, '.agent-bus', 'config.json'));

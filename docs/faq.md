@@ -70,6 +70,6 @@ No. It is a local plaintext directory on the filesystem and is excluded from ord
 
 ## How do I uninstall it?
 
-Run `npx @hogancv/coordinate-agents@latest uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
+Run `npx @hogancv/coordinate-agents@2.4.0 uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
 
 For detailed answers and exact commands, read the [English README](https://github.com/hogancv/coordinate-agents#faq) or [Simplified Chinese README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md#常见问题).

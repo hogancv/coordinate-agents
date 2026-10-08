@@ -15,7 +15,7 @@ import {
   userConfigPath,
   writeUserConfig,
 } from '../skills/coordinate-agents/scripts/user-config.mjs';
-import { runtimeSetupConfigure } from '../bin/coordinate-agents.mjs';
+import { runtimeSetupConfigure } from '../bin/coordinate-agents-legacy.mjs';
 import { getAdapter } from '../skills/coordinate-agents/adapters/index.mjs';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -216,7 +216,7 @@ test('concurrent isolated configure runs do not cross-pollute each other or the 
   const homeB = mkdtempSync(join(tmpdir(), 'coordinate-agents-user-config-home-b-'));
   const commandA = fakeAgentCommand(homeA, 'antigravity-a');
   const commandB = fakeAgentCommand(homeB, 'antigravity-b');
-  const cli = join(packageRoot, 'bin', 'coordinate-agents.mjs');
+  const cli = join(packageRoot, 'bin', 'coordinate-agents-legacy.mjs');
   const saved = saveHomeEnv();
 
   function spawnConfigure(home, root, command) {

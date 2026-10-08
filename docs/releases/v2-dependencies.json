@@ -1,0 +1,218 @@
+{
+  "edges": {
+    "bin/coordinate-agents.mjs": [
+      "lib/cli-core.mjs",
+      "lib/cli-core.mjs"
+    ],
+    "lib/cli-core.mjs": [
+      "skills/coordinate-agents/adapters/index.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/adapters/trusted-local.mjs",
+      "skills/coordinate-agents/scripts/agent-observer.mjs",
+      "skills/coordinate-agents/scripts/discovery.mjs",
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "skills/coordinate-agents/scripts/task-runtime.mjs",
+      "skills/coordinate-agents/scripts/task-graph-contract.mjs",
+      "skills/coordinate-agents/scripts/intent-map-contract.mjs",
+      "skills/coordinate-agents/scripts/task-graph-runtime.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/scripts/session-manager.mjs",
+      "skills/coordinate-agents/scripts/session-service.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "skills/coordinate-agents/scripts/scope-audit.mjs",
+      "lib/commands/config.mjs",
+      "lib/cli/parse-args.mjs",
+      "lib/commands/index.mjs",
+      "lib/commands/adapter.mjs",
+      "skills/coordinate-agents/scripts/role-prompts.mjs",
+      "inspector/server/server.mjs"
+    ],
+    "skills/coordinate-agents/adapters/index.mjs": [
+      "skills/coordinate-agents/adapters/base.mjs",
+      "skills/coordinate-agents/adapters/antigravity-cli.mjs",
+      "skills/coordinate-agents/adapters/codex-cli.mjs",
+      "skills/coordinate-agents/adapters/generic-cli.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/adapters/base.mjs": [],
+    "skills/coordinate-agents/adapters/antigravity-cli.mjs": [
+      "skills/coordinate-agents/adapters/base.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/adapters/contract-v1.mjs": [],
+    "skills/coordinate-agents/adapters/executable.mjs": [],
+    "skills/coordinate-agents/adapters/codex-cli.mjs": [
+      "skills/coordinate-agents/adapters/base.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/adapters/generic-cli.mjs": [
+      "skills/coordinate-agents/adapters/base.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/adapters/trusted-local.mjs": [
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/index.mjs"
+    ],
+    "skills/coordinate-agents/scripts/agent-observer.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs"
+    ],
+    "skills/coordinate-agents/scripts/config.mjs": [],
+    "skills/coordinate-agents/scripts/discovery.mjs": [
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/adapters/index.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/scripts/user-config.mjs"
+    ],
+    "skills/coordinate-agents/scripts/runtime-contract.mjs": [
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/scripts/user-config.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs"
+    ],
+    "skills/coordinate-agents/scripts/task-runtime.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs"
+    ],
+    "skills/coordinate-agents/scripts/runtime-events.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "skills/coordinate-agents/scripts/task-graph-contract.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/scripts/task-runtime.mjs"
+    ],
+    "skills/coordinate-agents/scripts/intent-map-contract.mjs": [
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "skills/coordinate-agents/scripts/task-graph-runtime.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/task-graph-contract.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "skills/coordinate-agents/scripts/task-runtime.mjs",
+      "skills/coordinate-agents/scripts/session-manager.mjs",
+      "skills/coordinate-agents/scripts/intent-map-contract.mjs",
+      "skills/coordinate-agents/scripts/scope-audit.mjs"
+    ],
+    "skills/coordinate-agents/scripts/session-manager.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "skills/coordinate-agents/adapters/index.mjs",
+      "skills/coordinate-agents/adapters/contract-v1.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/adapters/trusted-local.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "skills/coordinate-agents/scripts/session-host.mjs"
+    ],
+    "skills/coordinate-agents/scripts/session-host.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/pty-runtime.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "skills/coordinate-agents/scripts/pty-runtime.mjs": [],
+    "skills/coordinate-agents/scripts/scope-audit.mjs": [
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "skills/coordinate-agents/scripts/session-service.mjs": [
+      "skills/coordinate-agents/scripts/session-manager.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "lib/commands/config.mjs": [
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "lib/cli/parse-args.mjs": [],
+    "lib/commands/index.mjs": [
+      "lib/commands/adapter.mjs",
+      "lib/commands/agent.mjs",
+      "lib/commands/config.mjs",
+      "lib/commands/inspector.mjs",
+      "lib/commands/maintenance.mjs",
+      "lib/commands/setup.mjs",
+      "lib/commands/status.mjs",
+      "lib/commands/task.mjs",
+      "lib/commands/web.mjs",
+      "lib/commands/workspace.mjs"
+    ],
+    "lib/commands/adapter.mjs": [
+      "skills/coordinate-agents/adapters/trusted-local.mjs",
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs"
+    ],
+    "lib/commands/agent.mjs": [],
+    "lib/commands/inspector.mjs": [],
+    "lib/commands/maintenance.mjs": [],
+    "lib/commands/setup.mjs": [],
+    "lib/commands/status.mjs": [],
+    "lib/commands/task.mjs": [],
+    "lib/commands/web.mjs": [],
+    "lib/commands/workspace.mjs": [],
+    "skills/coordinate-agents/scripts/role-prompts.mjs": [],
+    "inspector/server/server.mjs": [
+      "inspector/server/inspector-data.mjs",
+      "inspector/server/workspace-projects.mjs",
+      "inspector/server/action-gateway.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs"
+    ],
+    "inspector/server/inspector-data.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/task-runtime.mjs",
+      "skills/coordinate-agents/scripts/session-manager.mjs",
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "skills/coordinate-agents/scripts/session-service.mjs",
+      "skills/coordinate-agents/scripts/workspace-task-runtime.mjs",
+      "skills/coordinate-agents/scripts/agent-observer.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs",
+      "skills/coordinate-agents/scripts/task-graph-runtime.mjs"
+    ],
+    "skills/coordinate-agents/scripts/workspace-task-runtime.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/scripts/session-service.mjs",
+      "skills/coordinate-agents/scripts/session-manager.mjs",
+      "skills/coordinate-agents/scripts/role-prompts.mjs",
+      "skills/coordinate-agents/scripts/workspace-message.mjs"
+    ],
+    "skills/coordinate-agents/scripts/workspace-message.mjs": [
+      "skills/coordinate-agents/scripts/workspace-task-runtime.mjs",
+      "skills/coordinate-agents/scripts/session-service.mjs"
+    ],
+    "inspector/server/workspace-projects.mjs": [
+      "skills/coordinate-agents/scripts/user-config.mjs",
+      "inspector/server/native-folder-picker.mjs",
+      "skills/coordinate-agents/scripts/agent-bus.mjs"
+    ],
+    "inspector/server/native-folder-picker.mjs": [],
+    "skills/coordinate-agents/scripts/agent-bus.mjs": [
+      "skills/coordinate-agents/scripts/config.mjs",
+      "skills/coordinate-agents/scripts/runtime-events.mjs"
+    ],
+    "inspector/server/action-gateway.mjs": [
+      "skills/coordinate-agents/scripts/runtime-services.mjs",
+      "skills/coordinate-agents/scripts/runtime-contract.mjs",
+      "skills/coordinate-agents/adapters/executable.mjs",
+      "skills/coordinate-agents/scripts/config.mjs"
+    ],
+    "skills/coordinate-agents/scripts/runtime-services.mjs": [
+      "lib/cli-core.mjs",
+      "skills/coordinate-agents/scripts/session-service.mjs",
+      "skills/coordinate-agents/scripts/workspace-task-runtime.mjs"
+    ]
+  },
+  "missing": []
+}

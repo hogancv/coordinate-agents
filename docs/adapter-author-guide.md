@@ -7,6 +7,9 @@ permalink: /adapter-author-guide.html
 
 # External Adapter Author Guide
 
+> **V3 distribution / 分发说明:** The SDK, conformance kit and external examples are GitHub Plugin/source and npm 2.4.0 resources. npm 3.x retains internal launch validation but does not publish Adapter SDK exports, conformance or examples.
+
+
 This guide describes the smallest supported external Adapter Contract v1
 module. The complete offline example is
 [`examples/minimal-external-adapter/adapter.mjs`](../examples/minimal-external-adapter/adapter.mjs),
@@ -117,9 +120,9 @@ there is no directory scan, URL import, remote lookup, download, or automatic
 npm installation:
 
 ```sh
-node bin/coordinate-agents.mjs adapter register \
+node bin/coordinate-agents-legacy.mjs adapter register \
   "<repository>/examples/minimal-external-adapter/adapter.mjs" --json
-node bin/coordinate-agents.mjs adapter list --json
+node bin/coordinate-agents-legacy.mjs adapter list --json
 ```
 
 Then configure the example with the exact Node.js executable and fake-agent
@@ -136,7 +139,7 @@ Args: ["<repository>/examples/minimal-external-adapter/fake-agent.mjs"]
 The equivalent Runtime setup transaction is:
 
 ```sh
-node bin/coordinate-agents.mjs setup configure \
+node bin/coordinate-agents-legacy.mjs setup configure \
   --agent minimal-example \
   --command "<node-executable>" \
   --adapter minimal-external-adapter \
@@ -152,8 +155,8 @@ the persisted user configuration and project Agent Bus unchanged.
 ## Packaging and identity checklist
 
 An external adapter must remain outside the built-in registry source. Ship the
-public `adapter-sdk.mjs` entry and the example together, and test the actual
-package payload with `npm pack --dry-run --ignore-scripts`. Keep these identities distinct:
+public `adapter-sdk.mjs` entry and the example together in the Plugin/source distribution (or npm 2.4.0), and test that distribution
+payload with `npm pack --dry-run --ignore-scripts`. Keep these identities distinct:
 
 1. Adapter ID: the Contract descriptor's unique lowercase kebab-case ID.
 2. Agent ID: the project workflow identity selected during setup.

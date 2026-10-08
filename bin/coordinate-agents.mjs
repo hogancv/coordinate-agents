@@ -4,9 +4,8 @@ import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runCli } from '../lib/cli-core.mjs';
+import { runCli } from '../lib/web-cli.mjs';
 
-export * from '../lib/cli-core.mjs';
 
 function isInvokedDirectly() {
   if (!process.argv[1]) return false;

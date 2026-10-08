@@ -10,10 +10,10 @@ import {
   taskGraphDurableFacts,
   validateTaskGraphV1,
 } from '../skills/coordinate-agents/scripts/task-graph-contract.mjs';
-import { runtimeTaskGraphValidate } from '../bin/coordinate-agents.mjs';
+import { runtimeTaskGraphValidate } from '../bin/coordinate-agents-legacy.mjs';
 import { createMcpServer } from '../mcp/server.mjs';
 
-const cli = fileURLToPath(new URL('../bin/coordinate-agents.mjs', import.meta.url));
+const cli = fileURLToPath(new URL('../bin/coordinate-agents-legacy.mjs', import.meta.url));
 
 function graph(overrides = {}) {
   return {

@@ -25,34 +25,17 @@ function sourceCommit() {
   return result.stdout.trim();
 }
 
-test('release candidate metadata and notes cover the Task Graph v1 scope', () => {
-  assert.equal(packageJson.version, '2.4.0');
-  assert.equal(pluginJson.version, packageJson.version);
+test('npm and Plugin distribution versions are independent', () => {
+  assert.equal(packageJson.version, '3.0.0');
+  assert.equal(pluginJson.version, '2.4.0');
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
-  assert.equal(pluginJson.name, 'coordinate-agents');
-  assert.ok(packageJson.files.includes('CHANGELOG.md'));
-
   const changelog = readFileSync(join(root, 'CHANGELOG.md'), 'utf8');
-  for (const phrase of [
-    'Lightweight Web Workspace',
-    'dual-terminal',
-    'Web-lite role prompts',
-    'Multi-Agent Task Graph v1',
-    'Bounded parallel execution',
-    'Runtime-owned Git worktree',
-    'Deterministic READY frontier',
-    'explicit recovery, stop, and cleanup',
-    'isolated integration and review',
-    'single-Task',
-    'Windows/macOS/Linux and Node.js 18/22',
-    '--expected-source-commit',
-    '--expected-tag',
-    'RELEASE_APPROVED',
-    'PUBLISH',
-  ]) assert.match(changelog, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(changelog, /3\.0\.0/);
+  assert.match(changelog, /Web-first/);
+  assert.match(changelog, /2\.4\.0/);
 });
 
-test('packed release artifact passes isolated payload, example, setup, and doctor verification', () => {
+test('packed release artifact independently installs and passes offline Web dual-terminal acceptance', () => {
   const output = mkdtempSync(join(tmpdir(), 'coordinate-agents-release-artifact-'));
   try {
     const packEnv = { ...process.env };
@@ -91,13 +74,29 @@ test('packed release artifact passes isolated payload, example, setup, and docto
     assert.equal(report.candidate.version, packageJson.version);
     assert.equal(report.package.name, packageJson.name);
     assert.equal(report.package.version, packageJson.version);
-    assert.equal(report.plugin.version, pluginJson.version);
-    assert.equal(report.payload.llmsSynchronized, true);
-    assert.equal(report.externalExample.contractVersion, 1);
-    assert.equal(report.externalExample.summary.failed, 0);
-    assert.equal(report.runtime.setup.ok, true);
-    assert.equal(report.runtime.doctor.ok, true);
+    assert.equal(report.payload.legacyAbsent, true);
+    assert.equal(report.installation.productionDependencies, true);
+    assert.equal(report.installation.isolatedHome, true);
+    for (const capability of ['dualTerminals', 'rolePrompts', 'messageRoundTrip', 'taskIsolation', 'customPathsAndArgs', 'resize', 'settings', 'multipleProjects', 'serverReconnect', 'restart', 'cleanup', 'archive', 'archiveCleanup']) assert.equal(report.runtime[capability], true, capability);
   } finally {
     rmSync(output, { recursive: true, force: true });
   }
+});
+
+test('payload verifier rejects omitted runtime files and added Legacy or secret files', async () => {
+  const { cpSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { verifyPayload } = await import('../scripts/verify-release-artifact.mjs');
+  const temporary = mkdtempSync(join(tmpdir(), 'coordinate-payload-negative-'));
+  try {
+    for (const file of ['package.json', ...packageJson.files]) {
+      const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); cpSync(join(root, file), target);
+    }
+    assert.equal(verifyPayload(temporary).legacyAbsent, true);
+    for (const file of ['.mcp.json', '.env', 'test/fixture.test.mjs', 'skills/coordinate-agents/SKILL.md']) {
+      const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); writeFileSync(target, 'unexpected');
+      assert.throws(() => verifyPayload(temporary), /Unexpected or Legacy payload file/); rmSync(target);
+    }
+    rmSync(join(temporary, 'skills/coordinate-agents/scripts/session-host.mjs'));
+    assert.throws(() => verifyPayload(temporary), /session-host.mjs is missing/);
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
 });

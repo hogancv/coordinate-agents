@@ -18,7 +18,7 @@ The current implementation has one canonical Runtime source:
 | --- | --- |
 | Plugin manifest | `.codex-plugin/plugin.json`, with `skills: "./skills/"` |
 | Five Skills | `coordinate-agents`, `coordinate-setup`, `coordinate-task`, `coordinate-review`, `coordinate-recover` |
-| Canonical executable | `bin/coordinate-agents.mjs` |
+| Canonical executable | `bin/coordinate-agents-legacy.mjs` |
 | Plugin Skill resolver | `skills/coordinate-agents/scripts/runtime-entry.mjs` |
 | Task persistence | `skills/coordinate-agents/scripts/task-runtime.mjs` under `.agent-bus/tasks/` |
 | Execution Session | `skills/coordinate-agents/scripts/session-manager.mjs`, `session-service.mjs`, and `session-host.mjs` under `.agent-bus/sessions/` |
@@ -31,7 +31,7 @@ The current implementation has one canonical Runtime source:
 | npm payload | `package.json.files` includes `.codex-plugin`, `skills`, and `bin` |
 
 The resolver is intentionally not a second Runtime. It starts the same
-`bin/coordinate-agents.mjs` with `process.execPath` and an argument array. A
+`bin/coordinate-agents-legacy.mjs` with `process.execPath` and an argument array. A
 Plugin Skill uses:
 
 ```text
@@ -47,7 +47,7 @@ The cached layout is expected to be equivalent to:
 ```text
 <CODEX_HOME>/plugins/cache/<marketplace>/coordinate-agents/<version>/
 ├── .codex-plugin/plugin.json
-├── bin/coordinate-agents.mjs
+├── bin/coordinate-agents-legacy.mjs
 ├── lib/
 │   ├── cli/parse-args.mjs
 │   ├── commands/

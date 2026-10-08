@@ -3,6 +3,7 @@ import { readWorkspaceTask } from './workspace-task-runtime.mjs';
 import { runtimeSessionRead, runtimeSessionWrite } from './session-service.mjs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
 
 // Resolve only the recorded pair; never fall back to another task's Session.
@@ -27,7 +28,12 @@ export async function workspaceMessage(root, taskId, operation, value, api = { r
   return { ok: true, sessionId, cursor: before.nextCursor, sent: true, hint: 'Read using this cursor; delivery is not completion.' };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+function isInvokedDirectly() {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return resolve(process.argv[1]) === fileURLToPath(import.meta.url); }
+}
+if (isInvokedDirectly()) {
   try {
     console.log(JSON.stringify(await workspaceMessage(process.cwd(), ...process.argv.slice(2))));
   } catch (error) {

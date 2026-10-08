@@ -37,7 +37,7 @@ import {
 import {
   runtimeTaskGraphCreate,
   runtimeTaskGraphStatus,
-} from '../bin/coordinate-agents.mjs';
+} from '../bin/coordinate-agents-legacy.mjs';
 
 const canonicalTmpdir = realpathSync(tmpdir());
 

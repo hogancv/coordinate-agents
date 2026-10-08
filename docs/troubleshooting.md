@@ -25,10 +25,10 @@ marketplace installs, personal local marketplace roots, and Windows paths with
 spaces. The npm command examples below are standalone/debugging fallbacks.
 
 ```sh
-npx @hogancv/coordinate-agents@latest setup --json
-npx @hogancv/coordinate-agents@latest task status --json
-npx @hogancv/coordinate-agents@latest status --json
-npx @hogancv/coordinate-agents@latest agent doctor --json
+npx @hogancv/coordinate-agents@2.4.0 setup --json
+npx @hogancv/coordinate-agents@2.4.0 task status --json
+npx @hogancv/coordinate-agents@2.4.0 status --json
+npx @hogancv/coordinate-agents@2.4.0 agent doctor --json
 ```
 
 The JSON contract keeps runtime facts separate from Skill explanations. Common

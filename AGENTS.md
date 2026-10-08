@@ -15,10 +15,9 @@ fixtures, logs, documentation, or release artifacts.
 
 ## Repository map
 
-- `bin/coordinate-agents.mjs`: thin executable and compatibility export surface. Argument parsing
-  lives in `lib/cli/`; top-level command execution lives in `lib/commands/`; shared
-  legacy-compatible domain operations remain in `lib/cli-core.mjs` while they are incrementally
-  extracted.
+- `bin/coordinate-agents.mjs` and `lib/web-cli.mjs`: npm 3.x Web-only entry. It lazily loads `inspector/server/workspace-server.mjs`; help/version do not load sessions or Legacy code.
+- `bin/coordinate-agents-legacy.mjs`: source-only complete CLI/export surface for Plugin/MCP/Task Graph. Its implementation remains in `lib/cli-core.mjs`, `lib/cli/` and `lib/commands/`.
+- `inspector/server/http-server.mjs`: shared HTTP transport; `workspace-data.mjs` and `workspace-services.mjs` supply only Web data/operations. `server.mjs`, `inspector-data.mjs` and `legacy-action-gateway.mjs` are repository-only structured compatibility surfaces.
 - `.codex-plugin/plugin.json`: Codex Plugin manifest.
 - `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`). The Session implementation is `scripts/pty-runtime.mjs`, `scripts/session-host.mjs`, `scripts/session-manager.mjs`, and `scripts/session-service.mjs`; `references/session-runtime.md` is the detailed protocol reference.
 - `scripts/`: repository development and release tooling (`demo.mjs`, `sync-llms.mjs`).
@@ -79,10 +78,10 @@ from a single local run; report the environments actually verified.
 
 ## Distribution and release strategy
 
-- **Primary distribution**: Codex Plugin directly from GitHub repository marketplace (`https://github.com/hogancv/coordinate-agents`).
-- **Compatibility distribution**: npm package (`@hogancv/coordinate-agents`) supporting the CLI/runtime, Antigravity skill installer, and legacy standalone Codex skill installer.
+- **Structured distribution**: Codex Plugin directly from GitHub repository marketplace (`https://github.com/hogancv/coordinate-agents`).
+- **Web-first distribution**: npm 3.x (`@hogancv/coordinate-agents`) contains the standalone Web Workspace and an exact runtime file whitelist. Legacy npm CLI users select 2.4.0; all Plugin/MCP/Graph/SDK sources remain in GitHub.
 - **Version independence**: `.codex-plugin/plugin.json` (Codex Plugin version) and `package.json` (npm package version) evolve independently and are synchronized when co-releasing.
-- **Workflow status**: CI and automated publishing workflows are paused (`.github/workflows/` disabled). Releases are managed explicitly by maintainers.
+- **Validation**: Web tarball acceptance and source Plugin verification are separate. `.github/workflows/web-package-acceptance.yml` covers Windows/macOS/Linux and Node 18/22/24. Release verification installs the production tarball in isolated directories with mock CLIs and publishes that same tarball; no generated/prepack-only build is permitted.
 - **npm publishing is strictly manual**: npm publishing is triggered exclusively through manual `workflow_dispatch` with mandatory `PUBLISH` confirmation. All automatic publish triggers (push tag, release published, push main) are forbidden.
 
 ## Release restrictions

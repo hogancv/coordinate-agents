@@ -18,7 +18,7 @@ import { resolveCanonicalRuntime } from '../skills/coordinate-agents/scripts/run
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function invoke(args, env = {}) {

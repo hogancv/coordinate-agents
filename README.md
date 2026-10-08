@@ -2,9 +2,36 @@
 
 [简体中文](./README.zh-CN.md) · [Documentation](./docs/index.md) · [Security](./SECURITY.md)
 
-Coordinate Agents is a local collaboration workbench backed by a local-first coordination protocol and runtime for Codex and external AI coding agents. It offers lightweight interactive collaboration and structured task workflows while keeping the repository and local state under your control.
+Coordinate Agents is a local Web Workspace for Codex + Antigravity collaboration.
+**npm 3.0.0 is the Web-first distribution**: a small standalone workbench with
+paired terminals, project/task persistence and lightweight role prompts.
 
-Choose **Web Workspace** for a low-overhead Codex + Antigravity terminal pair, or the **Codex Plugin / CLI / MCP** for durable Tasks, structured review, and explicit recovery. The Plugin is the recommended distribution for the structured workflow; Web runs through the standalone npm Runtime or a source checkout.
+```sh
+npx @hogancv/coordinate-agents@latest web
+# Select a folder and port (0 selects a free port):
+npx @hogancv/coordinate-agents@3.0.0 web --root "/path/to/project" --port 3000
+```
+
+Install Node.js >=18, Git, and the Codex/Antigravity CLIs separately; sign in to
+each CLI before starting a task. Open the printed localhost URL. Use terminal
+settings for custom commands such as `agy-proxy`, Codex model and reasoning.
+Create a task, enter requirements in Codex, and let it send the implementation
+to the task's Antigravity through `workspace-message`. Codex reviews the reply
+and reports to you. Multiple projects, raw terminal I/O, resize, close/restart,
+refresh and reconnection to independent Session Hosts remain available.
+
+Native PTY availability follows the existing platform policy: Node 18 and
+Windows Node >=22 use the owned stdio fallback; supported native combinations
+use node-pty. A fallback preserves Session I/O/lifecycle but may not support an
+agent's full interactive TUI. Node 18 support is retained; upgrading Node is
+appropriate when your installed CLI requires native terminal behavior.
+
+The **GitHub Plugin / Legacy CLI / MCP / Task Graph source remains complete**, including its local-first coordination protocol and runtime.
+Install the GitHub Plugin for structured collaboration; its version is managed
+independently (currently 2.4.0). npm 3.x excludes Plugin manifests, Skill
+resources, MCP, Task Graph, Adapter SDK/conformance/examples, tests and developer
+tooling. Only the required shared `.mjs` modules remain under `skills/` in the
+tarball; this is not a packaged Codex Skill. No build or prepack step is needed.
 
 ## Two collaboration modes
 
@@ -20,12 +47,12 @@ Web task-group status describes terminal lifecycle, **not implementation or revi
 The Web Workspace pairs Codex with a configured Implementer in a local,
 side-by-side browser workspace:
 
-![Web Workspace preview](./assets/web-workspace.jpg)
+![Web Workspace preview](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/assets/web-workspace.jpg)
 
 The end-to-end terminal recording below shows the same lightweight workflow
 in action:
 
-![End-to-end terminal demo](./assets/demo.gif)
+![End-to-end terminal demo](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/assets/demo.gif)
 
 The recording comes from `npm run demo` in an isolated Git repository. Its sanitized source transcript is available at [assets/demo-transcript.txt](./assets/demo-transcript.txt).
 
@@ -141,7 +168,7 @@ Project command configuration takes precedence over user configuration, which ta
 
 ### Adapter Contract v1
 
-The package and Plugin payload expose the versioned validation boundary at `adapter-sdk.mjs`; npm consumers import `@hogancv/coordinate-agents/adapter-sdk.mjs`. Contract v1 covers adapter identity, capabilities, detection, configuration compatibility, argument-array launch plans, persistent-session initial input, and launch policy. The Runtime continues to own executable/path validation, process and Session lifecycle, bounded output, durable state, review, and release gates.
+The GitHub source/Plugin and **npm 2.4.0** expose the versioned validation boundary at `adapter-sdk.mjs`; npm 2.x consumers import `@hogancv/coordinate-agents/adapter-sdk.mjs`. npm 3.x removes the SDK export and conformance resources. Contract v1 covers adapter identity, capabilities, detection, configuration compatibility, argument-array launch plans, persistent-session initial input, and launch policy. The Runtime continues to own executable/path validation, process and Session lifecycle, bounded output, durable state, review, and release gates.
 
 The public [Adapter Conformance Kit](./docs/adapter-conformance.md) runs the same Contract v1 checks against deterministic fake executables in isolated temporary roots, including paths with spaces and shell metacharacters. It returns bounded CI diagnostics and never contacts a provider or mutates user configuration. Explicit local modules can be registered with `coordinate-agents adapter register <local-file>`; only the selected regular `.mjs`, `.js`, or `.cjs` path is loaded, and descriptor/configuration failures leave user and project state unchanged. The module is trusted code running with current Node.js permissions; contract validation is not a malicious-JavaScript sandbox. See the bundled [Adapter Contract v1 reference](./skills/coordinate-agents/references/adapter-contract-v1.md).
 
@@ -181,8 +208,9 @@ npx @hogancv/coordinate-agents@latest web --port 3000
 The bilingual (`zh-CN` / `en-US`) sidebar groups Workspace tasks by project.
 The startup folder is registered automatically (Git subfolders use their repository root).
 **New project** browses local folders; ordinary folders require explicit Git and
-Agent Bus initialization, without a commit. Switching projects keeps terminals running.
+Workspace storage initialization, without a commit. Switching projects keeps terminals running.
 Terminal settings and close-all apply only to the selected project.
+Right-click a conversation or project heading to archive it. Archiving closes its owned terminals and hides the records; project source files remain. Settings provides one-click permanent clearing of archived conversations across all registered projects. Archived projects stay hidden after refresh/restart; explicitly adding the same folder shows the project again.
 **New task** starts a fresh Codex + Antigravity pair with Web-lite prompts;
 enter requirements directly in the Codex terminal. Terminal settings accept
 custom executable commands such as `agy-proxy`, plus Codex model and reasoning
@@ -191,22 +219,35 @@ There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.
 
 Workspace groups live in `.agent-bus/workspace-tasks/*.json`, separately from
 standard Tasks. Selection and refresh never launch sessions; explicit actions
-use the guarded `POST /api/action` gateway. Existing Task/Graph, CLI, MCP, and
-read-only `inspector` contracts remain available. For this checkout's new Web
+use the guarded `POST /api/action` gateway. Task/Graph actions and reads are absent from the default Web API. Existing structured CLI/MCP and read-only Inspector contracts remain in the GitHub source through the Legacy entry. For this checkout's new Web
 behavior, run `node bin/coordinate-agents.mjs web --port 3000`; merging to main
 does not publish a new npm version. Learn more in
 [Inspector & Web Workspace](./docs/inspector.md) and
 [Event Journal](./docs/event-journal.md).
 
-## Standalone npm Runtime
+## npm 3.0 migration
 
-The compatibility package exposes the installer, doctor, quickstart, task, agent, session, MCP, Inspector, and web commands:
+The public npm CLI is `coordinate-agents web`, `coordinate-agents --help`, and
+`coordinate-agents --version` (with Web `--root`, `--port`, `--json`). Legacy
+`install`, `update`, `uninstall`, `doctor`, `quickstart`, `launch`, `setup`,
+`discover`, `config`, `adapter`, `agent`, `task`, `status` and `inspector` are no
+longer npm 3.x commands. Unsupported commands fail with migration guidance,
+without trying to import absent modules. Wildcard internal exports and
+`./adapter-sdk` / `./adapter-sdk.mjs` are removed; only `./package.json` is public.
+The task-specific message helper path is supplied by the Codex role prompt.
+
+Use an explicit older version for the previous npm CLI:
 
 ```sh
-npx @hogancv/coordinate-agents@latest --help
+npx @hogancv/coordinate-agents@2.4.0 --help
+npx @hogancv/coordinate-agents@2.4.0 doctor
+# Full structured CLI from a GitHub source checkout:
+node bin/coordinate-agents-legacy.mjs --help
+node bin/coordinate-agents-legacy.mjs inspector --port 3000
 ```
 
-Use this path for legacy standalone Skill installation, external automation, or protocol debugging. The full command workflows are maintained in [Getting Started](./docs/getting-started.md) and [MCP integration](./docs/mcp.md).
+The Plugin automatically selects its bundled Legacy launcher. npm and Plugin
+validation/versioning are separate. See [V3 distribution and release evidence](./docs/releases/v3-web-first.md).
 
 ## Local Development
 

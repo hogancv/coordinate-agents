@@ -20,10 +20,10 @@ const exampleModule = join(exampleRoot, 'adapter.mjs');
 const builtinRegistrySource = join(process.cwd(), 'skills', 'coordinate-agents', 'adapters', 'index.mjs');
 const registrationChild = join(process.cwd(), 'test', 'support', 'external-adapter-registration-child.mjs');
 
-test('minimal external Adapter uses only the public SDK and passes offline conformance', () => {
+test('source external Adapter uses only the source SDK and passes offline conformance', () => {
   assert.equal(listAdapters().includes(MINIMAL_EXTERNAL_ADAPTER_ID), false);
   const source = readFileSync(exampleModule, 'utf8');
-  assert.match(source, /@hogancv\/coordinate-agents\/adapter-sdk\.mjs/);
+  assert.match(source, /\.\.\/\.\.\/adapter-sdk\.mjs/);
   assert.doesNotMatch(source, /skills[\\/]/);
   assert.doesNotMatch(readFileSync(builtinRegistrySource, 'utf8'), new RegExp(MINIMAL_EXTERNAL_ADAPTER_ID));
   const report = assertAdapterConformance(descriptor);

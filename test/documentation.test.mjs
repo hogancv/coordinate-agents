@@ -50,7 +50,7 @@ test('AI installation guide defines canonical identity and the complete safe lif
   assert.match(guide, /non-zero[\s\S]*failed installation/);
 });
 
-test('both READMEs are aligned two-mode landing pages', () => {
+test('both READMEs prioritize Web-first npm and preserve structured source documentation', () => {
   const english = read('README.md');
   const chinese = read('README.zh-CN.md');
   const englishHeadings = ['Two collaboration modes', 'Why Coordinate Agents', 'How the structured workflow works', 'Quick Start', 'Example', 'Key Capabilities', 'Supported Agents and Adapters', 'Web Workspace and Local Inspector', 'Documentation', 'Safety and Release Boundary', 'Project Status', 'License'];
@@ -68,12 +68,12 @@ test('both READMEs are aligned two-mode landing pages', () => {
     assert.match(document, /RELEASE_APPROVED/);
   }
   assert.ok(
-    english.indexOf('codex plugin marketplace add') < english.indexOf('npx @hogancv/coordinate-agents@latest'),
-    'Plugin installation must precede standalone npm usage'
+    english.indexOf('npx @hogancv/coordinate-agents@latest') < english.indexOf('codex plugin marketplace add'),
+    'Web npm usage must precede structured Plugin installation'
   );
   assert.ok(
-    chinese.indexOf('codex plugin marketplace add') < chinese.indexOf('npx @hogancv/coordinate-agents@latest'),
-    'Chinese Plugin installation must precede standalone npm usage'
+    chinese.indexOf('npx @hogancv/coordinate-agents@latest') < chinese.indexOf('codex plugin marketplace add'),
+    'Chinese Web npm usage must precede structured Plugin installation'
   );
 });
 
@@ -197,10 +197,10 @@ test('repository AI, security, and machine index files have distinct documented 
   assert.match(llms, /AI_INSTALL\.md/);
 });
 
-test('npm package carries machine installation and security documentation', () => {
+test('npm excludes source-only installation and machine documentation', () => {
   const packageJson = JSON.parse(read('package.json'));
   for (const name of ['AI_INSTALL.md', 'SECURITY.md', 'llms.txt', 'docs/llms.txt']) {
-    assert.ok(packageJson.files.includes(name), `${name} is absent from package files`);
+    assert.ok(!packageJson.files.includes(name), `${name} must remain source-only`);
   }
   assert.match(packageJson.scripts['check:llms'], /sync-llms\.mjs --check/);
 });

@@ -1,0 +1,43 @@
+{
+  "ok": true,
+  "candidate": {
+    "sourceCommit": "557f26b74187356aa8c9ee41e98ecb96f7542b98",
+    "tag": "v3.0.0",
+    "version": "3.0.0"
+  },
+  "package": {
+    "name": "@hogancv/coordinate-agents",
+    "version": "3.0.0",
+    "repository": "git+https://github.com/hogancv/coordinate-agents.git"
+  },
+  "payload": {
+    "files": 42,
+    "runtimeReferences": 75,
+    "legacyAbsent": true
+  },
+  "installation": {
+    "productionDependencies": true,
+    "isolatedHome": true,
+    "isolatedConsumer": true,
+    "loadedModules": 32
+  },
+  "runtime": {
+    "ok": true,
+    "version": "3.0.0",
+    "dualTerminals": true,
+    "rolePrompts": true,
+    "messageRoundTrip": true,
+    "taskIsolation": true,
+    "customPathsAndArgs": true,
+    "resize": true,
+    "settings": true,
+    "multipleProjects": true,
+    "serverReconnect": true,
+    "restart": true,
+    "cleanup": true,
+    "backend": "node-pty",
+    "sessionCount": 6
+  },
+  "verificationContext": "Disposable clean source snapshot in a temporary Git repository, not a GitHub release commit.",
+  "reproducibleTarballIntegrity": "sha512-ejz/E3o+EI8l3d/rySLO9DJlvYLsP/Br+mzKI5hgz+Hs36rRn8Z4FGqv7ltix/QbYy4CnxA7FU2VUcMbrwuxjA=="
+}

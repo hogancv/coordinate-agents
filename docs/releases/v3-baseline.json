@@ -1,0 +1,36 @@
+{
+  "version": "2.4.0",
+  "tarballBytes": 811800,
+  "unpackedBytes": 2175886,
+  "fileCount": 122,
+  "directoryBytes": {
+    ".agents": 373,
+    ".codex-plugin": 1688,
+    "(root)": 99102,
+    "assets": 388021,
+    "bin": 569,
+    "docs": 99221,
+    "examples": 7637,
+    "inspector": 701602,
+    "lib": 251644,
+    "mcp": 34877,
+    "schemas": 50020,
+    "scripts": 23702,
+    "skills": 517430
+  },
+  "directProductionDependencies": 1,
+  "installedProductionPackages": 3,
+  "installDiskKiB": 66312,
+  "startupMs": [
+    154.48758299999986,
+    95.05495800000041,
+    92.67487500000016,
+    96.01712500000036,
+    95.27591699999948
+  ],
+  "startupMedianMs": 95.27591699999948,
+  "node": "v24.17.0",
+  "npm": "11.13.0",
+  "platform": "Darwin arm64",
+  "measurement": "5 launches from installed tarball, process spawn to JSON server-ready line; independent home; node_modules allocated disk via du -sk"
+}

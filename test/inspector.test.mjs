@@ -32,7 +32,7 @@ import { startInspector } from '../inspector/server/server.mjs';
 import { appendRuntimeEvent } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const root = process.cwd();
-const cli = join(root, 'bin', 'coordinate-agents.mjs');
+const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
 const busTool = join(root, 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 
 function repository() {
@@ -420,10 +420,10 @@ test('Inspector SSE delivers recorded events and resumes from Last-Event-ID', as
   }
 });
 
-test('Inspector metadata is included in the package payload and CLI help', () => {
+test('source Inspector metadata and Legacy help remain available outside npm', () => {
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  assert.ok(packageJson.files.includes('inspector'));
-  assert.ok(packageJson.files.includes('docs/inspector.md'));
+  assert.ok(!packageJson.files.includes('inspector/server/server.mjs'));
+  assert.ok(existsSync(join(root, 'docs/inspector.md')));
   const help = spawnSync(process.execPath, [cli, 'help', '--lang', 'en'], { cwd: root, encoding: 'utf8', windowsHide: true });
   assert.equal(help.status, 0);
   assert.match(help.stdout, /inspector\s+Start the local read-only Web UI Inspector/);

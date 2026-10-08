@@ -1,0 +1,28 @@
+{
+  "version": "3.0.0",
+  "tarballBytes": 227407,
+  "unpackedBytes": 888776,
+  "fileCount": 42,
+  "directoryBytes": {
+    "(root)": 50881,
+    "bin": 531,
+    "inspector": 637080,
+    "lib": 3561,
+    "skills": 196723
+  },
+  "directProductionDependencies": 1,
+  "installedProductionPackages": 3,
+  "installDiskKiB": 64872,
+  "startupMs": [
+    112.78225,
+    53.910458,
+    56.519,
+    57.467458,
+    52.608084
+  ],
+  "startupMedianMs": 56.519,
+  "node": "v24.17.0",
+  "npm": "11.13.0",
+  "platform": "darwin arm64",
+  "measurement": "5 launches from installed tarball, process spawn to JSON server-ready line; independent home; node_modules allocated disk via du -sk"
+}

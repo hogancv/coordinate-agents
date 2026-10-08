@@ -6,6 +6,9 @@ description: A verified first-run lifecycle for Codex App or Codex CLI specifica
 
 # Getting started
 
+> **V3 distribution / 分发说明:** npm 3.x distributes Web Workspace only. Structured commands below require npm 2.4.0 or the GitHub Plugin/source Legacy entry. Use terminal settings for npm 3 Web command/model configuration.
+
+
 ## Open the local Web Workspace (lightweight mode)
 
 The **Web Workspace** provides a task list and interactive Codex + Antigravity
@@ -52,7 +55,7 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
 ```
 
 The active Skill supplies the absolute `<skill-dir>`. This resolves the canonical
-`bin/coordinate-agents.mjs` inside the cached or local Plugin payload; a global
+`bin/coordinate-agents-legacy.mjs` inside the cached or local Plugin payload; a global
 `coordinate-agents` executable is not required. The npm CLI remains a
 Runtime/fallback and advanced-debugging path, not a prerequisite for Plugin
 onboarding. The three homepage prompts are discover, configure, and try, with
@@ -99,8 +102,8 @@ let the high-level setup transaction configure the selected executable, project 
 Implementer role. The following commands are only the standalone npm compatibility/debugging path:
 
 ```console
-$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.command agy
-$ npx --yes @hogancv/coordinate-agents@latest agent add claude \
+$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
+$ npx --yes @hogancv/coordinate-agents@2.4.0 agent add claude \
     --adapter generic-cli --command claude \
     --args '["--print", "{prompt}"]'
 ```
@@ -121,8 +124,8 @@ first instruction through the PTY unless `{prompt}` is explicitly configured. If
 than assuming the Plugin added it:
 
 ```console
-$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-$ npx --yes @hogancv/coordinate-agents@latest config list
+$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+$ npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 ## 1. Check prerequisites and install both Skills
@@ -136,12 +139,12 @@ $ codex --version
 codex-cli 0.146.0
 $ agy --version
 1.1.12
-$ npx --yes @hogancv/coordinate-agents@latest config set agent.antigravity.command agy-proxy
+$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
 Updated user configuration: ~/.coordinate-agents/config.json
-$ npx --yes @hogancv/coordinate-agents@latest install
+$ npx --yes @hogancv/coordinate-agents@2.4.0 install
 Installed Codex: .../skills/coordinate-agents
 Installed Antigravity: .../skills/coordinate-agents
-$ npx --yes @hogancv/coordinate-agents@latest doctor
+$ npx --yes @hogancv/coordinate-agents@2.4.0 doctor
 Node.js: available (v22.23.0)
 Git: available (git version 2.53.0.windows.1)
 Codex CLI: available (codex-cli 0.146.0)
@@ -191,16 +194,16 @@ recovery inspection is read-only, and an explicit resume/dispatch is required.
 Run this from the project Git root:
 
 ```console
-$ npx --yes @hogancv/coordinate-agents@latest quickstart \
+$ npx --yes @hogancv/coordinate-agents@2.4.0 quickstart \
     --template feature --task "Add completion support to the Todo app"
 Collaboration workspace initialized: .../todo-app
 Generated role prompts: .../todo-app/.agent-bus/launch
 
 1. Codex terminal (copy and run):
-npx --yes @hogancv/coordinate-agents@latest launch --agent codex ...
+npx --yes @hogancv/coordinate-agents@2.4.0 launch --agent codex ...
 
 2. Antigravity terminal (copy and run):
-npx --yes @hogancv/coordinate-agents@latest launch --agent antigravity ...
+npx --yes @hogancv/coordinate-agents@2.4.0 launch --agent antigravity ...
 ```
 
 Run the two printed commands in separate terminals. Exact commands contain an encoded project path

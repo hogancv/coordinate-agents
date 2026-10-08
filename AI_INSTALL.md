@@ -1,5 +1,7 @@
 # AI installation guide / AI 安装指南
 
+> **V3 distribution / 分发说明:** npm 3.0 is Web-first: use `npx @hogancv/coordinate-agents@latest web`. All structured installation/doctor/setup/SDK instructions below refer to the GitHub Plugin/source or npm **2.4.0**. npm 3.x does not install Skills or provide the Legacy runtime. Plugin versions are independent; its resolver selects `bin/coordinate-agents-legacy.mjs`. / npm 3.0 仅分发 Web；以下结构化安装流程使用 GitHub Plugin/源码或 npm 2.4.0。
+
 This is the canonical installation procedure for AI assistants installing
 `coordinate-agents`. Human-readable usage remains in [README.md](./README.md) and
 [README.zh-CN.md](./README.zh-CN.md).
@@ -37,8 +39,8 @@ This is the canonical installation procedure for AI assistants installing
 
 2. **Project-Local Agent Registration & Protocol Runtime (Git Repository)**:
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
-   - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents agent add <id> --adapter <adapter>`.
-   - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents adapter register <local-file>`; the loader never scans directories or imports URLs.
+   - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents@2.4.0 agent add <id> --adapter <adapter>`.
+   - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents@2.4.0 adapter register <local-file>`; the loader never scans directories or imports URLs.
    - Adapter authors can start with the offline [External Adapter Author Guide](./docs/adapter-author-guide.md) and its bundled minimal example.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
@@ -115,11 +117,11 @@ When an AI assistant is asked to install `coordinate-agents`:
     codex plugin marketplace add hogancv/coordinate-agents
     codex plugin add coordinate-agents@coordinate-agents
     ```
-  - **Fallback (Standalone / Unsupported Plugin environment)**: Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`.
+  - **Fallback (Standalone / Unsupported Plugin environment)**: Use `npx --yes @hogancv/coordinate-agents@2.4.0 install --codex`.
 - **Target is Google Antigravity**:
-  - Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`.
+  - Use `npx --yes @hogancv/coordinate-agents@2.4.0 install --antigravity`.
 - **Target is both CLI hosts via npm**:
-  - Use `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`.
+  - Use `npx --yes @hogancv/coordinate-agents@2.4.0 install`.
 
 当 AI 助手需要安装 `coordinate-agents` 时：
 - **目标环境为 OpenAI Codex**：
@@ -128,11 +130,11 @@ When an AI assistant is asked to install `coordinate-agents`:
     codex plugin marketplace add hogancv/coordinate-agents
     codex plugin add coordinate-agents@coordinate-agents
     ```
-  - **回退（不支持插件环境/独立技能）**：使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex`。
+  - **回退（不支持插件环境/独立技能）**：使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install --codex`。
 - **目标环境为 Google Antigravity**：
-  - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity`。
+  - 使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install --antigravity`。
 - **通过 npm 同时为两个 CLI 宿主安装**：
-  - 使用 `npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install`。
+  - 使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install`。
 
 普通 Codex Plugin 用户不需要 `npm install -g @hogancv/coordinate-agents`；五个 Skill 优先使用
 Plugin 自带的 Coordinate Agents MCP tools。只有 MCP 不可用、standalone、兼容安装或调试场景，才通过
@@ -223,18 +225,18 @@ Let `VERIFIED_VERSION` mean the exact stable version returned by the identity ch
 that literal version for `<VERIFIED_VERSION>`:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --lang zh-CN
+npx --yes @hogancv/coordinate-agents@2.4.0 install
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --lang zh-CN
 ```
 
-Do not use a version different from the verified `dist-tags.latest` value. The second command is
+For these structured installers, verify the fixed Legacy version with `npm view @hogancv/coordinate-agents@2.4.0 name version repository.url --json`. `dist-tags.latest` now selects Web; do not use it for Skill installation. The second command is
 mandatory.
 
 ## Install Codex only / 只安装 Codex
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --codex
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --codex --lang zh-CN
+npx --yes @hogancv/coordinate-agents@2.4.0 install --codex
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --codex --lang zh-CN
 ```
 
 This installs only the Codex skill copy. It does not install or authenticate the Codex CLI itself.
@@ -242,8 +244,8 @@ This installs only the Codex skill copy. It does not install or authenticate the
 ## Install Antigravity only / 只安装 Antigravity
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> install --antigravity
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --antigravity --lang zh-CN
+npx --yes @hogancv/coordinate-agents@2.4.0 install --antigravity
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --antigravity --lang zh-CN
 ```
 
 This installs only the Antigravity skill copy. It does not install or authenticate `agy` itself.
@@ -299,10 +301,11 @@ debugging, the older lower-level commands remain available:
 
 ```sh
 # Default Antigravity Implementer
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy
+
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
 
 # Custom Claude Code Implementer
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> agent add claude \
+npx --yes @hogancv/coordinate-agents@2.4.0 agent add claude \
   --adapter generic-cli --command claude \
   --args '["--print", "{prompt}"]'
 ```
@@ -333,8 +336,8 @@ its adapter ID. Registration validates the descriptor before writing the user co
 not touch the project Bus:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter register "<absolute-local-adapter.mjs>" --json
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter list --json
+npx --yes @hogancv/coordinate-agents@2.4.0 adapter register "<absolute-local-adapter.mjs>" --json
+npx --yes @hogancv/coordinate-agents@2.4.0 adapter list --json
 ```
 
 Only regular `.mjs`, `.js`, or `.cjs` files without symlink/junction/hard-link paths are accepted.
@@ -355,10 +358,10 @@ Runtime 已经随载荷提供，不应要求用户安装 global npm CLI；下面
 
 ```sh
 # 默认使用 Antigravity 作为 Implementer
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
 
 # 使用 Claude Code 作为自定义 Implementer
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> agent add claude \
+npx --yes @hogancv/coordinate-agents@2.4.0 agent add claude \
   --adapter generic-cli --command claude \
   --args '["--print", "{prompt}"]'
 ```
@@ -382,8 +385,8 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> agent add claude \
 descriptor，且不会修改项目 Bus：
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter register "<absolute-local-adapter.mjs>" --json
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> adapter list --json
+npx --yes @hogancv/coordinate-agents@2.4.0 adapter register "<absolute-local-adapter.mjs>" --json
+npx --yes @hogancv/coordinate-agents@2.4.0 adapter list --json
 ```
 
 只接受没有符号链接、junction 或 hard link 路径的正规 `.mjs`、`.js` 或 `.cjs` 文件。模块会在当前 Node.js 权限下运行，
@@ -401,9 +404,9 @@ Plugin tree:
 For example, configure a custom Antigravity wrapper and inspect the result:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy-proxy
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config get agent.antigravity.command
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@2.4.0 config get agent.antigravity.command
+npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 Resolution is **explicit project command > user command > Adapter default**. A configured command
@@ -423,8 +426,8 @@ configuration already enables full permissions, it remains in effect. If the ins
 confirms the explicit flag is required and the user asks to use it, configure it in the user file:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 `config list` shows the configured user arguments; `doctor` verifies executable/version readiness,
@@ -440,9 +443,9 @@ versions without checking that CLI's help output.
 例如配置自定义 Antigravity 包装命令并查询结果：
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.command agy-proxy
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config get agent.antigravity.command
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@2.4.0 config get agent.antigravity.command
+npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 解析优先级为**项目级显式命令 > 用户级命令 > Adapter 默认值**。已配置但不存在或未通过可执行
@@ -459,8 +462,8 @@ npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
 用户级配置：
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> config list
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 `config list` 会显示用户级参数；`doctor` 只验证可执行文件和版本是否就绪，不能证明 Provider 的实际权限状态。不要在
@@ -481,7 +484,7 @@ so verify the command is the real local command such as `agy` or `claude`.
 For CLI-only hosts, run `quickstart`:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> quickstart --root . --template feature --task "<USER_TASK>"
+npx --yes @hogancv/coordinate-agents@2.4.0 quickstart --root . --template feature --task "<USER_TASK>"
 ```
 
 This creates project-local `.agent-bus/` data and adds `.agent-bus/` to the repository's local
@@ -502,8 +505,8 @@ appropriate exact-version update and matching doctor command:
 
 ```sh
 # Both agents
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> update
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> doctor --lang zh-CN
+npx --yes @hogancv/coordinate-agents@2.4.0 update
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --lang zh-CN
 
 # Or add --codex / --antigravity to both commands for one agent only.
 ```
@@ -518,11 +521,11 @@ Uninstall only package-managed copies, then verify that the selected targets are
 
 ```sh
 # Both agents
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall
+npx --yes @hogancv/coordinate-agents@2.4.0 uninstall
 
 # One agent only
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall --codex
-npx --yes @hogancv/coordinate-agents@<VERIFIED_VERSION> uninstall --antigravity
+npx --yes @hogancv/coordinate-agents@2.4.0 uninstall --codex
+npx --yes @hogancv/coordinate-agents@2.4.0 uninstall --antigravity
 ```
 
 The command refuses to remove an unrecognized or modified directory unless the user explicitly

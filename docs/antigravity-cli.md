@@ -59,8 +59,8 @@ If the installed `agy --help` confirms the explicit flag and the user intentiona
 configure it outside the installed Skill/Plugin:
 
 ```sh
-npx @hogancv/coordinate-agents@latest config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-npx @hogancv/coordinate-agents@latest config list
+npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
+npx @hogancv/coordinate-agents@2.4.0 config list
 ```
 
 `doctor` verifies the executable and version, not the effective provider permission state. Never
