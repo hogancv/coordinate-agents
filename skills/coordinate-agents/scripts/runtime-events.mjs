@@ -314,10 +314,9 @@ function matches(event, options) {
 
 export function readRuntimeEvents(root, options = {}) {
   const normalized = normalizedReadOptions(options);
-  // Reuse precomputed repository path from eventPaths to avoid redundant realpathSync.native calls
-  const { repository, directory, journal } = eventPaths(root);
+  // eventPaths(root) already asserts safe path for bus and containment for directory/journal
+  const { journal } = eventPaths(root);
   if (!existsSync(journal)) return [];
-  assertSafePath(repository, directory);
   const metadata = lstatSync(journal);
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw runtimeError('RUNTIME_EVENT_READ_FAILED', `Unsafe Event Journal: ${journal}`, { recoverable: false });
@@ -325,7 +324,10 @@ export function readRuntimeEvents(root, options = {}) {
   const descriptor = openSync(journal, 'r');
   const events = [];
   let remainder = '';
-  const consume = line => {
+  const consume = rawLine => {
+    if (!rawLine) return;
+    let line = rawLine;
+    if (line.endsWith('\r')) line = line.slice(0, -1);
     if (!line || line.length > MAX_EVENT_LINE_BYTES) return;
     // Fast-path byte length check: JS UTF-16 chars are at most 4 UTF-8 bytes each.
     // If line.length <= MAX_EVENT_LINE_BYTES / 4, byte length is guaranteed <= MAX_EVENT_LINE_BYTES.
