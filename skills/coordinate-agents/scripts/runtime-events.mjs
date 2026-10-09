@@ -314,9 +314,10 @@ function matches(event, options) {
 
 export function readRuntimeEvents(root, options = {}) {
   const normalized = normalizedReadOptions(options);
-  // eventPaths(root) already asserts safe path for bus and containment for directory/journal
-  const { journal } = eventPaths(root);
+  // Reuse precomputed repository path from eventPaths to avoid redundant realpathSync.native calls
+  const { repository, directory, journal } = eventPaths(root);
   if (!existsSync(journal)) return [];
+  assertSafePath(repository, directory);
   const metadata = lstatSync(journal);
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw runtimeError('RUNTIME_EVENT_READ_FAILED', `Unsafe Event Journal: ${journal}`, { recoverable: false });
