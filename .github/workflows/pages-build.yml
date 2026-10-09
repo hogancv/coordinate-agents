@@ -1,10 +1,12 @@
 name: Pages Build
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
+  # Pages settings use the platform's legacy main:/docs deployment. This job
+  # supplies PR-only documentation validation, without rebuilding main pushes.
   pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages-build.yml'
   workflow_dispatch:
 
 concurrency:

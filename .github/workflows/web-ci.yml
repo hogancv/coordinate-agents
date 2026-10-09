@@ -34,6 +34,11 @@ on:
     branches: [main]
     paths: *web-paths
   workflow_dispatch:
+    inputs:
+      windows_regression:
+        description: Verify the Session and Inspector fixes on Windows Node 22/24
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -45,18 +50,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            node: '18.x'
-          - os: ubuntu-latest
-            node: '24.x'
-          - os: macos-latest
-            node: '22.x'
-          - os: windows-latest
-            node: '22.x'
-          - os: windows-latest
-            node: '24.x'
+      matrix: ${{ fromJSON(inputs.windows_regression == true && '{"include":[{"os":"windows-latest","node":"22.x"},{"os":"windows-latest","node":"24.x"}]}' || '{"include":[{"os":"ubuntu-latest","node":"24.x"},{"os":"macos-latest","node":"22.x"},{"os":"windows-latest","node":"22.x"}]}') }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -68,3 +62,6 @@ jobs:
       - run: npm ci
       - name: Web behavior and shared runtime regressions
         run: npm run check:web
+      - name: Windows Inspector regression
+        if: inputs.windows_regression == true
+        run: node --test test/inspector.test.mjs

@@ -194,7 +194,9 @@ The authoritative matrix is defined in
 Legacy CLI/gateway, and independent Plugin/MCP tests on Linux with Node.js 18/22,
 plus macOS and Windows with Node.js 22. Index and offline demo checks run once on
 Ubuntu. Plugin/Legacy and shared Adapter/Session source changes trigger this gate;
-Web-only runtime changes, npm manifest/lockfile version bumps, and tags do not.
+npm-only CLI/frontend changes, npm manifest/lockfile version bumps, and tags do not.
+Shared Workspace runtimes and Inspector/server modules remain included because
+the Legacy CLI and Runtime import them.
 Explicit manual dispatch remains available. Dependency changes receive Web/shared
 runtime checks and real npm installation acceptance; explicitly dispatch Legacy
 Plugin CI when assessing their effect on the source SDK or Plugin.

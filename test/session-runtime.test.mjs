@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -12,7 +13,7 @@ import {
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import test, { afterEach, beforeEach } from 'node:test';
 import {
   runtimeSetupConfigure,
   runtimeTaskCreate,
@@ -26,10 +27,19 @@ import {
   runtimeSessionStatus,
   runtimeSessionWrite,
 } from '../skills/coordinate-agents/scripts/session-service.mjs';
-import { ExecutionSessionManager } from '../skills/coordinate-agents/scripts/session-manager.mjs';
+import { ExecutionSessionManager, readRecord } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
+const environmentKeys = ['COORDINATE_AGENTS_HOME', 'HOME', 'USERPROFILE', 'FIXTURE_STARTS', 'FIXTURE_DONE', 'FIXTURE_ROOT', 'FIXTURE_AGENT', 'BUS_TOOL'];
+let previousEnvironment;
+beforeEach(() => { previousEnvironment = Object.fromEntries(environmentKeys.map(key => [key, process.env[key]])); });
+afterEach(() => {
+  for (const key of environmentKeys) {
+    if (previousEnvironment[key] === undefined) delete process.env[key];
+    else process.env[key] = previousEnvironment[key];
+  }
+});
 
 function repository(prefix = 'coordinate-agents-session-') {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -37,7 +47,7 @@ function repository(prefix = 'coordinate-agents-session-') {
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const init = spawnSync(process.execPath, [busTool, 'init', '--root', root], { encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr || init.stdout);
-  return root;
+  return realpathSync.native(root);
 }
 
 function isolatedHome() {
@@ -103,28 +113,33 @@ async function configure(root, command, agent = 'antigravity', adapter = 'antigr
   assert.equal(result.ok, true, JSON.stringify(result));
 }
 
-async function closeQuietly(root, sessionId) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      const result = await runtimeSessionClose({ root, sessionId, graceful: false, timeoutMs: 1_000 });
-      if (!['starting', 'running', 'idle', 'busy'].includes(result?.session?.state)) return;
-    } catch { /* Cleanup is best effort after a test failure. */ }
-    await new Promise(resolve => setTimeout(resolve, 250));
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error.code === 'EPERM'; }
+}
+
+async function closeSession(root, sessionId) {
+  const owned = readRecord(root, sessionId);
+  const result = await runtimeSessionClose({ root, sessionId, graceful: false, timeoutMs: 1_000 });
+  assert.ok(['exited', 'failed'].includes(result.session.state), `Session ${sessionId} is still active`);
+  const deadline = Date.now() + 3_000;
+  while ([owned.pid, owned.hostPid].some(processAlive) && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 25));
   }
+  assert.equal(processAlive(owned.hostPid), false, `Owned Session Host ${owned.hostPid} leaked`);
+  assert.equal(processAlive(owned.pid), false, `Owned CLI ${owned.pid} leaked`);
 }
 
 async function removeTree(path) {
-  let lastError = null;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try {
-      rmSync(path, { recursive: true, force: true });
-      if (!existsSync(path)) return;
-    } catch (error) {
-      lastError = error;
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
+  const sessions = join(path, '.agent-bus', 'sessions');
+  if (existsSync(sessions)) {
+    for (const file of readdirSync(sessions).filter(file => file.endsWith('.json'))) await closeSession(path, file.slice(0, -5));
   }
-  if (lastError) throw lastError;
+  // Process exit is confirmed first. These bounded Windows retries cover only
+  // delayed handle release; they cannot turn a leaked process into a pass.
+  rmSync(path, { recursive: true, force: true, maxRetries: process.platform === 'win32' ? 10 : 0, retryDelay: 100 });
+  assert.equal(existsSync(path), false);
 }
 
 test('Execution Session supports open, write, bounded read, inspect, status, and close', async () => {
@@ -145,7 +160,7 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.equal(opened.reused, false);
     assert.equal(opened.session.agent, 'antigravity');
     assert.equal(opened.session.command, command);
-    assert.equal(opened.session.cwd, realpathSync(root));
+    assert.equal(opened.session.cwd, realpathSync.native(root));
     assert.ok(opened.session.pid);
 
     const status = await runtimeSessionStatus({ root, sessionId: opened.session.id });
@@ -209,10 +224,30 @@ test('silent healthy CLI starts promptly and records one ordered startup lifecyc
     const afterRead = readRuntimeEvents(root, { sessionId, limit: 50 }).map(event => event.type);
     assert.equal(afterRead.filter(type => type === 'SESSION_STARTED').length, 1);
   } finally {
-    if (sessionId) await closeQuietly(root, sessionId);
+    if (sessionId) await closeSession(root, sessionId);
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('an assertion failure after Session launch closes the owned CLI and host before deleting its root', async () => {
+  const root = repository('coordinate-session-assertion-cleanup-');
+  const home = isolatedHome();
+  let owned;
+  try {
+    const command = persistentExecutable(root, 'failure-cleanup-agent', { silent: true });
+    await configure(root, command);
+    await assert.rejects(async () => {
+      try {
+        const opened = await runtimeSessionOpen({ root, agent: 'antigravity' });
+        owned = readRecord(root, opened.session.id);
+        assert.fail('injected assertion after Session launch');
+      } finally { await removeTree(root); }
+    }, /injected assertion after Session launch/);
+    assert.equal(processAlive(owned.pid), false);
+    assert.equal(processAlive(owned.hostPid), false);
+    assert.equal(existsSync(root), false);
+  } finally { await removeTree(root); await removeTree(home); }
 });
 
 test('Task dispatch reuses the same healthy session after CHANGES_REQUESTED', async () => {
@@ -251,7 +286,7 @@ test('Task dispatch reuses the same healthy session after CHANGES_REQUESTED', as
     assert.equal(attached.id, sessionId);
     assert.equal(attached.command, command);
   } finally {
-    if (sessionId) await closeQuietly(root, sessionId);
+    if (sessionId) await closeSession(root, sessionId);
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
   }
@@ -280,7 +315,7 @@ test('sessions are isolated by root and Agent identity, and custom executable na
     assert.equal(otherAgent.session.agent, 'claude-bot');
     sessions.push([rootA, otherAgent.session.id]);
   } finally {
-    for (const [root, id] of sessions) await closeQuietly(root, id);
+    for (const [root, id] of sessions) await closeSession(root, id);
     await removeTree(rootA);
     await removeTree(rootB);
     await removeTree(home);
@@ -354,7 +389,7 @@ test('a delayed detached host receives its initialization before parent IPC disc
     assert.ok(['running', 'idle', 'busy'].includes(opened.session.state), JSON.stringify(opened));
     assert.ok(opened.session.pid > 0);
   } finally {
-    if (sessionId) { try { await manager.close(root, sessionId, { graceful: false, timeoutMs: 1000 }); } catch {} }
+    if (sessionId) await closeSession(root, sessionId);
     await removeTree(root); rmSync(home, { recursive: true, force: true });
   }
 });

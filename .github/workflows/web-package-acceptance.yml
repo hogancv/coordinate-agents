@@ -10,7 +10,14 @@ on:
       - '!inspector/server/inspector-data.mjs'
       - '!inspector/server/server.mjs'
       - 'inspector/web-workspace/**'
-      - 'skills/coordinate-agents/adapters/**'
+      - 'skills/coordinate-agents/adapters/base.mjs'
+      - 'skills/coordinate-agents/adapters/index.mjs'
+      - 'skills/coordinate-agents/adapters/codex-cli.mjs'
+      - 'skills/coordinate-agents/adapters/antigravity-cli.mjs'
+      - 'skills/coordinate-agents/adapters/generic-cli.mjs'
+      - 'skills/coordinate-agents/adapters/executable.mjs'
+      - 'skills/coordinate-agents/adapters/contract-v1.mjs'
+      - 'skills/coordinate-agents/adapters/trusted-local.mjs'
       - 'skills/coordinate-agents/scripts/config.mjs'
       - 'skills/coordinate-agents/scripts/user-config.mjs'
       - 'skills/coordinate-agents/scripts/runtime-contract.mjs'
@@ -18,7 +25,8 @@ on:
       - 'skills/coordinate-agents/scripts/pty-runtime.mjs'
       - 'skills/coordinate-agents/scripts/session-*.mjs'
       - 'skills/coordinate-agents/scripts/workspace-*.mjs'
-      - 'scripts/verify-*.mjs'
+      - 'scripts/verify-release-artifact.mjs'
+      - 'scripts/verify-workspace-install.mjs'
       - 'test/release-artifact.test.mjs'
       - 'test/release-workflow.test.mjs'
       - 'test/tar-capability.test.mjs'
@@ -33,7 +41,7 @@ on:
   workflow_dispatch:
     inputs:
       full_matrix:
-        description: Verify all release platform and Node combinations
+        description: Verify one candidate tarball on all release platform and Node combinations
         type: boolean
         default: true
   workflow_call:
@@ -42,7 +50,7 @@ on:
         required: true
         type: string
       artifact_name:
-        description: Exact tarball preserved by the release verify job
+        description: Exact tarball and SHA-256 preserved by the release verify job
         required: true
         type: string
 permissions:
@@ -52,13 +60,61 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 jobs:
   package:
+    name: Ubuntu / Node 24 package acceptance
+    if: inputs.artifact_name == ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.x'
+          cache: npm
+      - run: npm ci
+      - name: Pack, install and verify in an isolated consumer and home
+        if: inputs.full_matrix != true
+        run: npm run test:package
+      - name: Pack one candidate for all full-matrix consumers
+        if: inputs.full_matrix == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/coordinate-agents-artifact"
+          mkdir -p "$artifact_dir"
+          npm pack --ignore-scripts --pack-destination "$artifact_dir"
+          version="$(node -p "require('./package.json').version")"
+          artifact="$artifact_dir/hogancv-coordinate-agents-${version}.tgz"
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const artifact = process.argv[1];
+            writeFileSync(artifact + ".sha256", createHash("sha256").update(readFileSync(artifact)).digest("hex") + "\n");
+          ' "$artifact"
+      - name: Preserve the single full-matrix candidate
+        if: inputs.full_matrix == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: acceptance-npm-tarball
+          path: ${{ runner.temp }}/coordinate-agents-artifact/*.tgz*
+          if-no-files-found: error
+          retention-days: 7
+
+  full-acceptance:
+    needs: package
+    # A release caller supplies an already verified artifact, so its producer
+    # is skipped. Manual full acceptance must first finish its one pack job.
+    if: >-
+      always() && !cancelled() &&
+      ((inputs.artifact_name != '' && needs.package.result == 'skipped') ||
+       (inputs.full_matrix == true && needs.package.result == 'success'))
     name: ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # Routine changes use three platforms. Manual/full and release callers
-      # cover the >=18 even-numbered compatibility lines, including Node 20.
-      matrix: ${{ fromJSON((inputs.artifact_name != '' || inputs.full_matrix == true) && '{"os":["ubuntu-latest","macos-latest","windows-latest"],"node":["18.x","20.x","22.x","24.x"]}' || '{"include":[{"os":"ubuntu-latest","node":"24.x"},{"os":"macos-latest","node":"22.x"},{"os":"windows-latest","node":"22.x"}]}') }}
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['18.x', '20.x', '22.x', '24.x']
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -67,24 +123,14 @@ jobs:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
-      - name: Install test tooling from lockfile
-        if: inputs.artifact_name == ''
-        run: npm ci
-      - name: Pack, install and verify in an isolated consumer and home
-        if: inputs.artifact_name == ''
-        run: npm run test:package
       - name: Verify publication workflow guards
-        if: inputs.artifact_name != ''
         run: node --test test/release-workflow.test.mjs
-      - name: Download the exact release tarball
-        if: inputs.artifact_name != ''
+      - name: Download the exact candidate tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: ${{ inputs.artifact_name }}
+          name: ${{ inputs.artifact_name || 'acceptance-npm-tarball' }}
           path: ${{ runner.temp }}/coordinate-agents-artifact
-      - name: Verify the exact release tarball on this platform
-        if: inputs.artifact_name != ''
+      - name: Verify integrity and the installed candidate on this platform
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
@@ -92,9 +138,19 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
-          test "v${version}" = "$RELEASE_TAG"
+          expected_tag="v${version}"
+          if [[ -n "$RELEASE_TAG" ]]; then test "$expected_tag" = "$RELEASE_TAG"; fi
+          artifact="$ARTIFACT_DIR/hogancv-coordinate-agents-${version}.tgz"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const artifact = process.argv[1];
+            const expected = readFileSync(artifact + ".sha256", "utf8").trim();
+            const actual = createHash("sha256").update(readFileSync(artifact)).digest("hex");
+            if (!/^[0-9a-f]{64}$/.test(expected) || actual !== expected) throw new Error("Candidate tarball SHA-256 mismatch");
+          ' "$artifact"
           source_commit="$(git rev-parse HEAD)"
-          npm run release:verify -- "$ARTIFACT_DIR/hogancv-coordinate-agents-${version}.tgz" \
+          npm run release:verify -- "$artifact" \
             --expected-version "$version" \
             --expected-source-commit "$source_commit" \
-            --expected-tag "$RELEASE_TAG"
+            --expected-tag "$expected_tag"

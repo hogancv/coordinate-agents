@@ -1,179 +1,188 @@
-# V3 Web-first CI
+# V3 Web-first CI: daily scope and Windows verification
 
-The npm 3.x Web distribution and repository Plugin 2.4.x are independent. CI now
-uses three responsibilities; npm publishing remains an explicit manual action.
+This second tightening is based on main `b4ebf051721f046c4dc382cef76398dff90dd077`
+after PR #113. npm remains 3.0.0, Plugin remains 2.4.0, and `engines.node >=18`
+is unchanged. Publishing is an explicit, separate maintainer action.
 
-| Gate | Automatic scope | Daily matrix | What it proves |
-| --- | --- | --- | --- |
-| Web CI | Web source/tests, shared Adapter/Session runtime, npm manifest/lockfile | Ubuntu Node 18/24; macOS 22; Windows 22/24 (5 jobs) | Web behavior, guarded project/task/terminal APIs, shared runtime and Adapter contracts |
-| npm Package Acceptance | Files shipped by npm, manifest/lockfile, verifier and package tests | Ubuntu 24; macOS 22; Windows 22 (3 jobs) | Real `npm pack`, isolated production install, payload/import checks, offline dual-terminal acceptance, archive and process cleanup |
-| Legacy Plugin CI | Plugin/MCP/Legacy CLI/Task Graph/SDK and shared Adapter/Session source/tests, or manual dispatch | Ubuntu 18/22; macOS 22; Windows 22 (4 jobs) | Adapter SDK/external descriptors, Legacy CLI/gateway, independent Plugin/MCP compatibility |
+## Responsibilities and job counts
 
-`test:web` no longer packs npm or runs Plugin tests. `test:package` owns real
-artifact verification. `test:shared` covers the Session and Adapter components
-used by Web; `test:adapters`, `test:legacy`, and `test:plugin` retain independent
-source/Plugin coverage. The default `npm test` core suite is unchanged.
+Counts mean executed runner jobs, excluding jobs skipped before runner allocation.
 
-A manifest/lockfile-only npm version bump does not trigger Legacy CI. Shared
-Adapter, Session, PTY, configuration and runtime contract/event source changes
-still trigger it. Manifest/dependency-only changes receive Web/shared runtime
-checks and real installation acceptance; explicitly dispatch Legacy CI to
-assess dependency effects on Plugin/SDK consumers. No tag automatically grants
-release authority. README/CHANGELOG changes trigger package acceptance because
-these files are shipped; other documentation-only edits avoid runtime matrices.
+| Gate | Before this change | After | Automatic scope |
+| --- | ---: | ---: | --- |
+| Web CI | 5 | 3: Ubuntu 24, macOS 22, Windows 22 | Web source/tests and shared Session/Adapter/Workspace runtime |
+| npm Package Acceptance | 3 | 1: Ubuntu 24 | Shipped runtime/payload, manifest/lockfile and artifact verifiers |
+| Legacy Plugin CI | 4 when related | 4 when related | Plugin/Skills/MCP/SDK/Legacy CLI/Task Graph/Bus/Inspector and shared runtimes |
+| Custom Pages Build on main push | 1 | 0 | Retained only for docs PRs and explicit manual checks |
+| npm release acceptance matrix | 12 | 12 | Explicit release caller or full manual acceptance |
+| Platform Pages deployment | 3 | 3 | GitHub-managed deployment, outside repository workflow changes |
 
-## Release matrix and publishing
+Routine Web plus package jobs drop from **8 to 4**. A main push involving all
+shared code previously ran **16** jobs including Legacy and both Pages builds;
+the corresponding maximum is **11** after this change (3 + 1 + 4 + 3). A docs PR
+can add one custom build because it has independent pre-merge validation value.
+README edits run one package job because README is shipped by npm, rather than
+cross-platform Web or Legacy matrices.
 
-Full manual package acceptance and the reusable release gate cover
-Linux/macOS/Windows × Node 18/20/22/24 (12 jobs). Node 20 is included because the
-package declares `engines.node >=18`; the daily matrix is intentionally smaller.
-This is a tested compatibility baseline, not an exhaustive check of every odd
-or future Node version, CPU architecture, or OS distribution.
+`npm run check:web` retains Web/PTY/Session/Workspace and shared Adapter tests;
+Plugin suites remain independent. `npm run test:package` still makes and installs
+a real tarball, validates its whitelist/import closure/production dependencies,
+starts Web and mock terminal pairs, tests messages/isolation/restart/archives, and
+confirms cleanup. No test or Node support line was removed to reduce job counts.
 
-`release.yml` still requires `confirmation=PUBLISH`, an existing tag matching
-`package.json`, and verification of version/source SHA/tag candidate facts.
-Its verification job creates, independently installs and uploads the real
-tarball. The reusable package matrix downloads that exact artifact, installs
-production dependencies in an isolated consumer/home on each combination, and
-runs the offline installed Web acceptance. Publishing needs both verification
-and the entire matrix, downloads the same artifact, and retains npm Trusted
-Publishing, `id-token: write`, `publishConfig.provenance=true`, and no npm token.
-Acceptance jobs have read-only repository permissions and cannot publish.
+## Windows root causes and fixes
 
-## Failure analysis
+Complete logs were downloaded with `gh run view --log`:
 
-The complete logs were downloaded with `gh run view --log` for Web runs
-[37751758445](https://github.com/hogancv/coordinate-agents/actions/runs/37751758445),
-[37836132404](https://github.com/hogancv/coordinate-agents/actions/runs/37836132404),
-and Adapter run
-[37751758599](https://github.com/hogancv/coordinate-agents/actions/runs/37751758599).
-The first two requested runs used main `c670799`; the latest Web run used
-`9a2fa33`, a separate config-path patch not present in current main. Node 24 uses
-a different test reporter; its Windows failures were also inspected.
+- [Web 37874550313](https://github.com/hogancv/coordinate-agents/actions/runs/37874550313): Windows Node 22/24 failed the first persistent Session test with EBUSY/EPERM in its final directory removal.
+- [Legacy 37874550340](https://github.com/hogancv/coordinate-agents/actions/runs/37874550340): Windows Node 22 discovered zero Inspector Sessions instead of one.
+- [Package 37874550350](https://github.com/hogancv/coordinate-agents/actions/runs/37874550350): all three installed-tarball jobs passed; this did not prove the two source regressions.
 
-- JS `realpathSync` can retain Windows `RUNNER~1`, while Git/native filesystem
-  paths use `runneradmin`. Registration before `git init` stored the short path;
-  later Git root discovery returned the long path. Strict identity comparisons
-  then duplicated projects, rejected scoped APIs, marked existing projects
-  unavailable and skipped their archive/cleanup. Native realpath now normalizes
-  project and shared runtime paths; existing registry records retain their IDs
-  and archived state. Registries already containing aliases of the same real
-  directory consolidate to the first registered ID and retain any archive fact;
-  unrelated directories are never combined. Tabs holding a discarded duplicate
-  ID must reload the project list.
-- Path containment compared canonical children with lexical roots. Both sides
-  now use native canonical paths after the original lexical containment and
-  symlink/junction checks. Transcript ownership still requires the same real
-  project, task ID and permitted agent; other-project records remain rejected.
-- Task runtime fixtures were executable Unix shebang files without a Windows
-  extension. They now launch the actual Node executable with a `.cjs` fixture
-  argument, preserving startup/failure/authentication/raw-input assertions.
-- Node 18 tarball cleanup reported `EPERM` for a still-running `mock node.exe`,
-  masking the underlying failure. Verifier directories are canonicalized;
-  acceptance explicitly waits for its launched CLIs/hosts to exit, including
-  launches whose Session records were removed by archive cleanup. Deletion has
-  bounded retries for Windows handle release and does not suppress failure.
+The Session fixture returned a lexical temporary root and compared the manager's
+native `runneradmin` cwd with JS `realpathSync`'s retained `RUNNER~1` spelling.
+The assertion occurred before close. Its `finally` removed the tree without
+closing the already launched Session, so a genuine fixture process leak locked
+the root and masked the initial assertion. Extending removal retries could not
+fix that leak.
 
-## Job count and cost model
+The fixture now uses native canonical roots and preserves the cwd assertion.
+Every root cleanup enumerates its own persisted Sessions, closes them through
+the actual Session service, and checks the stored host and CLI PIDs for exit
+before removing files. Process liveness treats EPERM as alive. Failure to close
+or exit is an explicit test failure. Only after confirming exit does Windows
+receive bounded file-removal retries (10 × 100 ms) for delayed handle release.
+Environment overrides are restored between tests. The injected post-launch
+assertion regression proves the original error survives cleanup and both owned
+processes have exited. No arbitrary PID or caller-provided process is killed.
+The diagnosed issue required no PTY redesign or production timeout relaxation.
 
-Counts exclude the unchanged, manually dispatched Pages build. They count
-expanded runner jobs, not YAML job keys, and depend on changed-file scope.
+Inspector used `listRecords(root)` with a lexical root. The manager found the
+Session directory through a native canonical path but passed the original root
+to record parsing. Lexical containment then rejected the valid file and the
+list's corrupt-record filter silently omitted it. `listRecords` now uses one
+canonical repository for discovery and parsing. The shared Inspector/Web
+`canonicalRoot` also uses native realpath. Historical cwd aliases remain
+readable; no persisted Session is rewritten. A real parent symlink/junction
+alias regression requires exactly one Session and checks unchanged file bytes.
+Existing linked-record, malformed ID, capability/origin and containment guards
+remain intact.
 
-| Event | Before | After |
+Local success does not prove NTFS or Windows process behavior. The explicit
+Web CI input `windows_regression=true` selects Windows Node 22/24, runs the Web
+and shared Session suite, and additionally runs the Inspector suite. This is a
+manual repair-verification mode; routine Web remains three jobs.
+
+## Shared dependency audit and trigger tests
+
+Legacy references are actual code dependencies, not filename assumptions:
+
+- `lib/cli-core.mjs` loads `inspector/server/server.mjs`; that module re-exports the Workspace server and shares HTTP transport.
+- Legacy Inspector imports `workspace-data.mjs` and `workspace-task-runtime.mjs`.
+- `runtime-services.mjs` exposes Workspace task operations.
+- `action-gateway.mjs` imports Workspace services; those depend on Workspace task persistence and role prompts.
+- Workspace task prompts reference the message helper as an executable resource.
+
+Therefore shared Workspace scripts and server modules trigger both Web and
+Legacy. The previous blanket Workspace exclusion is removed. npm-only
+`lib/web-cli.mjs`, Workspace UI/CSS and npm metadata alone do not trigger Legacy.
+Package triggers name the shipped adapters, avoiding packing for SDK/conformance
+code absent from the npm whitelist. General repository documentation does not
+trigger runtime matrices.
+
+The YAML paths were evaluated with ordered positive/negative glob rules for
+sixteen scenarios; the main requested cases are:
+
+| Changed file / event | Web | npm | Legacy | Custom Pages |
+| --- | --- | --- | --- | --- |
+| Web CSS | 3 | 1 | — | — |
+| npm-only Web CLI runtime | 3 | 1 | — | — |
+| Shared Workspace task runtime | 3 | 1 | 4 | — |
+| Session Manager | 3 | 1 | 4 | — |
+| Plugin Skill | — | — | 4 | — |
+| Adapter SDK root module | — | — | 4 | — |
+| README | — | 1 | — | — |
+| package.json / lockfile | 3 | 1 | — | — |
+| docs-only PR | — | — | — | 1 |
+| Formal npm release | verify job | 12 artifact consumers | — | — |
+
+The table excludes the unchanged GitHub platform Pages deployment. Manual full
+package acceptance runs **one producer plus twelve consumers**; the matrix itself
+is still twelve combinations. Regular npm acceptance runs only its one Ubuntu
+job. Formal publishing runs verify + twelve consumers + publish, as before.
+
+## One artifact, full release coverage
+
+Full manual acceptance now packs **once**, uploads the candidate and SHA-256
+sidecar, and makes all twelve consumers download that candidate. It no longer
+creates a different tarball in each matrix environment. Release acceptance uses
+the artifact supplied by `release.yml`, skipping the independent producer.
+Failed producers or consumers cannot satisfy the publication dependency.
+
+Consumers verify the sidecar hash with Node crypto, then install production
+dependencies into independent consumer/home directories and run the installed
+Web acceptance. The publish job rechecks the downloaded hash before publishing
+that same tarball. Artifact upload/download actions remain pinned. Explicit
+PUBLISH, existing tag/version matching, expected source SHA/tag verification,
+OIDC `id-token: write`, Trusted Publishing and provenance remain in place.
+Acceptance has no publish or OIDC write permission. No publishing workflow is
+executed for repair verification.
+
+## Pages and required checks
+
+Read-only GitHub API inspection confirmed Pages is **legacy**, source branch
+**main**, path **/docs**, with active `pages-build-deployment`. The repository
+custom job only built Jekyll and never deployed. It now validates docs PRs and
+manual runs, leaving platform deployment/source/permissions unchanged. A main
+push no longer repeats the custom Jekyll job before the platform build.
+
+The traditional main branch-protection endpoint returned 404 (not protected),
+and the repository rulesets endpoint returned an empty list. No required-check
+configuration was changed. Do not mark these path-filtered workflow names as
+unconditional required checks: unrelated PRs would leave them pending. If the
+maintainer later requires one stable mandatory gate, use a workflow that always
+starts on PRs, evaluates scope internally, and exposes one aggregate status that
+fails for any required suite failure; set only that aggregate status as required.
+That future settings/policy change is outside this request.
+
+## Verifiable timing and costs
+
+Job timestamps on the failed main baseline recorded:
+
+| Workflow | Executed jobs | Total raw runner seconds |
 | --- | ---: | ---: |
-| Shipped Web source change, no npm version bump | 9 | 8 = 5 Web + 3 npm |
-| npm manifest/lockfile version bump | 15 = 9 Web + 6 Adapter/version/payload | 8 |
-| Shared Adapter/Session source change, no version bump | 9 (Adapter gate did not trigger) | 12 = 5 Web + 3 npm + 4 Legacy |
-| Legacy-only source change | 9 | 4 |
-| Non-shipped docs-only change | 9 | 0 |
-| Manual npm publication | 2 | 14 = verify + 12 exact-artifact combinations + publish |
+| Web | 5 | 896 |
+| npm package | 3 | 167 |
+| Legacy | 4 | 373 |
+| Custom Pages | 1 | 18 |
+| Platform Pages | 3 | 35 |
+| Total | 16 | 1,489 (24.82 minutes) |
 
-Daily Web+Plugin repetitions drop from 9 to 0. Real tarball installations drop
-from 9 to 3 for routine shipped Web changes. Legacy Plugin checks run only in
-its four independent jobs when relevant.
+Two Web Windows jobs and one Legacy Windows job failed, so this is not a green
+baseline and is not comparable to a successful run without qualification.
+Job count reductions are deterministic: daily Web/npm 8 → 4 (50%); a full-scope
+main push 16 → 11 (31.25%). Removed baseline jobs accounted for 509 raw seconds,
+but that is historical work avoided, not a measured future billing saving.
+Successful branch CI timings must be reported separately by platform/workflow.
+No currency saving or unexecuted runtime duration is claimed; pricing, caching,
+runner setup and failure paths affect actual cost. Full manual/release coverage
+intentionally retains its cost.
 
-The latest old Web run consumed **27.88 raw runner minutes** across 9 jobs;
-Windows jobs failed, so this is not a successful baseline. Successful Ubuntu
-and macOS jobs spent about 2.58–2.73 minutes in combined Web/tarball tests and
-0.32–0.53 minutes in repeated Plugin tests. The earlier version-triggered
-Adapter run added **3.48 raw runner minutes**, including its detection/payload
-jobs. These values come from job/step timestamps, not billing records.
+## Verification and handoff
 
-Given the narrower Web matrix, six fewer daily tarball installs, removed Plugin
-repetition, and added focused shared-runtime tests, routine Web changes are
-expected to use roughly **25–45% fewer raw runner minutes**. Version bumps and
-Legacy/docs-only changes save more. Shared-runtime changes intentionally add
-Legacy compatibility coverage that the old trigger missed; release validation
-intentionally costs more. Runner setup, caching, native dependency installation
-and OS billing rates can change actual cost. Measure successful hosted runs
-before treating this estimate as a billing reduction.
+Local verification uses macOS arm64 with Node 24.17.0. Core **190/190**, Web
+**57/57**, shared runtime **70/70**, Legacy **114/114**, Adapter **33/33**, real
+package acceptance **6/6**, and affected Session/Inspector **19/19** passed.
+Actionlint 1.7.12, whitespace checks and the sixteen trigger/matrix scenarios
+passed. Independent read-only review found no critical or important issues.
 
-## Verification and remaining risks
+Hosted verification is required before declaring the Windows repair complete:
+Windows Node 22/24 Session and Inspector tests, the normal three Web jobs, four
+Legacy jobs for these shared changes, and the manual twelve-consumer exact
+artifact matrix. Full local regressions and hosted results are recorded in the
+final task handoff. macOS results alone are not Windows/Linux evidence. Native
+OS chooser UI and real paid provider authentication remain outside mock tests;
+no paid Agent was launched or real user configuration modified.
 
-Local verification is on macOS arm64. Regression tests reproduce the native vs
-JS path split, retain existing project IDs/archive facts, and reject cleanup of
-another project's transcript. Existing negative tests still protect arbitrary
-paths, capability/origin checks, missing payload files and linked records.
-
-Executed on this host after the final fixes:
-
-- `npm run test:full`: **394/394 passed**; `npm test`: **189/189 passed**.
-- `npm run check:web`: **57 Web + 69 shared-runtime tests passed**.
-- `npm run test:legacy`: **113/113 passed**; Adapter suite **33/33** and
-  independent Plugin/MCP suite **27/27** passed (also included in the full run).
-- Real tarball package acceptance: **6/6 passed per version** on macOS arm64
-  Node **18.20.8, 20.20.2, 22.23.3, 24.17.0**. Production dependencies were
-  installed into separate consumers; no source tree dependency was used.
-- Node 18 project/archive/task-runtime checks: **23/23 passed**; final path/event
-  security and project-registry checks: **18/18 passed**.
-- An isolated installed-package probe injected a failure immediately after the
-  terminal pair launched: both owned mock CLIs exited and the original failure
-  remained visible. It created no provider sessions or persistent user state.
-- Actionlint **1.7.12**, index synchronization, offline demo, documentation guards,
-  whitespace checks and twelve trigger-scope scenarios passed. Independent
-  read-only review found no remaining major issues after fixes.
-
-Local results do not prove Windows/Linux, NTFS 8.3 behavior, ConPTY, native folder-picker UI,
-real provider authentication, or OIDC issuance. Hosted Web's five combinations,
-Legacy's four combinations for shared changes, and the full twelve-combination
-package gate must pass before release approval. Node 18 and Windows Node >=22
-retain the existing stdio fallback; native PTY is exercised on supported local
-Node 22/24 combinations. Newer Node generations remain an unverified risk of
-the open-ended engines declaration.
-
-If branch protection names the old workflows/jobs as required checks, update
-those required-check names to the new gates. Path-filtered workflows can stay
-pending when required unconditionally; choose requirements consistent with the
-changed-file scope. No branch-protection settings are changed by this task.
-Implementation and local verification were completed without pushing or publishing.
-The maintainer subsequently authorized pushing the source branch separately;
-merge, tag creation, npm publishing and release dispatch remain unauthorized.
-
-## Modified files
-
-- `.github/workflows/adapter-sdk-acceptance.yml`
-- `.github/workflows/release.yml`
-- `.github/workflows/web-ci.yml`
-- `.github/workflows/web-package-acceptance.yml`
-- `README.md`
-- `README.zh-CN.md`
-- `docs/adapter-conformance.md`
-- `docs/releases/v3-ci.md`
-- `docs/releases/v3-web-first.md`
-- `docs/task-graph-v1.md`
-- `inspector/server/workspace-projects.mjs`
-- `package.json`
-- `scripts/verify-release-artifact.mjs`
-- `scripts/verify-workspace-install.mjs`
-- `skills/coordinate-agents/scripts/config.mjs`
-- `skills/coordinate-agents/scripts/runtime-events.mjs`
-- `skills/coordinate-agents/scripts/session-manager.mjs`
-- `skills/coordinate-agents/scripts/workspace-task-runtime.mjs`
-- `test/adapter-acceptance-gate.test.mjs`
-- `test/release-workflow.test.mjs`
-- `test/runtime-events.test.mjs`
-- `test/task-graph-acceptance-gate.test.mjs`
-- `test/workspace-archive.test.mjs`
-- `test/workspace-projects.test.mjs`
-- `test/workspace-task-runtime.test.mjs`
-- `test/workspace.test.mjs`
+Code review passes. Merge readiness remains conditional on the actual hosted
+checks. Feature-branch pushes and non-publishing CI are used for verification;
+main pushes, merges, tags, GitHub Releases and npm publishing remain unauthorized.

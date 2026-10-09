@@ -296,12 +296,13 @@ function readRecord(root, id) {
 }
 
 function listRecords(root) {
-  const sessions = sessionStorePath(root);
+  const repository = sessionRoot(root);
+  const sessions = sessionStorePath(repository);
   const result = [];
   for (const name of readdirSync(sessions)) {
     if (!name.endsWith('.json')) continue;
     const path = join(sessions, name);
-    try { result.push(parseRecord(root, path)); } catch {
+    try { result.push(parseRecord(repository, path)); } catch {
       // A corrupt session record is not allowed to become a launch command or
       // an implicit recovery action. It is omitted from reuse candidates.
     }
