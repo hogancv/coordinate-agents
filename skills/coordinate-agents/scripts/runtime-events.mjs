@@ -314,9 +314,10 @@ function matches(event, options) {
 
 export function readRuntimeEvents(root, options = {}) {
   const normalized = normalizedReadOptions(options);
-  const { directory, journal } = eventPaths(root);
+  // Reuse precomputed repository path from eventPaths to avoid redundant realpathSync.native calls
+  const { repository, directory, journal } = eventPaths(root);
   if (!existsSync(journal)) return [];
-  assertSafePath(realpathSync.native(resolve(root)), directory);
+  assertSafePath(repository, directory);
   const metadata = lstatSync(journal);
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw runtimeError('RUNTIME_EVENT_READ_FAILED', `Unsafe Event Journal: ${journal}`, { recoverable: false });
@@ -325,7 +326,10 @@ export function readRuntimeEvents(root, options = {}) {
   const events = [];
   let remainder = '';
   const consume = line => {
-    if (!line || Buffer.byteLength(line, 'utf8') > MAX_EVENT_LINE_BYTES) return;
+    if (!line || line.length > MAX_EVENT_LINE_BYTES) return;
+    // Fast-path byte length check: JS UTF-16 chars are at most 4 UTF-8 bytes each.
+    // If line.length <= MAX_EVENT_LINE_BYTES / 4, byte length is guaranteed <= MAX_EVENT_LINE_BYTES.
+    if (line.length > MAX_EVENT_LINE_BYTES / 4 && Buffer.byteLength(line, 'utf8') > MAX_EVENT_LINE_BYTES) return;
     try {
       const event = JSON.parse(line);
       if (!validStoredEvent(event) || !matches(event, normalized)) return;
@@ -349,7 +353,7 @@ export function readRuntimeEvents(root, options = {}) {
       const text = remainder + buffer.subarray(0, bytesRead).toString('utf8');
       const lines = text.split(/\r?\n/);
       remainder = lines.pop() || '';
-      if (Buffer.byteLength(remainder, 'utf8') > MAX_EVENT_LINE_BYTES) remainder = '';
+      if (remainder.length > MAX_EVENT_LINE_BYTES / 4 && Buffer.byteLength(remainder, 'utf8') > MAX_EVENT_LINE_BYTES) remainder = '';
       for (const line of lines) consume(line);
       if (normalized.after !== null && events.length >= normalized.limit) break;
     } while (bytesRead > 0);
