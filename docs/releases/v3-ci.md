@@ -57,9 +57,10 @@ processes have exited. No arbitrary PID or caller-provided process is killed.
 A later hosted repeat exposed the crash-exit variant: the stdio runtime
 published terminal state on `exit`, before pipes closed. The stdio backend now
 settles on `close`, while the earlier exit fact clears its PID and rejects
-writes/resizing/reuse during output drain. A real subprocess regression exits
-the CLI before its inherited stdout is closed, checks rejection of input and
-retention of final output. Another host-protocol regression rejects reuse of a
+writes/resizing/reuse during output drain. A real subprocess regression pauses stdout consumption so process exit
+precedes pipe closure, checks rejection of input and retention of final output.
+This reader backpressure model is portable; it does not assume descendants can
+retain their parent pipe on Windows. Another host-protocol regression rejects reuse of a
 running/draining record with no live CLI. Native PTY behavior and production
 timeout bounds are unchanged.
 
@@ -189,6 +190,15 @@ Local verification uses macOS arm64 with Node 24.17.0. Core **190/190**, Web
 Session/Inspector **21/21** passed.
 Actionlint 1.7.12, whitespace checks and the sixteen trigger/matrix scenarios
 passed. Independent read-only review found no critical or important issues.
+
+[Full artifact acceptance at b780834](https://github.com/hogancv/coordinate-agents/actions/runs/37879534383)
+passed all twelve combinations using one Ubuntu-produced artifact. Windows 18/20
+had previously passed runtime assertions but failed deletion of a hardlinked mock
+executable while the verifier still ran the original Node image. Windows now
+uses an independent executable copy; CLI/host exit and final deletion checks
+remain mandatory, and the hosted rerun passed those checks. Source reruns use
+the portable reader-backpressure regression; final Windows 22/24 and PR checks
+must still complete before merge readiness.
 
 Hosted verification is required before declaring the Windows repair complete:
 Windows Node 22/24 Session and Inspector tests, the normal three Web jobs, four

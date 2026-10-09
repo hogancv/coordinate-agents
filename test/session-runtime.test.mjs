@@ -399,32 +399,40 @@ test('a delayed detached host receives its initialization before parent IPC disc
   }
 });
 
-test('stdio Session terminal state waits for close and retains output after the CLI exits', { timeout: 10_000 }, async () => {
+test('stdio Session terminal state waits for close and retains output after the CLI exits', { timeout: 10_000 }, async t => {
   const directory = realpathSync.native(mkdtempSync(join(tmpdir(), 'session-close-streams-')));
   // Loading the exact runtime in an independent directory exercises its real
   // missing-native-dependency fallback, including the actual child pipes.
   const module = join(directory, 'pty-runtime.mjs');
   copyFileSync(new URL('../skills/coordinate-agents/scripts/pty-runtime.mjs', import.meta.url), module);
   const fixture = join(directory, 'exit-before-pipes.cjs');
-  const tailWriter = join(directory, 'tail-writer.cjs');
-  writeFileSync(tailWriter, `setTimeout(() => process.stdout.write('final buffered output', () => process.exit(0)), 250);process.send('ready');process.disconnect();`);
-  // On Windows, numeric fd inheritance plus immediate parent exit can fail
-  // before the descendant is spawned. Pass the actual streams and wait for an
-  // IPC readiness fact so every platform exercises the intended drain window.
-  writeFileSync(fixture, `const child=require('node:child_process').fork(${JSON.stringify(tailWriter)}, [], {stdio:['ignore',process.stdout,process.stderr,'ipc'],windowsHide:true});child.once('error',error=>{console.error(error);process.exit(21);});child.once('message',()=>process.exit(9));`);
+  writeFileSync(fixture, `process.stdout.write('final buffered output', () => process.exit(9));`);
   const { PtyRuntime } = await import(pathToFileURL(module).href);
   const runtime = new PtyRuntime({ id: 'session_closepipes01', command: process.execPath, args: [fixture], cwd: directory });
   let streamsClosed;
+  let resume;
   try {
     runtime.open(); assert.equal(runtime.backend, 'stdio-fallback');
+    // Hold a real pipe's buffered bytes after the process exits. Node's exit
+    // handler normally resumes pipes automatically; delay only that reader
+    // action to reproduce handle/output drain on every supported platform.
+    resume = runtime.child.stdout.resume.bind(runtime.child.stdout);
+    runtime.child.stdout.pause();
+    t.mock.method(runtime.child.stdout, 'resume', () => runtime.child.stdout);
     streamsClosed = once(runtime.child, 'close');
+    let terminalSettled = false;
+    runtime.exitPromise.then(() => { terminalSettled = true; });
     await once(runtime.child, 'exit');
+    await new Promise(done => setImmediate(done));
+    assert.equal(terminalSettled, false, 'terminal state must await pipe closure');
     assert.throws(() => runtime.write('input after exit'), /not writable/);
     assert.equal(runtime.status().pid, null);
+    t.mock.restoreAll(); resume();
     const terminal = await runtime.exitPromise;
     assert.equal(terminal.state, 'failed'); assert.equal(terminal.exitCode, 9);
     assert.match(runtime.read().output, /final buffered output/);
   } finally {
+    t.mock.restoreAll(); resume?.();
     if (streamsClosed) await streamsClosed;
     await runtime.close({ graceful: false, timeoutMs: 1000 });
     rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
