@@ -138,9 +138,11 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
   process.env.FIXTURE_ROOT = root;
   process.env.FIXTURE_AGENT = 'antigravity';
   process.env.BUS_TOOL = busTool;
+  let sessionId = null;
   try {
     await configure(root, command);
     const opened = await runtimeSessionOpen({ root, agent: 'antigravity' });
+    sessionId = opened.session.id;
     assert.equal(opened.ok, true);
     assert.equal(opened.reused, false);
     assert.equal(opened.session.agent, 'antigravity');
@@ -172,6 +174,7 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.equal(eventTypes.filter(type => type === 'SESSION_CLOSED').length, 1);
     assert.equal((readFileSync(starts, 'utf8') || '').length, 1);
   } finally {
+    if (sessionId) await closeQuietly(root, sessionId);
     await removeTree(root);
     rmSync(home, { recursive: true, force: true });
   }
