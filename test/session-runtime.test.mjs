@@ -117,7 +117,7 @@ async function removeTree(path) {
   let lastError = null;
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
-      rmSync(path, { recursive: true, force: true });
+      rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
       if (!existsSync(path)) return;
     } catch (error) {
       lastError = error;
