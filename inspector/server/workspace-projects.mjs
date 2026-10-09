@@ -13,7 +13,9 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 function directory(path) {
   if (typeof path !== 'string' || !isAbsolute(path) || path.length > 4096 || /[\x00-\x1f]/.test(path)) throw new Error('An absolute directory path is required.');
   if (!lstatSync(path).isDirectory() || lstatSync(path).isSymbolicLink()) throw new Error('Select a regular directory.');
-  return realpathSync(path);
+  // Native realpath expands Windows 8.3 names to the spelling returned by Git.
+  // JS realpath can preserve RUNNER~1, producing a second project identity.
+  return realpathSync.native(path);
 }
 function gitRoot(path) {
   const result = spawnSync('git', ['-C', path, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', timeout: 5000, maxBuffer: 512 * 1024 });
@@ -36,7 +38,23 @@ export function createProjectStore({ home } = {}) {
       (project.archivedAt !== undefined && (typeof project.archivedAt !== 'string' || Number.isNaN(Date.parse(project.archivedAt))))) ||
       new Set(parsed.projects.map(project => project.id)).size !== parsed.projects.length ||
       new Set(parsed.projects.map(project => project.root)).size !== parsed.projects.length) throw new Error('Invalid project registry.');
-    return parsed.projects;
+    // Preserve IDs and archive facts written by earlier versions using a short
+    // path. Unavailable/unsafe directories remain unavailable, never recreated.
+    const projects = parsed.projects.map(project => {
+      try { return { ...project, root: directory(project.root) }; }
+      catch { return project; }
+    });
+    // The old short/long mismatch could already have appended two identities.
+    // Keep the first registration and any archive fact; explicit re-add is the
+    // only operation allowed to restore visibility. Only equal native paths
+    // of regular directories are consolidated, never different repositories.
+    const unique = new Map();
+    for (const project of projects) {
+      const existing = unique.get(project.root);
+      if (!existing) unique.set(project.root, project);
+      else if (project.archivedAt && (!existing.archivedAt || project.archivedAt < existing.archivedAt)) existing.archivedAt = project.archivedAt;
+    }
+    return [...unique.values()];
   }
   function transaction(update) {
     const parent = dirname(file);

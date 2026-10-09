@@ -156,3 +156,19 @@ test('settings can load global archive cleanup even when selected project settin
  const context=vm.createContext({state,document:{querySelector:node},WORKSPACE_SETTINGS_ENDPOINT:'/api/workspace-settings',DEFAULT_TERMINAL_COMMANDS:{codex:'codex',antigravity:'agy'},fetchJson:async()=>{throw new Error('Project directory unavailable');},postAction:async()=>({tasks:2,projects:0,unavailableProjects:1}),renderSettingsForm(){},renderArchiveSummary(){},settingsError(){},closeContextMenu(){},setSettingsBusy(value){state.settingsBusy=value;},t:key=>key,readCodexEffort(){return '';},readCodexModel(){return '';}});
  vm.runInContext(source,context);await context.openSettings();assert.equal(state.archives.tasks,2);assert.equal(state.archives.unavailableProjects,1);assert.equal(state.settingsBusy,false);
 });
+
+test('archive cleanup accepts a canonical alias of the owned cwd but rejects another project', async () => {
+ const f=fixture();try {
+  const task=closedTask(f.root);const directory=join(f.root,'.agent-bus/sessions');mkdirSync(directory,{recursive:true});
+  const id='session_pathalias0001';const path=join(directory,id+'.json');
+  const session={schemaVersion:1,id,agent:'codex',command:process.execPath,resolvedCommand:process.execPath,args:[],cwd:f.root+'/.' ,pid:null,state:'exited',createdAt:new Date().toISOString(),lastActivityAt:new Date().toISOString(),exitCode:0,signal:null,error:null,outputTail:'owned transcript',endpoint:null,hostPid:null,taskId:task.id,subtaskId:'codex'};
+  writeFileSync(path,JSON.stringify(session));
+  await runtime.runtimeWorkspaceTaskArchive({root:f.root,workspaceTaskId:task.id});
+  const other=join(f.home,'other-project');mkdirSync(other);createProjectStore({home:f.home}).register(other,true);
+  writeFileSync(path,JSON.stringify({...session,cwd:other}));
+  await assert.rejects(runtime.runtimeWorkspaceArchivesClear({root:f.root}),/another task/);
+  assert.ok(existsSync(path));assert.ok(existsSync(join(f.root,'.agent-bus/workspace-tasks',task.id+'.json')));
+  writeFileSync(path,JSON.stringify(session));
+  assert.equal((await runtime.runtimeWorkspaceArchivesClear({root:f.root})).deletedSessions,1);
+ }finally{rmSync(f.home,{recursive:true,force:true});}
+});

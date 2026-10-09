@@ -46,7 +46,7 @@ jobs:
       - name: Install from lockfile
         run: npm ci
       - name: Run focused regression suite
-        run: npm run check
+        run: npm run check:web
       - name: Inspect publish contents
         run: npm pack --dry-run --ignore-scripts
       - name: Verify isolated release artifact
@@ -80,8 +80,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish:
+  package-acceptance:
     needs: verify
+    uses: ./.github/workflows/web-package-acceptance.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      artifact_name: verified-npm-tarball
+
+  publish:
+    needs: [verify, package-acceptance]
     runs-on: ubuntu-latest
     permissions:
       contents: read

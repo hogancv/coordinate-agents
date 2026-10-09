@@ -115,7 +115,7 @@ function sessionRoot(root) {
   }
   let repository;
   try {
-    repository = realpathSync(supplied);
+    repository = realpathSync.native(supplied);
   } catch (error) {
     throw runtimeError('SESSION_STATE_CONFLICT', `Session root is unavailable: ${supplied}`, {
       recoverable: false,

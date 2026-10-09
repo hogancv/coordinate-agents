@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -270,7 +271,7 @@ export function loaderNodeOptions(loader) {
 
 async function main() {
   const { artifact, expectedVersion, expectedSourceCommit, expectedTag } = parseArgs(process.argv.slice(2));
-  const tempRoot = mkdtempSync(join(tmpdir(), 'coordinate-agents-release-'));
+  const tempRoot = realpathSync.native(mkdtempSync(join(tmpdir(), 'coordinate-agents-release-')));
   try {
     const packageRoot = extractArtifact(artifact, tempRoot);
     const { packageJson } = verifyIdentity(packageRoot, expectedVersion);
@@ -295,7 +296,7 @@ export async function load(url, context, next) { if (url.startsWith('file:')) ap
     const loaded = readFileSync(trace, 'utf8').trim().split(/\r?\n/);
     if (loaded.some(url => /cli-core|task-graph|\/task-runtime\.mjs|agent-bus\.mjs|runtime-services\.mjs|inspector-data|conformance/.test(url))) throw new VerificationError('Workspace loaded Legacy code.');
     console.log(JSON.stringify({ ok: true, artifact, candidate, package: { name: packageJson.name, version: packageJson.version, repository: packageJson.repository.url }, payload, installation: { productionDependencies: true, isolatedHome: true, isolatedConsumer: true, loadedModules: new Set(loaded).size }, runtime }, null, 2));
-  } finally { rmSync(tempRoot, { recursive: true, force: true }); }
+  } finally { rmSync(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
 
 const isDirectExecution = process.argv[1]

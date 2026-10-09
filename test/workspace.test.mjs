@@ -54,7 +54,7 @@ function repository() {
   git(repositoryRoot, ['commit', '-qm', 'chore: workspace fixture baseline']);
   const init = spawnSync(process.execPath, [busTool, 'init', '--root', repositoryRoot], { encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr || init.stdout);
-  return realpathSync(repositoryRoot);
+  return realpathSync.native(repositoryRoot);
 }
 
 function taskFixture(repositoryRoot) {

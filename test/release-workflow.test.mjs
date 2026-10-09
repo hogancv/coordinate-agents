@@ -16,4 +16,14 @@ test('release workflow keeps explicit confirmation, exact-tag verification, and 
   assert.match(workflow, /npm publish --ignore-scripts --access public --tag latest/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
+  assert.match(workflow, /needs: \[verify, package-acceptance\]/);
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/web-package-acceptance\.yml/);
+  assert.match(workflow, /artifact_name: verified-npm-tarball/);
+  const acceptance = readFileSync(join(process.cwd(), '.github', 'workflows', 'web-package-acceptance.yml'), 'utf8');
+  assert.match(acceptance, /workflow_call:/);
+  assert.match(acceptance, /name: \$\{\{ inputs\.artifact_name \}\}/);
+  assert.match(acceptance, /ref: \$\{\{ inputs\.release_tag \|\| github\.sha \}\}/);
+  assert.match(acceptance, /"node":\["18.x","20.x","22.x","24.x"\]/);
+  assert.match(acceptance, /npm run release:verify/);
+  assert.doesNotMatch(acceptance, /npm publish|id-token:\s*write/);
 });
