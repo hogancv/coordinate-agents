@@ -77,7 +77,7 @@ function repositoryRoot(root) {
       root: supplied,
     });
   }
-  const repository = realpathSync(supplied);
+  const repository = realpathSync.native(supplied);
   const bus = join(repository, '.agent-bus');
   if (!existsSync(bus)) {
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', `Agent Bus is not initialized: ${bus}`, {
@@ -715,7 +715,7 @@ function ownedTaskSessionFiles(root, record) {
     assertSafePath(root, path);
     if (!existsSync(path)) return [];
     const session = readRecord(root, id);
-    if (session.id !== id || session.cwd !== root || session.taskId !== record.id || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) {
+    if (session.id !== id || repositoryRoot(session.cwd) !== root || session.taskId !== record.id || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) {
       throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to modify a Session owned by another task.', { recoverable: false, taskId: record.id, sessionId: id });
     }
     return [{ id, path, session }];

@@ -183,20 +183,25 @@ Run the local gate from a clean checkout:
 
 ```sh
 npm ci
-npm test
+npm run test:adapters
+npm run test:legacy
+npm run test:plugin
 npm run demo
-npm pack --dry-run --ignore-scripts
 ```
 
 The authoritative matrix is defined in
-`.github/workflows/adapter-sdk-acceptance.yml` and runs the focused test suite
-on Linux with Node.js 18 and 22, plus macOS and Windows with Node.js 22. The
-offline demo and package payload checks run once on Ubuntu instead of once per
-matrix entry. Local results prove only the current host; the matrix workflow is
-the cross-platform evidence. Automatic pull-request and `main` runs are limited
-to `package.json` changes and proceed only when its `version` differs from the
-base revision. Version tags and explicit manual dispatches remain available for
-release and maintenance verification.
+`.github/workflows/adapter-sdk-acceptance.yml` (Legacy Plugin CI). It runs Adapter,
+Legacy CLI/gateway, and independent Plugin/MCP tests on Linux with Node.js 18/22,
+plus macOS and Windows with Node.js 22. Index and offline demo checks run once on
+Ubuntu. Plugin/Legacy and shared Adapter/Session source changes trigger this gate;
+Web-only runtime changes, npm manifest/lockfile version bumps, and tags do not.
+Explicit manual dispatch remains available. Dependency changes receive Web/shared
+runtime checks and real npm installation acceptance; explicitly dispatch Legacy
+Plugin CI when assessing their effect on the source SDK or Plugin.
+
+The [Web/package CI matrix](releases/v3-ci.md) replaces the former version-based
+trigger and dry-run payload job. Release publishing requires cross-platform
+verification of the exact real tarball before its OIDC publish job.
 
 The complete local regression suite remains available as `npm run test:full`
 or `npm run check:full`; it is intentionally not repeated in every matrix job.

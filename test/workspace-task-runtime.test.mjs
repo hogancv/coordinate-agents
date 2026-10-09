@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -54,13 +53,13 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   git(root, ['commit', '-qm', 'chore: workspace task fixture']);
   const init = spawnSync(process.execPath, [busTool, 'init', '--root', root], { encoding: 'utf8', windowsHide: true });
   assert.equal(init.status, 0, init.stderr || init.stdout);
-  return realpathSync(root);
+  return realpathSync.native(root);
 }
 
 function fakeCli(root, name, { fail = false, auth = false, transientAuth = false } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
-  const command = join(root, `${name}-cli`);
+  const script = join(root, `${name}-cli.cjs`);
   const source = `#!/usr/bin/env node
 const fs = require('node:fs');
 const log = ${JSON.stringify(log)};
@@ -86,18 +85,17 @@ process.stdin.setRawMode?.(true);
 process.stdin.resume();
 process.stdin.on('data', chunk => fs.appendFileSync(log, Buffer.from(chunk).toString('hex')));`}
 `;
-  writeFileSync(command, source, 'utf8');
-  chmodSync(command, 0o755);
-  return { command, log, termLog };
+  writeFileSync(script, source, 'utf8');
+  return { command: process.execPath, args: [script], log, termLog };
 }
 
 function configurePair(root, codex, antigravity) {
   const bus = join(root, '.agent-bus');
   const config = readConfig(bus);
   config.agents = config.agents.map(agent => agent.id === 'codex'
-    ? { ...agent, command: codex.command }
+    ? { ...agent, command: codex.command, args: codex.args }
     : agent.id === 'antigravity'
-      ? { ...agent, command: antigravity.command }
+      ? { ...agent, command: antigravity.command, args: antigravity.args }
       : agent);
   writeConfig(bus, config);
 }

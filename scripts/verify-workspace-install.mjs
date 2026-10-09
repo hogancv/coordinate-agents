@@ -3,12 +3,14 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
-const [packageRoot, temporary, expectedVersion] = process.argv.slice(2);
+const [packagePath, temporaryPath, expectedVersion] = process.argv.slice(2);
+const packageRoot = realpathSync.native(packagePath);
+const temporary = realpathSync.native(temporaryPath);
 const cli = join(packageRoot, 'bin/coordinate-agents.mjs');
 const project = join(temporary, 'project with spaces');
 const second = join(temporary, 'second project');
@@ -53,7 +55,6 @@ async function poll(get, check, label) {
 }
 let child, base, capability, projectId;
 const allTasks = [];
-const hostPids = [];
 async function start() {
   child = spawn(process.execPath, [cli, 'web', '--root', project, '--port', '0', '--json'], { cwd: temporary, env: process.env, stdio: ['ignore','pipe','pipe'] });
   let stderr = ''; child.stderr.on('data', data => { stderr += data; });
@@ -103,7 +104,7 @@ try {
   assert.ok(task?.id,JSON.stringify(created)); allTasks.push(task.id);
   const detail=await get(`/api/workspace-tasks/${task.id}`); assert.equal(detail.status,'RUNNING');
   const codex=detail.sessions.codex.sessionId, agy=detail.sessions.antigravity.sessionId; assert.notEqual(codex,agy);
-  for (const id of [codex,agy]) {const record=JSON.parse(readFileSync(join(project,'.agent-bus/sessions',`${id}.json`),'utf8'));hostPids.push(record.hostPid); assert.equal(record.taskId,task.id);}
+  for (const id of [codex,agy]) {const record=JSON.parse(readFileSync(join(project,'.agent-bus/sessions',`${id}.json`),'utf8')); assert.equal(record.taskId,task.id);}
   await poll(()=>read(codex),r=>r.output.output.includes('You clarify and review.'),'Codex role prompt');
   await poll(()=>read(agy),r=>r.output.output.includes('You implement.'),'Antigravity role prompt');
   await action('sessionWrite',{sessionId:codex,input:'input-output-check',submit:true});
@@ -161,9 +162,19 @@ try {
   // If any assertion fails, close only hosts persisted by this isolated install.
   try {
     const service=await import(pathToFileURL(join(packageRoot,'skills/coordinate-agents/scripts/session-service.mjs')).href);
+    const pids = new Set();
+    const launches = join(temporary, 'launches.jsonl');
+    if (existsSync(launches)) for (const line of readFileSync(launches, 'utf8').trim().split('\n').filter(Boolean)) pids.add(JSON.parse(line).pid);
     for (const directory of [project,second]) {
       const store=join(directory,'.agent-bus/sessions');if (!existsSync(store)) continue;
-      for (const file of readdirSync(store).filter(f=>f.endsWith('.json'))) {try {await service.runtimeSessionClose({root:directory,sessionId:file.slice(0,-5),graceful:false,timeoutMs:1000});} catch {}}
+      for (const file of readdirSync(store).filter(f=>f.endsWith('.json'))) {
+        const record = JSON.parse(readFileSync(join(store, file), 'utf8'));
+        if (record.hostPid) pids.add(record.hostPid);
+        await service.runtimeSessionClose({root:directory,sessionId:file.slice(0,-5),graceful:false,timeoutMs:1000});
+      }
     }
+    // Windows locks executable files until the process has actually exited.
+    // Check all CLIs we launched, including archived/removed Session records.
+    await poll(async () => [...pids].filter(pid => { try { process.kill(pid, 0); return true; } catch { return false; } }), alive => alive.length === 0, 'owned CLI and host exit');
   } finally {await stop();}
 }

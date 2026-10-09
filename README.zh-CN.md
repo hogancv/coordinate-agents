@@ -152,7 +152,7 @@ GitHub 源码/Plugin 与 **npm 2.4.0** 通过 `adapter-sdk.mjs` 提供带版本�
 
 面向第三方作者的[外部 Adapter 作者指南](./docs/adapter-author-guide.md)说明了公共导入、Contract v1 方法、离线 fixture、显式 trusted-local 注册和包内容校验。完整的[最小外部 Adapter 示例](./examples/minimal-external-adapter/README.md)位于内置 registry 之外，不需要访问 Provider。
 
-仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)只在包版本变化时自动运行精简跨平台矩阵；标签和显式手动触发仍可用于发布与维护校验。门禁会让内置与外部 descriptor 通过同一套 kit，并覆盖 Linux 上的 Node.js 18 以及 Windows、macOS、Linux 上的 Node.js 22；Task、Bus、Event Journal、Inspector、MCP、审查和发布权责保持不变。
+仓库的 [Adapter SDK 验收门禁](./docs/adapter-conformance.md#repository-acceptance-gate)在独立 Legacy Plugin CI 中运行：Plugin、旧 CLI 或共享 Adapter/Session 源码变化时自动触发，也支持显式手动触发。仅修改 Web npm 包版本不会运行旧插件矩阵。兼容矩阵覆盖 Linux Node.js 18/22，以及 macOS/Windows Node.js 22。Web CI 与真实 tarball 隔离安装验收分别负责 Web 回归和 npm 分发验证，详见 [CI 覆盖与成本说明](./docs/releases/v3-ci.md)。
 
 Setup discovery 以及现有 MCP setup/Task 工具会暴露同一个、向后兼容的
 `adapters` registry snapshot，其中包含已注册外部适配器的身份和 Contract

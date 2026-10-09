@@ -181,11 +181,11 @@ Adapter example](./examples/minimal-external-adapter/README.md) remains outside
 the built-in registry and requires no provider access.
 
 The repository [Adapter SDK acceptance gate](./docs/adapter-conformance.md#repository-acceptance-gate)
-automatically runs a focused cross-platform matrix only when the package version changes. Tag and
-explicit manual runs remain available for release and maintenance verification. The gate
-runs built-in and external descriptors through the same kit and covers Node.js 18 on Linux plus
-Node.js 22 on Windows, macOS, and Linux without changing Task, Bus, Event Journal, Inspector,
-MCP, review, or release ownership.
+runs in independent Legacy Plugin CI when Plugin, Legacy CLI, or shared Adapter/Session
+sources change, or on explicit manual dispatch. A Web npm version bump alone does
+not run this matrix. The gate covers Linux Node.js 18/22 and macOS/Windows Node.js 22.
+Web CI and isolated npm tarball acceptance have separate responsibilities; see
+[CI coverage and costs](./docs/releases/v3-ci.md).
 
 Setup discovery and the existing MCP setup/Task tools expose the same additive
 `adapters` registry snapshot, including registered external identities and
@@ -268,7 +268,10 @@ npm run test:full
 ```
 
 `npm run check` is the fast help/index/core check; `npm run check:full` adds
-the complete local regression suite.
+the complete local regression suite. `npm run check:web` checks Web behavior and
+shared runtimes; `npm run test:package` packs and installs a real tarball in an
+isolated consumer. `npm run test:adapters`, `npm run test:legacy`, and
+`npm run test:plugin` cover source/Plugin compatibility independently.
 
 ## Documentation
 

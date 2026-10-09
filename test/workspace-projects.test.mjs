@@ -5,9 +5,41 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import vm from 'node:vm';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { createProjectStore } from '../inspector/server/workspace-projects.mjs';
 import { startWorkspace } from '../inspector/server/workspace-server.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
+
+test('project identity uses the native path even when JS realpath preserves a short alias', async t => {
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'project-path-')));
+  const folder = join(home, 'repo'); mkdirSync(folder);
+  // Model the Windows realpath split without mocking Git, persistence or archive.
+  // JS realpath can retain a short/case alias while native realpath and Git return
+  // the canonical spelling. The directory itself is real and all I/O stays real.
+  const native = realpathSync.native;
+  const ordinary = realpathSync;
+  const alias = path => path === folder ? `${folder}/.` : ordinary(path);
+  alias.native = native;
+  t.mock.method(fs, 'realpathSync', alias);
+  syncBuiltinESMExports();
+  try {
+    const store = createProjectStore({ home });
+    const first = store.register(folder, true);
+    assert.equal(first.root, folder);
+    assert.equal(store.register(folder).id, first.id);
+    assert.equal(store.list().length, 1);
+    assert.equal(store.get(first.id).root, folder);
+    await store.archive(first.id);
+    assert.deepEqual(store.list(), []);
+    store.register(folder, true);
+    assert.deepEqual(store.list(), []);
+    assert.equal(store.list({ includeArchived: true })[0].available, true);
+  } finally {
+    t.mock.restoreAll(); syncBuiltinESMExports();
+    rmSync(home, { recursive: true, force: true });
+  }
+});
 
 test('concurrent project registration deduplicates and failed initialization can recover', async () => {
   const home = mkdtempSync(join(tmpdir(), 'project-concurrent-'));
@@ -29,6 +61,44 @@ test('concurrent project registration deduplicates and failed initialization can
       child.on('error', reject); child.on('exit', code => code === 0 ? resolve() : reject(new Error(error)));
     })));
     assert.equal(store.list().length, 2);
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('existing project aliases keep their ID and archived state across canonical registration', async () => {
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'project-existing-alias-')));
+  try {
+    const folder = join(home, 'repo'); mkdirSync(folder);
+    const store = createProjectStore({ home });
+    const project = store.register(folder, true);
+    const file = join(home, '.coordinate-agents', 'workspace-projects.json');
+    const registry = JSON.parse(readFileSync(file, 'utf8'));
+    registry.projects[0].root = `${folder}/.`;
+    registry.projects[0].archivedAt = '2026-10-08T00:00:00.000Z';
+    writeFileSync(file, JSON.stringify(registry));
+    assert.equal(store.register(folder).id, project.id);
+    assert.deepEqual(store.list(), []);
+    assert.equal(store.list({ includeArchived: true })[0].available, true);
+    assert.equal(store.register(folder, false, { restoreArchived: true }).id, project.id);
+    assert.equal(store.get(project.id).root, folder);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).projects.length, 1);
+  } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('registries already containing short and long aliases recover one archived project', () => {
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'project-duplicate-alias-')));
+  try {
+    const folder = join(home, 'repo'); mkdirSync(folder);
+    const store = createProjectStore({ home }); const first = store.register(folder, true);
+    const file = join(home, '.coordinate-agents', 'workspace-projects.json');
+    const registry = JSON.parse(readFileSync(file, 'utf8'));
+    registry.projects.push({ ...first, id: 'project-000000000000000000000001', root: `${folder}/.`, archivedAt: '2026-10-08T00:00:00.000Z' });
+    writeFileSync(file, JSON.stringify(registry));
+    assert.deepEqual(store.list(), []);
+    assert.equal(store.list({ includeArchived: true }).length, 1);
+    assert.equal(store.register(folder).id, first.id);
+    assert.equal(JSON.parse(readFileSync(file, 'utf8')).projects.length, 1);
+    assert.equal(store.register(folder, false, { restoreArchived: true }).id, first.id);
+    assert.equal(store.get(first.id).root, folder);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });
 
@@ -82,7 +152,7 @@ test('project registry initializes without commits, deduplicates repository subf
 });
 
 test('multi-project gateway isolates settings, task groups and raw PTY operations', { timeout: 120000 }, async () => {
-  const home = realpathSync(mkdtempSync(join(tmpdir(), 'project-http-')));
+  const home = realpathSync.native(mkdtempSync(join(tmpdir(), 'project-http-')));
   const a = join(home, 'a'); const b = join(home, 'b'); mkdirSync(a); mkdirSync(b);
   let started;
   const groups = [];
@@ -96,7 +166,7 @@ test('multi-project gateway isolates settings, task groups and raw PTY operation
     };
     const list = await (await fetch(`${started.url}/api/projects`, { headers })).json();
     const idA = list.defaultProjectId;
-    assert.equal(list.projects[0].root, realpathSync(a));
+    assert.equal(list.projects[0].root, realpathSync.native(a));
     assert.equal((await fetch(`${started.url}/api/projects`)).status, 403);
     const added = await post(null, 'projectAdd', { path: b, initialize: true });
     assert.equal(added.ok, true); const idB = added.project.id;

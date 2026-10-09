@@ -17,7 +17,7 @@ test('Task Graph acceptance gate uses the focused cross-platform matrix without 
   for (const node of ['18.x', '22.x']) {
     assert.match(workflow, new RegExp(`['"]${node}['"]`));
   }
-  for (const command of ['npm ci', 'npm test', 'npm run demo', 'npm pack --dry-run --ignore-scripts']) {
+  for (const command of ['npm ci', 'npm run test:legacy', 'npm run test:adapters', 'npm run test:plugin', 'npm run demo']) {
     assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.match(workflow, /matrix:\s*\n\s*include:/);
@@ -25,9 +25,9 @@ test('Task Graph acceptance gate uses the focused cross-platform matrix without 
   assert.match(workflow, /fail-fast: false/);
   assert.match(workflow, /cancel-in-progress: true/);
   assert.match(workflow, /branches: \[main\]/);
-  assert.match(workflow, /paths: \[package\.json\]/);
-  assert.match(workflow, /version-change:/);
-  assert.match(workflow, /if: needs\.version-change\.outputs\.run_acceptance == 'true'/);
+  assert.match(workflow, /skills\/coordinate-agents\/\*\*/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /package\.json|package-lock\.json|version-change:/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.doesNotMatch(workflow, /npm publish|gh release create|git push|deploy-pages|pages:\s*write/i);

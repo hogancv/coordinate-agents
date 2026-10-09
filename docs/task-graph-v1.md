@@ -414,16 +414,18 @@ Run the local gate from a clean checkout:
 
 ```sh
 npm ci
-npm test
+npm run test:legacy
+npm run test:adapters
+npm run test:plugin
 npm run demo
-npm pack --dry-run --ignore-scripts
 ```
 
 The authoritative matrix is defined in
 `.github/workflows/adapter-sdk-acceptance.yml`. It runs the focused regression
 suite on Linux with Node.js 18 and 22, plus macOS and Windows with Node.js 22
-when the package version changes; version tags and explicit manual dispatches
-remain available. The complete local suite is explicit via `npm run test:full`
+when Legacy/Plugin or shared Adapter/Session source changes; explicit manual
+dispatches remain available. Web npm version changes and tags alone do not
+trigger this gate. Package acceptance has its own real tarball matrix. The complete local suite is explicit via `npm run test:full`
 and is not repeated in every matrix job. Local results prove only the current
 host. Passing the gate or recording `REVIEW_APPROVED`
 does not authorize merge, push, tag, publish, deploy, or release.

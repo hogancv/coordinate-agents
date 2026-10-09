@@ -34,7 +34,7 @@ const EVENT_TYPE_PATTERN = /^[A-Z][A-Z0-9_]{1,127}$/;
 
 function eventPaths(root, { create = false } = {}) {
   const supplied = resolve(`${root || process.cwd()}`);
-  const repository = existsSync(supplied) ? realpathSync(supplied) : supplied;
+  const repository = existsSync(supplied) ? realpathSync.native(supplied) : supplied;
   const bus = join(repository, '.agent-bus');
   if (!existsSync(bus)) {
     if (!create) return { repository, bus, directory: join(bus, 'events'), journal: join(bus, 'events', 'runtime.jsonl'), lock: join(bus, 'events', '.append.lock') };
@@ -316,7 +316,7 @@ export function readRuntimeEvents(root, options = {}) {
   const normalized = normalizedReadOptions(options);
   const { directory, journal } = eventPaths(root);
   if (!existsSync(journal)) return [];
-  assertSafePath(realpathSync(resolve(root)), directory);
+  assertSafePath(realpathSync.native(resolve(root)), directory);
   const metadata = lstatSync(journal);
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw runtimeError('RUNTIME_EVENT_READ_FAILED', `Unsafe Event Journal: ${journal}`, { recoverable: false });

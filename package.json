@@ -65,8 +65,13 @@
     "mcp:self-test": "node mcp/self-test.mjs",
     "release:check": "npm ci && npm run check && npm pack --dry-run --ignore-scripts",
     "release:verify": "node scripts/verify-release-artifact.mjs",
-    "test:web": "node --test --test-concurrency=1 test/web-distribution.test.mjs test/release-artifact.test.mjs test/workspace.test.mjs test/workspace-projects.test.mjs test/workspace-task-runtime.test.mjs test/workspace-message.test.mjs test/terminal-polling.test.mjs test/role-prompts.test.mjs test/workspace-archive.test.mjs",
-    "test:plugin": "node --test --test-concurrency=1 test/plugin.test.mjs test/plugin-p0.test.mjs test/plugin-e2e.test.mjs test/mcp-server.test.mjs"
+    "test:web": "node --test --test-concurrency=1 test/web-distribution.test.mjs test/workspace.test.mjs test/workspace-projects.test.mjs test/workspace-task-runtime.test.mjs test/workspace-message.test.mjs test/terminal-polling.test.mjs test/workspace-archive.test.mjs test/native-folder-picker.test.mjs test/zen-mode.test.mjs",
+    "test:plugin": "node --test --test-concurrency=1 test/plugin.test.mjs test/plugin-p0.test.mjs test/plugin-e2e.test.mjs test/mcp-server.test.mjs",
+    "test:package": "node --test --test-concurrency=1 test/release-artifact.test.mjs test/tar-capability.test.mjs test/release-workflow.test.mjs",
+    "test:shared": "node --test --test-concurrency=1 test/runtime-contract.test.mjs test/runtime-events.test.mjs test/session-runtime.test.mjs test/user-config.test.mjs test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs",
+    "test:adapters": "node --test --test-concurrency=1 test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/adapter-acceptance-gate.test.mjs test/external-adapter-example.test.mjs test/trusted-local-adapter.test.mjs",
+    "test:legacy": "node --test --test-concurrency=1 test/web-acceptance-gate.test.mjs test/action-gateway.test.mjs test/inspector.test.mjs test/cli-modules.test.mjs test/cli.test.mjs test/agent-bus.test.mjs test/config-command.test.mjs test/intent-map-v1.test.mjs test/task-graph-contract.test.mjs test/task-graph-scheduler.test.mjs test/task-graph-persistence.test.mjs test/task-graph-intent-scheduler.test.mjs test/task-graph-acceptance-gate.test.mjs test/role-prompts.test.mjs",
+    "check:web": "node bin/coordinate-agents.mjs --help && npm run test:web && npm run test:shared"
   },
   "engines": {
     "node": ">=18"

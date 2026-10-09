@@ -14,6 +14,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { assertSafePath, safeInternalStat } from '../skills/coordinate-agents/scripts/config.mjs';
+
+test('canonical containment refuses a symbolic link or junction at its supplied root', () => {
+  const temporary = mkdtempSync(join(tmpdir(), 'runtime-linked-root-'));
+  try {
+    const outside = join(temporary, 'outside'); mkdirSync(outside);
+    const root = join(temporary, '.agent-bus');
+    symlinkSync(outside, root, process.platform === 'win32' ? 'junction' : 'dir');
+    const path = join(root, 'record.json'); writeFileSync(path, '{}');
+    assert.throws(() => assertSafePath(root, path), /symbolic link|junction/);
+    assert.throws(() => assertSafePath(`${root}/.`, path), /symbolic link|junction/);
+    assert.throws(() => assertSafePath(`${root}/.`, `${root}/./record.json`), /symbolic link|junction/);
+    assert.throws(() => safeInternalStat(root, path), /symbolic link|junction/);
+    mkdirSync(join(outside, 'sessions'));
+    const nested = join(root, 'sessions', 'record.json'); writeFileSync(nested, '{}');
+    assert.throws(() => safeInternalStat(join(root, 'sessions'), nested), /symbolic link|junction/);
+    assert.equal(readFileSync(join(outside, 'record.json'), 'utf8'), '{}');
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+});
 import {
   appendRuntimeEvent,
   EVENT_SCHEMA_VERSION,

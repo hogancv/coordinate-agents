@@ -32,35 +32,21 @@ test('Adapter SDK acceptance gate runs built-in and external descriptors through
   }
 });
 
-test('Adapter SDK acceptance matrix is focused and runs the required release-safe checks', () => {
+test('Legacy compatibility runs for Adapter/Session source changes independently of the npm version', () => {
   const workflow = readFileSync(join(root, '.github', 'workflows', 'adapter-sdk-acceptance.yml'), 'utf8');
-  for (const os of ['ubuntu-latest', 'macos-latest', 'windows-latest']) {
-    assert.match(workflow, new RegExp(`\\b${os}\\b`));
-  }
-  for (const node of ['18.x', '22.x']) assert.match(workflow, new RegExp(`['"]${node}['"]`));
-  for (const command of ['npm ci', 'npm test', 'npm run demo', 'npm pack --dry-run']) {
-    assert.match(workflow, new RegExp(command.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')));
-  }
-  assert.match(workflow, /npm pack --dry-run --ignore-scripts/);
+  assert.match(workflow, /name: Legacy Plugin CI/);
+  for (const os of ['ubuntu-latest', 'macos-latest', 'windows-latest']) assert.ok(workflow.includes(os));
+  for (const node of ['18.x', '22.x']) assert.ok(workflow.includes(node));
+  for (const command of ['npm ci', 'npm run test:adapters', 'npm run test:legacy', 'npm run test:plugin', 'npm run demo', 'npm run check:llms']) assert.ok(workflow.includes(command), command);
+  assert.match(workflow, /skills\/coordinate-agents\/\*\*/);
+  assert.match(workflow, /!skills\/coordinate-agents\/scripts\/workspace-\*\.mjs/);
+  assert.match(workflow, /adapter-sdk\.mjs/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /branches: \[main\]/);
   assert.match(workflow, /cache: npm/);
   assert.match(workflow, /cancel-in-progress: true/);
-  assert.match(workflow, /package-payload:/);
-  assert.match(workflow, /branches: \[main\]/);
-  assert.match(workflow, /tags: \['v\*'\]/);
-  assert.match(workflow, /paths: \[package\.json\]/);
-  assert.match(workflow, /version-change:/);
-  assert.match(workflow, /Compare package versions/);
-  assert.match(workflow, /current_version.*package\.json.*version/);
-  assert.match(workflow, /previous_package.*git show/);
-  assert.match(workflow, /previous_version.*previous_package/);
-  assert.match(workflow, /if: needs\.version-change\.outputs\.run_acceptance == 'true'/);
-  assert.match(workflow, /github\.ref_type != 'tag'/);
-  assert.match(workflow, /EVENT_NAME.*workflow_dispatch/);
-  assert.match(workflow, /matrix:\s*\n\s*include:/);
-  assert.doesNotMatch(workflow, /release-artifact:/);
-  assert.doesNotMatch(workflow, /npm run release:verify/);
-  assert.doesNotMatch(workflow, /--expected-source-commit/);
-  assert.doesNotMatch(workflow, /--expected-tag/);
+  assert.doesNotMatch(workflow, /package\.json|version-change|current_version|previous_version/);
+  assert.doesNotMatch(workflow, /npm pack|release-artifact:|npm run release:verify/);
   assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
   assert.match(workflow, /actions\/setup-node@[0-9a-f]{40}/);
   assert.doesNotMatch(workflow, /npm publish|npm install -g|curl\s+.*\|\s*(sh|bash)/i);
