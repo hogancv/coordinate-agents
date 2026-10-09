@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -11,6 +12,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { pathToFileURL } from 'node:url';
+import { createServer } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { afterEach, beforeEach } from 'node:test';
@@ -391,5 +396,57 @@ test('a delayed detached host receives its initialization before parent IPC disc
   } finally {
     if (sessionId) await closeSession(root, sessionId);
     await removeTree(root); rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('stdio Session terminal state waits for close and retains output after the CLI exits', { timeout: 10_000 }, async () => {
+  const directory = realpathSync.native(mkdtempSync(join(tmpdir(), 'session-close-streams-')));
+  // Loading the exact runtime in an independent directory exercises its real
+  // missing-native-dependency fallback, including the actual child pipes.
+  const module = join(directory, 'pty-runtime.mjs');
+  copyFileSync(new URL('../skills/coordinate-agents/scripts/pty-runtime.mjs', import.meta.url), module);
+  const fixture = join(directory, 'exit-before-pipes.cjs');
+  writeFileSync(fixture, `require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => process.stdout.write("final buffered output"), 250)'], { stdio: ['ignore', 1, 2], windowsHide: true });process.exit(9);`);
+  const { PtyRuntime } = await import(pathToFileURL(module).href);
+  const runtime = new PtyRuntime({ id: 'session_closepipes01', command: process.execPath, args: [fixture], cwd: directory });
+  let streamsClosed;
+  try {
+    runtime.open(); assert.equal(runtime.backend, 'stdio-fallback');
+    streamsClosed = once(runtime.child, 'close');
+    await once(runtime.child, 'exit');
+    assert.throws(() => runtime.write('input after exit'), /not writable/);
+    assert.equal(runtime.status().pid, null);
+    const terminal = await runtime.exitPromise;
+    assert.equal(terminal.state, 'failed'); assert.equal(terminal.exitCode, 9);
+    assert.match(runtime.read().output, /final buffered output/);
+  } finally {
+    if (streamsClosed) await streamsClosed;
+    await runtime.close({ graceful: false, timeoutMs: 1000 });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('a Session draining final output without a live CLI cannot be selected for reuse', async () => {
+  const root = repository('session-draining-');
+  const id = 'session_draining001';
+  const endpoint = process.platform === 'win32' ? `\\\\.\\pipe\\ca-drain-${randomUUID()}` : join(tmpdir(), `ca-drain-${randomUUID().slice(0, 12)}.sock`);
+  const server = createServer(socket => {
+    socket.once('data', data => {
+      const command = JSON.parse(String(data).trim());
+      socket.end(JSON.stringify({ id: command.id, ok: true, result: { pid: null, state: 'running', lastActivityAt: new Date().toISOString(), exitCode: 9, signal: null } })+'\n');
+    });
+  });
+  const file = join(root, '.agent-bus', 'sessions', id+'.json');
+  mkdirSync(join(root, '.agent-bus', 'sessions'));
+  try {
+    await new Promise((done, reject) => { server.once('error', reject); server.listen(endpoint, done); });
+    writeFileSync(file, JSON.stringify({ schemaVersion: 1, id, agent: 'antigravity', command: process.execPath, resolvedCommand: process.execPath, args: [], cwd: root, pid: null, state: 'running', createdAt: new Date().toISOString(), lastActivityAt: new Date().toISOString(), exitCode: 9, signal: null, error: null, endpoint, hostPid: process.pid }));
+    const manager = new ExecutionSessionManager();
+    assert.equal(await manager.findReusable(root, 'antigravity', process.execPath), null);
+    assert.equal(await manager.findPreferred(root, id, 'antigravity', process.execPath), null);
+    assert.equal(readRecord(root, id).state, 'running');
+  } finally {
+    await new Promise(done => server.close(done));
+    rmSync(file, { force: true }); await removeTree(root);
   }
 });

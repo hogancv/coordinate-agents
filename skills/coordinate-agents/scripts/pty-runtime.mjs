@@ -297,8 +297,13 @@ export class PtyRuntime {
         };
         if (this.pty) this.pty.onExit(event => finish(event?.exitCode, event?.signal));
         else {
-          this.child.once('error', error => finish(null, null, error));
-          this.child.once('exit', (code, signal) => finish(code, signal));
+          let processError = null;
+          this.child.once('error', error => { processError = error; });
+          this.child.once('exit', () => { this.pid = null; });
+          // exit precedes pipe closure. Keep the host alive until close so
+          // final output and Windows-owned handles are released before a
+          // terminal state becomes eligible for transcript/root cleanup.
+          this.child.once('close', (code, signal) => finish(code, signal, processError));
         }
       });
       // Attach lifecycle and output listeners immediately after spawn. A
@@ -321,7 +326,7 @@ export class PtyRuntime {
   }
 
   write(input, { submit = true } = {}) {
-    if ((!this.pty && !this.child) || !this.isActive()) throw new Error(`PTY session ${this.id} is not writable in state ${this.state}.`);
+    if ((!this.pty && !this.child) || !this.isActive() || !this.pid) throw new Error(`PTY session ${this.id} is not writable in state ${this.state}.`);
     const value = `${input ?? ''}`;
     if (!value) return this.snapshot();
     const suffix = submit && !/[\r\n]$/.test(value) ? (this.pty ? '\r' : '\n') : '';
@@ -353,7 +358,7 @@ export class PtyRuntime {
   }
 
   resize(cols, rows) {
-    if ((!this.pty && !this.child) || !this.isActive()) throw new Error(`PTY session ${this.id} is not resizable in state ${this.state}.`);
+    if ((!this.pty && !this.child) || !this.isActive() || !this.pid) throw new Error(`PTY session ${this.id} is not resizable in state ${this.state}.`);
     this.cols = boundedInteger(cols, this.cols, { min: 1, max: 1000 });
     this.rows = boundedInteger(rows, this.rows, { min: 1, max: 1000 });
     if (this.pty) this.pty.resize(this.cols, this.rows);

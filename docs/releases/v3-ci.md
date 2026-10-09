@@ -54,7 +54,14 @@ receive bounded file-removal retries (10 × 100 ms) for delayed handle release.
 Environment overrides are restored between tests. The injected post-launch
 assertion regression proves the original error survives cleanup and both owned
 processes have exited. No arbitrary PID or caller-provided process is killed.
-The diagnosed issue required no PTY redesign or production timeout relaxation.
+A later hosted repeat exposed the crash-exit variant: the stdio runtime
+published terminal state on `exit`, before pipes closed. The stdio backend now
+settles on `close`, while the earlier exit fact clears its PID and rejects
+writes/resizing/reuse during output drain. A real subprocess regression exits
+the CLI before its inherited stdout is closed, checks rejection of input and
+retention of final output. Another host-protocol regression rejects reuse of a
+running/draining record with no live CLI. Native PTY behavior and production
+timeout bounds are unchanged.
 
 Inspector used `listRecords(root)` with a lexical root. The manager found the
 Session directory through a native canonical path but passed the original root
@@ -118,6 +125,13 @@ creates a different tarball in each matrix environment. Release acceptance uses
 the artifact supplied by `release.yml`, skipping the independent producer.
 Failed producers or consumers cannot satisfy the publication dependency.
 
+The first full hosted matrix also exposed GNU tar under Git Bash rejecting
+native Windows absolute `-C` directories. Hash verification had already passed;
+all four Windows consumers failed during extraction. Extraction now runs with
+its process cwd set to the isolated directory, preserving entry-path and symlink
+validation while avoiding the incompatible `-C` argument. A real archive
+regression models this argument incompatibility and verifies extracted contents.
+
 Consumers verify the sidecar hash with Node crypto, then install production
 dependencies into independent consumer/home directories and run the installed
 Web acceptance. The publish job rechecks the downloaded hash before publishing
@@ -170,18 +184,26 @@ intentionally retains its cost.
 ## Verification and handoff
 
 Local verification uses macOS arm64 with Node 24.17.0. Core **190/190**, Web
-**57/57**, shared runtime **70/70**, Legacy **114/114**, Adapter **33/33**, real
-package acceptance **6/6**, and affected Session/Inspector **19/19** passed.
+**57/57**, shared runtime **72 tests** including the two added drain regressions, Legacy
+**114/114**, Adapter **33/33**, real package acceptance **7/7**, and final affected
+Session/Inspector **21/21** passed.
 Actionlint 1.7.12, whitespace checks and the sixteen trigger/matrix scenarios
 passed. Independent read-only review found no critical or important issues.
 
 Hosted verification is required before declaring the Windows repair complete:
 Windows Node 22/24 Session and Inspector tests, the normal three Web jobs, four
 Legacy jobs for these shared changes, and the manual twelve-consumer exact
-artifact matrix. Full local regressions and hosted results are recorded in the
-final task handoff. macOS results alone are not Windows/Linux evidence. Native
+artifact matrix. The final full local suite passed **399/399**. Hosted reruns of the final
+revision are recorded in the final task handoff. macOS results alone are not Windows/Linux evidence. Native
 OS chooser UI and real paid provider authentication remain outside mock tests;
 no paid Agent was launched or real user configuration modified.
+
+Initial branch evidence at `800999a`: [Windows Node 22/24 source regressions](https://github.com/hogancv/coordinate-agents/actions/runs/37876987253)
+and [Legacy four-platform jobs](https://github.com/hogancv/coordinate-agents/actions/runs/37876984391)
+passed, while [automatic Web](https://github.com/hogancv/coordinate-agents/actions/runs/37876984420)
+exposed the crash cleanup variant and [full package](https://github.com/hogancv/coordinate-agents/actions/runs/37876990562)
+exposed the GNU tar argument failure. Those failures prompted the close/tar fixes;
+final hosted reruns are required rather than treating earlier green jobs as proof.
 
 Code review passes. Merge readiness remains conditional on the actual hosted
 checks. Feature-branch pushes and non-publishing CI are used for verification;
