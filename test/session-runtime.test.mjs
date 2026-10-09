@@ -406,7 +406,12 @@ test('stdio Session terminal state waits for close and retains output after the 
   const module = join(directory, 'pty-runtime.mjs');
   copyFileSync(new URL('../skills/coordinate-agents/scripts/pty-runtime.mjs', import.meta.url), module);
   const fixture = join(directory, 'exit-before-pipes.cjs');
-  writeFileSync(fixture, `require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => process.stdout.write("final buffered output"), 250)'], { stdio: ['ignore', 1, 2], windowsHide: true });process.exit(9);`);
+  const tailWriter = join(directory, 'tail-writer.cjs');
+  writeFileSync(tailWriter, `setTimeout(() => process.stdout.write('final buffered output', () => process.exit(0)), 250);process.send('ready');process.disconnect();`);
+  // On Windows, numeric fd inheritance plus immediate parent exit can fail
+  // before the descendant is spawned. Pass the actual streams and wait for an
+  // IPC readiness fact so every platform exercises the intended drain window.
+  writeFileSync(fixture, `const child=require('node:child_process').fork(${JSON.stringify(tailWriter)}, [], {stdio:['ignore',process.stdout,process.stderr,'ipc'],windowsHide:true});child.once('error',error=>{console.error(error);process.exit(21);});child.once('message',()=>process.exit(9));`);
   const { PtyRuntime } = await import(pathToFileURL(module).href);
   const runtime = new PtyRuntime({ id: 'session_closepipes01', command: process.execPath, args: [fixture], cwd: directory });
   let streamsClosed;
