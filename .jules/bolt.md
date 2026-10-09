@@ -48,3 +48,7 @@
 ## 2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation
 **Learning:** `validateTaskGraphV1` converted `configuredAgents` to array via spread operator, `.map()`, and `.filter(Boolean)`, sorted normalized subtasks twice, allocated `Set` instances for empty or 1-item dependency arrays, and `cyclePath` re-copied and re-sorted already-sorted `dependsOn` arrays and `dependencies.keys()`.
 **Action:** Populate Sets via `for...of` loops without intermediate array allocations, sort collections once, skip Set lookups for length <= 1, and reuse already-sorted subtask array properties in graph graph processing.
+
+## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents
+**Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
+**Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.
