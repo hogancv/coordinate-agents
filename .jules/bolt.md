@@ -48,3 +48,7 @@
 ## 2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation
 **Learning:** `validateTaskGraphV1` converted `configuredAgents` to array via spread operator, `.map()`, and `.filter(Boolean)`, sorted normalized subtasks twice, allocated `Set` instances for empty or 1-item dependency arrays, and `cyclePath` re-copied and re-sorted already-sorted `dependsOn` arrays and `dependencies.keys()`.
 **Action:** Populate Sets via `for...of` loops without intermediate array allocations, sort collections once, skip Set lookups for length <= 1, and reuse already-sorted subtask array properties in graph graph processing.
+
+## 2026-09-20 - Pre-indexed session task map and pre-read session records in workspace archive cleanup
+**Learning:** `runtimeWorkspaceArchivesClear` repeatedly invoked `ownedTaskSessionFiles` per archived task record, causing $O(A \times S)$ disk reads and JSON parses for session files, and evaluated cross-task session references using `records.some(other => ...includes(file.id))` ($O(A \times S \times R)$ array/Set allocations).
+**Action:** Pre-read session records once and pre-build a `sessionTaskMap` (`Map<sessionId, Set<taskId>>`) before looping over archived task records. Pass pre-read session records to child functions to avoid redundant file I/O.
