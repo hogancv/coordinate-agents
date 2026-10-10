@@ -21,9 +21,13 @@ test('release workflow keeps explicit confirmation, exact-tag verification, and 
   assert.match(workflow, /artifact_name: verified-npm-tarball/);
   const acceptance = readFileSync(join(process.cwd(), '.github', 'workflows', 'web-package-acceptance.yml'), 'utf8');
   assert.match(acceptance, /workflow_call:/);
-  assert.match(acceptance, /name: \$\{\{ inputs\.artifact_name \}\}/);
+  assert.match(acceptance, /name: \$\{\{ inputs\.artifact_name \|\| 'acceptance-npm-tarball' \}\}/);
   assert.match(acceptance, /ref: \$\{\{ inputs\.release_tag \|\| github\.sha \}\}/);
-  assert.match(acceptance, /"node":\["18.x","20.x","22.x","24.x"\]/);
+  assert.match(acceptance, /node: \['18.x', '20.x', '22.x', '24.x'\]/);
+  assert.match(acceptance, /needs: package/);
+  assert.match(acceptance, /needs\.package\.result == 'success'/);
+  assert.match(acceptance, /SHA-256 mismatch/);
+  assert.match(workflow, /SHA-256 mismatch/);
   assert.match(acceptance, /npm run release:verify/);
   assert.doesNotMatch(acceptance, /npm publish|id-token:\s*write/);
 });

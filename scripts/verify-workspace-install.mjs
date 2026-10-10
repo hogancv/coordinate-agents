@@ -29,12 +29,17 @@ process.stdin.on('data', data => { fs.appendFileSync(${JSON.stringify(join(tempo
 process.on('SIGINT', () => process.exit(0));
 `);
 // A real executable with a space in its filename, without a shell command wrapper.
-// Hardlinks keep the full Node install available (notably on Windows).
-const { linkSync } = await import('node:fs');
+// Windows must get an independent file image: the verifier itself still runs
+// the original Node executable and can lock a hardlinked mock even after every
+// mock CLI exits. Unix can use a hardlink without that image-deletion lock.
+const { linkSync, copyFileSync } = await import('node:fs');
 const executable = join(temporary, process.platform === 'win32' ? 'mock node.exe' : 'mock node');
-try { linkSync(process.execPath, executable); } catch (error) {
+try {
+  if (process.platform === 'win32') copyFileSync(process.execPath, executable);
+  else linkSync(process.execPath, executable);
+} catch (error) {
   if (!['EXDEV', 'EPERM', 'EACCES'].includes(error.code)) throw error;
-  const { copyFileSync } = await import('node:fs'); copyFileSync(process.execPath, executable);
+  copyFileSync(process.execPath, executable);
 }
 writeFileSync(join(home, '.coordinate-agents/config.json'), JSON.stringify({ version: 1, adapters: [], agents: Object.fromEntries(['codex', 'antigravity'].map(agent => [agent, { command: executable, args: [fixture, agent, 'argument with spaces'] }])) }));
 const requireInstalled = createRequire(join(packageRoot, 'package.json'));

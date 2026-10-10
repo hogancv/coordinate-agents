@@ -296,12 +296,13 @@ function readRecord(root, id) {
 }
 
 function listRecords(root) {
-  const sessions = sessionStorePath(root);
+  const repository = sessionRoot(root);
+  const sessions = sessionStorePath(repository);
   const result = [];
   for (const name of readdirSync(sessions)) {
     if (!name.endsWith('.json')) continue;
     const path = join(sessions, name);
-    try { result.push(parseRecord(root, path)); } catch {
+    try { result.push(parseRecord(repository, path)); } catch {
       // A corrupt session record is not allowed to become a launch command or
       // an implicit recovery action. It is omitted from reuse candidates.
     }
@@ -478,7 +479,7 @@ export class ExecutionSessionManager {
       && (!command || item.command === command)
       && (!resolvedCommand || item.resolvedCommand === resolvedCommand))) {
       const current = await syncHostRecord(repository, record);
-      if (ACTIVE_STATES.has(current.state)) return current;
+      if (ACTIVE_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) return current;
     }
     return null;
   }
@@ -490,7 +491,7 @@ export class ExecutionSessionManager {
     if (record.agent !== agent || (command && record.command !== command)
       || (resolvedCommand && record.resolvedCommand !== resolvedCommand)) return null;
     const current = await syncHostRecord(repository, record);
-    return ACTIVE_STATES.has(current.state) ? current : null;
+    return ACTIVE_STATES.has(current.state) && ownedProcessIsAlive(current.pid) ? current : null;
   }
 
   async open(options = {}) {
@@ -742,7 +743,7 @@ export class ExecutionSessionManager {
     if (input.length > 256 * 1024) throw runtimeError('SESSION_WRITE_FAILED', 'Session input exceeds the size limit.', { recoverable: false, sessionId: id, root: repository });
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not writable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
+    if (!ACTIVE_STATES.has(current.state) || !ownedProcessIsAlive(current.pid)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not writable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
     const runtime = await requestHost(current, { op: 'write', input, submit });
     const updated = mergeRuntimeRecord(current, runtime);
     writeRecord(repository, updated);
@@ -757,7 +758,7 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not resizable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
+    if (!ACTIVE_STATES.has(current.state) || !ownedProcessIsAlive(current.pid)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not resizable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
     const runtime = await requestHost(current, { op: 'resize', cols, rows });
     const updated = mergeRuntimeRecord(current, runtime);
     writeRecord(repository, updated);
