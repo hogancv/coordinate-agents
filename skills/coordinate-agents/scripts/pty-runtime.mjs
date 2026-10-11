@@ -41,6 +41,9 @@ function nativePtyAvailable(mode = 'auto') {
 // Diagnostics deliberately contain fixed reasons, never native error messages,
 // command lines, environment values or terminal contents.
 function failure(stage, code) { return { stage, code }; }
+const SAFE_SYSTEM_CODES = new Set(['EIO', 'EAGAIN', 'EPIPE', 'EBADF', 'EINVAL', 'ENOSYS', 'ENOENT', 'EPERM', 'EACCES', 'ECONNRESET',
+  'ERR_IPC_DISCONNECTED', 'ERR_IPC_CHANNEL_CLOSED', 'ERR_STREAM_DESTROYED', 'ERR_INVALID_ARG_TYPE', 'ERR_INVALID_ARG_VALUE']);
+export function safePtySystemCode(value) { return SAFE_SYSTEM_CODES.has(value) ? value : 'UNKNOWN_SYSTEM_ERROR'; }
 
 function nativeSpawnFailure(error) {
   const message = `${error?.message || ''}`;
@@ -357,9 +360,10 @@ export class PtyRuntime {
             if (['EIO', 'EAGAIN'].includes(error?.code) || `${error?.code}`.includes('errno 5')) return;
             nativeError = new Error('Native PTY stream failed.');
             this.diagnostics.failure = failure('runtime', 'NATIVE_STREAM_ERROR');
-            this.diagnostics.failure.systemCode = /^[A-Z_0-9]+$/.test(error?.code || '') ? error.code : 'UNKNOWN_STREAM_ERROR';
+            this.diagnostics.failure.systemCode = safePtySystemCode(error?.code);
             // Keep exit as the resource-release boundary, including drain.
-            try { this.pty.kill(); } catch { /* Host timeout handles failed cleanup. */ }
+            if (process.platform === 'win32') void terminateOwnedProcessTree(this.pid);
+            else { try { this.pty.kill(); } catch { /* Host timeout handles failed cleanup. */ } }
           });
           this.pty.onExit(event => finish(event?.exitCode, event?.signal, nativeError));
         }
@@ -467,8 +471,11 @@ export class PtyRuntime {
       // root first can make taskkill /T unable to discover its descendants.
       if (this.pty) await terminateOwnedProcessTree(ownedPid);
       try {
-        if (this.pty) this.pty.kill();
-        else this.child.kill();
+        // Windows taskkill already targets the live owned tree. node-pty 1.1
+        // kill() after actual exit starts a delayed console-list helper which
+        // may signal a recycled PID. Host exit releases ConPTY workers/handles.
+        if (this.pty && process.platform !== 'win32') this.pty.kill();
+        else if (this.child) this.child.kill();
       } catch { /* The owned process may already be gone. */ }
       // node-pty can own a console process tree rather than the executable
       // directly. The pipe backend owns the direct ChildProcess and must not

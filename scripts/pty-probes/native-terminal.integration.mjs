@@ -154,3 +154,29 @@ test('unready detached host fails within the startup deadline and is reaped', as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('uncaught Session Host errors are durable, sanitized and release the owned CLI', async () => {
+  const oldMode = process.env.COORDINATE_AGENTS_PTY_MODE;
+  process.env.COORDINATE_AGENTS_PTY_MODE = 'native';
+  const { root, options, report } = environment();
+  const manager = new ExecutionSessionManager({ hostPath: fileURLToPath(new URL('./crashing-session-host.mjs', import.meta.url)) });
+  let session, owned;
+  try {
+    session = (await manager.open(options)).session; owned = readRecord(root, session.id);
+    assert.equal(session.backend, 'node-pty');
+    await until(async () => (await manager.status(root, session.id)).state === 'failed', 'uncaught Host error');
+    const status = await manager.status(root, session.id);
+    assert.equal(status.diagnostics.failure.code, 'HOST_UNCAUGHT_ERROR');
+    assert.equal(status.diagnostics.nativeStatus, 'failed');
+    assert.equal(status.diagnostics.failure.systemCode, 'UNKNOWN_SYSTEM_ERROR');
+    assert.equal(JSON.stringify(status).includes('private-secret-value'), false);
+    assert.equal(JSON.stringify(status).includes('PRIVATE_SECRET_VALUE'), false);
+    const cliPid = owned.pid || report().pid;
+    assert.ok(Number.isInteger(cliPid));
+    await until(() => !alive(owned.hostPid) && !alive(cliPid), 'uncaught Host release');
+  } finally {
+    if (session) await manager.close(root, session.id, { graceful: false, timeoutMs: 1000 });
+    if (oldMode === undefined) delete process.env.COORDINATE_AGENTS_PTY_MODE; else process.env.COORDINATE_AGENTS_PTY_MODE = oldMode;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

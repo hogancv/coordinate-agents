@@ -10,7 +10,7 @@ const launch = process.argv.includes('--attached') ? 'attached' : 'detached';
 const directory = mkdtempSync(join(tmpdir(), 'coordinate-native-probe-'));
 const stages = [];
 let ownedPid, timedOut = false;
-const worker = fork(fileURLToPath(new URL('./pty-probes/native-pty-probe.mjs', import.meta.url)), [join(directory, 'report.json'), ...(process.argv.includes('--dispose') ? ['--dispose'] : [])], {
+const worker = fork(fileURLToPath(new URL('./pty-probes/native-pty-probe.mjs', import.meta.url)), [join(directory, 'report.json')], {
   cwd: directory, detached: launch === 'detached', execArgv: [],
   stdio: launch === 'detached' ? ['ignore', 'ignore', 'ignore', 'ipc'] : ['ignore', 'pipe', 'pipe', 'ipc'],
   windowsHide: true,

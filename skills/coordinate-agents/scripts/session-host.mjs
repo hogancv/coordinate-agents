@@ -4,7 +4,7 @@ import { chmodSync, existsSync, lstatSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { atomicWrite, assertContained, assertSafePath } from './config.mjs';
-import { PtyRuntime } from './pty-runtime.mjs';
+import { PtyRuntime, safePtySystemCode } from './pty-runtime.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024;
@@ -252,9 +252,10 @@ process.on('SIGINT', async () => {
 process.on('uncaughtExceptionMonitor', error => {
   if (!runtime || !session) return;
   try {
+    if (runtime.backend === 'node-pty') runtime.diagnostics.nativeStatus = 'failed';
     runtime.diagnostics.failure = {
       stage: 'host', code: 'HOST_UNCAUGHT_ERROR',
-      systemCode: /^[A-Z_0-9]+$/.test(error?.code || '') ? error.code : 'UNKNOWN_HOST_ERROR',
+      systemCode: safePtySystemCode(error?.code),
     };
     runtime._setState('failed', new Error('Session Host encountered an uncaught error.'));
     persistMetadata();

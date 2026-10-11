@@ -427,7 +427,7 @@ async function syncHostRecord(root, record) {
       state: 'failed',
       lastActivityAt: now(),
       error: `Session host unavailable: ${error.message || error}`,
-      diagnostics: { ...record.diagnostics, failure: { stage: 'host', code: 'HOST_UNAVAILABLE' } },
+      diagnostics: { ...record.diagnostics, ...(record.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), failure: { stage: 'host', code: 'HOST_UNAVAILABLE' } },
     };
     // An unavailable endpoint can belong to a stalled but still live host.
     // Reap that exact owned host before making the session ineligible for close.
@@ -628,8 +628,9 @@ export class ExecutionSessionManager {
       host.stderr?.on('data', data => {
         // Only retain fixed error identifiers; never persist raw stderr,
         // native stacks, terminal text, command lines or environment values.
-        const code = data.match(/\b(?:ERR_[A-Z_0-9]+|EACCES|EPERM|EINVAL|ENOENT|EIO)\b/)?.[0];
-        if (code) hostFailureHint = code;
+        const code = data.match(/\b(?:ERR_[A-Z_0-9]+|EACCES|EPERM|EINVAL|ENOENT|EIO|ENOSYS)\b/)?.[0];
+        if (['ERR_IPC_DISCONNECTED', 'ERR_IPC_CHANNEL_CLOSED', 'ERR_INVALID_ARG_TYPE', 'ERR_INVALID_ARG_VALUE', 'ERR_STREAM_DESTROYED',
+          'ERR_MODULE_NOT_FOUND', 'EACCES', 'EPERM', 'EINVAL', 'ENOENT', 'EIO', 'ENOSYS'].includes(code)) hostFailureHint = code;
         else if (/Assertion.*failed|FATAL ERROR|Napi::Error::Fatal/i.test(data)) hostFailureHint = 'NATIVE_FATAL';
       });
       host.stderr?.unref?.();
@@ -664,13 +665,13 @@ export class ExecutionSessionManager {
       // init while the child is still importing node-pty or a loader. Keep the
       // channel until the owned host disconnects, on every Node/platform.
       host.unref();
-      host.once('exit', (code, signal) => {
+      host.once('close', (code, signal) => {
         try {
           const latest = readRecord(repository, id);
           if (!ACTIVE_STATES.has(latest.state)) return;
           writeRecord(repository, { ...latest, pid: null, state: 'failed', lastActivityAt: now(),
             error: 'Owned Session Host exited unexpectedly.',
-            diagnostics: { ...latest.diagnostics, hostExitCode: code, hostSignal: signal, hostFailureHint,
+            diagnostics: { ...latest.diagnostics, ...(latest.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), hostExitCode: code, hostSignal: signal, hostFailureHint,
               failure: { stage: 'host', code: 'HOST_EXIT_UNEXPECTED' } },
           });
         } catch { /* The session root may already have been removed. */ }

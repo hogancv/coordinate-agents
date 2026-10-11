@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fork, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
 import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { PtyRuntime } from '../skills/coordinate-agents/scripts/pty-runtime.mjs';
 
 const options = { id: 'backend-test', command: process.execPath, cwd: process.cwd() };
@@ -62,24 +64,30 @@ test('bounded terminal tails preserve UTF-8 and report lost bytes', async () => 
   assert.ok(Buffer.byteLength(result.output) <= 100);
   assert.equal(result.truncated, true);
 });
-test('native stream failure is recorded without crashing the Runtime observer', { timeout: 12000 }, async () => {
-  const runtime = new PtyRuntime({ ...options, backendMode: 'native', args: ['-e', "console.log('READY');setInterval(()=>{},1000)"] });
+test('native stream failure is recorded at the owned Host boundary without secret error identifiers', { timeout: 15000 }, async () => {
   if (Number(process.versions.node.split('.')[0]) < 20) {
-    assert.throws(() => runtime.open(), /Native PTY unavailable/);
-    assert.equal(runtime.child, null); return;
+    const runtime = new PtyRuntime({ ...options, backendMode: 'native' });
+    assert.throws(() => runtime.open(), /Native PTY unavailable/); assert.equal(runtime.child, null); return;
   }
-  try {
-    runtime.open();
-    const deadline = Date.now() + 5000;
-    while (!runtime.read().output.includes('READY') && Date.now() < deadline) await new Promise(done => setTimeout(done, 25));
-    assert.match(runtime.read().output, /READY/);
-    runtime.pty.emit('error', Object.assign(new Error('private-secret-value'), { code: 'EPIPE' }));
-    let timer;
+  for (const code of ['EPIPE', 'PRIVATE_SECRET_VALUE']) {
+    const host = fork(fileURLToPath(new URL('../scripts/pty-probes/runtime-error-host.mjs', import.meta.url)), [code], {
+      execArgv: [], stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true,
+    });
+    let result, ownedPid;
+    host.on('message', message => { if (message.type === 'started') ownedPid = message.pid; if (message.type === 'result') result = message.snapshot; });
+    const timer = setTimeout(() => {
+      if (process.platform === 'win32') spawnSync('taskkill.exe', ['/PID', String(host.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      else { if (ownedPid) { try { process.kill(ownedPid, 'SIGKILL'); } catch {} } host.kill('SIGKILL'); }
+    }, 7000);
     try {
-      await Promise.race([runtime.exitPromise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Native exit timeout')), 3000); })]);
-    } finally { clearTimeout(timer); }
-    assert.equal(runtime.status().state, 'failed');
-    assert.equal(runtime.status().diagnostics.failure.code, 'NATIVE_STREAM_ERROR');
-    assert.equal(JSON.stringify(runtime.status()).includes('private-secret-value'), false);
-  } finally { await runtime.close({ graceful: false, timeoutMs: 1000 }); }
+      const [exitCode] = await once(host, 'exit');
+      assert.equal(exitCode, 0); assert.ok(result);
+      assert.equal(result.backend, 'node-pty'); assert.equal(result.state, 'failed');
+      assert.equal(result.diagnostics.failure.code, 'NATIVE_STREAM_ERROR');
+      assert.equal(result.diagnostics.failure.systemCode, code === 'EPIPE' ? 'EPIPE' : 'UNKNOWN_SYSTEM_ERROR');
+      assert.equal(JSON.stringify(result).includes('private-secret-value'), false);
+      assert.equal(JSON.stringify(result).includes('PRIVATE_SECRET_VALUE'), false);
+      assert.throws(() => process.kill(ownedPid, 0), { code: 'ESRCH' });
+    } finally { clearTimeout(timer); if (host.exitCode === null) host.kill('SIGKILL'); }
+  }
 });
