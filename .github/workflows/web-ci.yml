@@ -39,6 +39,10 @@ on:
         description: Verify the Session and Inspector fixes on Windows Node 22/24
         type: boolean
         default: false
+      native_pty_regression:
+        description: Offline native PTY acceptance and Node 18/20 compatibility (manual only)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -46,6 +50,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   web:
+    if: inputs.native_pty_regression != true
     name: ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -65,3 +70,32 @@ jobs:
       - name: Windows Inspector regression
         if: inputs.windows_regression == true
         run: node --test test/inspector.test.mjs
+  native-pty:
+    if: github.event_name == 'workflow_dispatch' && inputs.native_pty_regression == true
+    name: PTY / ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, node: '22.x', native: true }
+          - { os: windows-latest, node: '24.x', native: true }
+          - { os: ubuntu-latest, node: '24.x', native: true }
+          - { os: macos-latest, node: '22.x', native: true }
+          - { os: windows-latest, node: '18.x', native: false }
+          - { os: windows-latest, node: '20.x', native: true }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run test:pty
+      - name: Strict native binding, TTY and owned Session acceptance
+        if: matrix.native == true
+        run: npm run test:pty:native
+      - name: Existing platform policy and Session regressions
+        run: node --test --test-concurrency=1 test/session-runtime.test.mjs test/terminal-polling.test.mjs test/terminal-resize.test.mjs

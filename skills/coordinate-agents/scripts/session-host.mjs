@@ -53,6 +53,10 @@ function metadataFromRuntime() {
     args: safeArgs(session.args),
     cwd: session.cwd,
     pid: snapshot.pid ?? null,
+    backend: snapshot.backend || null,
+    diagnostics: snapshot.diagnostics || null,
+    cols: snapshot.cols ?? null,
+    rows: snapshot.rows ?? null,
     state: snapshot.state || 'starting',
     createdAt: snapshot.createdAt || session.createdAt,
     lastActivityAt: snapshot.lastActivityAt || session.createdAt,
@@ -153,7 +157,7 @@ function handleSocket(socket) {
       try {
         const result = await handleCommand(command);
         respond(socket, command.id ?? null, result);
-        if (command.op === 'close') {
+        if (command.op === 'close' && !runtime.isActive()) {
           // Keep the named-pipe/socket open until the close response has been
           // flushed. Windows clients can otherwise observe a detached host
           // before receiving the successful response.
@@ -257,6 +261,8 @@ try {
         args: safeArgs(session.args),
         cwd: session.cwd,
         pid: null,
+        backend: runtime?.backend || null,
+        diagnostics: runtime?.snapshot?.().diagnostics || null,
         state: 'failed',
         createdAt: session.createdAt,
         lastActivityAt: new Date().toISOString(),

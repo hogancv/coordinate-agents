@@ -1,0 +1,82 @@
+{
+  "date": "2026-10-11",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "24.17.0",
+  "secondaryNode": "22.23.3",
+  "baseline": "0b924f8",
+  "checks": {
+    "nativeMacos24": [
+      "\u2139 tests 5",
+      "\u2139 pass 5",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 22120.978833"
+    ],
+    "nativeMacos22": [
+      "# tests 5",
+      "# pass 5",
+      "# fail 0",
+      "# skipped 0",
+      "# duration_ms 22106.409083"
+    ],
+    "web": [
+      "\u2139 tests 57",
+      "\u2139 pass 57",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 124915.131417",
+      "\u2139 tests 79",
+      "\u2139 pass 79",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 34969.513833"
+    ],
+    "package": [
+      "\u2139 tests 7",
+      "\u2139 pass 7",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 35005.061083"
+    ],
+    "legacy": [
+      "\u2139 tests 114",
+      "\u2139 pass 114",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 24294.947667"
+    ],
+    "adapters": [
+      "\u2139 tests 33",
+      "\u2139 pass 33",
+      "\u2139 fail 0",
+      "\u2139 skipped 0",
+      "\u2139 duration_ms 10125.389791"
+    ]
+  },
+  "browser": {
+    "backend": "node-pty",
+    "realTTY": true,
+    "ansiAlternateScreen": true,
+    "utf8Chinese": true,
+    "keyboardBackspaceArrows": true,
+    "interrupt": true,
+    "pasteBytes": 53248,
+    "pasteSha256Verified": true,
+    "sizes": [
+      [
+        61,
+        32
+      ],
+      [
+        76,
+        47
+      ]
+    ],
+    "xtermApiChildDimensionsEqual": true,
+    "refreshSameSessionIds": true
+  },
+  "remote": {
+    "status": "pending-authorized-run"
+  }
+}
