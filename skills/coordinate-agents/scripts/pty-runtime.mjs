@@ -354,9 +354,10 @@ export class PtyRuntime {
         if (this.pty) {
           let nativeError = null;
           this.pty.on('error', error => {
-            if (['EIO', 'EAGAIN'].includes(error?.code)) return;
+            if (['EIO', 'EAGAIN'].includes(error?.code) || `${error?.code}`.includes('errno 5')) return;
             nativeError = new Error('Native PTY stream failed.');
             this.diagnostics.failure = failure('runtime', 'NATIVE_STREAM_ERROR');
+            this.diagnostics.failure.systemCode = /^[A-Z_0-9]+$/.test(error?.code || '') ? error.code : 'UNKNOWN_STREAM_ERROR';
             // Keep exit as the resource-release boundary, including drain.
             try { this.pty.kill(); } catch { /* Host timeout handles failed cleanup. */ }
           });

@@ -247,6 +247,20 @@ process.on('SIGINT', async () => {
   shutdown();
 });
 
+// Observe an uncaught JS failure without suppressing Node's default crash.
+// Native aborts cannot be caught here; the Manager records owned fork exit.
+process.on('uncaughtExceptionMonitor', error => {
+  if (!runtime || !session) return;
+  try {
+    runtime.diagnostics.failure = {
+      stage: 'host', code: 'HOST_UNCAUGHT_ERROR',
+      systemCode: /^[A-Z_0-9]+$/.test(error?.code || '') ? error.code : 'UNKNOWN_HOST_ERROR',
+    };
+    runtime._setState('failed', new Error('Session Host encountered an uncaught error.'));
+    persistMetadata();
+  } catch { /* Keep Node's original crash behavior. */ }
+});
+
 try {
   await main();
 } catch (error) {

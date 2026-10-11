@@ -36,7 +36,13 @@ try {
   let output = '', exit;
   pty.onData(data => { output += data; });
   pty.onExit(event => { exit = event; });
-  pty.on('error', () => { progress('runtime'); process.exitCode = 1; });
+  pty.on('error', error => {
+    // POSIX PTY read ends normally with EIO when the slave closes. node-pty's
+    // own handler explicitly ignores it; it is not a failed child exit.
+    if (['EIO', 'EAGAIN'].includes(error?.code) || `${error?.code}`.includes('errno 5')) return;
+    progress('runtime', { errorCode: /^[A-Z_0-9]+$/.test(error?.code || '') ? error.code : 'UNKNOWN_STREAM_ERROR' });
+    process.exitCode = 1;
+  });
   await until(() => report().tty?.every(Boolean), 'TTY_NOT_READY');
   assert.deepEqual(report().tty, [true, true, true]);
   assert.equal(report().cols, 91); assert.equal(report().rows, 27);
@@ -59,6 +65,7 @@ try {
   assert.equal(exit.exitCode, 0);
   assert.ok(output.includes('FINAL_OUTPUT'), 'final output drained');
   progress('complete', { tty: true, input: true, ansi: true, utf8: true, resize: true, exit: true });
+  if (process.argv.includes('--dispose')) pty.kill();
   process.disconnect?.();
   // Natural worker exit is required: no process.exit masking native handle leaks.
 } catch {

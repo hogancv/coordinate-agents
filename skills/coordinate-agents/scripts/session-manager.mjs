@@ -613,13 +613,26 @@ export class ExecutionSessionManager {
     appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId, subtaskId });
     let host;
     try {
+      let hostFailureHint = null;
+      // Custom diagnostic hosts only. Production hosts keep independent,
+      // ignored stdio so a Web/CLI parent exit cannot close their stderr pipe.
+      const captureHostDiagnostics = this.hostPath !== HOST_PATH && process.env.COORDINATE_AGENTS_PTY_MODE === 'native';
       host = fork(this.hostPath, [], {
         cwd: repository,
         detached: true,
         execArgv: [],
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        stdio: ['ignore', 'ignore', captureHostDiagnostics ? 'pipe' : 'ignore', 'ipc'],
         windowsHide: true,
       });
+      host.stderr?.setEncoding('utf8');
+      host.stderr?.on('data', data => {
+        // Only retain fixed error identifiers; never persist raw stderr,
+        // native stacks, terminal text, command lines or environment values.
+        const code = data.match(/\b(?:ERR_[A-Z_0-9]+|EACCES|EPERM|EINVAL|ENOENT|EIO)\b/)?.[0];
+        if (code) hostFailureHint = code;
+        else if (/Assertion.*failed|FATAL ERROR|Napi::Error::Fatal/i.test(data)) hostFailureHint = 'NATIVE_FATAL';
+      });
+      host.stderr?.unref?.();
       record.hostPid = host.pid || null;
       writeRecord(repository, record);
       await new Promise((resolvePromise, reject) => {
@@ -657,7 +670,7 @@ export class ExecutionSessionManager {
           if (!ACTIVE_STATES.has(latest.state)) return;
           writeRecord(repository, { ...latest, pid: null, state: 'failed', lastActivityAt: now(),
             error: 'Owned Session Host exited unexpectedly.',
-            diagnostics: { ...latest.diagnostics, hostExitCode: code, hostSignal: signal,
+            diagnostics: { ...latest.diagnostics, hostExitCode: code, hostSignal: signal, hostFailureHint,
               failure: { stage: 'host', code: 'HOST_EXIT_UNEXPECTED' } },
           });
         } catch { /* The session root may already have been removed. */ }

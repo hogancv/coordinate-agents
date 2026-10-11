@@ -10,7 +10,7 @@ const launch = process.argv.includes('--attached') ? 'attached' : 'detached';
 const directory = mkdtempSync(join(tmpdir(), 'coordinate-native-probe-'));
 const stages = [];
 let ownedPid, timedOut = false;
-const worker = fork(fileURLToPath(new URL('./pty-probes/native-pty-probe.mjs', import.meta.url)), [join(directory, 'report.json')], {
+const worker = fork(fileURLToPath(new URL('./pty-probes/native-pty-probe.mjs', import.meta.url)), [join(directory, 'report.json'), ...(process.argv.includes('--dispose') ? ['--dispose'] : [])], {
   cwd: directory, detached: launch === 'detached', execArgv: [],
   stdio: launch === 'detached' ? ['ignore', 'ignore', 'ignore', 'ipc'] : ['ignore', 'pipe', 'pipe', 'ipc'],
   windowsHide: true,
@@ -33,10 +33,11 @@ clearTimeout(timer);
 let childAlive = false;
 if (ownedPid) { try { process.kill(ownedPid, 0); childAlive = true; } catch {} }
 const complete = stages.some(item => item.stage === 'complete');
+const probeError = stages.find(item => item.failure || item.errorCode);
 let cleanup = false;
 try { rmSync(directory, { recursive: true, force: true }); cleanup = !existsSync(directory); } catch {}
 const ok = result.code === 0 && complete && !timedOut && !childAlive && cleanup;
 console.log(JSON.stringify({ ok, platform: process.platform, osRelease: release(), arch: process.arch, nodeVersion: process.versions.node,
   launch, backend: 'node-pty', stages, workerExit: result, timedOut, childAlive, cleanup,
-  failureStage: ok ? null : childAlive || !cleanup || (complete && timedOut) ? 'cleanup' : stages.at(-1)?.stage || 'load' }, null, 2));
+  failureStage: ok ? null : childAlive || !cleanup || (complete && timedOut) ? 'cleanup' : probeError?.stage || stages.at(-1)?.stage || 'load' }, null, 2));
 process.exitCode = ok ? 0 : 1;

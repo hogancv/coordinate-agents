@@ -42,7 +42,7 @@ test('raw native binding and TTY probe succeeds in attached and detached launch 
   }
 });
 
-test('native Session Host preserves backend, keyboard, resize, reconnect and final output', async () => {
+test('native Session Host preserves backend, keyboard, resize, reconnect and final output', async t => {
   const oldMode = process.env.COORDINATE_AGENTS_PTY_MODE;
   process.env.COORDINATE_AGENTS_PTY_MODE = 'native';
   const { root, report, options } = environment();
@@ -54,7 +54,9 @@ test('native Session Host preserves backend, keyboard, resize, reconnect and fin
     assert.equal(session.diagnostics.nativeStatus, 'running');
     assert.deepEqual(report().tty, [true, true, true]);
     assert.equal(report().cols, 120); assert.equal(report().rows, 30);
-    let output = (await manager.read(root, session.id)).output;
+    const firstRead = await manager.read(root, session.id);
+    t.diagnostic(JSON.stringify({ state: firstRead.session.state, backend: firstRead.session.backend, diagnostics: firstRead.session.diagnostics, exitCode: firstRead.session.exitCode, signal: firstRead.session.signal, error: firstRead.session.error }));
+    let output = firstRead.output;
     assert.match(output, /终端测试/); assert.match(output, /\x1b\[/); assert.match(output, /PROBE_READY/);
     await manager.write(root, session.id, 'abc\x7fd\x1b[A\x1b[B\x1b[C\x1b[D\r', { submit: false });
     await until(() => report().lines?.some(line => line.text === 'abd'), 'keyboard');
@@ -136,13 +138,14 @@ test('native host death cannot be reused and leaves no owned CLI', async () => {
   }
 });
 
-test('unready detached host fails within the startup deadline and is reaped', async () => {
+test('unready detached host fails within the startup deadline and is reaped', async t => {
   const { root, options } = environment();
   const manager = new ExecutionSessionManager({ hostPath: fileURLToPath(new URL('./unready-session-host.mjs', import.meta.url)) });
   let session;
   try {
     session = (await manager.open(options)).session;
     const owned = readRecord(root, session.id);
+    t.diagnostic(JSON.stringify({ state: session.state, diagnostics: session.diagnostics }));
     assert.equal(session.state, 'failed');
     assert.equal(session.diagnostics.failure.code, 'HOST_START_TIMEOUT');
     assert.equal(alive(owned.hostPid), false);
