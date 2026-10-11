@@ -9,7 +9,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { createConnection } from 'node:net';
-import { tmpdir } from 'node:os';
+import { tmpdir, release } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -603,6 +603,13 @@ export class ExecutionSessionManager {
       exitCode: null,
       signal: null,
       error: null,
+      backend: null,
+      diagnostics: {
+        platform: process.platform, osRelease: release(), arch: process.arch, nodeVersion: process.versions.node,
+        requestedMode: ['auto', 'native', 'stdio'].includes(process.env.COORDINATE_AGENTS_PTY_MODE || 'auto')
+          ? process.env.COORDINATE_AGENTS_PTY_MODE || 'auto' : 'unknown',
+        nativeStatus: 'pending', failure: null,
+      },
       outputTail: '',
       endpoint,
       hostPid: null,
@@ -655,6 +662,7 @@ export class ExecutionSessionManager {
             maxOutputBytes: this.maxOutputBytes,
             createdAt,
             root: repository,
+            diagnostics: record.diagnostics,
             taskId,
             subtaskId,
           },
@@ -681,7 +689,9 @@ export class ExecutionSessionManager {
       // so an IPC/socket startup failure cannot leave an orphaned Implementer.
       try { await requestHost(record, { op: 'close', graceful: false, timeoutMs: 500 }, { timeoutMs: 700 }); } catch { /* The host may not have bound yet. */ }
       try { host?.kill(); } catch { /* Only the host process created above is eligible. */ }
-      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
+      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error),
+        diagnostics: { ...record.diagnostics, failure: { stage: 'host', code: 'HOST_INIT_TRANSPORT_FAILED' } },
+      };
       writeRecord(repository, failed);
       appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId, subtaskId });
       throw runtimeError('SESSION_START_FAILED', `Failed to start execution session ${id}: ${error.message || error}`, { recoverable: true, agent, command: resolved.command, root: repository, sessionId: id, details: { agent, command: resolved.command, root: repository } });

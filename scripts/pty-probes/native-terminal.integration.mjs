@@ -150,6 +150,8 @@ test('unready detached host fails within the startup deadline and is reaped', as
     t.diagnostic(JSON.stringify({ state: session.state, diagnostics: session.diagnostics }));
     assert.equal(session.state, 'failed');
     assert.equal(session.diagnostics.failure.code, 'HOST_START_TIMEOUT');
+    assert.equal(session.diagnostics.platform, process.platform);
+    assert.equal(session.diagnostics.nodeVersion, process.versions.node);
     assert.equal(alive(owned.hostPid), false);
   } finally {
     if (session) await manager.close(root, session.id, { graceful: false, timeoutMs: 1000 });

@@ -277,7 +277,7 @@ try {
         cwd: session.cwd,
         pid: null,
         backend: runtime?.backend || null,
-        diagnostics: runtime?.snapshot?.().diagnostics || null,
+        diagnostics: runtime?.snapshot?.().diagnostics || session.diagnostics || null,
         state: 'failed',
         createdAt: session.createdAt,
         lastActivityAt: new Date().toISOString(),
