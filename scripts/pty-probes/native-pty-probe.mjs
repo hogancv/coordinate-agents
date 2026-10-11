@@ -69,7 +69,9 @@ try {
   // Natural worker exit is required: no process.exit masking native handle leaks.
 } catch {
   process.send?.({ stage, failure: 'NATIVE_PROBE_FAILED' });
-  try { pty?.kill(); } catch { /* Supervisor owns timeout cleanup. */ }
+  // Windows cleanup stays at the owned worker process boundary; public kill
+  // may signal the old CLI PID after natural exit in node-pty 1.1.0.
+  if (process.platform !== 'win32') { try { pty?.kill(); } catch { /* Supervisor owns timeout cleanup. */ } }
   process.exitCode = 1;
   process.disconnect?.();
 }

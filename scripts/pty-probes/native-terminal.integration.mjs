@@ -139,6 +139,8 @@ test('native host death cannot be reused and leaves no owned CLI', async () => {
 });
 
 test('unready detached host fails within the startup deadline and is reaped', async t => {
+  const oldMode = process.env.COORDINATE_AGENTS_PTY_MODE;
+  process.env.COORDINATE_AGENTS_PTY_MODE = 'native';
   const { root, options } = environment();
   const manager = new ExecutionSessionManager({ hostPath: fileURLToPath(new URL('./unready-session-host.mjs', import.meta.url)) });
   let session;
@@ -151,6 +153,7 @@ test('unready detached host fails within the startup deadline and is reaped', as
     assert.equal(alive(owned.hostPid), false);
   } finally {
     if (session) await manager.close(root, session.id, { graceful: false, timeoutMs: 1000 });
+    if (oldMode === undefined) delete process.env.COORDINATE_AGENTS_PTY_MODE; else process.env.COORDINATE_AGENTS_PTY_MODE = oldMode;
     rmSync(root, { recursive: true, force: true });
   }
 });

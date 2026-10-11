@@ -43,6 +43,10 @@ on:
         description: Offline native PTY acceptance and Node 18/20 compatibility (manual only)
         type: boolean
         default: false
+      host_startup_diagnostic:
+        description: Focused Windows Node 20 Host IPC startup diagnostic (not full PTY acceptance)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -50,7 +54,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   web:
-    if: inputs.native_pty_regression != true
+    if: inputs.native_pty_regression != true && inputs.host_startup_diagnostic != true
     name: ${{ matrix.os }} / Node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -100,3 +104,17 @@ jobs:
       - name: Existing platform policy and Session regressions
         if: always()
         run: node --test --test-concurrency=1 test/session-runtime.test.mjs test/terminal-polling.test.mjs test/terminal-resize.test.mjs
+  host-startup-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.host_startup_diagnostic == true
+    name: Host IPC diagnostic / Windows / Node 20
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '20.x'
+          cache: npm
+      - run: npm ci
+      - run: node --test --test-name-pattern=unready scripts/pty-probes/native-terminal.integration.mjs
