@@ -73,6 +73,6 @@
     "skills/coordinate-agents/scripts/session-manager.mjs": "e2485fa831cb053cd8c2f945c02b015bf18d484a891a33ae66f7c397e0196716",
     "test/native-pty.test.mjs": "34b496590965e878a7e66d309363881095fcec91cbb007c81d964e8496638f16",
     "test/support/native-pty-probe.mjs": "d4766e36f2598496166150fcd90edfd71b95f335aef02dea73527b3cf6e862ac",
-    "test/support/native-session-probe.mjs": "a923ee3a8bf71078ec907bd482eff02c76c1b965d2ac9541773993a9ad57d68a"
+    "test/support/native-session-probe.mjs": "afd017520e69daadb566fcf3c55806d39e9c835adda33708a438714517b88f6e"
   }
 }

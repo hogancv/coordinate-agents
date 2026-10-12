@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -22,8 +22,12 @@ async function until(predicate, description, timeoutMs = 5000) {
 const fixture = fileURLToPath(new URL('./native-pty-fixture.mjs', import.meta.url));
 const host = fileURLToPath(new URL('../../skills/coordinate-agents/scripts/session-host.mjs', import.meta.url));
 export async function runSessionChecks(directory, { failedProbe = false, hangProbe = false } = {}) {
-  const root = join(directory, '项目 with spaces');
-  mkdirSync(join(root, '.agent-bus', 'tmp'), { recursive: true });
+  const suppliedRoot = join(directory, '项目 with spaces');
+  mkdirSync(join(suppliedRoot, '.agent-bus', 'tmp'), { recursive: true });
+  // Session Manager canonicalizes roots. Windows CI can expose both the long
+  // runner profile path and an 8.3 alias; direct readRecord calls must use the
+  // same canonical root, without weakening the production containment guard.
+  const root = realpathSync.native(suppliedRoot);
   const records = [], opened = [];
   let manager;
   const facts = agent => join(root, `${agent}.jsonl`);
