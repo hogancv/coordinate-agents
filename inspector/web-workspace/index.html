@@ -22,29 +22,44 @@
           <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Close sidebar">×</button>
         </div>
 
-        <section id="repository" class="repository-card" aria-label="Bound repository">
-          <span class="eyebrow" data-i18n="repo.label">BOUND REPOSITORY</span>
-          <div class="repository-title-row">
-            <strong id="repo-name" data-i18n="repo.loading">Loading repository…</strong>
-            <span id="repo-branch" class="branch-badge">—</span>
+        <section id="repository" class="repository-card sidebar-context" aria-label="Current project">
+          <div class="sidebar-section-heading">
+            <span class="sidebar-section-label" data-i18n="repo.label">CURRENT PROJECT</span>
+            <button id="new-project-button" class="sidebar-light-button" type="button">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>
+              <span data-project-add-label>New project</span>
+            </button>
           </div>
-          <button id="repo-facts-toggle" class="link-button" type="button" aria-expanded="false" data-i18n="repo.details">Show repository details</button>
+          <div class="repository-title-row">
+            <div class="project-switch-control">
+              <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
+              <strong id="repo-name" data-i18n="repo.loading">Loading repository…</strong>
+              <svg class="project-switch-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
+              <select id="project-switcher" aria-label="Switch project" title="Switch project" disabled></select>
+            </div>
+            <span id="repo-branch" class="branch-badge">—</span>
+            <button id="repo-facts-toggle" class="icon-button sidebar-details-button" type="button" aria-expanded="false" aria-controls="repo-facts" aria-label="Show repository details" title="Show repository details"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 9v5m0-8h.01"/></svg></button>
+          </div>
           <div id="repo-facts" class="repo-facts" hidden></div>
         </section>
 
         <div class="sidebar-actions">
-          <button id="new-task-button" class="primary-button new-task-button" type="button" data-i18n="task.new">New task</button>
-          <div class="sidebar-secondary-actions">
-            <button id="new-project-button" class="secondary-button" type="button">＋ New project</button>
-            <button id="terminal-settings-button" class="secondary-button terminal-settings-button" type="button" data-i18n="settings.open">Terminal settings</button>
-          </div>
+          <button id="new-task-button" class="primary-button new-task-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg><span data-i18n="task.new">New task</span></button>
+          <button id="terminal-settings-button" class="sidebar-light-button terminal-settings-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h12M7 3v4m6 1v4m-6 1v4"/></svg><span data-i18n="settings.open">Terminal settings</span></button>
         </div>
 
-        <div class="task-list-heading">
-          <span data-i18n="task.list">Workspace tasks</span>
-          <span id="task-count" class="count-badge">0</span>
-        </div>
-        <div id="project-list" class="project-list"><div id="workspace-task-list" class="workspace-task-list" aria-live="polite"></div></div>
+        <section class="sidebar-task-panel" aria-labelledby="task-list-label">
+          <div class="task-list-heading">
+            <span id="task-list-label" data-i18n="task.list">Workspace tasks</span>
+            <span id="task-count" class="count-badge">0</span>
+          </div>
+          <div class="task-search">
+            <svg class="task-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5"/><path d="m12.5 12.5 4 4"/></svg>
+            <input id="task-search-input" type="search" autocomplete="off" spellcheck="false" aria-label="Search tasks or projects" placeholder="Search tasks or projects">
+            <button id="task-search-clear" class="icon-button" type="button" aria-label="Clear search" title="Clear search" hidden>×</button>
+          </div>
+          <div id="project-list" class="project-list"><div id="workspace-task-list" class="workspace-task-list" aria-live="polite"></div></div>
+        </section>
 
         <div class="sidebar-footer">
           <span class="live-dot" aria-hidden="true"></span>

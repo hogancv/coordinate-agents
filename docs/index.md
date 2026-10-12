@@ -60,7 +60,7 @@ acceptance gates](./plugin-e2e.html) for the exact state and error mapping.
 For a custom CLI, ask the active Codex App thread to inspect the installed executable and its
 `--help` output, register it with `generic-cli`, run `doctor`, and show the resolved configuration
 before starting a task. The legacy Antigravity launch passes configured arguments and appends
-only `--prompt-interactive <prompt>`; a persistent Session starts with `--prompt-interactive ""` for
+only `--prompt-interactive <prompt>`; a persistent Session starts with `--prompt-interactive=` for
 current `agy`/`agy-proxy` parsers, then writes its first instruction through the PTY unless `{prompt}`
 is explicitly configured. The Adapter does not automatically add a full-permission or
 sandbox-bypass flag.
