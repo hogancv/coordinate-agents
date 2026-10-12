@@ -20,6 +20,7 @@ let runtime;
 let server;
 let shuttingDown = false;
 let metadataWriteTimer = null;
+let pendingCloseResponses = 0;
 
 function respond(socket, id, payload, error = null) {
   const message = error
@@ -53,6 +54,7 @@ function metadataFromRuntime() {
     args: safeArgs(session.args),
     cwd: session.cwd,
     pid: snapshot.pid ?? null,
+    backend: snapshot.backend || null,
     state: snapshot.state || 'starting',
     createdAt: snapshot.createdAt || session.createdAt,
     lastActivityAt: snapshot.lastActivityAt || session.createdAt,
@@ -106,6 +108,15 @@ async function handleCommand(command) {
   switch (command.op) {
     case 'status':
       return runtime.status();
+    case 'associate':
+      for (const field of ['taskId', 'subtaskId']) {
+        if (command[field] != null && (typeof command[field] !== 'string' || command[field].length > 128)) {
+          throw safeSessionError('Invalid Session association.', 'SESSION_STATE_CONFLICT');
+        }
+        session[field] ||= command[field] || null;
+      }
+      persistMetadata();
+      return runtime.status();
     case 'read':
       return runtime.read({
         cursor: command.cursor ?? null,
@@ -133,6 +144,10 @@ async function handleCommand(command) {
 function handleSocket(socket) {
   let buffer = '';
   socket.setEncoding('utf8');
+  // A bounded manager/browser request may disconnect before an async command
+  // returns. write() reports EPIPE asynchronously; try/catch in respond() is
+  // insufficient. Losing one RPC client must not crash an owned PTY Host.
+  socket.on('error', () => socket.destroy());
   socket.on('data', async chunk => {
     buffer += chunk;
     if (buffer.length > MAX_MESSAGE_LENGTH) {
@@ -150,6 +165,17 @@ function handleSocket(socket) {
         respond(socket, null, null, safeSessionError('Invalid session host JSON.', 'SESSION_RUNTIME_ERROR'));
         continue;
       }
+      let closeFinished = false;
+      const finishClose = () => {
+        if (command.op !== 'close' || closeFinished) return;
+        closeFinished = true;
+        pendingCloseResponses -= 1;
+        if (pendingCloseResponses === 0 && !runtime.isActive()) shutdown();
+      };
+      if (command.op === 'close') {
+        pendingCloseResponses += 1;
+        socket.once('close', finishClose);
+      }
       try {
         const result = await handleCommand(command);
         respond(socket, command.id ?? null, result);
@@ -157,11 +183,15 @@ function handleSocket(socket) {
           // Keep the named-pipe/socket open until the close response has been
           // flushed. Windows clients can otherwise observe a detached host
           // before receiving the successful response.
-          socket.end(() => shutdown());
-          setTimeout(shutdown, 1_000).unref();
+          socket.end(finishClose);
+          setTimeout(finishClose, 1_000).unref();
         }
       } catch (error) {
         respond(socket, command.id ?? null, null, error);
+        if (command.op === 'close') {
+          try { socket.end(finishClose); } catch { finishClose(); }
+          setTimeout(finishClose, 1_000).unref();
+        }
       }
     }
   });
@@ -179,7 +209,9 @@ async function waitForInit() {
       process.on('message', onMessage);
       setTimeout(() => reject(new Error('Timed out waiting for session host initialization.')), 10_000).unref();
     });
-    try { process.disconnect?.(); } catch { /* Parent is intentionally detached. */ }
+    if (!process.argv.includes('--native-pty-probe')) {
+      try { process.disconnect?.(); } catch { /* Parent is intentionally detached. */ }
+    }
     return;
   }
   throw new Error('Session host requires an initialization channel.');
@@ -187,6 +219,23 @@ async function waitForInit() {
 
 async function main() {
   await waitForInit();
+  if (process.argv.includes('--native-pty-probe')) {
+    // Same detached/native path as a Session; no user CLI, model account,
+    // bus mutation, or retryable task side effect.
+    let output = '';
+    const probe = new PtyRuntime({
+      id: 'native-capability-probe', command: process.execPath,
+      args: ['-e', 'console.log("NATIVE_TTY:" + Boolean(process.stdin.isTTY && process.stdout.isTTY))'],
+      cwd: session.cwd, nativePtyVerified: true,
+      onOutput: data => { output = (output + data).slice(-4096); },
+    });
+    probe.open();
+    process.send?.({ type: 'probe-owned', pid: probe.pid });
+    const result = await probe.exitPromise;
+    const verified = result.backend === 'node-pty' && result.exitCode === 0 && output.includes('NATIVE_TTY:true');
+    process.send?.({ type: 'native-pty-probe', verified, backend: result.backend }, () => process.exit(verified ? 0 : 1));
+    return;
+  }
   assertContained(session.root, session.metadataPath);
   assertSafePath(session.root, session.metadataPath, undefined, false);
   assertSafePath(session.root, session.tmpDirectory);
@@ -203,11 +252,14 @@ async function main() {
     args: session.spawnArgs,
     cwd: session.cwd,
     maxOutputBytes: session.maxOutputBytes,
+    nativePtyVerified: session.nativePtyVerified === true,
     onOutput: () => scheduleMetadata(),
     onStateChange: () => {
       try { persistMetadata(); } catch { /* Keep the PTY alive if metadata is temporarily unavailable. */ }
       if (runtime.state === 'exited' || runtime.state === 'failed') {
-        setTimeout(shutdown, 25).unref();
+        // Native exit may arrive while close() is still awaiting taskkill's
+        // own handles. Do not exit the Host before the close RPC is flushed.
+        setTimeout(() => { if (pendingCloseResponses === 0) shutdown(); }, 25).unref();
       }
     },
   });

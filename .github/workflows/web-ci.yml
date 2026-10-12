@@ -23,6 +23,8 @@ on:
       - 'test/zen-mode.test.mjs'
       - 'test/native-folder-picker.test.mjs'
       - 'test/session-runtime.test.mjs'
+      - 'test/native-pty.test.mjs'
+      - 'test/support/native-*.mjs'
       - 'test/runtime-*.test.mjs'
       - 'test/*adapter*.test.mjs'
       - 'test/user-config.test.mjs'
@@ -65,3 +67,6 @@ jobs:
       - name: Windows Inspector regression
         if: inputs.windows_regression == true
         run: node --test test/inspector.test.mjs
+      - name: Windows native ConPTY regression (no fallback substitution)
+        if: runner.os == 'Windows'
+        run: npm run test:native-pty
