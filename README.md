@@ -20,11 +20,13 @@ to the task's Antigravity through `workspace-message`. Codex reviews the reply
 and reports to you. Multiple projects, raw terminal I/O, resize, close/restart,
 refresh and reconnection to independent Session Hosts remain available.
 
-Native PTY availability follows the existing platform policy: Node 18 and
-Windows Node >=22 use the owned stdio fallback; supported native combinations
-use node-pty. A fallback preserves Session I/O/lifecycle but may not support an
-agent's full interactive TUI. Node 18 support is retained; upgrading Node is
-appropriate when your installed CLI requires native terminal behavior.
+Node 18 retains the owned stdio fallback. On Windows Node >=20, this source
+checkout verifies native PTY startup and real TTY behavior in a disposable,
+detached Session Host before selecting node-pty. A failed or timed-out probe
+selects stdio fallback only after owned-process cleanup is confirmed; an actual
+Session failure never automatically retries an Agent task. Session diagnostics
+include `backend`. Fallback preserves bounded I/O/lifecycle, but is not a real
+terminal and cannot provide native TUI or child-observed resize.
 
 The **GitHub Plugin / Legacy CLI / MCP / Task Graph source remains complete**, including its local-first coordination protocol and runtime.
 Install the GitHub Plugin for structured collaboration; its version is managed

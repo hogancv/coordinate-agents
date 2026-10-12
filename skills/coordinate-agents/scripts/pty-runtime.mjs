@@ -22,17 +22,17 @@ if (currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR) {
 
 const require = createRequire(import.meta.url);
 
-function nativePtyAvailable() {
+function nativePtyAvailable(nativePtyVerified = false) {
   // node-pty 1.x can load on Node 18 while its native backend remains
   // unreliable there across the supported operating systems. A native
   // failure can terminate the detached Session Host before it can publish a
   // useful error, so select the owned stdio backend up front on Node 18.
-  // Windows Node 22 has the same detached-host failure mode in ConPTY; use
-  // the owned pipe backend until that native combination is stable.
+  // Windows availability is established in a disposable detached Host, not
+  // by import success alone. A native abort is not catchable in JS.
   return Boolean(nodePty?.spawn)
     && Number.isInteger(currentNodeMajor)
     && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR
-    && !(process.platform === 'win32' && currentNodeMajor >= 22);
+    && (process.platform !== 'win32' || nativePtyVerified === true);
 }
 
 function terminateOwnedProcessTree(pid) {
@@ -161,6 +161,7 @@ export class PtyRuntime {
     rows = 30,
     maxOutputBytes = 64 * 1024,
     idleAfterMs = 350,
+    nativePtyVerified = false,
     onOutput = null,
     onStateChange = null,
   } = {}) {
@@ -178,7 +179,8 @@ export class PtyRuntime {
     this.output = new OutputBuffer(maxOutputBytes);
     this.pty = null;
     this.child = null;
-    this.backend = nativePtyAvailable() ? 'node-pty' : 'stdio-fallback';
+    this.nativePtyVerified = nativePtyVerified;
+    this.backend = nativePtyAvailable(nativePtyVerified) ? 'node-pty' : 'stdio-fallback';
     this.pid = null;
     this.state = 'starting';
     this.createdAt = timestamp();
@@ -252,7 +254,7 @@ export class PtyRuntime {
         // preserving any useful terminal type supplied by the caller.
         TERM: !this.env.TERM || this.env.TERM === 'dumb' ? 'xterm-256color' : this.env.TERM,
       };
-      if (nativePtyAvailable()) {
+      if (nativePtyAvailable(this.nativePtyVerified)) {
         try {
           this.pty = nodePty.spawn(this.command, this.args, {
             name: 'xterm-256color',
@@ -327,7 +329,11 @@ export class PtyRuntime {
 
   write(input, { submit = true } = {}) {
     if ((!this.pty && !this.child) || !this.isActive() || !this.pid) throw new Error(`PTY session ${this.id} is not writable in state ${this.state}.`);
-    const value = `${input ?? ''}`;
+    // Logical submitted text uses Enter on the Windows console. LF alone is
+    // not Enter in cooked ConPTY input. Raw xterm key/paste bytes stay exact.
+    const value = this.pty && process.platform === 'win32' && submit
+      ? `${input ?? ''}`.replace(/\r?\n/g, '\r')
+      : `${input ?? ''}`;
     if (!value) return this.snapshot();
     const suffix = submit && !/[\r\n]$/.test(value) ? (this.pty ? '\r' : '\n') : '';
     const payload = `${value}${suffix}`;
@@ -394,14 +400,21 @@ export class PtyRuntime {
     if (timer) clearTimeout(timer);
     if (this.isActive()) {
       const ownedPid = this.pid;
-      try {
-        if (this.pty) this.pty.kill();
-        else this.child.kill();
-      } catch { /* The owned process may already be gone. */ }
+      if (this.pty && process.platform === 'win32') {
+        // Avoid node-pty 1.1.0's extra AttachConsole helper during kill(): it
+        // was observed failing while the shell exited. Kill only our CLI tree
+        // first; onExit drains output before the Session Host exits.
+        await terminateOwnedProcessTree(ownedPid);
+      } else {
+        try {
+          if (this.pty) this.pty.kill();
+          else this.child.kill();
+        } catch { /* The owned process may already be gone. */ }
+      }
       // node-pty can own a console process tree rather than the executable
       // directly. The pipe backend owns the direct ChildProcess and must not
       // block close on a second Windows taskkill invocation.
-      if (this.pty) await terminateOwnedProcessTree(ownedPid);
+      if (this.pty && process.platform !== 'win32') await terminateOwnedProcessTree(ownedPid);
       await Promise.race([
         this.exitPromise,
         new Promise(resolve => setTimeout(resolve, Math.min(2_000, waitMs))),

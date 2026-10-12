@@ -279,13 +279,15 @@ test('Workspace Gateway exposes pair lifecycle, raw PTY input, resize, and hides
 
     const resized = await post('sessionResize', { sessionId: codexSessionId, cols: 100, rows: 32 });
     assert.equal(resized.payload.ok, true, JSON.stringify(resized.payload.error || {}));
-    const raw = await post('sessionWrite', { sessionId: codexSessionId, input: '\u001b[99~Z\u0003', submit: false });
+    // ConPTY translates valid keyboard sequences and discards unknown CSI
+    // codes; use the real Up key rather than an undefined CSI 99~ sequence.
+    const raw = await post('sessionWrite', { sessionId: codexSessionId, input: '\u001b[AZ\u0003', submit: false });
     assert.equal(raw.payload.ok, true, JSON.stringify(raw.payload.error || {}));
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (existsSync(codex.log) && readFileSync(codex.log, 'utf8').includes('1b5b39397e5a03')) break;
+      if (existsSync(codex.log) && readFileSync(codex.log, 'utf8').includes('1b5b415a03')) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    assert.match(readFileSync(codex.log, 'utf8'), /1b5b39397e5a03/);
+    assert.match(readFileSync(codex.log, 'utf8'), /1b5b415a03/);
 
     const closed = await post('workspaceTaskClose', { workspaceTaskId });
     assert.equal(closed.payload.ok, true, JSON.stringify(closed.payload.error || {}));

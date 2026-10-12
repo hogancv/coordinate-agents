@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-12",
+  "os": "Windows 10 10.0.19045 x64",
+  "packageVersion": "3.0.0",
+  "nodePtyVersion": "1.1.0",
+  "baseline": "0b924f8",
+  "branch": "dev/windows-native-conpty",
+  "probes": [
+    {
+      "node": "v22.23.0",
+      "abi": "127",
+      "backend": "node-pty",
+      "exitCode": 0,
+      "timedOut": false,
+      "leaked": false,
+      "directoryRemoved": true,
+      "checks": {
+        "module": true,
+        "binding": true,
+        "tty": true,
+        "conpty": true,
+        "input": true,
+        "logicalSubmit": true,
+        "ansi": true,
+        "resize": true,
+        "ctrlC": true,
+        "boundedOutput": true,
+        "finalOutput": true,
+        "cleanup": true
+      },
+      "tty": {
+        "stdinTTY": true,
+        "stdoutTTY": true,
+        "cols": 100,
+        "rows": 30
+      },
+      "ok": true
+    },
+    {
+      "node": "v24.19.0",
+      "abi": "137",
+      "backend": "node-pty",
+      "exitCode": 0,
+      "timedOut": false,
+      "leaked": false,
+      "directoryRemoved": true,
+      "checks": {
+        "module": true,
+        "binding": true,
+        "tty": true,
+        "conpty": true,
+        "input": true,
+        "logicalSubmit": true,
+        "ansi": true,
+        "resize": true,
+        "ctrlC": true,
+        "boundedOutput": true,
+        "finalOutput": true,
+        "cleanup": true
+      },
+      "tty": {
+        "stdinTTY": true,
+        "stdoutTTY": true,
+        "cols": 100,
+        "rows": 30
+      },
+      "ok": true
+    }
+  ],
+  "sha256": {
+    "skills/coordinate-agents/scripts/pty-runtime.mjs": "b1c3c1ab408a0760bb8c146b8c35d92d35b274fbeda4e20eedd0d800bca93c26",
+    "skills/coordinate-agents/scripts/session-host.mjs": "09d11a565aad8f8afea77f3dc836a51448a97b83e07af7e412ad121f6df9584e",
+    "skills/coordinate-agents/scripts/session-manager.mjs": "e2485fa831cb053cd8c2f945c02b015bf18d484a891a33ae66f7c397e0196716",
+    "test/native-pty.test.mjs": "34b496590965e878a7e66d309363881095fcec91cbb007c81d964e8496638f16",
+    "test/support/native-pty-probe.mjs": "d4766e36f2598496166150fcd90edfd71b95f335aef02dea73527b3cf6e862ac",
+    "test/support/native-session-probe.mjs": "a923ee3a8bf71078ec907bd482eff02c76c1b965d2ac9541773993a9ad57d68a"
+  }
+}
