@@ -9,7 +9,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { createConnection } from 'node:net';
-import { tmpdir } from 'node:os';
+import { tmpdir, release } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -87,6 +87,16 @@ async function terminateOwnedHost(pid) {
     try { process.kill(pid, 'SIGTERM'); } catch { /* The exact owned host may have exited. */ }
   }
   return waitForOwnedHostExit(pid, 500);
+}
+
+async function reapOwnedHost(pid, timeoutMs = 1000) {
+  await terminateOwnedHost(pid);
+  if (await waitForOwnedHostExit(pid, timeoutMs)) return true;
+  // A blocked native initializer or stuck JS handler may never handle SIGTERM.
+  if (process.platform !== 'win32') {
+    try { process.kill(pid, 'SIGKILL'); } catch { /* Already exited. */ }
+  }
+  return waitForOwnedHostExit(pid, timeoutMs);
 }
 
 function safeArgs(args) {
@@ -191,6 +201,9 @@ function publicRecord(record) {
     cwd: record.cwd,
     pid: Number.isInteger(record.pid) ? record.pid : null,
     backend: record.backend || null,
+    diagnostics: record.diagnostics || null,
+    cols: record.cols ?? null,
+    rows: record.rows ?? null,
     state: record.state,
     createdAt: record.createdAt,
     lastActivityAt: record.lastActivityAt,
@@ -215,6 +228,9 @@ function writeRecord(root, record) {
     cwd: record.cwd,
     pid: Number.isInteger(record.pid) ? record.pid : null,
     backend: record.backend || null,
+    diagnostics: record.diagnostics || null,
+    cols: record.cols ?? null,
+    rows: record.rows ?? null,
     state: record.state,
     createdAt: record.createdAt,
     lastActivityAt: record.lastActivityAt,
@@ -317,6 +333,9 @@ function mergeRuntimeRecord(record, runtime) {
     ...record,
     pid: Number.isInteger(runtime?.pid) ? runtime.pid : null,
     backend: runtime?.backend || record.backend || null,
+    diagnostics: runtime?.diagnostics || record.diagnostics || null,
+    cols: runtime?.cols ?? record.cols ?? null,
+    rows: runtime?.rows ?? record.rows ?? null,
     state: EXECUTION_SESSION_STATES.includes(runtime?.state) ? runtime.state : record.state,
     lastActivityAt: runtime?.lastActivityAt || record.lastActivityAt,
     exitCode: runtime?.exitCode ?? record.exitCode ?? null,
@@ -409,7 +428,11 @@ async function syncHostRecord(root, record) {
       state: 'failed',
       lastActivityAt: now(),
       error: `Session host unavailable: ${error.message || error}`,
+      diagnostics: { ...record.diagnostics, ...(record.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), failure: { stage: 'host', code: 'HOST_UNAVAILABLE' } },
     };
+    // Persisted PIDs can outlive their Host and be reused. Polling has no
+    // current process ownership proof, so it must never signal that PID.
+    // Startup cleanup still reaps the Host forked by this open() call.
     writeRecord(root, failed);
     appendSessionEvent(root, failed, 'SESSION_FAILED');
     return failed;
@@ -630,6 +653,13 @@ export class ExecutionSessionManager {
       exitCode: null,
       signal: null,
       error: null,
+      backend: null,
+      diagnostics: {
+        platform: process.platform, osRelease: release(), arch: process.arch, nodeVersion: process.versions.node,
+        requestedMode: ['auto', 'native', 'stdio'].includes(process.env.COORDINATE_AGENTS_PTY_MODE || 'auto')
+          ? process.env.COORDINATE_AGENTS_PTY_MODE || 'auto' : 'unknown',
+        nativeStatus: 'pending', failure: null,
+      },
       outputTail: '',
       endpoint,
       hostPid: null,
@@ -640,14 +670,29 @@ export class ExecutionSessionManager {
     appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId, subtaskId });
     let host;
     try {
-      const nativePtyVerified = await this._verifyWindowsNative(repository);
+      const nativePtyVerified = (process.env.COORDINATE_AGENTS_PTY_MODE || 'auto') === 'auto'
+        && await this._verifyWindowsNative(repository);
+      let hostFailureHint = null;
+      // Custom diagnostic hosts only. Production hosts keep independent,
+      // ignored stdio so a Web/CLI parent exit cannot close their stderr pipe.
+      const captureHostDiagnostics = this.hostPath !== HOST_PATH && process.env.COORDINATE_AGENTS_PTY_MODE === 'native';
       host = fork(this.hostPath, [], {
         cwd: repository,
         detached: true,
         execArgv: [],
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        stdio: ['ignore', 'ignore', captureHostDiagnostics ? 'pipe' : 'ignore', 'ipc'],
         windowsHide: true,
       });
+      host.stderr?.setEncoding('utf8');
+      host.stderr?.on('data', data => {
+        // Only retain fixed error identifiers; never persist raw stderr,
+        // native stacks, terminal text, command lines or environment values.
+        const code = data.match(/\b(?:ERR_[A-Z_0-9]+|EACCES|EPERM|EINVAL|ENOENT|EIO|ENOSYS)\b/)?.[0];
+        if (['ERR_IPC_DISCONNECTED', 'ERR_IPC_CHANNEL_CLOSED', 'ERR_INVALID_ARG_TYPE', 'ERR_INVALID_ARG_VALUE', 'ERR_STREAM_DESTROYED',
+          'ERR_MODULE_NOT_FOUND', 'EACCES', 'EPERM', 'EINVAL', 'ENOENT', 'EIO', 'ENOSYS'].includes(code)) hostFailureHint = code;
+        else if (/Assertion.*failed|FATAL ERROR|Napi::Error::Fatal/i.test(data)) hostFailureHint = 'NATIVE_FATAL';
+      });
+      host.stderr?.unref?.();
       record.hostPid = host.pid || null;
       writeRecord(repository, record);
       await new Promise((resolvePromise, reject) => {
@@ -670,6 +715,7 @@ export class ExecutionSessionManager {
             nativePtyVerified,
             createdAt,
             root: repository,
+            diagnostics: record.diagnostics,
             taskId,
             subtaskId,
           },
@@ -680,12 +726,25 @@ export class ExecutionSessionManager {
       // init while the child is still importing node-pty or a loader. Keep the
       // channel until the owned host disconnects, on every Node/platform.
       host.unref();
+      host.once('close', (code, signal) => {
+        try {
+          const latest = readRecord(repository, id);
+          if (!ACTIVE_STATES.has(latest.state)) return;
+          writeRecord(repository, { ...latest, pid: null, state: 'failed', lastActivityAt: now(),
+            error: 'Owned Session Host exited unexpectedly.',
+            diagnostics: { ...latest.diagnostics, ...(latest.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), hostExitCode: code, hostSignal: signal, hostFailureHint,
+              failure: { stage: 'host', code: 'HOST_EXIT_UNEXPECTED' } },
+          });
+        } catch { /* The session root may already have been removed. */ }
+      });
     } catch (error) {
       // The host is the only owner of the child process. Ask it to close first
       // so an IPC/socket startup failure cannot leave an orphaned Implementer.
       try { await requestHost(record, { op: 'close', graceful: false, timeoutMs: 500 }, { timeoutMs: 700 }); } catch { /* The host may not have bound yet. */ }
       try { host?.kill(); } catch { /* Only the host process created above is eligible. */ }
-      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
+      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error),
+        diagnostics: { ...record.diagnostics, failure: { stage: 'host', code: 'HOST_INIT_TRANSPORT_FAILED' } },
+      };
       writeRecord(repository, failed);
       appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId, subtaskId });
       throw runtimeError('SESSION_START_FAILED', `Failed to start execution session ${id}: ${error.message || error}`, { recoverable: true, agent, command: resolved.command, root: repository, sessionId: id, details: { agent, command: resolved.command, root: repository } });
@@ -700,6 +759,7 @@ export class ExecutionSessionManager {
     let healthySince = null;
     let healthyProbeCount = 0;
     let current = record;
+    let startupHealthy = false;
     while (Date.now() < deadline) {
       try {
         const runtime = await requestHost(current, { op: 'status' }, { timeoutMs: 500 });
@@ -733,14 +793,22 @@ export class ExecutionSessionManager {
         // A scheduler stall can cross the wall-clock window between only two
         // probes. Require several successful host round trips as well so an
         // already-exited child can publish its terminal fact before STARTED.
-        if (healthyProbeCount >= minimumHealthyProbes && Date.now() - healthySince >= healthyStabilityMs) break;
+        if (healthyProbeCount >= minimumHealthyProbes && Date.now() - healthySince >= healthyStabilityMs) { startupHealthy = true; break; }
       } else {
         healthySince = null;
         healthyProbeCount = 0;
       }
       await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
-    if (HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
+    if (!startupHealthy && ACTIVE_STATES.has(current.state)) {
+      try { await requestHost(current, { op: 'close', graceful: false, timeoutMs: 500 }, { timeoutMs: 1500 }); } catch { /* Host may be blocked in native initialization. */ }
+      const hostExited = await reapOwnedHost(record.hostPid, 1000);
+      current = { ...current, pid: null, state: 'failed', lastActivityAt: now(), error: 'Session host startup timed out.',
+        diagnostics: { ...current.diagnostics, failure: { stage: hostExited ? 'host' : 'cleanup', code: hostExited ? 'HOST_START_TIMEOUT' : 'HOST_CLEANUP_TIMEOUT' } },
+      };
+      writeRecord(repository, current);
+    }
+    if (startupHealthy && HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
       appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId, subtaskId });
     } else if (!ACTIVE_STATES.has(current.state) && current.state !== 'starting') {
       ensureSessionStateEvent(repository, current, { taskId, subtaskId });
@@ -869,8 +937,7 @@ export class ExecutionSessionManager {
         // has been killed, leaving the detached host holding repository files.
         // Only terminate the host PID recorded for this Session; never accept
         // a caller-supplied arbitrary process identifier.
-        await terminateOwnedHost(current.hostPid);
-        hostExited = await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
+        hostExited = await reapOwnedHost(current.hostPid, Math.max(500, timeoutMs + 500));
       }
       const cliExited = await waitForOwnedHostExit(current.pid, 500);
       if (!hostExited || !cliExited) {
@@ -896,8 +963,7 @@ export class ExecutionSessionManager {
     } catch (error) {
       // If the socket disappeared during a close, still clean up the exact
       // host created for this Session before exposing the failure.
-      await terminateOwnedHost(current.hostPid);
-      await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
+      await reapOwnedHost(current.hostPid, Math.max(500, timeoutMs + 500));
       if (ownedProcessIsAlive(current.pid)) await terminateOwnedHost(current.pid);
       let latest = current;
       try { latest = readRecord(repository, id); } catch { /* Preserve the validated original record. */ }

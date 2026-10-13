@@ -2,6 +2,7 @@ import {
   isActiveTerminalSession,
   selectTerminalPanes,
   terminalSessionKey,
+  terminalBackendKey,
   TERMINAL_MAX_BYTES,
   TERMINAL_MAX_LINES,
   TERMINAL_POLL_MS,
@@ -103,6 +104,9 @@ const I18N = {
     'terminal.focus': 'Focus terminal',
     'terminal.restore': 'Restore split view',
     'terminal.switchFocus': 'Focus {terminal}',
+    'terminal.nativeBackend': 'Native PTY',
+    'terminal.fallbackBackend': 'stdio fallback',
+    'terminal.unknownBackend': 'Backend unknown',
     'action.refreshError': 'Workspace refresh failed.',
     'action.createError': 'Could not create the dual-terminal task.',
     'action.closeError': 'Could not close the task pair.',
@@ -194,6 +198,9 @@ const I18N = {
     'terminal.focus': '聚焦终端',
     'terminal.restore': '恢复分屏',
     'terminal.switchFocus': '聚焦 {terminal}',
+    'terminal.nativeBackend': '原生 PTY',
+    'terminal.fallbackBackend': '已降级到 stdio',
+    'terminal.unknownBackend': '后端未知',
     'action.refreshError': '工作台刷新失败。',
     'action.createError': '无法创建双终端任务。',
     'action.closeError': '无法关闭终端组。',
@@ -1019,7 +1026,7 @@ function terminalCardMarkup(pane) {
       </div>
     </header>
     <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(t(`terminal.${pane.slotId}`))}"></div>
-    <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-updated>—</span></footer>
+    <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-backend></span><span data-terminal-updated>—</span></footer>
   </article>`;
 }
 
@@ -1103,6 +1110,13 @@ function updateTerminalHeader(pane) {
   if (controller?.terminal && status) controller.terminal.options.disableStdin = !sessionIsActive(session);
   const sessionElement = card.querySelector('[data-terminal-session]');
   if (sessionElement) sessionElement.textContent = pane.sessionId || '—';
+  const backendElement = card.querySelector('[data-terminal-backend]');
+  if (backendElement) {
+    backendElement.textContent = t(terminalBackendKey(session));
+    const diagnostic = session?.diagnostics;
+    backendElement.title = diagnostic ? [diagnostic.platform, `Node ${diagnostic.nodeVersion || '?'}`, diagnostic.nativeStatus,
+      diagnostic.failure?.stage, diagnostic.failure?.code].filter(Boolean).join(' · ') : '';
+  }
   const updated = card.querySelector('[data-terminal-updated]');
   if (updated) updated.textContent = formatTime(session?.lastActivityAt || session?.createdAt);
 }
@@ -1194,13 +1208,13 @@ function resizeTerminal(controller) {
   const size = terminalSize(controller);
   if (!size || size.cols < 1 || size.rows < 1) return;
   const key = `${size.cols}x${size.rows}`;
-  if (controller.lastSize === key) return;
+  if (controller.lastSize === key && !controller.pendingResize && !controller.resizeSending) return;
+  if (controller.pendingResize && `${controller.pendingResize.cols}x${controller.pendingResize.rows}` === key) return;
   const viewport = captureTerminalViewport(controller.terminal);
   try {
     controller.terminal.resize(size.cols, size.rows);
     restoreTerminalViewport(controller.terminal, viewport);
   } catch { viewport?.marker?.dispose(); return; }
-  controller.lastSize = key;
   controller.pendingResize = size;
   // Fit xterm immediately, but send only the latest PTY size at a bounded rate.
   if (!controller.resizeTimer && !controller.resizeSending) {
@@ -1230,6 +1244,7 @@ async function flushTerminalResize(controller) {
   controller.resizeSending = true;
   try {
     await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size }, controller.projectId);
+    controller.lastSize = `${size.cols}x${size.rows}`;
   } catch (error) {
     if (!controller.disposed) showToast(error.payload?.error?.message || t('terminal.resizeError'), 'error');
   } finally {

@@ -4,7 +4,7 @@ import { chmodSync, existsSync, lstatSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { atomicWrite, assertContained, assertSafePath } from './config.mjs';
-import { PtyRuntime } from './pty-runtime.mjs';
+import { PtyRuntime, safePtySystemCode } from './pty-runtime.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024;
@@ -55,6 +55,9 @@ function metadataFromRuntime() {
     cwd: session.cwd,
     pid: snapshot.pid ?? null,
     backend: snapshot.backend || null,
+    diagnostics: snapshot.diagnostics || null,
+    cols: snapshot.cols ?? null,
+    rows: snapshot.rows ?? null,
     state: snapshot.state || 'starting',
     createdAt: snapshot.createdAt || session.createdAt,
     lastActivityAt: snapshot.lastActivityAt || session.createdAt,
@@ -179,7 +182,7 @@ function handleSocket(socket) {
       try {
         const result = await handleCommand(command);
         respond(socket, command.id ?? null, result);
-        if (command.op === 'close') {
+        if (command.op === 'close' && !runtime.isActive()) {
           // Keep the named-pipe/socket open until the close response has been
           // flushed. Windows clients can otherwise observe a detached host
           // before receiving the successful response.
@@ -295,6 +298,21 @@ process.on('SIGINT', async () => {
   shutdown();
 });
 
+// Observe an uncaught JS failure without suppressing Node's default crash.
+// Native aborts cannot be caught here; the Manager records owned fork exit.
+process.on('uncaughtExceptionMonitor', error => {
+  if (!runtime || !session) return;
+  try {
+    if (runtime.backend === 'node-pty') runtime.diagnostics.nativeStatus = 'failed';
+    runtime.diagnostics.failure = {
+      stage: 'host', code: 'HOST_UNCAUGHT_ERROR',
+      systemCode: safePtySystemCode(error?.code),
+    };
+    runtime._setState('failed', new Error('Session Host encountered an uncaught error.'));
+    persistMetadata();
+  } catch { /* Keep Node's original crash behavior. */ }
+});
+
 try {
   await main();
 } catch (error) {
@@ -309,6 +327,8 @@ try {
         args: safeArgs(session.args),
         cwd: session.cwd,
         pid: null,
+        backend: runtime?.backend || null,
+        diagnostics: runtime?.snapshot?.().diagnostics || session.diagnostics || null,
         state: 'failed',
         createdAt: session.createdAt,
         lastActivityAt: new Date().toISOString(),
