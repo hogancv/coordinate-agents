@@ -217,6 +217,8 @@ Right-click a conversation or project heading to archive it. Archiving closes it
 enter requirements directly in the Codex terminal. Terminal settings accept
 custom executable commands such as `agy-proxy`, plus Codex model and reasoning
 choices. Refresh, close, restart, and close-all-terminal controls are available.
+Drag the divider to resize the terminals (25–75%); double-click to reset to 50:50. The ratio survives refresh. Each terminal's focus button expands it without restarting sessions; restore returns to the saved split, and the adjacent switch button focuses the other terminal. These controls also work in Zen mode. Small screens keep the stacked layout.
+The sidebar search filters task titles and project names across loaded/cached tasks, preserving project groups. Projects whose tasks have not loaded are explicitly noted. Clear the search or press Escape to restore the previous project expansion state.
 There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.
 
 Workspace groups live in `.agent-bus/workspace-tasks/*.json`, separately from
