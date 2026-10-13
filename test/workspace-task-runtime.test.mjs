@@ -38,6 +38,19 @@ test('Workspace readiness recognizes ANSI-redrawn interactive prompts', () => {
   assert.equal(workspaceTerminalReady('antigravity', paint('? for shortcuts')), true);
 });
 
+test('Workspace readiness does not mistake a stale input marker for folder trust approval', () => {
+  assert.equal(workspaceTerminalReady('codex', 'Ask Codex to do anything\nTrust this folder?\n1. Trust and continue'), false);
+  assert.equal(workspaceTerminalReady('antigravity', 'Welcome. You are currently not signed in.\nSigning in...\nDo you trust the contents of this project?\n> Yes, I trust this folder'), false);
+  assert.equal(workspaceTerminalReady('antigravity', '? for shortcuts\nDo you trust the contents of this project?'), false);
+  assert.equal(workspaceTerminalReady('codex', 'Trust this folder?\nAsk Codex to do anything'), true);
+});
+
+test('Codex placeholder input is not ready while its model header is still loading', () => {
+  assert.equal(workspaceTerminalReady('codex', 'OpenAI Codex (v0.162.1)\nloading\nAsk Codex to do anything'), false);
+  assert.equal(workspaceTerminalReady('codex', 'OpenAI Codex (v0.162.1)\ngpt-5.6-luna · max\nAsk Codex to do anything'), true);
+  assert.equal(workspaceTerminalReady('codex', 'Ask Codex to do anything\nError: account/read failed during TUI bootstrap: workspace routing discovery timed out'), false);
+});
+
 test('Workspace readiness preserves prompt text between ST and BEL terminated OSC sequences', () => {
   const output = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[27;3HAsk Codex to do anything\x1b]0;Workspace\x07';
   assert.equal(workspaceTerminalReady('codex', output), true);
@@ -89,7 +102,7 @@ test('single-task reads ignore Session payload identities that differ from the r
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, inputDelayMs = 0, titleUpdates = false } = {}) {
+function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, trust = false, inputDelayMs = 0, titleUpdates = false } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
   const script = join(root, `${name}-cli.cjs`);
@@ -99,7 +112,19 @@ const log = ${JSON.stringify(log)};
 const termLog = ${JSON.stringify(termLog)};
 if (process.argv.includes('--version')) { console.log('workspace-fixture 1.0.0'); process.exit(0); }
 ${titleUpdates ? "setInterval(() => process.stdout.write('\\x1b]0;title-' + Date.now() + '\\x07'), 80);" : ''}
-${fail ? 'process.exit(17);' : auth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
+${fail ? 'process.exit(17);' : trust ? `console.log('${name === 'codex' ? 'Ask Codex to do anything' : 'Welcome. You are currently not signed in.'}');
+console.log('${name === 'codex' ? 'Trust this folder?' : 'Do you trust the contents of this project?'}');
+console.log('${name === 'codex' ? '1. Trust and continue' : '> Yes, I trust this folder'}');
+process.stdin.resume();
+process.stdin.setRawMode?.(true);
+let confirmed = false;
+process.stdin.on('data', chunk => {
+  fs.appendFileSync(log, Buffer.from(chunk).toString('hex'));
+  if (!confirmed && chunk.includes(121)) {
+    confirmed = true;
+    console.log('\\x1b[2J${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
+  }
+});` : auth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
 console.log('Select login method:');
 console.log('Google OAuth');
 process.stdin.resume();` : transientAuth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
@@ -285,24 +310,19 @@ test('Workspace Task startup failure rolls back the first terminal and keeps bot
   }
 });
 
-test('Workspace Task reports explicit Antigravity authentication blockers', { timeout: 90_000 }, async () => {
+test('Workspace keeps login prompts interactive instead of treating them as startup failures', { timeout: 40000 }, async () => {
   const root = repository('coordinate-agents-workspace-task-auth-');
-  const codex = fakeCli(root, 'codex');
-  const antigravity = fakeCli(root, 'antigravity', { auth: true });
-  configurePair(root, codex, antigravity);
+  configurePair(root, fakeCli(root, 'codex'), fakeCli(root, 'antigravity', { auth: true }));
+  let id;
   try {
-    await assert.rejects(
-      runtimeWorkspaceTaskCreate({ root }),
-      error => error.code === 'WORKSPACE_TASK_START_FAILED'
-        && JSON.stringify(error.details || '').includes('AUTH_REQUIRED')
-        && JSON.stringify(error.details || '').includes('authentication'),
-    );
-    const tasks = await readWorkspaceTasks(root);
-    assert.equal(tasks.length, 1);
-    assert.equal(tasks[0].status, 'ERROR');
-    assert.match(`${tasks[0].error?.details || ''}`, /Sign in with the CLI/);
-    assert.ok(listRecords(root).every(session => !ACTIVE.has(session.state)));
+    const result = await runtimeWorkspaceTaskCreate({ root });
+    id = result.workspaceTask.id;
+    assert.equal(result.workspaceTask.status, 'AWAITING_INPUT');
+    assert.equal(result.workspaceTask.startup.slots.antigravity, 'AUTH_REQUIRED');
+    assert.equal(result.workspaceTask.error, null);
+    assert.ok(listRecords(root).every(session => ACTIVE.has(session.state)));
   } finally {
+    for (const task of await readWorkspaceTasks(root)) await closeGroup(root, task.id);
     await removeTree(root);
   }
 });
@@ -385,4 +405,91 @@ test('Workspace Gateway exposes pair lifecycle, raw PTY input, resize, and hides
     await new Promise(resolve => started.server.close(resolve));
     await removeTree(root);
   }
+});
+
+test('Web onboarding retains both terminals and resumes each role once after user input', { timeout: 60000 }, async () => {
+  const root = repository('coordinate-web-onboarding-');
+  const codex = fakeCli(root, 'codex', { trust: true });
+  const antigravity = fakeCli(root, 'antigravity', { trust: true });
+  configurePair(root, codex, antigravity);
+  const { runtimeWorkspaceTaskContinue } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const { invokeRuntimeOperation } = await import('../skills/coordinate-agents/scripts/workspace-services.mjs');
+  try {
+    const created = (await runtimeWorkspaceTaskCreate({ root })).workspaceTask;
+    assert.equal(created.status, 'AWAITING_INPUT');
+    assert.deepEqual(created.startup.slots, { codex: 'TRUST_REQUIRED', antigravity: 'TRUST_REQUIRED' });
+    assert.ok(created.sessions.codex.sessionId && created.sessions.antigravity.sessionId);
+    assert.ok(listRecords(root).every(session => ACTIVE.has(session.state)));
+    assert.equal((await readWorkspaceTask(root, created.id)).status, 'AWAITING_INPUT');
+    await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id });
+    assert.equal(existsSync(codex.log) ? readFileSync(codex.log, 'utf8') : '', '');
+    assert.equal(existsSync(antigravity.log) ? readFileSync(antigravity.log, 'utf8') : '', '');
+    for (const slot of ['antigravity', 'codex']) {
+      await invokeRuntimeOperation('sessionWrite', { root, sessionId: created.sessions[slot].sessionId, input: 'y\r', submit: false });
+      const next = (await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id })).workspaceTask;
+      assert.equal(next.startup.slots[slot], 'READY');
+      assert.deepEqual(next.sessionIds, created.sessionIds);
+      assert.equal(next.status, slot === 'codex' ? 'RUNNING' : 'AWAITING_INPUT');
+    }
+    await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id });
+    for (const [slot, cli] of [['codex', codex], ['antigravity', antigravity]]) {
+      await waitForCliInput(cli.log, workspaceRolePrompt(slot, 'en'));
+      const log = readFileSync(cli.log, 'utf8');
+      const prompt = Buffer.from(workspaceRolePrompt(slot, 'en')).toString('hex');
+      assert.equal(log.split(prompt).length - 1, 1);
+    }
+    assert.equal(listRecords(root).length, 2);
+    // Reproduce a process stopping after a Session exists but before its ID is bound.
+    const file = join(root, '.agent-bus', 'workspace-tasks', `${created.id}.json`);
+    const interrupted = JSON.parse(readFileSync(file, 'utf8'));
+    interrupted.status = 'STARTING';
+    interrupted.startup.slots = { codex: 'WAITING', antigravity: 'WAITING' };
+    interrupted.sessions.antigravity.sessionId = null;
+    writeFileSync(file, JSON.stringify(interrupted));
+    const recovered = (await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id })).workspaceTask;
+    assert.equal(recovered.status, 'ERROR');
+    assert.match(recovered.error.message, /Restart the pair/);
+    const restarted = (await runtimeWorkspaceTaskRestart({ root, workspaceTaskId: created.id })).workspaceTask;
+    assert.equal(restarted.status, 'AWAITING_INPUT');
+    const sessionsAfterRestart = listRecords(root);
+    assert.equal(sessionsAfterRestart.filter(session => ACTIVE.has(session.state)).length, 2);
+    for (const oldId of Object.values(created.sessionIds)) assert.ok(!ACTIVE.has(sessionsAfterRestart.find(session => session.id === oldId).state));
+  } finally {
+    for (const task of await readWorkspaceTasks(root)) await closeGroup(root, task.id);
+    await removeTree(root);
+  }
+});
+
+test('startup screen parsing follows header redraws instead of keeping stale loading text', async () => {
+  const { renderWorkspaceStartupScreen } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const initial = '\x1b[1;1HOpenAI Codex (v0.162.1)\x1b[2;1Hloading\x1b[8;1HAsk Codex to do anything';
+  const loading = await renderWorkspaceStartupScreen(initial, { cols: 80, rows: 24 });
+  assert.equal(workspaceTerminalReady('codex', loading), false);
+  const ready = await renderWorkspaceStartupScreen(initial + '\x1b[2;1Hgpt-5.6-luna · max\x1b[K', { cols: 80, rows: 24 });
+  assert.equal(workspaceTerminalReady('codex', ready), true);
+});
+
+test('failed Codex account initialization is exposed in the task Session view', async () => {
+  const root = repository('coordinate-codex-bootstrap-failure-');
+  const id = 'workspace-bootstraperror1', sessionId = 'session_bootstraperror1';
+  const directory = join(root, '.agent-bus', 'workspace-tasks');mkdirSync(directory, { recursive: true });
+  const timestamp = new Date().toISOString();
+  writeFileSync(join(directory, `${id}.json`), JSON.stringify({ schemaVersion: 1, id, title: 'Bootstrap failure', status: 'RUNNING', promptVersion: 'test', createdAt: timestamp, updatedAt: timestamp,
+    sessions: { codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId }, antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: null } }, sessionHistory: [], error: null }));
+  mkdirSync(join(root, '.agent-bus', 'sessions'), { recursive: true });
+  writeFileSync(join(root, '.agent-bus', 'sessions', `${sessionId}.json`), JSON.stringify({ schemaVersion: 1, id: sessionId, taskId: id, cwd: root, command: 'mock', agent: 'codex', state: 'failed', exitCode: 1,
+    outputTail: 'Unsent draft: example\nError: account/read failed during TUI bootstrap: account/read failed: workspace routing discovery timed out (code -32603)' }));
+  try {
+    const task = await readWorkspaceTask(root, id);
+    assert.match(task.sessions.codex.error, /workspace routing discovery timed out/);
+    assert.equal(task.sessions.codex.startupFailure, 'account-init-timeout');
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('current startup screen preserves spaces in Codex cursor-painted trust prompts', async () => {
+  const { renderWorkspaceStartupScreen } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const raw = '\x1b[1;1H\x1b[J\x1b[2;3HFolder access\x1b[5;3HTrust\x1b[5;9Hthis\x1b[5;14Hfolder?\x1b[9;3H1.\x1b[9;6HTrust\x1b[9;12Hand\x1b[9;16Hcontinue';
+  const screen = await renderWorkspaceStartupScreen(raw, { cols: 80, rows: 24 });
+  assert.match(screen, /Trust this folder\?/);
+  assert.equal(workspaceTerminalReady('codex', screen), false);
 });

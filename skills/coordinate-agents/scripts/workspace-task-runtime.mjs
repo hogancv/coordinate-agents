@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import vm from 'node:vm';
 import {
   existsSync,
   lstatSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   rmSync,
   unlinkSync,
@@ -36,6 +38,7 @@ export const WORKSPACE_TASK_SLOTS = Object.freeze([
 ]);
 export const WORKSPACE_TASK_STATUSES = Object.freeze([
   'STARTING',
+  'AWAITING_INPUT',
   'RUNNING',
   'DEGRADED',
   'EXITED',
@@ -53,6 +56,24 @@ const REPORT_TRANSITIONS = {
   DONE: ['REVIEWING', 'FAILED'],
   REVIEWING: ['APPROVED', 'CHANGES_REQUESTED', 'FAILED'],
 };
+
+const STARTUP_STATES = new Set(['WAITING', 'TRUST_REQUIRED', 'AUTH_REQUIRED', 'INJECTING', 'READY']);
+function initialStartup(language) {
+  return { language, slots: { codex: 'WAITING', antigravity: 'WAITING' } };
+}
+function validateStartup(value) {
+  if (value === undefined || value === null) return null; // Legacy pairs already received their prompts.
+  if (!value || !['en', 'zh-CN'].includes(value.language) || !value.slots
+    || WORKSPACE_TASK_SLOTS.some(({ slot }) => !STARTUP_STATES.has(value.slots[slot]))) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Invalid Workspace startup state.', { recoverable: false });
+  }
+  return { language: value.language, slots: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, value.slots[slot]])) };
+}
+function startupStatus(record) {
+  const states = Object.values(record.startup.slots);
+  return states.every(state => state === 'READY') ? 'RUNNING'
+    : states.some(state => ['TRUST_REQUIRED', 'AUTH_REQUIRED'].includes(state)) ? 'AWAITING_INPUT' : 'STARTING';
+}
 
 function idleCooperation(revision = 0) {
   return { status: 'IDLE', roundId: null, revision, summary: '', updatedAt: null };
@@ -248,6 +269,7 @@ function validateWorkspaceTaskRecord(value) {
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
     cooperation: validateCooperation(value.cooperation),
+    startup: validateStartup(value.startup),
     sessionHistory,
     error,
   };
@@ -261,7 +283,7 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   return path;
 }
 
-function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false } = {}) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false } = {}) {
   const repository = repositoryRoot(root);
   const path = workspaceTaskFile(repository, record.id, { create: true });
   // Reuse the existing short file transaction lock for every task-file writer.
@@ -278,6 +300,13 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
       }
       // A receipt may only change cooperation fields, never restore stale Sessions or lifecycle state.
       base = { ...current, updatedAt: record.updatedAt };
+    }
+    if (replaceStartup && current) {
+      if (!['STARTING', 'AWAITING_INPUT'].includes(current.status) || current.archivedAt
+        || WORKSPACE_TASK_SLOTS.some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
+        throw new Error('Task pair changed during startup; no automatic retry will run.');
+      }
+      base = { ...current, status: record.status, startup: record.startup, error: record.error, updatedAt: record.updatedAt };
     }
     const cooperation = resetCooperation ? idleCooperation((current?.cooperation.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
@@ -372,7 +401,8 @@ function sessionView(slot, facts) {
     lastActivityAt: fact?.lastActivityAt || null,
     exitCode: fact?.exitCode ?? null,
     signal: fact?.signal || null,
-    error: fact?.error ? redactOutput(fact.error, MAX_ERROR_BYTES) : null,
+    error: fact?.error ? redactOutput(fact.error, MAX_ERROR_BYTES) : (TERMINAL_SESSION_STATES.has(fact?.state) ? workspaceTerminalFailure(slot.agent, fact?.outputTail) : null),
+    startupFailure: TERMINAL_SESSION_STATES.has(fact?.state) && workspaceTerminalFailure(slot.agent, fact?.outputTail)?.includes('workspace routing discovery timed out') ? 'account-init-timeout' : null,
     backend: fact?.backend || null,
     diagnostics: fact?.diagnostics || null,
     cols: fact?.cols ?? null,
@@ -382,6 +412,7 @@ function sessionView(slot, facts) {
 
 function statusFromFacts(record, sessions) {
   if (record.status === 'ERROR' || record.status === 'CLOSED') return record.status;
+  if (record.startup && Object.values(record.startup.slots).some(state => state !== 'READY')) return record.status;
   const states = sessions.map(session => session.state).filter(Boolean);
   const active = states.filter(state => ACTIVE_SESSION_STATES.has(state)).length;
   if (active === 2) return 'RUNNING';
@@ -406,6 +437,7 @@ function workspaceTaskView(record, facts = new Map()) {
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
     cooperation: record.cooperation,
+    startup: record.startup,
     sessionIds: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
     error: record.error,
@@ -457,7 +489,7 @@ function updateRecord(record, update = {}) {
   };
 }
 
-function initialWorkspaceTask() {
+function initialWorkspaceTask(language) {
   const id = `workspace-${randomUUID().replaceAll('-', '')}`;
   const timestamp = now();
   return {
@@ -469,6 +501,7 @@ function initialWorkspaceTask() {
     createdAt: timestamp,
     updatedAt: timestamp,
     sessions: defaultSessions(),
+    startup: initialStartup(language),
     sessionHistory: [],
     error: null,
   };
@@ -476,7 +509,10 @@ function initialWorkspaceTask() {
 
 async function discoverTaskSessions(root, taskId) {
   try {
-    return listRecords(root).filter(record => record.taskId === taskId);
+    return listRecords(root).filter(record => {
+      if (record.taskId !== taskId || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === record.agent)) return false;
+      try { return repositoryRoot(record.cwd) === repositoryRoot(root); } catch { return false; }
+    });
   } catch {
     return [];
   }
@@ -490,9 +526,47 @@ export function normalizeWorkspaceTerminalOutput(output) {
   return `${output || ''}`.replace(ANSI_ESCAPE_PATTERN, '');
 }
 
+let startupTerminalConstructor;
+export async function renderWorkspaceStartupScreen(output, { cols = 120, rows = 30 } = {}) {
+  if (!startupTerminalConstructor) {
+    // Reuse the bundled terminal parser to read the current screen after cursor redraws.
+    // Agent output is fed as terminal data, never evaluated as JavaScript.
+    const context = vm.createContext({ setTimeout, clearTimeout, queueMicrotask, performance, document: {},
+      navigator: { userAgent: 'CoordinateWorkspace', appVersion: '1', platform: 'Win32', language: 'en-US' } });
+    context.window = context;
+    vm.runInContext(readFileSync(new URL('../../../inspector/web-workspace/vendor/xterm.js', import.meta.url), 'utf8'), context);
+    startupTerminalConstructor = context.Terminal;
+  }
+  const terminal = new startupTerminalConstructor({ cols: Math.max(10, Math.min(1000, cols || 120)), rows: Math.max(10, Math.min(500, rows || 30)), scrollback: 0 });
+  try {
+    await new Promise(done => terminal.write(`${output || ''}`, done));
+    const screen = terminal.buffer.active;
+    return Array.from({ length: terminal.rows }, (_, index) => screen.getLine(screen.baseY + index)?.translateToString(true) || '').join('\n');
+  } finally { terminal.dispose(); }
+}
+
+function workspaceTerminalFailure(agent, output) {
+  if (agent !== 'codex') return null;
+  const match = normalizeWorkspaceTerminalOutput(output).match(/Error:\s*(account\/read failed during TUI bootstrap:[^\r\n]*)/i);
+  return match ? redactOutput(match[1], 1024) : null;
+}
+
+function workspaceTerminalNeedsTrust(agent, output) {
+  const normalized = normalizeWorkspaceTerminalOutput(output);
+  const prompts = agent === 'codex'
+    ? ['Trust this folder?', 'Trust and continue']
+    : ['Do you trust the contents of this project?', 'Yes, I trust this folder'];
+  const trustIndex = Math.max(...prompts.map(value => normalized.lastIndexOf(value)));
+  const progressIndex = Math.max(...['Starting MCP servers', 'Signing in...', 'Generating...'].map(value => normalized.lastIndexOf(value)));
+  return trustIndex >= 0 && trustIndex > normalized.lastIndexOf(workspaceTerminalMarker(agent)) && trustIndex > progressIndex;
+}
+
 export function workspaceTerminalReady(agent, output) {
   const marker = workspaceTerminalMarker(agent);
   const normalized = normalizeWorkspaceTerminalOutput(output);
+  if (workspaceTerminalFailure(agent, normalized)) return false;
+  if (agent === 'codex' && /OpenAI Codex[^\n]*\n?[^\n]*\bloading\b/i.test(normalized)) return false;
+  if (workspaceTerminalNeedsTrust(agent, normalized)) return false;
   const markerIndex = normalized.lastIndexOf(marker);
   if (markerIndex < 0) return false;
   const loadingMarkers = agent === 'codex'
@@ -511,10 +585,18 @@ function workspaceTerminalAuthRequired(agent, output) {
   return agent === 'antigravity' && /currently\s+not\s+signed\s+in|select\s+login\s+method|google\s+oauth/i.test(output);
 }
 
-async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
+function workspaceTerminalAuthSelection(agent, output) {
+  const normalized = normalizeWorkspaceTerminalOutput(output);
+  const prompts = agent === 'codex'
+    ? ['Sign in with ChatGPT', 'Sign in to Codex', 'Provide an API key']
+    : ['Select login method:', 'Google OAuth'];
+  const index = Math.max(...prompts.map(value => normalized.lastIndexOf(value)));
+  return index >= 0 && index > normalized.lastIndexOf(workspaceTerminalMarker(agent));
+}
+
+async function waitForWorkspaceTerminalReady(root, session, agent, taskId, { timeoutMs = WORKSPACE_STARTUP_TIMEOUT_MS } = {}) {
   const manager = getExecutionSessionManager();
-  const marker = workspaceTerminalMarker(agent);
-  const deadline = Date.now() + WORKSPACE_STARTUP_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   let markerSeen = false;
   let authObserved = false;
   let lastOutput = null;
@@ -525,6 +607,9 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
     try {
       const inspected = await manager.inspect(root, session.id, { maxLines: 160, maxBytes: 24 * 1024 });
       latest = inspected.session || latest;
+      const rawOutput = inspected.output?.output || '';
+      const startupError = workspaceTerminalFailure(agent, rawOutput);
+      if (startupError) throw runtimeError('WORKSPACE_TASK_START_FAILED', `${agent} CLI startup failed: ${startupError}`, { recoverable: true, taskId, agent, sessionId: session.id, stage: 'account-bootstrap' });
       if (!ACTIVE_SESSION_STATES.has(`${latest?.state || ''}`)) {
         throw runtimeError('WORKSPACE_TASK_START_FAILED', `Workspace Task ${taskId} ${agent} Session exited before its interactive prompt was ready.`, {
           recoverable: true,
@@ -535,12 +620,14 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
         });
       }
 
-      const output = normalizeWorkspaceTerminalOutput(inspected.output?.output || '');
+      const output = await renderWorkspaceStartupScreen(rawOutput, latest);
+      if (workspaceTerminalNeedsTrust(agent, output)) return { session: latest, state: 'TRUST_REQUIRED' };
+      if (workspaceTerminalAuthSelection(agent, output)) return { session: latest, state: 'AUTH_REQUIRED' };
       // Antigravity can print its unauthenticated banner while its keyring
       // auth is still being loaded. Treat that output as an observation, not
       // an immediate failure; a real login can complete before the prompt is
-      // ready. Only report AUTH_REQUIRED after the bounded readiness window
-      // expires without an interactive prompt.
+      // ready. A lingering banner becomes a recoverable sign-in state after
+      // the bounded readiness window; the terminal stays available.
       authObserved ||= workspaceTerminalAuthRequired(agent, output);
       const ready = workspaceTerminalReady(agent, output);
       markerSeen = ready;
@@ -548,7 +635,7 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
       // without changing the prompt. Wait for stable terminal text instead.
       if (markerSeen && output === lastOutput) {
         quietSince ??= Date.now();
-        if (Date.now() - quietSince >= WORKSPACE_READY_QUIET_MS) return latest;
+        if (Date.now() - quietSince >= WORKSPACE_READY_QUIET_MS) return { session: latest, state: 'READY' };
       } else {
         quietSince = null;
       }
@@ -561,36 +648,21 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
     await new Promise(resolvePromise => setTimeout(resolvePromise, 100));
   }
 
-  if (authObserved) {
-    throw runtimeError('AUTH_REQUIRED', `Workspace Task ${taskId} ${agent} CLI requires sign-in before its terminal can start.`, {
-      recoverable: true,
-      taskId,
-      agent,
-      sessionId: session.id,
-      stage: 'authentication',
-      details: { hint: 'Sign in with the CLI, then restart the Workspace Task.' },
-    });
-  }
-
-  throw runtimeError('WORKSPACE_TASK_START_FAILED', `Workspace Task ${taskId} ${agent} Session did not reach its interactive prompt in time.`, {
-    recoverable: true,
-    taskId,
-    agent,
-    sessionId: session.id,
-    details: {
-      timeoutMs: WORKSPACE_STARTUP_TIMEOUT_MS,
-      marker,
-    },
-  });
+  // Keep the existing terminal interactive for sign-in or slow initialization.
+  return { session: latest, state: authObserved ? 'AUTH_REQUIRED' : 'WAITING' };
 }
 
-async function openWorkspaceSlot(root, record, slot, language) {
+function workspaceSlotPrompt(record, slot, language) {
   const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
   const helper = "'" + fileURLToPath(new URL('./workspace-message.mjs', import.meta.url)).replaceAll("'", "'\\''") + "'";
   const commands = slot === 'codex'
     ? `send '<instruction>'; read <cursor>; wait <cursor> [revision] [timeout-ms]; report reviewing|approved|changes-requested <roundId> ['summary']`
     : `report working|done|failed <roundId> ['summary']`;
-  const prompt = `${workspaceRolePrompt(expected.agent, language)}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
+  return `${workspaceRolePrompt(expected.agent, language)}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
+}
+
+async function openWorkspaceSlot(root, record, slot, language) {
+  const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
   const opened = await runtimeSessionOpen({
     root,
     agent: expected.agent,
@@ -614,25 +686,60 @@ async function openWorkspaceSlot(root, record, slot, language) {
       details: { state: sessionState || null },
     });
   }
-  await waitForWorkspaceTerminalReady(root, opened.session, expected.agent, record.id);
-  const manager = getExecutionSessionManager();
-  // Send the instruction and Enter as separate PTY writes. Codex treats one
-  // large write containing text plus CR as a paste buffer and leaves it in
-  // the draft editor; a distinct control-byte write is the same interaction
-  // as pressing Enter in the terminal.
-  await manager.write(root, opened.session.id, prompt, {
-    submit: false,
-    taskId: record.id,
-    subtaskId: slot,
-  });
-  const session = await manager.write(root, opened.session.id, '\r', {
-    submit: false,
-    taskId: record.id,
-    subtaskId: slot,
-  });
-  record.sessions[slot].sessionId = session.id;
+  // Bind the Session before inspecting any human confirmation screen so the Web can display it.
+  const current = readWorkspaceTaskRecord(root, record.id);
+  if (!['STARTING', 'AWAITING_INPUT'].includes(current.status)) {
+    await closeSessionIds(root, [opened.session.id]);
+    throw new Error('Task was closed while its terminal was opening.');
+  }
+  record.sessions[slot].sessionId = opened.session.id;
   writeWorkspaceTask(root, record);
-  return session;
+  return opened.session;
+}
+
+async function prepareWorkspaceSlot(root, record, slot, timeoutMs = WORKSPACE_STARTUP_TIMEOUT_MS) {
+  if (record.startup.slots[slot] === 'READY') return;
+  if (record.startup.slots[slot] === 'INJECTING') throw runtimeError('WORKSPACE_TASK_START_FAILED', 'Role initialization was interrupted. Restart the pair to avoid sending the prompt twice.', { recoverable: true, taskId: record.id, agent: slot });
+  const sessionId = record.sessions[slot].sessionId;
+  const session = readRecord(root, sessionId);
+  if (session.id !== sessionId || session.taskId !== record.id || session.agent !== slot || repositoryRoot(session.cwd) !== root) throw new Error('Session task binding mismatch during startup.');
+  const result = await waitForWorkspaceTerminalReady(root, session, slot, record.id, { timeoutMs });
+  record.startup.slots[slot] = result.state;
+  record.status = startupStatus(record);
+  record.updatedAt = now();
+  if (result.state !== 'READY') {
+    writeWorkspaceTask(root, record, { replaceStartup: true });
+    return;
+  }
+  // Persist the in-flight marker before writing: after interruption we require a restart, never resend.
+  record.startup.slots[slot] = 'INJECTING';
+  record.status = startupStatus(record);
+  writeWorkspaceTask(root, record, { replaceStartup: true });
+  const manager = getExecutionSessionManager();
+  await manager.write(root, sessionId, workspaceSlotPrompt(record, slot, record.startup.language), { submit: false, taskId: record.id, subtaskId: slot });
+  await manager.write(root, sessionId, '\r', { submit: false, taskId: record.id, subtaskId: slot });
+  record.startup.slots[slot] = 'READY';
+  record.status = startupStatus(record);
+  record.updatedAt = now();
+  writeWorkspaceTask(root, record, { replaceStartup: true });
+}
+
+export async function runtimeWorkspaceTaskContinue(input = {}) {
+  const root = repositoryRoot(input.root);
+  const id = input.workspaceTaskId || input.id;
+  return withCooperationLock(root, id, async repository => {
+    let record = readWorkspaceTaskRecord(repository, id);
+    if (!record.archivedAt && record.startup && ['STARTING', 'AWAITING_INPUT'].includes(record.status)) {
+      try {
+        if (WORKSPACE_TASK_SLOTS.some(({ slot }) => !record.sessions[slot].sessionId)) throw runtimeError('WORKSPACE_TASK_START_FAILED', 'Startup was interrupted before both terminals opened. Restart the pair to continue.', { recoverable: true, taskId: record.id });
+        for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(repository, record, slot, 1500);
+      } catch (error) {
+        record = failureRecord(record, error);
+        writeWorkspaceTask(repository, record, { replaceStartup: true });
+      }
+    }
+    return jsonSuccess('workspace.task.continue', { workspaceTask: workspaceTaskView(record, sessionFactMap(repository, sessionIdsFor(record))) });
+  });
 }
 
 async function rollbackTaskSessions(root, record) {
@@ -675,34 +782,37 @@ function workspaceStartError(record, error) {
 export async function runtimeWorkspaceTaskCreate(input = {}) {
   const root = repositoryRoot(input.root);
   const language = normalizeLanguage(input.language);
-  let record = initialWorkspaceTask();
+  let record = initialWorkspaceTask(language);
   writeWorkspaceTask(root, record);
-  try {
-    await openWorkspaceSlot(root, record, 'codex', language);
-    await openWorkspaceSlot(root, record, 'antigravity', language);
-    record = updateRecord(record, { status: 'RUNNING', error: null });
-    writeWorkspaceTask(root, record);
-    return jsonSuccess('workspace.task.create', {
-      workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
-    });
-  } catch (error) {
-    await attachDiscoveredSessions(root, record);
-    const rollback = await rollbackTaskSessions(root, record);
-    const normalized = workspaceStartError(record, error);
-    if (rollback.errors.length > 0) normalized.details = {
-      startup: normalized.details,
-      rollback: rollback.errors.map(item => serializeRuntimeError(item, { includeLegacy: true })),
-    };
-    record = failureRecord(record, normalized);
-    writeWorkspaceTask(root, record);
-    throw normalized;
-  }
+  return withCooperationLock(root, record.id, async () => {
+    try {
+      await openWorkspaceSlot(root, record, 'codex', language);
+      await openWorkspaceSlot(root, record, 'antigravity', language);
+      for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(root, record, slot);
+      record = updateRecord(record, { status: startupStatus(record), error: null });
+      writeWorkspaceTask(root, record);
+      return jsonSuccess('workspace.task.create', {
+        workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
+      });
+    } catch (error) {
+      await attachDiscoveredSessions(root, record);
+      const rollback = await rollbackTaskSessions(root, record);
+      const normalized = workspaceStartError(record, error);
+      if (rollback.errors.length > 0) normalized.details = {
+        startup: normalized.details,
+        rollback: rollback.errors.map(item => serializeRuntimeError(item, { includeLegacy: true })),
+      };
+      record = failureRecord(record, normalized);
+      writeWorkspaceTask(root, record);
+      throw normalized;
+    }
+  });
 }
 
 export async function runtimeWorkspaceTaskClose(input = {}) {
   const root = repositoryRoot(input.root);
   let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
-  const closed = await closeSessionIds(root, sessionIdsFor(record));
+  const closed = await rollbackTaskSessions(root, record);
   record.status = 'CLOSED';
   record.error = closed.errors.length > 0
     ? serializeRuntimeError(closed.errors[0], { includeLegacy: true })
@@ -719,60 +829,64 @@ export async function runtimeWorkspaceTaskClose(input = {}) {
 export async function runtimeWorkspaceTaskRestart(input = {}) {
   const root = repositoryRoot(input.root);
   const language = normalizeLanguage(input.language);
-  let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
-  if (record.archivedAt) throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Cannot restart an archived Workspace Task.', { recoverable: false, taskId: record.id });
-  const oldSessionIds = sessionIdsFor(record);
-  const closed = await closeSessionIds(root, oldSessionIds);
-  const stillActive = closed.results.filter(session => ACTIVE_SESSION_STATES.has(`${session?.state || ''}`));
-  if (closed.errors.length > 0 || stillActive.length > 0) {
-    const error = closed.errors[0] || runtimeError('WORKSPACE_TASK_CLOSE_FAILED', `Workspace Task ${record.id} still has an active Session.`, {
-      recoverable: true,
-      taskId: record.id,
-    });
-    record.status = 'ERROR';
-    record.error = serializeRuntimeError(error, { includeLegacy: true });
-    record.updatedAt = now();
-    writeWorkspaceTask(root, record);
-    throw error;
-  }
+  return withCooperationLock(root, input.workspaceTaskId || input.id, async () => {
+    let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+    if (record.archivedAt) throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Cannot restart an archived Workspace Task.', { recoverable: false, taskId: record.id });
+    const oldSessionIds = sessionIdsFor(record);
+    const closed = await rollbackTaskSessions(root, record);
+    const stillActive = closed.results.filter(session => ACTIVE_SESSION_STATES.has(`${session?.state || ''}`));
+    if (closed.errors.length > 0 || stillActive.length > 0) {
+      const error = closed.errors[0] || runtimeError('WORKSPACE_TASK_CLOSE_FAILED', `Workspace Task ${record.id} still has an active Session.`, {
+        recoverable: true,
+        taskId: record.id,
+      });
+      record.status = 'ERROR';
+      record.error = serializeRuntimeError(error, { includeLegacy: true });
+      record.updatedAt = now();
+      writeWorkspaceTask(root, record);
+      throw error;
+    }
 
-  if (oldSessionIds.length > 0) {
-    record.sessionHistory = [
-      ...record.sessionHistory,
-      {
-        codexSessionId: record.sessions.codex.sessionId,
-        antigravitySessionId: record.sessions.antigravity.sessionId,
-        closedAt: now(),
-      },
-    ].slice(-MAX_HISTORY);
-  }
-  record.sessions = defaultSessions();
-  record.promptVersion = WORKSPACE_TASK_PROMPT_VERSION;
-  record.status = 'STARTING';
-  record.error = null;
-  record.updatedAt = now();
-  writeWorkspaceTask(root, record, { resetCooperation: true });
-  try {
-    await openWorkspaceSlot(root, record, 'codex', language);
-    await openWorkspaceSlot(root, record, 'antigravity', language);
-    record = updateRecord(record, { status: 'RUNNING', error: null });
-    writeWorkspaceTask(root, record);
-    return jsonSuccess('workspace.task.restart', {
-      workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
-      closedSessions: closed.results,
-    });
-  } catch (error) {
-    await attachDiscoveredSessions(root, record);
-    const rollback = await rollbackTaskSessions(root, record);
-    const normalized = workspaceStartError(record, error);
-    if (rollback.errors.length > 0) normalized.details = {
-      startup: normalized.details,
-      rollback: rollback.errors.map(item => serializeRuntimeError(item, { includeLegacy: true })),
-    };
-    record = failureRecord(record, normalized);
-    writeWorkspaceTask(root, record);
-    throw normalized;
-  }
+    if (oldSessionIds.length > 0) {
+      record.sessionHistory = [
+        ...record.sessionHistory,
+        {
+          codexSessionId: record.sessions.codex.sessionId,
+          antigravitySessionId: record.sessions.antigravity.sessionId,
+          closedAt: now(),
+        },
+      ].slice(-MAX_HISTORY);
+    }
+    record.sessions = defaultSessions();
+    record.promptVersion = WORKSPACE_TASK_PROMPT_VERSION;
+    record.startup = initialStartup(language);
+    record.status = 'STARTING';
+    record.error = null;
+    record.updatedAt = now();
+    writeWorkspaceTask(root, record, { resetCooperation: true });
+    try {
+      await openWorkspaceSlot(root, record, 'codex', language);
+      await openWorkspaceSlot(root, record, 'antigravity', language);
+      for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(root, record, slot);
+      record = updateRecord(record, { status: startupStatus(record), error: null });
+      writeWorkspaceTask(root, record);
+      return jsonSuccess('workspace.task.restart', {
+        workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
+        closedSessions: closed.results,
+      });
+    } catch (error) {
+      await attachDiscoveredSessions(root, record);
+      const rollback = await rollbackTaskSessions(root, record);
+      const normalized = workspaceStartError(record, error);
+      if (rollback.errors.length > 0) normalized.details = {
+        startup: normalized.details,
+        rollback: rollback.errors.map(item => serializeRuntimeError(item, { includeLegacy: true })),
+      };
+      record = failureRecord(record, normalized);
+      writeWorkspaceTask(root, record);
+      throw normalized;
+    }
+  });
 }
 
 function allTaskSessionIds(record) {

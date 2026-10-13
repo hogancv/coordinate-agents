@@ -20,6 +20,17 @@ const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: '
 
 const I18N = {
   en: {
+    'status.failed': 'Failed',
+    'terminal.accountInitTimeout': 'Account initialization timed out. Check the network or proxy, then restart the terminal pair.',
+    'status.awaiting_input': 'Awaiting confirmation',
+    'status.idle': 'Idle',
+    'status.busy': 'Busy',
+    'startup.trust': 'Confirm folder trust and any sign-in prompts in the terminals below. Startup continues automatically afterwards.',
+    'startup.auth': 'Complete sign-in in the terminals below. Startup continues automatically afterwards.',
+    'startup.waiting': 'Preparing terminals. Complete any prompts shown below; startup continues automatically.',
+    'startup.roleTrust': 'confirm folder trust',
+    'startup.roleAuth': 'sign-in required',
+    'startup.roleWaiting': 'preparing',
     'cooperation.SENT': 'Sent to Antigravity',
     'cooperation.WORKING': 'Antigravity implementing',
     'cooperation.DONE': 'Awaiting Codex review',
@@ -130,6 +141,17 @@ const I18N = {
     'action.retry': 'Retry',
   },
   zh: {
+    'status.failed': '失败',
+    'terminal.accountInitTimeout': '账户初始化超时。请检查网络或代理，然后重启终端组。',
+    'status.awaiting_input': '等待确认',
+    'status.idle': '空闲',
+    'status.busy': '忙碌',
+    'startup.trust': '请在下方终端确认目录信任，并完成出现的登录提示。确认后会自动继续启动。',
+    'startup.auth': '请直接在下方终端完成登录，完成后会自动继续启动。',
+    'startup.waiting': '终端正在准备，请完成下方出现的提示，随后会自动继续启动。',
+    'startup.roleTrust': '等待目录信任确认',
+    'startup.roleAuth': '等待登录',
+    'startup.roleWaiting': '准备中',
     'cooperation.SENT': '已派发给 Antigravity',
     'cooperation.WORKING': 'Antigravity 实现中',
     'cooperation.DONE': '等待 Codex 审查',
@@ -261,6 +283,7 @@ const state = {
   focusedTerminal: null,
   layoutFrame: null,
   actionBusy: false,
+  startupContinuing: new Set(),
   refreshTimer: null,
   taskTimer: null,
   pollTimer: null,
@@ -1083,16 +1106,22 @@ function renderSelectedTask() {
   }
   if (id) id.textContent = task.id || '—';
   if (version) version.textContent = `v${task.promptVersion || '2.3.0'}`;
+  const startupNotice = document.querySelector('#task-startup');
+  if (startupNotice) {
+    const hint = ['STARTING', 'AWAITING_INPUT'].includes(task.status) ? startupHint(task.startup) : '';
+    startupNotice.hidden = !hint;
+    startupNotice.textContent = hint;
+  }
   const error = document.querySelector('#task-error');
   if (error) {
-    const message = task.error?.message || task.error?.details || '';
+    const message = taskErrorMessage(task);
     error.hidden = !message;
     error.textContent = message ? `${t('task.error')}: ${bounded(message)}` : '';
   }
   const close = document.querySelector('#close-task-button');
   const restart = document.querySelector('#restart-task-button');
   if (close) close.disabled = state.actionBusy || statusKey(task.status) === 'closed';
-  if (restart) restart.disabled = state.actionBusy || statusKey(task.status) === 'starting';
+  if (restart) restart.disabled = state.actionBusy;
 
   const panes = selectTerminalPanes({ workspaceTask: task });
   const pairKey = panes.map(terminalSessionKey).join('|');
@@ -1115,7 +1144,11 @@ function cooperationLabel(cooperation) {
     ? t(`cooperation.${status}`) : '';
 }
 
-function terminalRoleLabel(slot, cooperation) {
+function terminalRoleLabel(slot, cooperation, startup) {
+  const startupState = startup?.slots?.[slot];
+  if (startupState === 'TRUST_REQUIRED') return t('startup.roleTrust');
+  if (startupState === 'AUTH_REQUIRED') return t('startup.roleAuth');
+  if (['WAITING', 'INJECTING'].includes(startupState)) return t('startup.roleWaiting');
   const status = cooperation?.status;
   if (slot === 'codex') {
     if (status === 'DONE') return t('cooperation.awaitingReview');
@@ -1129,10 +1162,28 @@ function terminalRoleLabel(slot, cooperation) {
   return t(slot === 'codex' ? 'terminal.planner' : 'terminal.implementer');
 }
 
+function startupHint(startup) {
+  const states = Object.values(startup?.slots || {});
+  if (states.includes('TRUST_REQUIRED')) return t('startup.trust');
+  if (states.includes('AUTH_REQUIRED')) return t('startup.auth');
+  if (states.some(value => value !== 'READY')) return t('startup.waiting');
+  return '';
+}
+
+function taskErrorMessage(task) {
+  if (task.error?.message || task.error?.details) return task.error.message || task.error.details;
+  for (const [slot, session] of Object.entries(task.sessions || {})) {
+    const agent = slot === 'codex' ? 'Codex' : 'Antigravity';
+    if (session.startupFailure === 'account-init-timeout') return `${agent}: ${t('terminal.accountInitTimeout')}`;
+    if (session.error) return `${agent}: ${session.error}`;
+  }
+  return '';
+}
+
 function terminalCardMarkup(pane) {
   return `<article class="terminal-card" data-terminal-slot="${escapeHtml(pane.slotId)}">
     <header class="terminal-card-header">
-      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation))}</span></div></div>
+      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup))}</span></div></div>
       <div class="terminal-card-actions">
         <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
         <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${pane.slotId === 'codex' ? 'antigravity' : 'codex'}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
@@ -1212,7 +1263,7 @@ function updateTerminalHeader(pane) {
   const card = controller?.card || document.querySelector(`[data-terminal-slot="${CSS.escape(pane.slotId)}"]`);
   if (!card) return;
   const role = card.querySelector('[data-terminal-role]');
-  if (role) role.textContent = terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation);
+  if (role) role.textContent = terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup);
   const taskSession = state.selectedTask?.sessions?.[pane.slotId] || null;
   const session = controller?.session || pane.session || taskSession;
   const status = sessionState(session);
@@ -1460,6 +1511,24 @@ async function loadSelectedTask() {
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
+  void continueTaskStartup(task, projectId, epoch);
+}
+
+async function continueTaskStartup(task, projectId, epoch) {
+  if (state.actionBusy || !task.startup || !['STARTING', 'AWAITING_INPUT'].includes(task.status)) return;
+  const key = `${projectId}:${task.id}`;
+  if (state.startupContinuing.has(key)) return;
+  state.startupContinuing.add(key);
+  try {
+    const payload = await postAction('workspaceTaskContinue', { workspaceTaskId: task.id }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId) return;
+    state.selectedTask = payload.workspaceTask;
+    state.tasks = state.tasks.map(item => item.id === task.id ? payload.workspaceTask : item);
+    state.projectTasks.set(projectId, state.tasks);
+    renderTaskList();
+    renderSelectedTask();
+  } catch { /* Retry through the existing refresh; terminal input stays usable. */ }
+  finally { state.startupContinuing.delete(key); }
 }
 
 async function refresh({ showError = false } = {}) {

@@ -31,6 +31,10 @@ const ACTION_DEFINITIONS = Object.freeze({
       language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
     },
   },
+  workspaceTaskContinue: {
+    operation: 'workspaceTaskContinue', command: 'workspace.task.continue',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
+  },
   workspaceTaskArchive: {
     operation: 'workspaceTaskArchive', command: 'workspace.task.archive',
     params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
