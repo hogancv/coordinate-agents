@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync, fork } from 'node:child_process';
+import { execFile, fork } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -9,7 +9,7 @@ import {
   rmSync,
 } from 'node:fs';
 import { createConnection } from 'node:net';
-import { tmpdir } from 'node:os';
+import { tmpdir, release } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -75,18 +75,28 @@ async function waitForOwnedHostExit(pid, timeoutMs = 1_000) {
   return !ownedProcessIsAlive(pid);
 }
 
-function terminateOwnedHost(pid) {
-  if (!ownedProcessIsAlive(pid)) return;
+async function terminateOwnedHost(pid) {
+  if (!ownedProcessIsAlive(pid)) return true;
   if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill.exe', ['/PID', `${pid}`, '/T', '/F'], {
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-    } catch { /* The exact owned host may have exited between probes. */ }
-    return;
+    await new Promise(resolvePromise => {
+      execFile('taskkill.exe', ['/PID', `${pid}`, '/T', '/F'], {
+        windowsHide: true, timeout: 1_500,
+      }, () => resolvePromise());
+    });
+  } else {
+    try { process.kill(pid, 'SIGTERM'); } catch { /* The exact owned host may have exited. */ }
   }
-  try { process.kill(pid, 'SIGTERM'); } catch { /* The exact owned host may have exited. */ }
+  return waitForOwnedHostExit(pid, 500);
+}
+
+async function reapOwnedHost(pid, timeoutMs = 1000) {
+  await terminateOwnedHost(pid);
+  if (await waitForOwnedHostExit(pid, timeoutMs)) return true;
+  // A blocked native initializer or stuck JS handler may never handle SIGTERM.
+  if (process.platform !== 'win32') {
+    try { process.kill(pid, 'SIGKILL'); } catch { /* Already exited. */ }
+  }
+  return waitForOwnedHostExit(pid, timeoutMs);
 }
 
 function safeArgs(args) {
@@ -190,6 +200,10 @@ function publicRecord(record) {
     args: safeArgs(record.args),
     cwd: record.cwd,
     pid: Number.isInteger(record.pid) ? record.pid : null,
+    backend: record.backend || null,
+    diagnostics: record.diagnostics || null,
+    cols: record.cols ?? null,
+    rows: record.rows ?? null,
     state: record.state,
     createdAt: record.createdAt,
     lastActivityAt: record.lastActivityAt,
@@ -213,6 +227,10 @@ function writeRecord(root, record) {
     args: safeArgs(record.args),
     cwd: record.cwd,
     pid: Number.isInteger(record.pid) ? record.pid : null,
+    backend: record.backend || null,
+    diagnostics: record.diagnostics || null,
+    cols: record.cols ?? null,
+    rows: record.rows ?? null,
     state: record.state,
     createdAt: record.createdAt,
     lastActivityAt: record.lastActivityAt,
@@ -296,12 +314,13 @@ function readRecord(root, id) {
 }
 
 function listRecords(root) {
-  const sessions = sessionStorePath(root);
+  const repository = sessionRoot(root);
+  const sessions = sessionStorePath(repository);
   const result = [];
   for (const name of readdirSync(sessions)) {
     if (!name.endsWith('.json')) continue;
     const path = join(sessions, name);
-    try { result.push(parseRecord(root, path)); } catch {
+    try { result.push(parseRecord(repository, path)); } catch {
       // A corrupt session record is not allowed to become a launch command or
       // an implicit recovery action. It is omitted from reuse candidates.
     }
@@ -313,6 +332,10 @@ function mergeRuntimeRecord(record, runtime) {
   return {
     ...record,
     pid: Number.isInteger(runtime?.pid) ? runtime.pid : null,
+    backend: runtime?.backend || record.backend || null,
+    diagnostics: runtime?.diagnostics || record.diagnostics || null,
+    cols: runtime?.cols ?? record.cols ?? null,
+    rows: runtime?.rows ?? record.rows ?? null,
     state: EXECUTION_SESSION_STATES.includes(runtime?.state) ? runtime.state : record.state,
     lastActivityAt: runtime?.lastActivityAt || record.lastActivityAt,
     exitCode: runtime?.exitCode ?? record.exitCode ?? null,
@@ -388,7 +411,8 @@ async function syncHostRecord(root, record) {
       base = latest;
     } catch { /* Keep the validated record if the latest read races cleanup. */ }
     const updated = mergeRuntimeRecord(base, runtime);
-    writeRecord(root, updated);
+    // The live Host owns runtime metadata and outputTail. A delayed RPC
+    // response must not republish an older tail over its final output.
     if (updated.state !== base.state) ensureSessionStateEvent(root, updated);
     return updated;
   } catch (error) {
@@ -404,7 +428,11 @@ async function syncHostRecord(root, record) {
       state: 'failed',
       lastActivityAt: now(),
       error: `Session host unavailable: ${error.message || error}`,
+      diagnostics: { ...record.diagnostics, ...(record.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), failure: { stage: 'host', code: 'HOST_UNAVAILABLE' } },
     };
+    // Persisted PIDs can outlive their Host and be reused. Polling has no
+    // current process ownership proof, so it must never signal that PID.
+    // Startup cleanup still reaps the Host forked by this open() call.
     writeRecord(root, failed);
     appendSessionEvent(root, failed, 'SESSION_FAILED');
     return failed;
@@ -469,6 +497,51 @@ export class ExecutionSessionManager {
     this.maxOutputBytes = maxOutputBytes;
     this.hostPath = hostPath;
     this.openLocks = new Map();
+    this.nativeProbe = null;
+  }
+
+  async _verifyWindowsNative(cwd) {
+    if (process.platform !== 'win32') return false;
+    // Cache this runtime/host combination, not a global or persisted setting.
+    // The disposable Host shields the Web server from native aborts.
+    this.nativeProbe ??= new Promise((resolvePromise, reject) => {
+      let verified = false, cliPid = null;
+      let probe;
+      let timer;
+      let settled = false;
+      const finish = async value => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        const requiredCleanup = ownedProcessIsAlive(cliPid);
+        const hostExited = await terminateOwnedHost(probe?.pid);
+        const cliExited = await terminateOwnedHost(cliPid);
+        if (!hostExited || !cliExited) {
+          reject(runtimeError('SESSION_START_FAILED', 'Native PTY probe cleanup could not confirm owned process exit.', { root: cwd, recoverable: true }));
+          return;
+        }
+        resolvePromise(value && !requiredCleanup);
+      };
+      try {
+        probe = fork(this.hostPath, ['--native-pty-probe'], {
+          cwd, detached: true, execArgv: [], windowsHide: true,
+          stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        });
+        probe.on('message', message => {
+          if (message?.type === 'probe-owned') cliPid = message.pid;
+          if (message?.type === 'native-pty-probe') verified = message.verified === true && message.backend === 'node-pty';
+        });
+        probe.once('error', () => { void finish(false); });
+        probe.once('exit', code => { void finish(code === 0 && verified); });
+        probe.send({ type: 'init', session: { cwd } }, error => {
+          if (error) void finish(false);
+        });
+        timer = setTimeout(() => {
+          void finish(false);
+        }, 4000);
+      } catch { void finish(false); }
+    });
+    return this.nativeProbe;
   }
 
   async findReusable(root, agent, command = null, resolvedCommand = null) {
@@ -478,7 +551,7 @@ export class ExecutionSessionManager {
       && (!command || item.command === command)
       && (!resolvedCommand || item.resolvedCommand === resolvedCommand))) {
       const current = await syncHostRecord(repository, record);
-      if (ACTIVE_STATES.has(current.state)) return current;
+      if (ACTIVE_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) return current;
     }
     return null;
   }
@@ -490,7 +563,7 @@ export class ExecutionSessionManager {
     if (record.agent !== agent || (command && record.command !== command)
       || (resolvedCommand && record.resolvedCommand !== resolvedCommand)) return null;
     const current = await syncHostRecord(repository, record);
-    return ACTIVE_STATES.has(current.state) ? current : null;
+    return ACTIVE_STATES.has(current.state) && ownedProcessIsAlive(current.pid) ? current : null;
   }
 
   async open(options = {}) {
@@ -538,7 +611,12 @@ export class ExecutionSessionManager {
         taskId: existing.taskId || taskId,
         subtaskId: existing.subtaskId || subtaskId,
       };
-      if (associated.taskId !== existing.taskId || associated.subtaskId !== existing.subtaskId) writeRecord(repository, associated);
+      if (associated.taskId !== existing.taskId || associated.subtaskId !== existing.subtaskId) {
+        // Association must use the same single metadata writer as output/state.
+        // A Manager-side record rewrite can otherwise resurrect a dead Host.
+        const runtime = await requestHost(existing, { op: 'associate', taskId: associated.taskId, subtaskId: associated.subtaskId });
+        Object.assign(associated, mergeRuntimeRecord(associated, runtime));
+      }
       appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
       return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
@@ -575,6 +653,13 @@ export class ExecutionSessionManager {
       exitCode: null,
       signal: null,
       error: null,
+      backend: null,
+      diagnostics: {
+        platform: process.platform, osRelease: release(), arch: process.arch, nodeVersion: process.versions.node,
+        requestedMode: ['auto', 'native', 'stdio'].includes(process.env.COORDINATE_AGENTS_PTY_MODE || 'auto')
+          ? process.env.COORDINATE_AGENTS_PTY_MODE || 'auto' : 'unknown',
+        nativeStatus: 'pending', failure: null,
+      },
       outputTail: '',
       endpoint,
       hostPid: null,
@@ -585,13 +670,29 @@ export class ExecutionSessionManager {
     appendSessionEvent(repository, record, 'SESSION_STARTING', {}, { taskId, subtaskId });
     let host;
     try {
+      const nativePtyVerified = (process.env.COORDINATE_AGENTS_PTY_MODE || 'auto') === 'auto'
+        && await this._verifyWindowsNative(repository);
+      let hostFailureHint = null;
+      // Custom diagnostic hosts only. Production hosts keep independent,
+      // ignored stdio so a Web/CLI parent exit cannot close their stderr pipe.
+      const captureHostDiagnostics = this.hostPath !== HOST_PATH && process.env.COORDINATE_AGENTS_PTY_MODE === 'native';
       host = fork(this.hostPath, [], {
         cwd: repository,
         detached: true,
         execArgv: [],
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        stdio: ['ignore', 'ignore', captureHostDiagnostics ? 'pipe' : 'ignore', 'ipc'],
         windowsHide: true,
       });
+      host.stderr?.setEncoding('utf8');
+      host.stderr?.on('data', data => {
+        // Only retain fixed error identifiers; never persist raw stderr,
+        // native stacks, terminal text, command lines or environment values.
+        const code = data.match(/\b(?:ERR_[A-Z_0-9]+|EACCES|EPERM|EINVAL|ENOENT|EIO|ENOSYS)\b/)?.[0];
+        if (['ERR_IPC_DISCONNECTED', 'ERR_IPC_CHANNEL_CLOSED', 'ERR_INVALID_ARG_TYPE', 'ERR_INVALID_ARG_VALUE', 'ERR_STREAM_DESTROYED',
+          'ERR_MODULE_NOT_FOUND', 'EACCES', 'EPERM', 'EINVAL', 'ENOENT', 'EIO', 'ENOSYS'].includes(code)) hostFailureHint = code;
+        else if (/Assertion.*failed|FATAL ERROR|Napi::Error::Fatal/i.test(data)) hostFailureHint = 'NATIVE_FATAL';
+      });
+      host.stderr?.unref?.();
       record.hostPid = host.pid || null;
       writeRecord(repository, record);
       await new Promise((resolvePromise, reject) => {
@@ -611,8 +712,10 @@ export class ExecutionSessionManager {
             spawnCommand: launch.command,
             spawnArgs: [...(launch.prefix || []), ...launch.args],
             maxOutputBytes: this.maxOutputBytes,
+            nativePtyVerified,
             createdAt,
             root: repository,
+            diagnostics: record.diagnostics,
             taskId,
             subtaskId,
           },
@@ -623,12 +726,25 @@ export class ExecutionSessionManager {
       // init while the child is still importing node-pty or a loader. Keep the
       // channel until the owned host disconnects, on every Node/platform.
       host.unref();
+      host.once('close', (code, signal) => {
+        try {
+          const latest = readRecord(repository, id);
+          if (!ACTIVE_STATES.has(latest.state)) return;
+          writeRecord(repository, { ...latest, pid: null, state: 'failed', lastActivityAt: now(),
+            error: 'Owned Session Host exited unexpectedly.',
+            diagnostics: { ...latest.diagnostics, ...(latest.backend === 'node-pty' ? { nativeStatus: 'failed' } : {}), hostExitCode: code, hostSignal: signal, hostFailureHint,
+              failure: { stage: 'host', code: 'HOST_EXIT_UNEXPECTED' } },
+          });
+        } catch { /* The session root may already have been removed. */ }
+      });
     } catch (error) {
       // The host is the only owner of the child process. Ask it to close first
       // so an IPC/socket startup failure cannot leave an orphaned Implementer.
       try { await requestHost(record, { op: 'close', graceful: false, timeoutMs: 500 }, { timeoutMs: 700 }); } catch { /* The host may not have bound yet. */ }
       try { host?.kill(); } catch { /* Only the host process created above is eligible. */ }
-      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
+      const failed = { ...record, state: 'failed', lastActivityAt: now(), error: error.message || String(error),
+        diagnostics: { ...record.diagnostics, failure: { stage: 'host', code: 'HOST_INIT_TRANSPORT_FAILED' } },
+      };
       writeRecord(repository, failed);
       appendSessionEvent(repository, failed, 'SESSION_FAILED', {}, { taskId, subtaskId });
       throw runtimeError('SESSION_START_FAILED', `Failed to start execution session ${id}: ${error.message || error}`, { recoverable: true, agent, command: resolved.command, root: repository, sessionId: id, details: { agent, command: resolved.command, root: repository } });
@@ -643,6 +759,7 @@ export class ExecutionSessionManager {
     let healthySince = null;
     let healthyProbeCount = 0;
     let current = record;
+    let startupHealthy = false;
     while (Date.now() < deadline) {
       try {
         const runtime = await requestHost(current, { op: 'status' }, { timeoutMs: 500 });
@@ -656,7 +773,6 @@ export class ExecutionSessionManager {
           base = latest;
         } catch { /* Keep the current validated startup record. */ }
         current = mergeRuntimeRecord(base, runtime);
-        writeRecord(repository, current);
       } catch {
         // A short-lived Implementer may close its host before the next probe,
         // but the host persists the terminal state first. Prefer that durable
@@ -677,14 +793,22 @@ export class ExecutionSessionManager {
         // A scheduler stall can cross the wall-clock window between only two
         // probes. Require several successful host round trips as well so an
         // already-exited child can publish its terminal fact before STARTED.
-        if (healthyProbeCount >= minimumHealthyProbes && Date.now() - healthySince >= healthyStabilityMs) break;
+        if (healthyProbeCount >= minimumHealthyProbes && Date.now() - healthySince >= healthyStabilityMs) { startupHealthy = true; break; }
       } else {
         healthySince = null;
         healthyProbeCount = 0;
       }
       await new Promise(resolvePromise => setTimeout(resolvePromise, 25));
     }
-    if (HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
+    if (!startupHealthy && ACTIVE_STATES.has(current.state)) {
+      try { await requestHost(current, { op: 'close', graceful: false, timeoutMs: 500 }, { timeoutMs: 1500 }); } catch { /* Host may be blocked in native initialization. */ }
+      const hostExited = await reapOwnedHost(record.hostPid, 1000);
+      current = { ...current, pid: null, state: 'failed', lastActivityAt: now(), error: 'Session host startup timed out.',
+        diagnostics: { ...current.diagnostics, failure: { stage: hostExited ? 'host' : 'cleanup', code: hostExited ? 'HOST_START_TIMEOUT' : 'HOST_CLEANUP_TIMEOUT' } },
+      };
+      writeRecord(repository, current);
+    }
+    if (startupHealthy && HEALTHY_STARTUP_STATES.has(current.state) && ownedProcessIsAlive(current.pid)) {
       appendSessionEvent(repository, current, 'SESSION_STARTED', {}, { taskId, subtaskId });
     } else if (!ACTIVE_STATES.has(current.state) && current.state !== 'starting') {
       ensureSessionStateEvent(repository, current, { taskId, subtaskId });
@@ -742,10 +866,9 @@ export class ExecutionSessionManager {
     if (input.length > 256 * 1024) throw runtimeError('SESSION_WRITE_FAILED', 'Session input exceeds the size limit.', { recoverable: false, sessionId: id, root: repository });
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not writable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
+    if (!ACTIVE_STATES.has(current.state) || !ownedProcessIsAlive(current.pid)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not writable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
     const runtime = await requestHost(current, { op: 'write', input, submit });
     const updated = mergeRuntimeRecord(current, runtime);
-    writeRecord(repository, updated);
     if (updated.state !== current.state) {
       const type = sessionStateEventType(updated.state);
       appendSessionEvent(repository, updated, type, {}, { taskId, subtaskId });
@@ -757,10 +880,9 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not resizable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
+    if (!ACTIVE_STATES.has(current.state) || !ownedProcessIsAlive(current.pid)) throw runtimeError('SESSION_NOT_HEALTHY', `Execution session ${id} is not resizable in state ${current.state}.`, { recoverable: true, sessionId: id, root: repository });
     const runtime = await requestHost(current, { op: 'resize', cols, rows });
     const updated = mergeRuntimeRecord(current, runtime);
-    writeRecord(repository, updated);
     return publicRecord(updated);
   }
 
@@ -771,7 +893,6 @@ export class ExecutionSessionManager {
     if (!ACTIVE_STATES.has(current.state)) return publicRecord(current);
     const runtime = await requestHost(current, { op: 'interrupt' });
     const updated = mergeRuntimeRecord(current, runtime);
-    writeRecord(repository, updated);
     return publicRecord(updated);
   }
 
@@ -779,7 +900,15 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
-    if (!ACTIVE_STATES.has(current.state)) return publicRecord(current);
+    if (!ACTIVE_STATES.has(current.state)) {
+      // Terminal metadata precedes the Host's shutdown timer. Do not publish
+      // cleanup before it releases its handles. Never kill a stale terminal
+      // record's PID: it could have been reused by an unrelated process.
+      if (!await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500))) {
+        throw runtimeError('SESSION_CLOSE_FAILED', 'Terminal Session Host exit could not be confirmed.', { root: repository, sessionId: id, recoverable: true });
+      }
+      return publicRecord(current);
+    }
     try {
       let runtime = await requestHost(current, { op: 'close', graceful, timeoutMs }, { timeoutMs: Math.max(5_000, timeoutMs + 2_000) });
       if (ACTIVE_STATES.has(runtime?.state)) {
@@ -808,8 +937,11 @@ export class ExecutionSessionManager {
         // has been killed, leaving the detached host holding repository files.
         // Only terminate the host PID recorded for this Session; never accept
         // a caller-supplied arbitrary process identifier.
-        terminateOwnedHost(current.hostPid);
-        hostExited = await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
+        hostExited = await reapOwnedHost(current.hostPid, Math.max(500, timeoutMs + 500));
+      }
+      const cliExited = await waitForOwnedHostExit(current.pid, 500);
+      if (!hostExited || !cliExited) {
+        throw runtimeError('SESSION_CLOSE_FAILED', 'Owned Session Host or CLI did not exit after close.', { root: repository, sessionId: id, recoverable: true });
       }
       if (ACTIVE_STATES.has(updated.state)) {
         updated = {
@@ -820,15 +952,26 @@ export class ExecutionSessionManager {
           error: updated.error || (hostExited ? 'Session close returned an active runtime state.' : 'Owned Session Host did not exit after close.'),
         };
       }
+      // Read after the exact Host exits so its final drained transcript wins.
+      try {
+        const latest = readRecord(repository, id);
+        if (!ACTIVE_STATES.has(latest.state)) updated = latest;
+      } catch { /* Preserve the explicit close failure if no record remains. */ }
       writeRecord(repository, updated);
       appendSessionEvent(repository, updated, 'SESSION_CLOSED');
       return publicRecord(updated);
     } catch (error) {
       // If the socket disappeared during a close, still clean up the exact
       // host created for this Session before exposing the failure.
-      terminateOwnedHost(current.hostPid);
-      await waitForOwnedHostExit(current.hostPid, Math.max(500, timeoutMs + 500));
-      const failed = { ...current, pid: null, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
+      await reapOwnedHost(current.hostPid, Math.max(500, timeoutMs + 500));
+      if (ownedProcessIsAlive(current.pid)) await terminateOwnedHost(current.pid);
+      let latest = current;
+      try { latest = readRecord(repository, id); } catch { /* Preserve the validated original record. */ }
+      if (!ACTIVE_STATES.has(latest.state) && !ownedProcessIsAlive(current.hostPid) && !ownedProcessIsAlive(current.pid)) {
+        appendSessionEvent(repository, latest, 'SESSION_CLOSED');
+        return publicRecord(latest);
+      }
+      const failed = { ...latest, pid: ownedProcessIsAlive(current.pid) ? current.pid : null, state: 'failed', lastActivityAt: now(), error: error.message || String(error) };
       writeRecord(repository, failed);
       appendSessionEvent(repository, failed, 'SESSION_FAILED');
       throw normalizeRuntimeError(error, 'SESSION_CLOSE_FAILED');

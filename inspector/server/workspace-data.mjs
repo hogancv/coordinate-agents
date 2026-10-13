@@ -22,7 +22,7 @@ function canonicalRoot(root) {
   if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
     throw new Error(`Inspector root is not a regular directory: ${candidate}`);
   }
-  return realpathSync(candidate);
+  return realpathSync.native(candidate);
 }
 
 

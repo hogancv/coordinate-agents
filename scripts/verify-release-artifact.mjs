@@ -231,7 +231,7 @@ function npmInstall(artifact, consumer, env) {
   return run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', artifact], { cwd: consumer, env });
 }
 
-function extractArtifact(artifact, tempRoot) {
+export function extractArtifact(artifact, tempRoot) {
   if (!existsSync(artifact)) throw new VerificationError(`Package artifact is missing: ${artifact}`);
   const metadata = lstatSync(artifact);
   if (!metadata.isFile() || metadata.isSymbolicLink()) throw new VerificationError(`Package artifact is not a regular file: ${artifact}`);
@@ -243,7 +243,10 @@ function extractArtifact(artifact, tempRoot) {
   // understand that GNU-only flag, so it must never receive it.
   const entries = run('tar', ['-tzf', artifact, ...tarFlags], { cwd: tempRoot }).stdout.trim().split(/\r?\n/);
   if (entries.some(entry => !entry.startsWith('package/') || entry.split(/[\\/]/).includes('..'))) throw new VerificationError('Unsafe artifact entry path.');
-  run('tar', ['-xzf', artifact, '-C', extractionRoot, ...tarFlags], { cwd: tempRoot, env: process.env });
+  // A process cwd is portable across BSD tar and Git Bash's GNU tar. The
+  // latter accepts the archive with --force-local but rejects native Windows
+  // absolute directory arguments to -C. Extraction remains isolated here.
+  run('tar', ['-xzf', artifact, ...tarFlags], { cwd: extractionRoot, env: process.env });
   const packageRoot = join(extractionRoot, 'package');
   if (!existsSync(packageRoot) || !lstatSync(packageRoot).isDirectory()) {
     throw new VerificationError(`Package artifact did not extract a package/ directory: ${basename(artifact)}`);

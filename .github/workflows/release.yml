@@ -71,12 +71,18 @@ jobs:
             --expected-version "$version" \
             --expected-source-commit "$source_commit" \
             --expected-tag "$RELEASE_TAG"
+          node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const artifact = process.argv[1];
+            writeFileSync(artifact + ".sha256", createHash("sha256").update(readFileSync(artifact)).digest("hex") + "\n");
+          ' "$artifact"
 
       - name: Preserve verified npm tarball
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: verified-npm-tarball
-          path: ${{ runner.temp }}/coordinate-agents-artifact/*.tgz
+          path: ${{ runner.temp }}/coordinate-agents-artifact/*.tgz*
           if-no-files-found: error
           retention-days: 7
 
@@ -120,4 +126,11 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           artifact="$RUNNER_TEMP/coordinate-agents-artifact/hogancv-coordinate-agents-${version}.tgz"
           test -f "$artifact"
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { createHash } from "node:crypto";
+            const artifact = process.argv[1];
+            const expected = readFileSync(artifact + ".sha256", "utf8").trim();
+            if (!/^[0-9a-f]{64}$/.test(expected) || createHash("sha256").update(readFileSync(artifact)).digest("hex") !== expected) throw new Error("Candidate tarball SHA-256 mismatch");
+          ' "$artifact"
           npm publish --ignore-scripts --access public --tag latest "$artifact"

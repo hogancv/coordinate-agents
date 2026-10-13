@@ -39,7 +39,8 @@ test('Legacy compatibility runs for Adapter/Session source changes independently
   for (const node of ['18.x', '22.x']) assert.ok(workflow.includes(node));
   for (const command of ['npm ci', 'npm run test:adapters', 'npm run test:legacy', 'npm run test:plugin', 'npm run demo', 'npm run check:llms']) assert.ok(workflow.includes(command), command);
   assert.match(workflow, /skills\/coordinate-agents\/\*\*/);
-  assert.match(workflow, /!skills\/coordinate-agents\/scripts\/workspace-\*\.mjs/);
+  assert.doesNotMatch(workflow, /!skills\/coordinate-agents\/scripts\/workspace-\*\.mjs/);
+  assert.match(workflow, /inspector\/server\/\*\*/);
   assert.match(workflow, /adapter-sdk\.mjs/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /branches: \[main\]/);

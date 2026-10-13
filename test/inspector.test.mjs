@@ -9,6 +9,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -30,6 +31,8 @@ import {
 } from '../skills/coordinate-agents/scripts/task-graph-runtime.mjs';
 import { startInspector } from '../inspector/server/server.mjs';
 import { appendRuntimeEvent } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
+import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
+import { createInspectorData } from '../inspector/server/inspector-data.mjs';
 
 const root = process.cwd();
 const cli = join(root, 'bin', 'coordinate-agents-legacy.mjs');
@@ -107,6 +110,32 @@ function writeSession(repositoryRoot, taskId) {
   });
   return { sessionId, taskId };
 }
+
+test('Inspector discovers historical Sessions through a parent path alias without changing records', async () => {
+  const repositoryRoot = repository();
+  const aliasParent = `${repositoryRoot}-alias`;
+  const child = join(repositoryRoot, 'nested'); mkdirSync(child);
+  symlinkSync(repositoryRoot, aliasParent, process.platform === 'win32' ? 'junction' : 'dir');
+  // The selected root itself is a regular directory; only its parent has an
+  // alias, just as RUNNER~1 and runneradmin name the same Windows directory.
+  const selected = join(aliasParent, 'nested');
+  const init = spawnSync(process.execPath, [busTool, 'init', '--root', selected], { encoding: 'utf8', windowsHide: true });
+  assert.equal(init.status, 0, init.stderr);
+  try {
+    writeSession(selected, 'task-historical-alias');
+    const record = join(selected, '.agent-bus', 'sessions', 'session_fixture123.json');
+    const before = readFileSync(record, 'utf8');
+    assert.equal(listRecords(selected).length, 1);
+    const sessions = await createInspectorData(selected).readSessions();
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].sessionId, 'session_fixture123');
+    assert.equal(sessions[0].status, 'exited');
+    assert.equal(readFileSync(record, 'utf8'), before);
+  } finally {
+    rmSync(aliasParent, { recursive: true, force: true });
+    rmSync(repositoryRoot, { recursive: true, force: true });
+  }
+});
 
 async function freePort() {
   const server = createServer();
