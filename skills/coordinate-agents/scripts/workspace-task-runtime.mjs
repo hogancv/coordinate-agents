@@ -284,10 +284,25 @@ function normalizeLanguage(language) {
   return `${language || 'en'}`.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
 }
 
-function sessionFactMap(root) {
+// Performance optimization: When target sessionIds are provided (e.g. single task reads),
+// perform O(1) targeted file reads via readRecord instead of scanning all sessions with listRecords.
+function sessionFactMap(root, sessionIds = null) {
   const sessions = join(repositoryRoot(root), '.agent-bus', 'sessions');
   if (!existsSync(sessions)) return new Map();
   try {
+    if (Array.isArray(sessionIds)) {
+      const facts = new Map();
+      for (const id of sessionIds) {
+        if (!id) continue;
+        try {
+          const record = readRecord(root, id);
+          if (record.id === id) facts.set(id, record);
+        } catch {
+          // Ignore missing or inaccessible session records
+        }
+      }
+      return facts;
+    }
     return new Map(listRecords(root).map(record => [record.id, record]));
   } catch {
     return new Map();
@@ -355,7 +370,9 @@ export async function readWorkspaceTasks(root, { includeArchived = false } = {})
 export async function readWorkspaceTask(root, id) {
   const repository = repositoryRoot(root);
   const record = readWorkspaceTaskRecord(repository, id);
-  return workspaceTaskView(record, sessionFactMap(repository));
+  // Pass targeted session IDs to sessionFactMap to avoid scanning all workspace session files
+  const sessionIds = sessionIdsFor(record);
+  return workspaceTaskView(record, sessionFactMap(repository, sessionIds));
 }
 
 async function closeSessionIds(root, sessionIds) {
