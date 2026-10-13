@@ -195,9 +195,10 @@ function sanitizeTask(task) {
   };
 }
 
-function readTaskRecords(root) {
+function readTaskRecords(root, { sanitize = true } = {}) {
   if (!busFor(root)) return [];
-  return listTasks(root).map(sanitizeTask);
+  const tasks = listTasks(root);
+  return sanitize ? tasks.map(sanitizeTask) : tasks;
 }
 
 function taskSummary(task) {
@@ -205,7 +206,7 @@ function taskSummary(task) {
     kind: 'task',
     graph: false,
     id: task.id,
-    title: task.title,
+    title: bounded(task.title, 2 * 1024),
     status: task.status,
     round: task.round,
     createdAt: task.createdAt,
@@ -407,10 +408,20 @@ function graphDetail(root, graph) {
     maxConcurrency: graph.maxConcurrency,
     frontier: sanitizeNested(scheduling.frontier, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
     wave: sanitizeNested(scheduling.wave, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
-    dependencies: subtasks.flatMap(item => item.dependsOn.map(dependency => ({
-      from: dependency,
-      to: item.id,
-    }))).slice(0, MAX_GRAPH_ITEMS * MAX_GRAPH_ITEMS),
+    dependencies: (() => {
+      const result = [];
+      const maxLimit = MAX_GRAPH_ITEMS * MAX_GRAPH_ITEMS;
+      for (let i = 0; i < subtasks.length; i += 1) {
+        const item = subtasks[i];
+        const dependsOn = item.dependsOn;
+        for (let j = 0; j < dependsOn.length; j += 1) {
+          if (result.length >= maxLimit) break;
+          result.push({ from: dependsOn[j], to: item.id });
+        }
+        if (result.length >= maxLimit) break;
+      }
+      return result;
+    })(),
     subtasks,
     intentCoverage: sanitizeNested(graph.intentMap || null, { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
     conflicts: sanitizeNested(scheduling.wave?.conflicts || [], { stringLimit: 4 * 1024, itemLimit: MAX_GRAPH_ITEMS }),
@@ -423,11 +434,22 @@ function graphDetail(root, graph) {
     events,
     timeline: events.map(event => ({ ...event, status: null })).sort((a, b) => a.sequence - b.sequence),
     historySource: 'recorded',
-    agentFlow: [
-      { role: 'planner', agent: parent.planner },
-      ...[...new Set(graph.subtasks.map(item => item.implementer))].map(agent => ({ role: 'implementer', agent })),
-      { role: 'reviewer', agent: parent.reviewer },
-    ],
+    agentFlow: (() => {
+      const implementers = new Set();
+      for (let i = 0; i < graph.subtasks.length; i += 1) {
+        const agent = graph.subtasks[i]?.implementer;
+        if (agent) implementers.add(agent);
+      }
+      const implementerFlow = [];
+      for (const agent of implementers) {
+        implementerFlow.push({ role: 'implementer', agent });
+      }
+      return [
+        { role: 'planner', agent: parent.planner },
+        ...implementerFlow,
+        { role: 'reviewer', agent: parent.reviewer },
+      ];
+    })(),
   };
   return detail;
 }
@@ -719,8 +741,10 @@ export function createInspectorData(root) {
       return readWorkspaceSettings(repository);
     },
     readTasks() {
+      // Performance optimization: Avoid running sanitizeTask on every task record during
+      // task list summary generation since taskSummary selects only scalar header fields.
       return [
-        ...readTaskRecords(repository).map(taskSummary),
+        ...readTaskRecords(repository, { sanitize: false }).map(taskSummary),
         ...listTaskGraphs(repository).map(graphSummary),
       ].sort((left, right) => `${right.updatedAt || ''}`.localeCompare(`${left.updatedAt || ''}`));
     },
