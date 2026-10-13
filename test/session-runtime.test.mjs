@@ -11,7 +11,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:net';
@@ -32,11 +32,11 @@ import {
   runtimeSessionStatus,
   runtimeSessionWrite,
 } from '../skills/coordinate-agents/scripts/session-service.mjs';
-import { ExecutionSessionManager, readRecord } from '../skills/coordinate-agents/scripts/session-manager.mjs';
+import { ExecutionSessionManager, readRecord, resolveConfiguredSessionAgent, sessionStorePath } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
-const environmentKeys = ['COORDINATE_AGENTS_HOME', 'HOME', 'USERPROFILE', 'FIXTURE_STARTS', 'FIXTURE_DONE', 'FIXTURE_ROOT', 'FIXTURE_AGENT', 'BUS_TOOL'];
+const environmentKeys = ['COORDINATE_AGENTS_HOME', 'COORDINATE_AGENTS_PTY_MODE', 'HOME', 'USERPROFILE', 'FIXTURE_STARTS', 'FIXTURE_DONE', 'FIXTURE_ROOT', 'FIXTURE_AGENT', 'BUS_TOOL'];
 let previousEnvironment;
 beforeEach(() => { previousEnvironment = Object.fromEntries(environmentKeys.map(key => [key, process.env[key]])); });
 afterEach(() => {
@@ -146,6 +146,51 @@ async function removeTree(path) {
   rmSync(path, { recursive: true, force: true, maxRetries: process.platform === 'win32' ? 10 : 0, retryDelay: 100 });
   assert.equal(existsSync(path), false);
 }
+
+test('polling a stale active Session does not terminate a reused unrelated Host PID', async () => {
+  const root = repository();
+  const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });
+  await once(sentinel, 'spawn');
+  const sentinelExit = once(sentinel, 'exit');
+  try {
+    const id = `session_${randomUUID()}`;
+    const record = { schemaVersion: 1, id, agent: 'fixture', command: process.execPath, cwd: root,
+      state: 'running', pid: null, hostPid: sentinel.pid, backend: 'stdio-fallback',
+      endpoint: process.platform === 'win32' ? `\\\\.\\pipe\\missing-${randomUUID()}` : join(root, 'missing.sock'),
+      createdAt: new Date().toISOString(), lastActivityAt: new Date().toISOString() };
+    writeFileSync(join(sessionStorePath(root), `${id}.json`), JSON.stringify(record));
+    const status = await new ExecutionSessionManager().status(root, id);
+    assert.equal(status.state, 'failed');
+    assert.equal(status.diagnostics.failure.code, 'HOST_UNAVAILABLE');
+    assert.equal(processAlive(sentinel.pid), true, 'Polling killed an unrelated process referenced by stale metadata');
+  } finally {
+    sentinel.kill('SIGKILL');
+    await sentinelExit;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('explicit stdio Session opens without a native capability probe', async () => {
+  const root = repository();
+  const home = isolatedHome();
+  process.env.COORDINATE_AGENTS_PTY_MODE = 'stdio';
+  class NoNativeProbeManager extends ExecutionSessionManager {
+    async _verifyWindowsNative() { throw new Error('Explicit stdio must not launch native processes'); }
+  }
+  const manager = new NoNativeProbeManager();
+  let opened;
+  try {
+    await configure(root, persistentExecutable(root));
+    const resolution = await resolveConfiguredSessionAgent(root, 'antigravity');
+    opened = await manager.open({ root, agent: 'antigravity', resolved: resolution.resolved, adapter: resolution.adapter });
+    assert.equal(opened.session.backend, 'stdio-fallback');
+    assert.equal(opened.session.diagnostics.nativeStatus, 'disabled');
+  } finally {
+    if (opened) await manager.close(root, opened.session.id, { graceful: false, timeoutMs: 500 });
+    await removeTree(root);
+    await removeTree(home);
+  }
+});
 
 test('Execution Session supports open, write, bounded read, inspect, status, and close', async () => {
   const root = repository();

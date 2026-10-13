@@ -147,6 +147,26 @@ test('cleanup finds owned transcripts beyond the 32-entry retained restart histo
  }finally{rmSync(f.home,{recursive:true,force:true});}
 });
 
+test('duplicate Session payload IDs cannot authorize deletion of a foreign active record', async () => {
+ const f=fixture();try {
+  const task=closedTask(f.root);
+  task.archivedAt=new Date().toISOString();
+  const id='session_archivecollision0001';
+  task.sessions.codex.sessionId=id;
+  const taskFile=join(f.root,'.agent-bus/workspace-tasks',task.id+'.json');
+  writeFileSync(taskFile,JSON.stringify(task));
+  const directory=join(f.root,'.agent-bus/sessions');mkdirSync(directory,{recursive:true});
+  const original={schemaVersion:1,id,agent:'codex',command:process.execPath,cwd:f.root,state:'running',
+   taskId:'workspace-other000001',lastActivityAt:'2026-10-13T00:00:00Z'};
+  const target=join(directory,id+'.json');
+  writeFileSync(target,JSON.stringify(original));
+  writeFileSync(join(directory,'zz-shadow.json'),JSON.stringify({...original,state:'exited',taskId:task.id,lastActivityAt:'2026-10-12T00:00:00Z'}));
+  await assert.rejects(runtime.runtimeWorkspaceArchivesClear({root:f.root}),{code:'WORKSPACE_TASK_STATE_CONFLICT'});
+  assert.deepEqual(JSON.parse(readFileSync(target,'utf8')),original);
+  assert.ok(existsSync(taskFile));
+ }finally{rmSync(f.home,{recursive:true,force:true});}
+});
+
 test('settings can load global archive cleanup even when selected project settings fail',async()=>{
  const {default:vm}=await import('node:vm');
  const app=readFileSync(new URL('../inspector/web-workspace/app.js',import.meta.url),'utf8');

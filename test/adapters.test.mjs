@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
   AgentAdapter,
@@ -122,7 +123,7 @@ test('Codex workspace sessions disable hook review without changing standard ses
   assert.deepEqual(workspace.args.slice(0, 2), ['-c', 'features.hooks=false']);
 });
 
-test('Antigravity persistent sessions provide the required empty prompt value', () => {
+test('Antigravity persistent sessions encode the empty prompt in one argument', () => {
   const agy = getAdapter('antigravity-cli', {
     id: 'antigravity',
     command: process.execPath,
@@ -135,7 +136,7 @@ test('Antigravity persistent sessions provide the required empty prompt value', 
     language: 'en',
   });
 
-  assert.deepEqual(resolved.args, ['--prompt-interactive', '']);
+  assert.deepEqual(resolved.args, ['--prompt-interactive=']);
   assert.equal(resolved.initialInputConsumed, false);
 });
 
@@ -156,8 +157,38 @@ test('Antigravity preserves configured prompt templates and fills a missing flag
     args: ['--prompt-interactive'],
   });
   assert.deepEqual(missingValue.resolveSessionLaunch({ initialPrompt: 'Implement feature' }).args, [
-    '--prompt-interactive', '',
+    '--prompt-interactive=',
   ]);
+  const explicitEmpty = getAdapter('antigravity-cli', {
+    id: 'antigravity', command: process.execPath, args: ['-i', '', '--model', 'fixture'],
+  });
+  assert.deepEqual(explicitEmpty.resolveSessionLaunch({ initialPrompt: '' }).args, ['-i=', '--model', 'fixture']);
+  const inlinePrompt = getAdapter('antigravity-cli', {
+    id: 'antigravity', command: process.execPath, args: ['--prompt-interactive={prompt}'],
+  });
+  const inline = inlinePrompt.resolveSessionLaunch({ initialPrompt: 'Implement feature' });
+  assert.deepEqual(inline.args, ['--prompt-interactive=Implement feature']);
+  assert.equal(inline.initialInputConsumed, true);
+});
+
+test('Antigravity empty prompt survives Windows PowerShell proxy forwarding', { skip: process.platform !== 'win32' }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'coordinate-agents-proxy-argv-'));
+  try {
+    const script = join(root, 'proxy.ps1');
+    const capture = join(root, 'capture.cjs');
+    writeFileSync(script, 'param([Parameter(ValueFromRemainingArguments = $true)][string[]] $CliArgs)\n& $env:CA_ARGV_NODE $env:CA_ARGV_PROBE @CliArgs\nexit $LASTEXITCODE\n');
+    writeFileSync(capture, 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+    const adapter = getAdapter('antigravity-cli', { id: 'antigravity', command: script });
+    const launch = adapter.resolveSessionLaunch({ initialPrompt: '' });
+    assert.equal(launch.resolvedCommand, script);
+    const result = spawnSync(launch.command, [...launch.prefix, ...launch.args], {
+      encoding: 'utf8', windowsHide: true, timeout: 10000,
+      env: { ...process.env, CA_ARGV_NODE: process.execPath, CA_ARGV_PROBE: capture },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), ['--prompt-interactive=']);
+    assert.equal(launch.initialInputConsumed, false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('custom adapter can be registered and used with custom lifecycle', () => {

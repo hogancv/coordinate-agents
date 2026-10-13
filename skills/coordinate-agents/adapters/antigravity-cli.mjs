@@ -42,15 +42,17 @@ export class AntigravityCliAdapter extends AgentAdapter {
         .replaceAll('{prompt}', initialPrompt)
         .replaceAll('{agent}', agent || '')
         .replaceAll('{lang}', language || ''));
-    const promptFlagIndex = args.findIndex(arg => arg === '--prompt-interactive' || arg === '-i');
+    const promptFlagIndex = args.findIndex(arg => /^(--prompt-interactive|-i)(=|$)/.test(arg));
     if (promptFlagIndex === -1) {
-      // Current agy/agy-proxy builds parse --prompt-interactive as an option
-      // that requires a value. An empty value starts the interactive session
-      // without consuming the first instruction; the PTY receives that
-      // instruction immediately after startup.
-      args.push('--prompt-interactive', '');
-    } else if (args[promptFlagIndex + 1] === undefined || `${args[promptFlagIndex + 1]}`.startsWith('-')) {
-      args.splice(promptFlagIndex + 1, 0, '');
+      // Encode the required empty value in the flag itself: Windows PowerShell
+      // proxy scripts drop standalone empty native arguments. The real first
+      // instruction is still delivered through the PTY after startup.
+      args.push('--prompt-interactive=');
+    } else if (!args[promptFlagIndex].includes('=')) {
+      const value = args[promptFlagIndex + 1];
+      if (value === undefined || value === '' || value.startsWith('-')) {
+        args.splice(promptFlagIndex, value === '' ? 2 : 1, `${args[promptFlagIndex]}=`);
+      }
     }
     // Persistent sessions deliver the first instruction through the PTY unless
     // the configured argument template explicitly consumes {prompt}. The

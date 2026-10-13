@@ -116,7 +116,7 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
 
     const page = await (await fetch(`${started.url}/`)).text();
     assert.match(page, /Coordinate Agents Workspace/);
-    assert.match(page, /BOUND REPOSITORY/);
+    assert.match(page, /CURRENT PROJECT/);
     assert.match(page, /id="repository"/);
     assert.match(page, /id="repo-name"/);
     assert.match(page, /id="repo-branch"/);

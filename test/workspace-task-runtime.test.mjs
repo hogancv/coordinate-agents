@@ -56,7 +56,7 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   return realpathSync.native(root);
 }
 
-function fakeCli(root, name, { fail = false, auth = false, transientAuth = false } = {}) {
+function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, inputDelayMs = 0 } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
   const script = join(root, `${name}-cli.cjs`);
@@ -83,7 +83,11 @@ console.log('${name}-ready');
 console.log('${name === 'codex' ? 'Ask Codex to do anything' : '? for shortcuts'}');
 process.stdin.setRawMode?.(true);
 process.stdin.resume();
-process.stdin.on('data', chunk => fs.appendFileSync(log, Buffer.from(chunk).toString('hex')));`}
+process.stdin.on('data', chunk => {
+  const input = Buffer.from(chunk).toString('hex');
+  if (${inputDelayMs} > 0) setTimeout(() => fs.appendFileSync(log, input), ${inputDelayMs});
+  else fs.appendFileSync(log, input);
+});`}
 `;
   writeFileSync(script, source, 'utf8');
   return { command: process.execPath, args: [script], log, termLog };
@@ -105,6 +109,16 @@ async function closeGroup(root, id) {
   try { await runtimeWorkspaceTaskClose({ root, workspaceTaskId: id }); } catch { /* Test cleanup is best effort. */ }
 }
 
+async function waitForCliInput(path, input, timeoutMs = 5_000) {
+  const expected = Buffer.from(input).toString('hex');
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(path) && readFileSync(path, 'utf8').includes(expected)) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  assert.fail(`Mock CLI did not consume the expected input within ${timeoutMs}ms.`);
+}
+
 async function removeTree(root) {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
@@ -120,7 +134,9 @@ async function removeTree(root) {
 test('Workspace Task lifecycle creates an isolated pair, preserves history, and closes idempotently', { timeout: 90_000 }, async () => {
   const root = repository();
   const codex = fakeCli(root, 'codex');
-  const antigravity = fakeCli(root, 'antigravity');
+  // An RPC write acknowledgement does not mean the CLI has consumed its input.
+  // Reproduce that asynchronous boundary rather than relying on runner speed.
+  const antigravity = fakeCli(root, 'antigravity', { inputDelayMs: 500 });
   configurePair(root, codex, antigravity);
   let workspaceTaskId = null;
   try {
@@ -136,8 +152,8 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(readFileSync(codex.termLog, 'utf8'), 'xterm-256color');
     assert.equal(readFileSync(antigravity.termLog, 'utf8'), 'xterm-256color');
-    assert.ok(readFileSync(codex.log, 'utf8').includes(Buffer.from(workspaceRolePrompt('codex', 'en')).toString('hex')));
-    assert.ok(readFileSync(antigravity.log, 'utf8').includes(Buffer.from(workspaceRolePrompt('antigravity', 'en')).toString('hex')));
+    await waitForCliInput(codex.log, workspaceRolePrompt('codex', 'en'));
+    await waitForCliInput(antigravity.log, workspaceRolePrompt('antigravity', 'en'));
 
     const bound = listRecords(root).filter(session => session.taskId === first.id);
     assert.deepEqual(new Set(bound.map(session => session.agent)), new Set(['codex', 'antigravity']));
@@ -146,11 +162,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const sent = await workspaceMessage(root, workspaceTaskId, 'send', 'web-lite-hello');
     assert.equal(sent.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(sent.sent, true);
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (readFileSync(antigravity.log, 'utf8').includes(Buffer.from('web-lite-hello\r').toString('hex'))) break;
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    assert.ok(readFileSync(antigravity.log, 'utf8').includes(Buffer.from('web-lite-hello\r').toString('hex')));
+    await waitForCliInput(antigravity.log, 'web-lite-hello\r');
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     // Closed pairs must not receive additional input through the lightweight helper.
     await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
@@ -279,13 +291,15 @@ test('Workspace Gateway exposes pair lifecycle, raw PTY input, resize, and hides
 
     const resized = await post('sessionResize', { sessionId: codexSessionId, cols: 100, rows: 32 });
     assert.equal(resized.payload.ok, true, JSON.stringify(resized.payload.error || {}));
-    const raw = await post('sessionWrite', { sessionId: codexSessionId, input: '\u001b[99~Z\u0003', submit: false });
+    // ConPTY translates valid keyboard sequences and discards unknown CSI
+    // codes; use the real Up key rather than an undefined CSI 99~ sequence.
+    const raw = await post('sessionWrite', { sessionId: codexSessionId, input: '\u001b[AZ\u0003', submit: false });
     assert.equal(raw.payload.ok, true, JSON.stringify(raw.payload.error || {}));
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (existsSync(codex.log) && readFileSync(codex.log, 'utf8').includes('1b5b39397e5a03')) break;
+      if (existsSync(codex.log) && readFileSync(codex.log, 'utf8').includes('1b5b415a03')) break;
       await new Promise(resolve => setTimeout(resolve, 50));
     }
-    assert.match(readFileSync(codex.log, 'utf8'), /1b5b39397e5a03/);
+    assert.match(readFileSync(codex.log, 'utf8'), /1b5b415a03/);
 
     const closed = await post('workspaceTaskClose', { workspaceTaskId });
     assert.equal(closed.payload.ok, true, JSON.stringify(closed.payload.error || {}));

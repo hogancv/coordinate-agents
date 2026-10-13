@@ -103,11 +103,17 @@ show me the resolved configuration. Do not start until I confirm.
 
 The built-in Antigravity Adapter does not automatically append a full-permission flag. The legacy
 one-shot path passes configured `args` and then adds `--prompt-interactive <prompt>`; a persistent
-Session starts with `--prompt-interactive ""` for current `agy`/`agy-proxy` parsers, then writes its
+Session starts with `--prompt-interactive=` for current `agy`/`agy-proxy` parsers, then writes its
 first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, set
 `agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
 `doctor` checks the executable/version only.
+
+If a Windows PowerShell proxy reports `flag needs an argument: -prompt-interactive`,
+the wrapper may have dropped a standalone empty argument. Persistent Antigravity
+sessions use the single argument `--prompt-interactive=` to preserve the empty
+value through that forwarding step. Restart the Web server after updating the
+source, then explicitly restart the failed task pair; no automatic retry is needed.
 
 ## Node version too low
 
