@@ -308,6 +308,10 @@ function sessionView(slot, facts) {
     exitCode: fact?.exitCode ?? null,
     signal: fact?.signal || null,
     error: fact?.error ? redactOutput(fact.error, MAX_ERROR_BYTES) : null,
+    backend: fact?.backend || null,
+    diagnostics: fact?.diagnostics || null,
+    cols: fact?.cols ?? null,
+    rows: fact?.rows ?? null,
   };
 }
 

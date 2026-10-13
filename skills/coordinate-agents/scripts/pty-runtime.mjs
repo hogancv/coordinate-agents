@@ -2,6 +2,7 @@ import { chmodSync, existsSync } from 'node:fs';
 import { spawn as spawnChild } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { release } from 'node:os';
 
 // The Plugin payload is intentionally runnable directly from a Git checkout,
 // where npm dependencies may not have been installed or the native backend is
@@ -16,13 +17,14 @@ function nodeMajorVersion() {
 
 const currentNodeMajor = nodeMajorVersion();
 let nodePty = null;
+let nativeLoadFailed = false;
 if (currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR) {
-  try { nodePty = await import('node-pty'); } catch { nodePty = null; }
+  try { nodePty = await import('node-pty'); } catch { nativeLoadFailed = true; }
 }
 
 const require = createRequire(import.meta.url);
 
-function nativePtyAvailable(nativePtyVerified = false) {
+function nativePtyAvailable(mode = 'auto', nativePtyVerified = false) {
   // node-pty 1.x can load on Node 18 while its native backend remains
   // unreliable there across the supported operating systems. A native
   // failure can terminate the detached Session Host before it can publish a
@@ -32,7 +34,21 @@ function nativePtyAvailable(nativePtyVerified = false) {
   return Boolean(nodePty?.spawn)
     && Number.isInteger(currentNodeMajor)
     && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR
-    && (process.platform !== 'win32' || nativePtyVerified === true);
+    && (process.platform !== 'win32' || nativePtyVerified === true || mode === 'native');
+}
+
+// Diagnostics deliberately contain fixed reasons, never native error messages,
+// command lines, environment values or terminal contents.
+function failure(stage, code) { return { stage, code }; }
+const SAFE_SYSTEM_CODES = new Set(['EIO', 'EAGAIN', 'EPIPE', 'EBADF', 'EINVAL', 'ENOSYS', 'ENOENT', 'EPERM', 'EACCES', 'ECONNRESET',
+  'ERR_IPC_DISCONNECTED', 'ERR_IPC_CHANNEL_CLOSED', 'ERR_STREAM_DESTROYED', 'ERR_INVALID_ARG_TYPE', 'ERR_INVALID_ARG_VALUE']);
+export function safePtySystemCode(value) { return SAFE_SYSTEM_CODES.has(value) ? value : 'UNKNOWN_SYSTEM_ERROR'; }
+
+function nativeSpawnFailure(error) {
+  const message = `${error?.message || ''}`;
+  if (message.includes('Failed to load native module')) return failure('load', 'NATIVE_BINDING_LOAD_FAILED');
+  if (/Cannot launch conpty|Failed to initialize conpty|CreatePseudoConsole/.test(message)) return failure('initialization', 'CONPTY_INITIALIZATION_FAILED');
+  return failure('spawn', 'NATIVE_SPAWN_FAILED');
 }
 
 function terminateOwnedProcessTree(pid) {
@@ -60,7 +76,7 @@ function terminateOwnedProcessTree(pid) {
 }
 
 function ensureUnixSpawnHelper() {
-  if (process.platform === 'win32' || !nativePtyAvailable()) return;
+  if (process.platform === 'win32' || !nodePty?.spawn) return;
   try {
     const packageRoot = dirname(dirname(require.resolve('node-pty')));
     const candidates = [
@@ -94,6 +110,14 @@ function boundedInteger(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGE
   return Math.min(max, Math.max(min, value));
 }
 
+function utf8Tail(text, maxBytes) {
+  const bytes = Buffer.from(text, 'utf8');
+  let start = Math.max(0, bytes.length - maxBytes);
+  // Skip continuation bytes at the left edge, keeping only complete codepoints.
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+  return bytes.subarray(start).toString('utf8');
+}
+
 class OutputBuffer {
   constructor(maxBytes) {
     this.maxBytes = boundedInteger(maxBytes, 64 * 1024, { min: 1024, max: 4 * 1024 * 1024 });
@@ -109,7 +133,7 @@ class OutputBuffer {
     let chunk = text;
     let chunkBytes = Buffer.byteLength(chunk, 'utf8');
     if (chunkBytes > this.maxBytes) {
-      chunk = Buffer.from(chunk, 'utf8').subarray(-this.maxBytes).toString('utf8');
+      chunk = utf8Tail(chunk, this.maxBytes);
       chunkBytes = Buffer.byteLength(chunk, 'utf8');
     }
     this.chunks.push({ cursor: this.cursor, text: chunk, bytes: chunkBytes });
@@ -124,17 +148,18 @@ class OutputBuffer {
   read({ cursor = null, maxLines = null, maxBytes = this.maxBytes } = {}) {
     const limit = boundedInteger(maxBytes, this.maxBytes, { min: 1, max: this.maxBytes });
     const firstCursor = this.chunks[0]?.cursor ?? this.cursor + 1;
-    const truncated = Number.isInteger(cursor) && cursor < firstCursor - 1;
+    let truncated = Number.isInteger(cursor) && cursor < firstCursor - 1;
     const selected = Number.isInteger(cursor)
       ? this.chunks.filter(chunk => chunk.cursor > cursor)
       : this.chunks;
     let output = selected.map(chunk => chunk.text).join('');
     if (Buffer.byteLength(output, 'utf8') > limit) {
-      output = Buffer.from(output, 'utf8').subarray(-limit).toString('utf8');
+      output = utf8Tail(output, limit);
+      truncated = true;
     }
     if (Number.isInteger(maxLines) && maxLines > 0) {
       const lines = output.split(/(?<=\n)/);
-      if (lines.length > maxLines) output = lines.slice(-maxLines).join('');
+      if (lines.length > maxLines) { output = lines.slice(-maxLines).join(''); truncated = true; }
     }
     return {
       output,
@@ -164,10 +189,12 @@ export class PtyRuntime {
     nativePtyVerified = false,
     onOutput = null,
     onStateChange = null,
+    backendMode = process.env.COORDINATE_AGENTS_PTY_MODE || 'auto',
   } = {}) {
     if (!id) throw new Error('PTY runtime requires a session id.');
     if (!command) throw new Error('PTY runtime requires an executable command.');
     if (!cwd) throw new Error('PTY runtime requires a working directory.');
+    if (!['auto', 'native', 'stdio'].includes(backendMode)) throw new Error('Invalid PTY mode; expected auto, native or stdio.');
     this.id = id;
     this.command = command;
     this.args = [...args].map(value => `${value}`);
@@ -180,7 +207,18 @@ export class PtyRuntime {
     this.pty = null;
     this.child = null;
     this.nativePtyVerified = nativePtyVerified;
-    this.backend = nativePtyAvailable(nativePtyVerified) ? 'node-pty' : 'stdio-fallback';
+    this.backendMode = backendMode;
+    this.backend = backendMode !== 'stdio' && nativePtyAvailable(backendMode, nativePtyVerified) ? 'node-pty' : 'stdio-fallback';
+    this.diagnostics = {
+      platform: process.platform, osRelease: release(), arch: process.arch,
+      nodeVersion: process.versions.node, requestedMode: backendMode,
+      nativeStatus: this.backend === 'node-pty' ? 'pending' : 'unavailable',
+      failure: null,
+    };
+    if (backendMode === 'stdio') this.diagnostics.nativeStatus = 'disabled';
+    else if (this.backend !== 'node-pty') this.diagnostics.failure = failure(nativeLoadFailed ? 'load' : 'selection',
+      currentNodeMajor < NODE_PTY_MIN_NODE_MAJOR ? 'NODE_VERSION_POLICY'
+        : nativeLoadFailed || !nodePty?.spawn ? 'NATIVE_LOAD_FAILED' : 'WINDOWS_NATIVE_NOT_VALIDATED');
     this.pid = null;
     this.state = 'starting';
     this.createdAt = timestamp();
@@ -202,6 +240,7 @@ export class PtyRuntime {
     return {
       id: this.id,
       backend: this.backend,
+      diagnostics: { ...this.diagnostics },
       pid: this.pid,
       state: this.state,
       createdAt: this.createdAt,
@@ -243,6 +282,14 @@ export class PtyRuntime {
   open() {
     if (this.pty || this.child) return this.snapshot();
     try {
+      if (this.backendMode === 'native' && process.platform === 'win32' && Number(release().split('.')[2]) < 18309) {
+        this.diagnostics.failure = failure('initialization', 'CONPTY_OS_UNSUPPORTED');
+        throw new Error('Native PTY requires a ConPTY-capable Windows build.');
+      }
+      if (this.backendMode === 'native' && !nativePtyAvailable('native')) {
+        this.diagnostics.failure = failure('load', 'NATIVE_UNAVAILABLE');
+        throw new Error('Native PTY unavailable on this runtime; inspect session diagnostics.');
+      }
       ensureUnixSpawnHelper();
       this._setState('starting');
       const env = {
@@ -254,7 +301,7 @@ export class PtyRuntime {
         // preserving any useful terminal type supplied by the caller.
         TERM: !this.env.TERM || this.env.TERM === 'dumb' ? 'xterm-256color' : this.env.TERM,
       };
-      if (nativePtyAvailable(this.nativePtyVerified)) {
+      if (this.backend === 'node-pty') {
         try {
           this.pty = nodePty.spawn(this.command, this.args, {
             name: 'xterm-256color',
@@ -264,7 +311,8 @@ export class PtyRuntime {
             env,
             useConpty: true,
           });
-        } catch {
+          this.diagnostics.nativeStatus = 'running';
+        } catch (error) {
           // Native PTY loading can fail on an otherwise supported runtime
           // (notably when a platform/Node combination has no usable native
           // prebuild). Keep the owned Session contract by falling back to
@@ -272,6 +320,12 @@ export class PtyRuntime {
           // uses the exact validated command and arguments.
           this.backend = 'stdio-fallback';
           this.pty = null;
+          this.diagnostics.nativeStatus = 'unavailable';
+          this.diagnostics.failure = nativeSpawnFailure(error);
+          if (this.backendMode === 'native') {
+            this.backend = 'node-pty';
+            throw new Error('Native PTY spawn failed; inspect session diagnostics.');
+          }
         }
       }
       if (!this.pty) {
@@ -294,10 +348,26 @@ export class PtyRuntime {
           this.error = error ? `${error.message || error}`.slice(0, 2 * 1024) : this.error;
           this.pid = null;
           const failed = Boolean(error) || (this.exitCode !== null && this.exitCode !== 0);
+          if (this.idleTimer) clearTimeout(this.idleTimer);
+          this.idleTimer = null;
+          if (failed && !this.diagnostics.failure) this.diagnostics.failure = failure('exit', error ? 'PROCESS_ERROR' : 'NONZERO_EXIT');
+          if (this.pty) this.diagnostics.nativeStatus = failed ? 'failed' : 'exited';
           this._setState(failed ? 'failed' : 'exited', error);
           resolve(this.snapshot());
         };
-        if (this.pty) this.pty.onExit(event => finish(event?.exitCode, event?.signal));
+        if (this.pty) {
+          let nativeError = null;
+          this.pty.on('error', error => {
+            if (['EIO', 'EAGAIN'].includes(error?.code) || `${error?.code}`.includes('errno 5')) return;
+            nativeError = new Error('Native PTY stream failed.');
+            this.diagnostics.failure = failure('runtime', 'NATIVE_STREAM_ERROR');
+            this.diagnostics.failure.systemCode = safePtySystemCode(error?.code);
+            // Keep exit as the resource-release boundary, including drain.
+            if (process.platform === 'win32') void terminateOwnedProcessTree(this.pid);
+            else { try { this.pty.kill(); } catch { /* Host timeout handles failed cleanup. */ } }
+          });
+          this.pty.onExit(event => finish(event?.exitCode, event?.signal, nativeError));
+        }
         else {
           let processError = null;
           this.child.once('error', error => { processError = error; });
@@ -313,6 +383,8 @@ export class PtyRuntime {
       // of the session setup is complete; both facts must remain observable.
       if (this.pty) this.pty.onData(data => this._appendOutput(data));
       else {
+        this.child.stdout?.setEncoding('utf8');
+        this.child.stderr?.setEncoding('utf8');
         this.child.stdout?.on('data', data => this._appendOutput(`${data}`));
         this.child.stderr?.on('data', data => this._appendOutput(`${data}`));
       }
@@ -415,10 +487,13 @@ export class PtyRuntime {
       // directly. The pipe backend owns the direct ChildProcess and must not
       // block close on a second Windows taskkill invocation.
       if (this.pty && process.platform !== 'win32') await terminateOwnedProcessTree(ownedPid);
+      let forceTimer;
       await Promise.race([
         this.exitPromise,
-        new Promise(resolve => setTimeout(resolve, Math.min(2_000, waitMs))),
+        new Promise(resolve => { forceTimer = setTimeout(resolve, Math.min(2_000, waitMs)); }),
       ]);
+      if (forceTimer) clearTimeout(forceTimer);
+      if (this.isActive()) this.diagnostics.failure = failure('cleanup', 'PTY_CLOSE_TIMEOUT');
     }
     return this.snapshot();
   }
