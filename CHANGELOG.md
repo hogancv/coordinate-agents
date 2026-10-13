@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.0.1] - 2026-10-13
+
+### Windows terminals
+
+- Restore verified native ConPTY sessions on Windows 10 with Node 22/24. Check native startup and real TTY behavior in an isolated Session Host; fall back safely after failed or timed-out probes and confirmed cleanup.
+- Fix Session Host RPC errors, close-response races, and stale metadata overwriting final output. Confirm owned Host/CLI exit before reporting cleanup, and prevent status polling from terminating a reused historical PID.
+- Add backend and sanitized platform diagnostics, explicit native/stdio modes, UTF-8-safe output tails, and bounded startup cleanup. Preserve independent Host reconnection and retry failed terminal resize requests while coalescing pending sizes.
+
+### Web Workspace
+
+- Simplify the sidebar with compact project/task navigation, project switching, repository details, and task/project search.
+- Add draggable, persistent dual-terminal split sizing and individual Codex/Antigravity focus with split restoration and scrollback-preserving reflow.
+- Add light/dark theme switching with a light default, saved preferences, and matching terminal palettes without restarting Sessions.
+- Combine Workspace and task controls into one toolbar and place terminal role labels beside agent names to increase terminal space.
+- Fix interactive startup detection for mixed OSC terminators and continuous terminal-title updates, preventing ready Codex terminals from being incorrectly closed after a timeout.
+- Preserve empty Antigravity interactive prompts across proxy forwarding and improve terminal backend visibility and startup/lifecycle feedback.
+
+### Performance and safety
+
+- Reduce redundant Event Journal path resolution and UTF-8 byte counting while preserving path checks and bounded reads.
+- Optimize Workspace archive discovery and cross-task references while retaining exact-file ownership/activity validation before deletion.
+- Read only referenced Session records for single-task views and reject mismatched payload/file identities. Reduce unnecessary Inspector summary sanitization and graph-detail allocations in the GitHub source.
+
+### Compatibility
+
+- Keep Node.js >=18, node-pty 1.1.0, and the Web-first npm payload. Node 18 continues to use stdio fallback; native PTY is selected only on supported, validated runtimes. Fallback does not provide native TUI or child-observed resize.
+- The independently versioned GitHub Legacy Plugin remains at 2.4.0. This release adds no WebSocket transport or automatic multi-agent orchestration.
+
 ## 3.0.0 — Web-first npm distribution
 
 - Added right-click archiving for Workspace conversations and whole project folders. Archive closes owned terminals, persists records and hides them; settings can clear archived conversation and owned Session transcripts across projects while preserving project source. Archived folders remain hidden on restart and explicit re-add restores their navigation entry.

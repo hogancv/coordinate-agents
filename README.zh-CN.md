@@ -3,13 +3,13 @@
 [English](./README.md) · [文档](./docs/zh-CN/index.md) · [安全说明](./SECURITY.md)
 
 Coordinate Agents 是面向 Codex + Antigravity 协作的本地 Web Workspace。
-**npm 3.0.0 是 Web-first 分发版本**：独立运行的轻量工作台，保留双终端、
+**npm 3.0.1 是 Web-first 分发版本**：独立运行的轻量工作台，保留双终端、
 项目与任务持久化，以及轻量角色提示词。
 
 ```sh
 npx @hogancv/coordinate-agents@latest web
 # 指定目录和端口（0 表示自动分配空闲端口）：
-npx @hogancv/coordinate-agents@3.0.0 web --root "/path/to/project" --port 3000
+npx @hogancv/coordinate-agents@3.0.1 web --root "/path/to/project" --port 3000
 ```
 
 先安装 Node.js >=18、Git、Codex 和 Antigravity CLI，并分别登录代理 CLI。
@@ -18,7 +18,7 @@ Codex 模型及推理强度。创建任务后，在 Codex 终端输入需求；C
 `workspace-message` 向该任务的 Antigravity 派发实现要求，收到回复后审查并汇报。
 多项目、原始终端输入输出、尺寸调整、关闭/重启、刷新和独立 Session Host 重连均保留。
 
-Node 18 继续使用受管 stdio 回退后端。Windows Node >=20 在当前源码中先通过
+Node 18 继续使用受管 stdio 回退后端。Windows Node >=20 在 npm 3.0.1 中先通过
 一次性独立 Session Host 验证原生 PTY 启动和真实 TTY，再选择 node-pty。
 预检失败或超时，仅在确认本次进程清理后才使用 stdio 回退；实际 Session 失败
 不会自动重试 Agent 任务。会话诊断包含 `backend` 字段。回退保留有界输入输出

@@ -885,7 +885,7 @@ test('Protocol schemas and Plugin MCP packaging stay version-stable', () => {
   const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
   assert.match(packageJson.version, /^\d+\.\d+\.\d+$/);
   assert.equal(pluginJson.version, '2.4.0');
-  assert.equal(packageJson.version, '3.0.0');
+  assert.equal(packageJson.version, '3.0.1');
   assert.equal(pluginJson.mcpServers, './.mcp.json');
   const mcpConfig = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8'));
   const serverIds = Object.keys(mcpConfig.mcpServers);

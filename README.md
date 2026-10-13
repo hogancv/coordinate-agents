@@ -3,13 +3,13 @@
 [简体中文](./README.zh-CN.md) · [Documentation](./docs/index.md) · [Security](./SECURITY.md)
 
 Coordinate Agents is a local Web Workspace for Codex + Antigravity collaboration.
-**npm 3.0.0 is the Web-first distribution**: a small standalone workbench with
+**npm 3.0.1 is the Web-first distribution**: a small standalone workbench with
 paired terminals, project/task persistence and lightweight role prompts.
 
 ```sh
 npx @hogancv/coordinate-agents@latest web
 # Select a folder and port (0 selects a free port):
-npx @hogancv/coordinate-agents@3.0.0 web --root "/path/to/project" --port 3000
+npx @hogancv/coordinate-agents@3.0.1 web --root "/path/to/project" --port 3000
 ```
 
 Install Node.js >=18, Git, and the Codex/Antigravity CLIs separately; sign in to
@@ -20,8 +20,8 @@ to the task's Antigravity through `workspace-message`. Codex reviews the reply
 and reports to you. Multiple projects, raw terminal I/O, resize, close/restart,
 refresh and reconnection to independent Session Hosts remain available.
 
-Node 18 retains the owned stdio fallback. On Windows Node >=20, this source
-checkout verifies native PTY startup and real TTY behavior in a disposable,
+Node 18 retains the owned stdio fallback. On Windows Node >=20, npm 3.0.1
+verifies native PTY startup and real TTY behavior in a disposable,
 detached Session Host before selecting node-pty. A failed or timed-out probe
 selects stdio fallback only after owned-process cleanup is confirmed; an actual
 Session failure never automatically retries an Agent task. Session diagnostics
