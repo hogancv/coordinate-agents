@@ -49,7 +49,7 @@ const MAX_ERROR_BYTES = 4 * 1024;
 const MAX_HISTORY = 32;
 const WORKSPACE_STARTUP_TIMEOUT_MS = 20_000;
 const WORKSPACE_READY_QUIET_MS = 900;
-const ANSI_ESCAPE_PATTERN = /(?:\u001B\][^\u0007]*(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[@-_]|\u009B[0-?]*[ -/]*[@-~])/g;
+const ANSI_ESCAPE_PATTERN = /(?:\u001B\][^\u0007]*?(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[@-_]|\u009B[0-?]*[ -/]*[@-~])/g;
 
 function now() {
   return new Date().toISOString();
@@ -466,7 +466,7 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
   const deadline = Date.now() + WORKSPACE_STARTUP_TIMEOUT_MS;
   let markerSeen = false;
   let authObserved = false;
-  let lastCursor = null;
+  let lastOutput = null;
   let quietSince = null;
   let latest = session;
 
@@ -493,14 +493,15 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
       authObserved ||= workspaceTerminalAuthRequired(agent, output);
       const ready = workspaceTerminalReady(agent, output);
       markerSeen = ready;
-      const cursor = inspected.output?.nextCursor ?? null;
-      if (markerSeen && cursor === lastCursor) {
+      // Title animations and cursor-only redraws advance the raw PTY cursor
+      // without changing the prompt. Wait for stable terminal text instead.
+      if (markerSeen && output === lastOutput) {
         quietSince ??= Date.now();
         if (Date.now() - quietSince >= WORKSPACE_READY_QUIET_MS) return latest;
       } else {
         quietSince = null;
       }
-      lastCursor = cursor;
+      lastOutput = output;
     } catch (error) {
       if (error?.code === 'WORKSPACE_TASK_START_FAILED' || error?.code === 'AUTH_REQUIRED') throw error;
       // A detached host can briefly be unavailable between its socket bind

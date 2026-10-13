@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="dark">
+    <meta name="color-scheme" content="light dark">
     <meta name="description" content="Coordinate Agents dual-terminal Workspace.">
     <meta name="coordinate-agents-capability" content="__COORDINATE_AGENTS_CAPABILITY__">
     <title>Coordinate Agents Workspace</title>
@@ -79,12 +79,30 @@
       <main class="main-column">
         <header class="topbar">
           <button id="sidebar-open" class="icon-button mobile-only" type="button" aria-label="Open sidebar">☰</button>
-          <div class="topbar-copy">
-            <span class="eyebrow" data-i18n="workspace.eyebrow">DUAL-TERMINAL WORKSPACE</span>
+          <div id="workspace-heading" class="topbar-copy">
             <h1 id="workspace-title" data-i18n="workspace.title">Workspace</h1>
           </div>
+          <div id="task-heading" class="task-heading" hidden>
+            <div class="task-heading-title-row">
+              <h2 id="selected-task-title">—</h2>
+              <span id="selected-task-status" class="status-pill">—</span>
+            </div>
+            <div class="task-meta-row" hidden>
+              <code id="selected-task-id">—</code>
+              <span id="selected-task-prompt-version">v2.3.0</span>
+            </div>
+          </div>
           <div class="topbar-actions">
+            <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
+              <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
+              <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
+              <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
+            </div>
             <button id="zen-button" class="secondary-button" type="button" aria-pressed="false" data-i18n="zen.enter" disabled>Zen mode</button>
+            <button id="theme-button" class="icon-button theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode">
+              <svg class="theme-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 11.5A7 7 0 0 1 8.5 3.5a7 7 0 1 0 8 8z"/></svg>
+              <svg class="theme-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.5"/><path d="M10 1v2m0 14v2M1 10h2m14 0h2M3.6 3.6 5 5m10 10 1.4 1.4m0-12.8L15 5M5 15l-1.4 1.4"/></svg>
+            </button>
             <div class="language-toggle" role="group" aria-label="Language / 语言">
               <button id="lang-zh" class="language-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
               <button id="lang-en" class="language-button active" type="button" lang="en-US" aria-pressed="true">English</button>
@@ -103,23 +121,6 @@
         </section>
 
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
-          <header class="task-toolbar">
-            <div class="task-heading">
-              <div class="task-heading-title-row">
-                <h2 id="selected-task-title">—</h2>
-                <span id="selected-task-status" class="status-pill">—</span>
-              </div>
-              <div class="task-meta-row">
-                <code id="selected-task-id">—</code>
-                <span id="selected-task-prompt-version">v2.3.0</span>
-              </div>
-            </div>
-            <div class="task-toolbar-actions">
-              <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
-              <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
-              <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
-            </div>
-          </header>
           <div id="task-error" class="task-error" role="alert" hidden></div>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>

@@ -36,6 +36,8 @@ const I18N = {
     'empty.archivedBody': 'Add a project to continue, or open settings to clear archived conversations.',
     'zen.enter': 'Zen mode',
     'zen.exit': 'Exit Zen mode',
+    'theme.toDark': 'Switch to dark mode',
+    'theme.toLight': 'Switch to light mode',
     'repo.label': 'CURRENT PROJECT',
     'project.switch': 'Switch project',
     'project.new': 'New project',
@@ -130,6 +132,8 @@ const I18N = {
     'empty.archivedBody': '新增项目继续工作，或进入设置清除已归档对话。',
     'zen.enter': '禅模式',
     'zen.exit': '退出禅模式',
+    'theme.toDark': '切换为深色模式',
+    'theme.toLight': '切换为浅色模式',
     'repo.label': '当前项目',
     'project.switch': '切换项目',
     'project.new': '新增项目',
@@ -218,6 +222,7 @@ const state = {
   expandedProjects: new Set(),
   taskSearch: '',
   locale: loadLocale(),
+  theme: loadTheme(),
   repository: null,
   tasks: [],
   selectedId: null,
@@ -259,6 +264,53 @@ function setTerminalSplitRatio(ratio, persist = true) {
     catch { /* Browser storage is optional. */ }
   }
   updateTerminalLayout();
+}
+
+function loadTheme() {
+  try {
+    if (localStorage.getItem('coordinate-agents-workspace-theme') === 'dark') return 'dark';
+  } catch { /* Browser storage is optional. */ }
+  return 'light';
+}
+
+function terminalTheme(theme = state.theme) {
+  if (theme === 'dark') return {
+    background: '#080d18', foreground: '#e7efff', cursor: '#a7bcff', cursorAccent: '#080d18',
+    selectionBackground: 'rgba(130, 158, 255, .35)',
+    black: '#1e293b', red: '#f87171', green: '#4ade80', yellow: '#facc15',
+    blue: '#60a5fa', magenta: '#c084fc', cyan: '#22d3ee', white: '#cbd5e1',
+    brightBlack: '#94a3b8', brightRed: '#fca5a5', brightGreen: '#86efac', brightYellow: '#fde047',
+    brightBlue: '#93c5fd', brightMagenta: '#d8b4fe', brightCyan: '#67e8f9', brightWhite: '#f8fafc',
+  };
+  return {
+    background: '#ffffff', foreground: '#172033', cursor: '#2563eb', cursorAccent: '#ffffff',
+    selectionBackground: 'rgba(37, 99, 235, .18)',
+    black: '#1f2937', red: '#b91c1c', green: '#15803d', yellow: '#a16207',
+    blue: '#1d4ed8', magenta: '#7e22ce', cyan: '#0e7490', white: '#4b5563',
+    brightBlack: '#64748b', brightRed: '#dc2626', brightGreen: '#166534', brightYellow: '#854d0e',
+    brightBlue: '#2563eb', brightMagenta: '#9333ea', brightCyan: '#0891b2', brightWhite: '#111827',
+  };
+}
+
+function renderTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  const button = document.querySelector('#theme-button');
+  const label = t(state.theme === 'dark' ? 'theme.toLight' : 'theme.toDark');
+  if (button) {
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-pressed', String(state.theme === 'dark'));
+  }
+  for (const controller of state.terminalViews.values()) {
+    if (controller.terminal) controller.terminal.options.theme = terminalTheme();
+  }
+}
+
+function setTheme(theme) {
+  if (!['light', 'dark'].includes(theme)) return;
+  state.theme = theme;
+  try { localStorage.setItem('coordinate-agents-workspace-theme', theme); } catch { /* Optional. */ }
+  renderTheme();
 }
 
 function loadLocale() {
@@ -553,6 +605,7 @@ async function saveSettings(event) {
 }
 
 function renderLocale() {
+  renderTheme();
   document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
   document.body.dataset.locale = state.locale === 'zh' ? 'zh-CN' : 'en';
   for (const element of document.querySelectorAll('[data-i18n]')) element.textContent = t(element.dataset.i18n);
@@ -956,6 +1009,12 @@ function taskItemMarkup(task, projectId) {
 }
 
 function renderSelectedTask() {
+  const workspaceHeading = document.querySelector('#workspace-heading');
+  const taskHeading = document.querySelector('#task-heading');
+  const taskActions = document.querySelector('#task-toolbar-actions');
+  if (workspaceHeading) workspaceHeading.hidden = Boolean(state.selectedTask);
+  if (taskHeading) taskHeading.hidden = !state.selectedTask;
+  if (taskActions) taskActions.hidden = !state.selectedTask;
   const zenButton = document.querySelector('#zen-button');
   if (zenButton) zenButton.disabled = !state.selectedTask;
   if (!state.selectedTask && document.body.classList.contains('zen-mode')) setZenMode(false);
@@ -978,7 +1037,10 @@ function renderSelectedTask() {
   const status = document.querySelector('#selected-task-status');
   const id = document.querySelector('#selected-task-id');
   const version = document.querySelector('#selected-task-prompt-version');
-  if (title) title.textContent = task.title || '—';
+  if (title) {
+    title.textContent = task.title || '—';
+    title.title = `${task.title || '—'}\n${task.id || ''}\nv${task.promptVersion || '2.3.0'}`;
+  }
   if (status) {
     status.textContent = statusLabel(task.status);
     status.className = `status-pill ${statusKey(task.status)}`;
@@ -1073,12 +1135,8 @@ function renderTerminalViews(panes) {
       scrollback: 2_000,
       fontSize: 13,
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-      theme: {
-        background: '#080d18',
-        foreground: '#e7efff',
-        cursor: '#a7bcff',
-        selectionBackground: 'rgba(130, 158, 255, .35)',
-      },
+      minimumContrastRatio: 4.5,
+      theme: terminalTheme(),
     });
     controller.terminal.open(screen);
     controller.terminal.onData(data => enqueueRawInput(controller, data));
@@ -1613,6 +1671,7 @@ function bindEvents() {
   document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));
+  document.querySelector('#theme-button')?.addEventListener('click', () => setTheme(state.theme === 'light' ? 'dark' : 'light'));
   document.querySelector('#repo-facts-toggle')?.addEventListener('click', () => {
     state.repoFactsOpen = !state.repoFactsOpen;
     renderRepository();

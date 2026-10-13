@@ -12,6 +12,46 @@ function runFunctions(start, end, globals) {
   return context;
 }
 
+test('theme defaults to light and restores only valid saved choices', () => {
+  let saved = null;
+  const context = runFunctions('loadTheme', 'loadLocale', { localStorage: { getItem: () => saved } });
+  for (const value of [null, '', 'system', 'invalid']) {
+    saved = value;
+    assert.equal(context.loadTheme(), 'light');
+  }
+  saved = 'dark';
+  assert.equal(context.loadTheme(), 'dark');
+  saved = 'light';
+  assert.equal(context.loadTheme(), 'light');
+  const blocked = runFunctions('loadTheme', 'loadLocale', { localStorage: { getItem() { throw new Error('Storage blocked'); } } });
+  assert.equal(blocked.loadTheme(), 'light');
+});
+
+test('theme switching persists the choice and recolors existing terminals without changing sessions', () => {
+  const terminal = { options: {} };
+  const controller = { terminal, pane: { sessionId: 'existing-session' } };
+  const state = { theme: 'light', terminalViews: new Map([['codex', controller]]) };
+  const attributes = {};
+  const button = { setAttribute: (key, value) => { attributes[key] = value; } };
+  const root = { dataset: {} };
+  let saved;
+  const context = runFunctions('loadTheme', 'loadLocale', { state,
+    localStorage: { setItem: (key, value) => { saved = [key, value]; } },
+    document: { documentElement: root, querySelector: () => button }, t: key => key,
+  });
+  context.setTheme('dark');
+  assert.equal(root.dataset.theme, 'dark');
+  assert.deepEqual(saved, ['coordinate-agents-workspace-theme', 'dark']);
+  assert.equal(attributes['aria-pressed'], 'true');
+  assert.equal(terminal.options.theme.background, '#080d18');
+  context.setTheme('light');
+  assert.equal(root.dataset.theme, 'light');
+  assert.equal(attributes['aria-pressed'], 'false');
+  assert.equal(terminal.options.theme.background, '#ffffff');
+  assert.equal(state.terminalViews.get('codex'), controller);
+  assert.equal(controller.pane.sessionId, 'existing-session');
+});
+
 test('split ratio restores storage, defaults safely and clamps both panes to 25%', () => {
   let stored = '0.7';
   const state = {};

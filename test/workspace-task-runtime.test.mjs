@@ -38,6 +38,12 @@ test('Workspace readiness recognizes ANSI-redrawn interactive prompts', () => {
   assert.equal(workspaceTerminalReady('antigravity', paint('? for shortcuts')), true);
 });
 
+test('Workspace readiness preserves prompt text between ST and BEL terminated OSC sequences', () => {
+  const output = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[27;3HAsk Codex to do anything\x1b]0;Workspace\x07';
+  assert.equal(workspaceTerminalReady('codex', output), true);
+  assert.equal(workspaceTerminalReady('codex', '\x1b]0;Ask Codex to do anything\x07'), false);
+});
+
 function git(root, args) {
   const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', windowsHide: true });
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -83,7 +89,7 @@ test('single-task reads ignore Session payload identities that differ from the r
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, inputDelayMs = 0 } = {}) {
+function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, inputDelayMs = 0, titleUpdates = false } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);
   const script = join(root, `${name}-cli.cjs`);
@@ -92,6 +98,7 @@ const fs = require('node:fs');
 const log = ${JSON.stringify(log)};
 const termLog = ${JSON.stringify(termLog)};
 if (process.argv.includes('--version')) { console.log('workspace-fixture 1.0.0'); process.exit(0); }
+${titleUpdates ? "setInterval(() => process.stdout.write('\\x1b]0;title-' + Date.now() + '\\x07'), 80);" : ''}
 ${fail ? 'process.exit(17);' : auth ? `console.log('Welcome to the Antigravity CLI. You are currently not signed in.');
 console.log('Select login method:');
 console.log('Google OAuth');
@@ -157,6 +164,22 @@ async function removeTree(root) {
   }
   rmSync(root, { recursive: true, force: true });
 }
+
+test('Workspace readiness ignores continuous title updates after the interactive prompt', { timeout: 40_000 }, async () => {
+  const root = repository();
+  const codex = fakeCli(root, 'codex', { titleUpdates: true });
+  const antigravity = fakeCli(root, 'antigravity', { titleUpdates: true });
+  configurePair(root, codex, antigravity);
+  try {
+    const created = await runtimeWorkspaceTaskCreate({ root });
+    assert.equal(created.workspaceTask.status, 'RUNNING');
+    await waitForCliInput(codex.log, workspaceRolePrompt('codex', 'en'));
+    await waitForCliInput(antigravity.log, workspaceRolePrompt('antigravity', 'en'));
+  } finally {
+    for (const task of await readWorkspaceTasks(root)) await closeGroup(root, task.id);
+    await removeTree(root);
+  }
+});
 
 test('Workspace Task lifecycle creates an isolated pair, preserves history, and closes idempotently', { timeout: 90_000 }, async () => {
   const root = repository();
