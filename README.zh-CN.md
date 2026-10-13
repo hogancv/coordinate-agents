@@ -18,10 +18,11 @@ Codex 模型及推理强度。创建任务后，在 Codex 终端输入需求；C
 `workspace-message` 向该任务的 Antigravity 派发实现要求，收到回复后审查并汇报。
 多项目、原始终端输入输出、尺寸调整、关闭/重启、刷新和独立 Session Host 重连均保留。
 
-原有 PTY 平台策略保持不变：Node 18 和 Windows Node >=22 使用受管 stdio
-回退后端，支持的原生组合使用 node-pty。回退后端保留会话输入输出与生命周期，
-但可能无法运行代理完整交互 TUI。继续支持 Node 18；如果所用 CLI 必须使用原生
-终端，应选择相应的较新 Node 环境。
+Node 18 继续使用受管 stdio 回退后端。Windows Node >=20 在当前源码中先通过
+一次性独立 Session Host 验证原生 PTY 启动和真实 TTY，再选择 node-pty。
+预检失败或超时，仅在确认本次进程清理后才使用 stdio 回退；实际 Session 失败
+不会自动重试 Agent 任务。会话诊断包含 `backend` 字段。回退保留有界输入输出
+和生命周期，但不是真实终端，不能提供原生 TUI 或子进程可感知的 resize。
 
 **GitHub 中完整的 Plugin / Legacy CLI / MCP / Task Graph 源码仍然保留**，包括原有本地优先协作协议和运行时。
 结构化协作使用 GitHub Plugin；其版本独立管理，目前仍为 2.4.0。

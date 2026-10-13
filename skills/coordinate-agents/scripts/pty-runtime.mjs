@@ -24,18 +24,17 @@ if (currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR) {
 
 const require = createRequire(import.meta.url);
 
-function nativePtyAvailable(mode = 'auto') {
+function nativePtyAvailable(mode = 'auto', nativePtyVerified = false) {
   // node-pty 1.x can load on Node 18 while its native backend remains
   // unreliable there across the supported operating systems. A native
   // failure can terminate the detached Session Host before it can publish a
   // useful error, so select the owned stdio backend up front on Node 18.
-  // Windows Node 22+ was held back after owned-session startup/cleanup
-  // failures. That history alone does not establish an ABI incompatibility.
-  // Keep auto stable; only a strict process-scoped experiment bypasses it.
+  // Windows availability is established in a disposable detached Host, not
+  // by import success alone. A native abort is not catchable in JS.
   return Boolean(nodePty?.spawn)
     && Number.isInteger(currentNodeMajor)
     && currentNodeMajor >= NODE_PTY_MIN_NODE_MAJOR
-    && (mode === 'native' || !(process.platform === 'win32' && currentNodeMajor >= 22));
+    && (process.platform !== 'win32' || nativePtyVerified === true || mode === 'native');
 }
 
 // Diagnostics deliberately contain fixed reasons, never native error messages,
@@ -187,6 +186,7 @@ export class PtyRuntime {
     rows = 30,
     maxOutputBytes = 64 * 1024,
     idleAfterMs = 350,
+    nativePtyVerified = false,
     onOutput = null,
     onStateChange = null,
     backendMode = process.env.COORDINATE_AGENTS_PTY_MODE || 'auto',
@@ -206,8 +206,9 @@ export class PtyRuntime {
     this.output = new OutputBuffer(maxOutputBytes);
     this.pty = null;
     this.child = null;
+    this.nativePtyVerified = nativePtyVerified;
     this.backendMode = backendMode;
-    this.backend = backendMode !== 'stdio' && nativePtyAvailable(backendMode) ? 'node-pty' : 'stdio-fallback';
+    this.backend = backendMode !== 'stdio' && nativePtyAvailable(backendMode, nativePtyVerified) ? 'node-pty' : 'stdio-fallback';
     this.diagnostics = {
       platform: process.platform, osRelease: release(), arch: process.arch,
       nodeVersion: process.versions.node, requestedMode: backendMode,
@@ -400,7 +401,11 @@ export class PtyRuntime {
 
   write(input, { submit = true } = {}) {
     if ((!this.pty && !this.child) || !this.isActive() || !this.pid) throw new Error(`PTY session ${this.id} is not writable in state ${this.state}.`);
-    const value = `${input ?? ''}`;
+    // Logical submitted text uses Enter on the Windows console. LF alone is
+    // not Enter in cooked ConPTY input. Raw xterm key/paste bytes stay exact.
+    const value = this.pty && process.platform === 'win32' && submit
+      ? `${input ?? ''}`.replace(/\r?\n/g, '\r')
+      : `${input ?? ''}`;
     if (!value) return this.snapshot();
     const suffix = submit && !/[\r\n]$/.test(value) ? (this.pty ? '\r' : '\n') : '';
     const payload = `${value}${suffix}`;
@@ -467,19 +472,21 @@ export class PtyRuntime {
     if (timer) clearTimeout(timer);
     if (this.isActive()) {
       const ownedPid = this.pid;
-      // Kill the Windows tree while the root PID still exists. Killing the
-      // root first can make taskkill /T unable to discover its descendants.
-      if (this.pty) await terminateOwnedProcessTree(ownedPid);
-      try {
-        // Windows taskkill already targets the live owned tree. node-pty 1.1
-        // kill() after actual exit starts a delayed console-list helper which
-        // may signal a recycled PID. Host exit releases ConPTY workers/handles.
-        if (this.pty && process.platform !== 'win32') this.pty.kill();
-        else if (this.child) this.child.kill();
-      } catch { /* The owned process may already be gone. */ }
+      if (this.pty && process.platform === 'win32') {
+        // Avoid node-pty 1.1.0's extra AttachConsole helper during kill(): it
+        // was observed failing while the shell exited. Kill only our CLI tree
+        // first; onExit drains output before the Session Host exits.
+        await terminateOwnedProcessTree(ownedPid);
+      } else {
+        try {
+          if (this.pty) this.pty.kill();
+          else this.child.kill();
+        } catch { /* The owned process may already be gone. */ }
+      }
       // node-pty can own a console process tree rather than the executable
       // directly. The pipe backend owns the direct ChildProcess and must not
       // block close on a second Windows taskkill invocation.
+      if (this.pty && process.platform !== 'win32') await terminateOwnedProcessTree(ownedPid);
       let forceTimer;
       await Promise.race([
         this.exitPromise,
