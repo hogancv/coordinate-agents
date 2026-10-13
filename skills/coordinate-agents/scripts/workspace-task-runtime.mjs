@@ -295,7 +295,8 @@ function sessionFactMap(root, sessionIds = null) {
       for (const id of sessionIds) {
         if (!id) continue;
         try {
-          facts.set(id, readRecord(root, id));
+          const record = readRecord(root, id);
+          if (record.id === id) facts.set(id, record);
         } catch {
           // Ignore missing or inaccessible session records
         }
@@ -322,6 +323,10 @@ function sessionView(slot, facts) {
     exitCode: fact?.exitCode ?? null,
     signal: fact?.signal || null,
     error: fact?.error ? redactOutput(fact.error, MAX_ERROR_BYTES) : null,
+    backend: fact?.backend || null,
+    diagnostics: fact?.diagnostics || null,
+    cols: fact?.cols ?? null,
+    rows: fact?.rows ?? null,
   };
 }
 
@@ -721,17 +726,23 @@ function allTaskSessionIds(record) {
   return [...new Set([...sessionIdsFor(record), ...record.sessionHistory.flatMap(entry => [entry.codexSessionId, entry.antigravitySessionId])].filter(Boolean))];
 }
 
-function ownedTaskSessionFiles(root, record) {
+const WORKSPACE_SLOT_AGENTS = new Set(WORKSPACE_TASK_SLOTS.map(slot => slot.agent));
+
+function ownedTaskSessionFiles(root, record, sessionRecords = null) {
   const directory = join(root, '.agent-bus', 'sessions');
   assertSafePath(root, directory);
-  const owned = existsSync(directory) ? listRecords(root).filter(session => session.taskId === record.id && WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) : [];
+  // Performance optimization: reuse pre-read session records when provided to avoid O(A * S) disk reads
+  const sessions = sessionRecords !== null ? sessionRecords : (existsSync(directory) ? listRecords(root) : []);
+  const owned = sessions.filter(session => session.taskId === record.id && WORKSPACE_SLOT_AGENTS.has(session.agent));
   // Restart history is bounded, but transcript cleanup must cover every owned Session.
   return [...new Set([...allTaskSessionIds(record), ...owned.map(session => session.id)])].flatMap(id => {
     const path = join(root, '.agent-bus', 'sessions', `${id}.json`);
     assertSafePath(root, path);
     if (!existsSync(path)) return [];
+    // Discovery records may contain duplicate payload IDs in different files.
+    // Validate ownership and active state from the exact file being modified.
     const session = readRecord(root, id);
-    if (session.id !== id || repositoryRoot(session.cwd) !== root || session.taskId !== record.id || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === session.agent)) {
+    if (session.id !== id || repositoryRoot(session.cwd) !== root || session.taskId !== record.id || !WORKSPACE_SLOT_AGENTS.has(session.agent)) {
       throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to modify a Session owned by another task.', { recoverable: false, taskId: record.id, sessionId: id });
     }
     return [{ id, path, session }];
@@ -756,10 +767,33 @@ export async function runtimeWorkspaceArchivesClear(input = {}) {
   const root = repositoryRoot(input.root);
   const records = listWorkspaceTaskRecords(root);
   let deletedTasks = 0, deletedSessions = 0;
-  for (const record of records.filter(task => task.archivedAt)) {
-    const files = ownedTaskSessionFiles(root, record);
+  const archivedRecords = records.filter(task => task.archivedAt);
+  if (archivedRecords.length === 0) {
+    return jsonSuccess('workspace.archives.clear', { deletedTasks: 0, deletedSessions: 0 });
+  }
+
+  const directory = join(root, '.agent-bus', 'sessions');
+  const sessionRecords = existsSync(directory) ? listRecords(root) : [];
+
+  // Performance optimization: pre-index session IDs to set of referencing task IDs for O(1) cross-task reference checks
+  const sessionTaskMap = new Map();
+  for (const record of records) {
+    for (const sessionId of allTaskSessionIds(record)) {
+      let taskIds = sessionTaskMap.get(sessionId);
+      if (!taskIds) {
+        taskIds = new Set();
+        sessionTaskMap.set(sessionId, taskIds);
+      }
+      taskIds.add(record.id);
+    }
+  }
+
+  for (const record of archivedRecords) {
+    const files = ownedTaskSessionFiles(root, record, sessionRecords);
     for (const file of files) {
-      if (ACTIVE_SESSION_STATES.has(file.session.state) || records.some(other => other.id !== record.id && allTaskSessionIds(other).includes(file.id))) {
+      const referencingTaskIds = sessionTaskMap.get(file.id);
+      const referencedByOther = referencingTaskIds && Array.from(referencingTaskIds).some(taskId => taskId !== record.id);
+      if (ACTIVE_SESSION_STATES.has(file.session.state) || referencedByOther) {
         throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to clear a Session still active or referenced by another task.', { recoverable: false, sessionId: file.id });
       }
     }

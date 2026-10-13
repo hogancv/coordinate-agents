@@ -56,6 +56,33 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   return realpathSync.native(root);
 }
 
+test('single-task reads ignore Session payload identities that differ from the requested file', async () => {
+  const root = repository();
+  try {
+    const id = 'workspace-sessionfacts0001';
+    const sessionId = 'session_viewtarget0001';
+    const directory = join(root, '.agent-bus', 'workspace-tasks');
+    mkdirSync(directory, { recursive: true });
+    const timestamp = new Date().toISOString();
+    writeFileSync(join(directory, `${id}.json`), JSON.stringify({ schemaVersion: 1, id, title: 'Session facts', status: 'CLOSED',
+      promptVersion: '2.3.0-web-lite-1', createdAt: timestamp, updatedAt: timestamp,
+      sessions: { codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId },
+        antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: null } },
+      sessionHistory: [], error: null }));
+    const sessions = join(root, '.agent-bus', 'sessions');
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(join(sessions, `${sessionId}.json`), JSON.stringify({ schemaVersion: 1, id: 'session_otheridentity0001',
+      agent: 'codex', command: process.execPath, cwd: root, state: 'running', backend: 'node-pty',
+      diagnostics: { nativeStatus: 'running' } }));
+    const detail = await readWorkspaceTask(root, id);
+    const listed = (await readWorkspaceTasks(root))[0];
+    assert.equal(detail.sessions.codex.state, null);
+    assert.equal(detail.sessions.codex.backend, null);
+    assert.equal(detail.sessions.codex.diagnostics, null);
+    assert.deepEqual(detail.sessions, listed.sessions);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 function fakeCli(root, name, { fail = false, auth = false, transientAuth = false, inputDelayMs = 0 } = {}) {
   const log = join(root, `${name}-raw-input.log`);
   const termLog = join(root, `${name}-term.log`);

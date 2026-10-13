@@ -61,3 +61,9 @@ export function isActiveTerminalSession(session) {
 export function terminalSessionKey(pane) {
   return [pane?.slotId ?? pane?.slot ?? '', pane?.agentId || '', pane?.sessionId || '', pane?.source || 'none'].join(':');
 }
+
+export function terminalBackendKey(session) {
+  if (session?.backend === 'node-pty') return 'terminal.nativeBackend';
+  if (session?.backend === 'stdio-fallback') return 'terminal.fallbackBackend';
+  return 'terminal.unknownBackend';
+}

@@ -328,7 +328,7 @@ test('agy-proxy and agy templates launch with exactly their own arguments', () =
   });
   const proxySession = proxy.resolveSessionLaunch({ root: '.', initialPrompt: 'Implement feature', agent: 'antigravity', language: 'en' });
   assert.equal(proxySession.args.includes('Implement feature'), true);
-  assert.equal(proxySession.args.filter(arg => arg === '--prompt-interactive').length, 1, 'never a duplicate interactive flag');
+  assert.equal(proxySession.args.filter(arg => arg.startsWith('--prompt-interactive')).length, 1, 'never a duplicate interactive flag');
   assert.equal(proxySession.initialInputConsumed, true);
 
   // agy + [--prompt-interactive, {prompt}]: exactly that pair, no duplicate flag.
@@ -352,7 +352,7 @@ test('agy-proxy and agy templates launch with exactly their own arguments', () =
     args: ['--prompt-interactive'],
   });
   const incompleteSession = incomplete.resolveSessionLaunch({ initialPrompt: 'Implement feature' });
-  assert.deepEqual(incompleteSession.args, ['--prompt-interactive', '']);
+  assert.deepEqual(incompleteSession.args, ['--prompt-interactive=']);
   assert.equal(incompleteSession.initialInputConsumed, false);
 
   // Default Adapter surface (no user args) still yields agy's interactive form.

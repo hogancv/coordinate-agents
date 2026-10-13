@@ -1,0 +1,244 @@
+{
+  "date": "2026-10-11",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "24.17.0",
+  "secondaryNode": "22.23.3",
+  "baseline": "0b924f8",
+  "browser": {
+    "backend": "node-pty",
+    "realTTY": true,
+    "ansiAlternateScreen": true,
+    "utf8Chinese": true,
+    "keyboardBackspaceArrows": true,
+    "interrupt": true,
+    "pasteBytes": 53248,
+    "pasteSha256Verified": true,
+    "sizes": [
+      [
+        61,
+        32
+      ],
+      [
+        76,
+        47
+      ]
+    ],
+    "xtermApiChildDimensionsEqual": true,
+    "refreshSameSessionIds": true
+  },
+  "runtimeSourceCommit": "e0a065f",
+  "fullRegressionSourceCommit": "c12933c",
+  "checks": {
+    "web": [
+      {
+        "tests": 57,
+        "pass": 57,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 124376.304291
+      },
+      {
+        "tests": 81,
+        "pass": 81,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 35181.111375
+      }
+    ],
+    "package": [
+      {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 35762.788792
+      }
+    ],
+    "legacy": [
+      {
+        "tests": 114,
+        "pass": 114,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 24294.947667
+      }
+    ],
+    "adapters": [
+      {
+        "tests": 33,
+        "pass": 33,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 10125.389791
+      }
+    ],
+    "full": [
+      {
+        "tests": 408,
+        "pass": 408,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 277707.37
+      }
+    ],
+    "backendAndResize": [
+      {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 454.953708
+      }
+    ],
+    "nativeMacos24": [
+      {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 25778.961125
+      }
+    ],
+    "nativeMacos22": [
+      {
+        "tests": 6,
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 27236.952167
+      }
+    ],
+    "installedNativeMacos24": [
+      {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 34910.795583
+      }
+    ],
+    "installedNativeMacos22": [
+      {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 35394.752792
+      }
+    ],
+    "sessionAfterInitialDiagnostics": [
+      {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 31601.011208
+      }
+    ]
+  },
+  "remote": {
+    "fullNativeRun": "https://github.com/hogancv/coordinate-agents/actions/runs/38139799801",
+    "fullNativeConclusion": "failure",
+    "runtimeCommit": "c12933c",
+    "platforms": [
+      {
+        "platform": "windows",
+        "node": "22.23.3",
+        "backendInExperiment": "node-pty / ConPTY",
+        "backendInAuto": "stdio-fallback",
+        "nativeTests": {
+          "pass": 5,
+          "fail": 1,
+          "skipped": 0
+        },
+        "failure": "raw worker retained after CLI exit;20s cleanup timeout",
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      },
+      {
+        "platform": "windows",
+        "node": "24.21.0",
+        "backendInExperiment": "node-pty / ConPTY",
+        "backendInAuto": "stdio-fallback",
+        "nativeTests": {
+          "pass": 5,
+          "fail": 1,
+          "skipped": 0
+        },
+        "failure": "raw worker retained after CLI exit;20s cleanup timeout",
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      },
+      {
+        "platform": "windows",
+        "node": "20.20.2",
+        "backendInExperiment": "node-pty / ConPTY",
+        "backendInAuto": "node-pty",
+        "nativeTests": {
+          "pass": 4,
+          "fail": 2,
+          "skipped": 0
+        },
+        "failure": "raw worker cleanup;unready diagnostic fixture early exit",
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      },
+      {
+        "platform": "windows",
+        "node": "18.x",
+        "backendInAuto": "stdio-fallback",
+        "backendPolicies": {
+          "pass": 9,
+          "fail": 0
+        },
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      },
+      {
+        "platform": "ubuntu",
+        "node": "24.21.0",
+        "backendInExperiment": "node-pty",
+        "nativeTests": {
+          "pass": 6,
+          "fail": 0,
+          "skipped": 0
+        },
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      },
+      {
+        "platform": "macos",
+        "node": "22.x",
+        "backendInExperiment": "node-pty",
+        "nativeTests": {
+          "pass": 6,
+          "fail": 0,
+          "skipped": 0
+        },
+        "policiesAndSessionRegression": {
+          "pass": 14,
+          "fail": 0
+        }
+      }
+    ],
+    "windows20FocusedStartupRun": "https://github.com/hogancv/coordinate-agents/actions/runs/38140458643",
+    "focusedConclusion": "success",
+    "selectedTests": 1,
+    "unselectedTests": 5,
+    "focusedRunIsFullAcceptance": false,
+    "initialDiagnosticsWindows20Run": "https://github.com/hogancv/coordinate-agents/actions/runs/38142027731",
+    "initialDiagnosticsConclusion": "success",
+    "initialDiagnosticsSourceCommit": "e0a065f12c4921f60564027be419187da260deea"
+  }
+}
