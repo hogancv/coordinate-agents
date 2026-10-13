@@ -71,7 +71,7 @@ test('single-task reads ignore Session payload identities that differ from the r
     mkdirSync(directory, { recursive: true });
     const timestamp = new Date().toISOString();
     writeFileSync(join(directory, `${id}.json`), JSON.stringify({ schemaVersion: 1, id, title: 'Session facts', status: 'CLOSED',
-      promptVersion: '2.3.0-web-lite-1', createdAt: timestamp, updatedAt: timestamp,
+      promptVersion: '2.3.0-web-lite-2', createdAt: timestamp, updatedAt: timestamp,
       sessions: { codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId },
         antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: null } },
       sessionHistory: [], error: null }));
@@ -196,7 +196,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.match(first.id, /^workspace-[A-Za-z0-9_-]{8,}$/);
     assert.match(first.title, /^Task · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · [A-Za-z0-9]{6}$/);
     assert.equal(first.status, 'RUNNING');
-    assert.equal(first.promptVersion, '2.3.0-web-lite-1');
+    assert.equal(first.promptVersion, '2.3.0-web-lite-2');
     assert.ok(first.sessions.codex.sessionId);
     assert.ok(first.sessions.antigravity.sessionId);
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
@@ -209,14 +209,32 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.deepEqual(new Set(bound.map(session => session.agent)), new Set(['codex', 'antigravity']));
     assert.ok(bound.every(session => session.subtaskId === 'codex' || session.subtaskId === 'antigravity'));
 
-    const sent = await workspaceMessage(root, workspaceTaskId, 'send', 'web-lite-hello');
+    const helper = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'workspace-message.mjs');
+    const messageCli = (...args) => {
+      const result = spawnSync(process.execPath, [helper, workspaceTaskId, ...args], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 5000 });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      return JSON.parse(result.stdout);
+    };
+    const sent = messageCli('send', 'web-lite-hello');
     assert.equal(sent.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(sent.sent, true);
-    await waitForCliInput(antigravity.log, 'web-lite-hello\r');
+    await waitForCliInput(antigravity.log, 'web-lite-hello');
+    assert.equal(sent.status, 'SENT');
+    await waitForCliInput(antigravity.log, sent.roundId);
+    let latest = sent;
+    for (const state of ['working', 'done', 'reviewing', 'approved']) {
+      const reported = messageCli('report', state, sent.roundId, `mock ${state}`);
+      assert.equal(reported.status, state.toUpperCase());
+      latest = messageCli('wait', `${latest.cursor}`, `${latest.revision}`, '1000');
+      assert.equal(latest.status, state.toUpperCase());
+      assert.equal(latest.pending, false);
+    }
+    assert.equal((await readWorkspaceTask(root, workspaceTaskId)).cooperation.status, 'APPROVED');
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     // Closed pairs must not receive additional input through the lightweight helper.
     await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
     assert.equal(closed.workspaceTask.status, 'CLOSED');
+    assert.equal(closed.workspaceTask.cooperation.status, 'APPROVED');
     assert.ok(closed.closedSessions.every(session => !ACTIVE.has(session.state)));
     const closedAgain = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     assert.equal(closedAgain.workspaceTask.status, 'CLOSED');
@@ -224,6 +242,8 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
 
     const restarted = await runtimeWorkspaceTaskRestart({ root, workspaceTaskId, language: 'zh-CN' });
     assert.equal(restarted.workspaceTask.status, 'RUNNING');
+    assert.equal(restarted.workspaceTask.cooperation.status, 'IDLE');
+    assert.equal(restarted.workspaceTask.cooperation.roundId, null);
     assert.notEqual(restarted.workspaceTask.sessions.codex.sessionId, first.sessions.codex.sessionId);
     assert.notEqual(restarted.workspaceTask.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(restarted.workspaceTask.sessionHistory.length, 1);
@@ -233,7 +253,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const saved = JSON.parse(readFileSync(join(root, '.agent-bus', 'workspace-tasks', `${workspaceTaskId}.json`), 'utf8'));
     assert.equal(saved.sessions.codex.sessionId, restarted.workspaceTask.sessions.codex.sessionId);
     assert.equal(saved.sessions.antigravity.sessionId, restarted.workspaceTask.sessions.antigravity.sessionId);
-    assert.equal(saved.promptVersion, '2.3.0-web-lite-1');
+    assert.equal(saved.promptVersion, '2.3.0-web-lite-2');
     assert.equal((await readWorkspaceTask(root, workspaceTaskId)).id, workspaceTaskId);
   } finally {
     await closeGroup(root, workspaceTaskId);

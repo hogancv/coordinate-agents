@@ -5,11 +5,13 @@ import {
   mkdirSync,
   readdirSync,
   realpathSync,
+  rmSync,
   unlinkSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  acquireConfigLock,
   assertContained,
   assertSafePath,
   atomicWrite,
@@ -40,6 +42,34 @@ export const WORKSPACE_TASK_STATUSES = Object.freeze([
   'CLOSED',
   'ERROR',
 ]);
+
+export const WORKSPACE_COOPERATION_STATUSES = Object.freeze([
+  'IDLE', 'SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED',
+]);
+const ROUND_ID_PATTERN = /^round-[a-zA-Z0-9_-]{1,128}$/;
+const REPORT_TRANSITIONS = {
+  SENT: ['WORKING', 'DONE', 'FAILED'],
+  WORKING: ['DONE', 'FAILED'],
+  DONE: ['REVIEWING', 'FAILED'],
+  REVIEWING: ['APPROVED', 'CHANGES_REQUESTED', 'FAILED'],
+};
+
+function idleCooperation(revision = 0) {
+  return { status: 'IDLE', roundId: null, revision, summary: '', updatedAt: null };
+}
+
+function validateCooperation(value) {
+  if (value === undefined) return idleCooperation(); // Existing task records remain readable.
+  if (!value || !WORKSPACE_COOPERATION_STATUSES.includes(value.status)
+    || !Number.isSafeInteger(value.revision) || value.revision < 0
+    || (value.status === 'IDLE' ? value.roundId !== null : !ROUND_ID_PATTERN.test(value.roundId || ''))
+    || typeof value.summary !== 'string' || Buffer.byteLength(value.summary) > 2048
+    || (value.updatedAt !== null && (typeof value.updatedAt !== 'string' || Number.isNaN(Date.parse(value.updatedAt))))) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Invalid Workspace cooperation state.', { recoverable: false });
+  }
+  return { status: value.status, roundId: value.roundId, revision: value.revision,
+    summary: redactOutput(value.summary, 2048), updatedAt: value.updatedAt };
+}
 
 const ACTIVE_SESSION_STATES = new Set(['starting', 'running', 'idle', 'busy']);
 const TERMINAL_SESSION_STATES = new Set(['exited', 'failed']);
@@ -217,6 +247,7 @@ function validateWorkspaceTaskRecord(value) {
     updatedAt: value.updatedAt,
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
+    cooperation: validateCooperation(value.cooperation),
     sessionHistory,
     error,
   };
@@ -230,12 +261,31 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   return path;
 }
 
-function writeWorkspaceTask(root, record) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false } = {}) {
   const repository = repositoryRoot(root);
-  const validated = validateWorkspaceTaskRecord(record);
-  const path = workspaceTaskFile(repository, validated.id, { create: true });
-  atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
-  return validated;
+  const path = workspaceTaskFile(repository, record.id, { create: true });
+  // Reuse the existing short file transaction lock for every task-file writer.
+  // No Session RPC or asynchronous work runs while this lock is held.
+  const bus = join(repository, '.agent-bus');
+  assertSafePath(repository, join(bus, 'locks', 'config'));
+  const release = acquireConfigLock(bus);
+  try {
+    const current = existsSync(path) ? readWorkspaceTaskRecord(repository, record.id) : null;
+    let base = record;
+    if (replaceCooperation && current) {
+      if (current.status !== 'RUNNING' || current.archivedAt || WORKSPACE_TASK_SLOTS.some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
+        throw new Error('Task pair changed during cooperation update; dispatch input may have been sent. Do not resend automatically.');
+      }
+      // A receipt may only change cooperation fields, never restore stale Sessions or lifecycle state.
+      base = { ...current, updatedAt: record.updatedAt };
+    }
+    const cooperation = resetCooperation ? idleCooperation((current?.cooperation.revision || 0) + 1)
+      : (!replaceCooperation && current ? current.cooperation : record.cooperation);
+    const validated = validateWorkspaceTaskRecord({ ...base, cooperation });
+    atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
+    Object.assign(record, validated); // Keep lifecycle responses consistent with persisted receipts.
+    return validated;
+  } finally { release(); }
 }
 
 function readWorkspaceTaskRecord(root, id) {
@@ -355,6 +405,7 @@ function workspaceTaskView(record, facts = new Map()) {
     updatedAt: record.updatedAt,
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
+    cooperation: record.cooperation,
     sessionIds: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
     error: record.error,
@@ -536,9 +587,10 @@ async function waitForWorkspaceTerminalReady(root, session, agent, taskId) {
 async function openWorkspaceSlot(root, record, slot, language) {
   const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
   const helper = "'" + fileURLToPath(new URL('./workspace-message.mjs', import.meta.url)).replaceAll("'", "'\\''") + "'";
-  const prompt = workspaceRolePrompt(expected.agent, language) + (slot === 'codex'
-    ? `\nWorkspace: ${record.id}\nCommunication (run from repository root): node ${helper} ${record.id} send '<instruction>'\nRead subsequent output without resending: node ${helper} ${record.id} read <cursor>\nQuote instruction safely for your shell. Output is terminal text, not proof of completion. Wait for an explicit reply. If the pair is still starting, wait and retry only when no input was sent; never create another session.`
-    : `\nWorkspace: ${record.id}`);
+  const commands = slot === 'codex'
+    ? `send '<instruction>'; read <cursor>; wait <cursor> [revision] [timeout-ms]; report reviewing|approved|changes-requested <roundId> ['summary']`
+    : `report working|done|failed <roundId> ['summary']`;
+  const prompt = `${workspaceRolePrompt(expected.agent, language)}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
   const opened = await runtimeSessionOpen({
     root,
     agent: expected.agent,
@@ -699,7 +751,7 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
   record.status = 'STARTING';
   record.error = null;
   record.updatedAt = now();
-  writeWorkspaceTask(root, record);
+  writeWorkspaceTask(root, record, { resetCooperation: true });
   try {
     await openWorkspaceSlot(root, record, 'codex', language);
     await openWorkspaceSlot(root, record, 'antigravity', language);
@@ -808,3 +860,81 @@ export async function runtimeWorkspaceArchivesClear(input = {}) {
 }
 
 export { validateWorkspaceTaskRecord };
+
+// No daemon: the lock exists only during a dispatch or receipt update.
+async function withCooperationLock(root, id, operation) {
+  const repository = repositoryRoot(root);
+  const lock = `${workspaceTaskFile(repository, id)}.lock`;
+  const owner = randomUUID();
+  const ownerPath = join(lock, 'owner.json');
+  const deadline = Date.now() + 10_000;
+  while (true) {
+    try {
+      mkdirSync(lock);
+      atomicWrite(ownerPath, JSON.stringify({ owner, pid: process.pid }), join(repository, '.agent-bus', 'tmp'));
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      assertSafePath(repository, lock);
+      if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
+      try {
+        const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
+        try { process.kill(held.pid, 0); }
+        catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
+      } catch {
+        // Allow recovery if a process died between mkdir and writing its owner.
+        if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+      }
+      if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
+      await new Promise(done => setTimeout(done, 50));
+    }
+  }
+  try { return await operation(repository); }
+  finally {
+    const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
+    if (held.owner === owner) rmSync(lock, { recursive: true });
+  }
+}
+
+function assertCooperationSession(root, record, slot) {
+  if (record.archivedAt || record.status !== 'RUNNING') throw new Error('Task pair is not ready. No input was sent.');
+  const sessionId = record.sessions[slot].sessionId;
+  if (!sessionId) throw new Error('Session task binding mismatch: no recorded Session.');
+  const session = readRecord(root, sessionId);
+  if (session.id !== sessionId || session.taskId !== record.id || session.agent !== slot || repositoryRoot(session.cwd) !== root) {
+    throw new Error('Session task binding mismatch.');
+  }
+}
+
+export async function dispatchWorkspaceTask(root, id, roundId, deliver) {
+  if (!ROUND_ID_PATTERN.test(roundId || '')) throw new Error('Invalid roundId.');
+  return withCooperationLock(root, id, async repository => {
+    const before = readWorkspaceTaskRecord(repository, id);
+    assertCooperationSession(repository, before, 'antigravity');
+    await deliver();
+    const current = readWorkspaceTaskRecord(repository, id);
+    if (current.status !== 'RUNNING' || current.archivedAt || current.sessions.antigravity.sessionId !== before.sessions.antigravity.sessionId) throw new Error('Task pair changed during dispatch; input may have been sent. Do not resend automatically.');
+    current.cooperation = { status: 'SENT', roundId, revision: current.cooperation.revision + 1, summary: '', updatedAt: now() };
+    current.updatedAt = now();
+    return writeWorkspaceTask(repository, current, { replaceCooperation: true }).cooperation;
+  });
+}
+
+export async function reportWorkspaceTask(root, id, status, roundId, summary = '') {
+  if (!['WORKING', 'DONE', 'REVIEWING', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED'].includes(status)) throw new Error('Invalid report status. Use working, done, reviewing, approved, changes-requested, or failed.');
+  if (!ROUND_ID_PATTERN.test(roundId || '')) throw new Error('A valid roundId is required.');
+  if (typeof summary !== 'string' || Buffer.byteLength(summary) > 2048) throw new Error('Summary must be at most 2048 bytes.');
+  return withCooperationLock(root, id, repository => {
+    const record = readWorkspaceTaskRecord(repository, id);
+    const slot = ['REVIEWING', 'APPROVED', 'CHANGES_REQUESTED'].includes(status) ? 'codex' : 'antigravity';
+    assertCooperationSession(repository, record, slot);
+    const previous = record.cooperation;
+    if (previous.roundId !== roundId) throw new Error('Stale roundId: this receipt does not belong to the current round.');
+    if (previous.status !== status && !REPORT_TRANSITIONS[previous.status]?.includes(status)) throw new Error(`Invalid cooperation transition: ${previous.status} -> ${status}.`);
+    const cleaned = redactOutput(summary, 2048);
+    if (previous.status === status && previous.summary === cleaned) return previous;
+    record.cooperation = { status, roundId, revision: previous.revision + 1, summary: cleaned, updatedAt: now() };
+    record.updatedAt = now();
+    return writeWorkspaceTask(repository, record, { replaceCooperation: true }).cooperation;
+  });
+}

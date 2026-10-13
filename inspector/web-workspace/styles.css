@@ -194,7 +194,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 
 .workspace-panel { display: flex; min-width: 0; max-width: 100%; min-height: 0; flex: 1; flex-direction: column; padding: .75rem 1.5rem 1.5rem; overflow: hidden; }
 .task-heading { min-width: 8rem; flex: 1; }
-.task-heading-title-row { min-width: 0; gap: .6rem; }
+.task-heading-title-row { min-width: 0; gap: .6rem; flex-wrap: wrap; }
 .task-heading-title-row h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-heading-title-row .status-pill { flex-shrink: 0; white-space: nowrap; }
 .task-meta-row { flex-wrap: wrap; gap: .5rem; margin-top: .42rem; color: var(--muted); font-size: .68rem; }
@@ -205,6 +205,11 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .status-pill.starting, .status-pill.degraded { color: var(--yellow); background: rgba(244, 204, 112, .11); }
 .status-pill.error { color: var(--red); background: rgba(255, 130, 146, .11); }
 .status-pill.closed, .status-pill.exited { color: var(--muted); background: rgba(155, 170, 202, .12); }
+.cooperation-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0; }
+.cooperation-pill.sent, .cooperation-pill.done, .cooperation-pill.changes_requested { color: var(--yellow); background: rgba(244, 204, 112, .11); }
+.cooperation-pill.working, .cooperation-pill.reviewing { color: var(--accent); background: rgba(157, 181, 255, .12); }
+.cooperation-pill.approved { color: var(--green); background: rgba(95, 224, 160, .11); }
+.cooperation-pill.failed { color: var(--red); background: rgba(255, 130, 146, .11); }
 .task-error { margin-bottom: .9rem; padding: .7rem .8rem; border: 1px solid rgba(255, 130, 146, .25); border-radius: .55rem; color: var(--error-text); background: rgba(255, 130, 146, .08); font-size: .75rem; line-height: 1.45; overflow-wrap: anywhere; }
 
 .terminal-grid { display: grid; min-width: 0; max-width: 100%; min-height: 0; flex: 1; grid-template-columns: minmax(0, var(--codex-width, .5fr)) 8px minmax(0, var(--antigravity-width, .5fr)); grid-auto-rows: minmax(0, 1fr); overflow: hidden; gap: 0; }

@@ -169,3 +169,17 @@ test('resizing the bundled xterm preserves the same output line across scrollbac
     assert.match(terminal.buffer.active.getLine(terminal.buffer.active.viewportY).translateToString(true), /^10:/);
   } finally { terminal.dispose(); }
 });
+
+test('cooperation labels hide idle and distinguish implementation from review', () => {
+  const context = runFunctions('cooperationLabel', 'terminalCardMarkup', { t: key => key });
+  assert.equal(context.cooperationLabel(), '');
+  assert.equal(context.cooperationLabel({ status: 'IDLE' }), '');
+  assert.equal(context.cooperationLabel({ status: 'RUNNING' }), '');
+  assert.equal(context.cooperationLabel({ status: 'WORKING' }), 'cooperation.WORKING');
+  assert.equal(context.cooperationLabel({ status: 'DONE' }), 'cooperation.DONE');
+  assert.equal(context.cooperationLabel({ status: 'APPROVED' }), 'cooperation.APPROVED');
+  assert.equal(context.terminalRoleLabel('antigravity', { status: 'WORKING' }), 'cooperation.agentWorking');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'DONE' }), 'cooperation.awaitingReview');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'REVIEWING' }), 'cooperation.agentReviewing');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'IDLE' }), 'terminal.planner');
+});
