@@ -308,6 +308,10 @@ function sessionView(slot, facts) {
     exitCode: fact?.exitCode ?? null,
     signal: fact?.signal || null,
     error: fact?.error ? redactOutput(fact.error, MAX_ERROR_BYTES) : null,
+    backend: fact?.backend || null,
+    diagnostics: fact?.diagnostics || null,
+    cols: fact?.cols ?? null,
+    rows: fact?.rows ?? null,
   };
 }
 
@@ -713,13 +717,14 @@ function ownedTaskSessionFiles(root, record, sessionRecords = null) {
   // Performance optimization: reuse pre-read session records when provided to avoid O(A * S) disk reads
   const sessions = sessionRecords !== null ? sessionRecords : (existsSync(directory) ? listRecords(root) : []);
   const owned = sessions.filter(session => session.taskId === record.id && WORKSPACE_SLOT_AGENTS.has(session.agent));
-  const sessionMap = new Map(sessions.map(session => [session.id, session]));
   // Restart history is bounded, but transcript cleanup must cover every owned Session.
   return [...new Set([...allTaskSessionIds(record), ...owned.map(session => session.id)])].flatMap(id => {
     const path = join(root, '.agent-bus', 'sessions', `${id}.json`);
     assertSafePath(root, path);
     if (!existsSync(path)) return [];
-    const session = sessionMap.get(id) || readRecord(root, id);
+    // Discovery records may contain duplicate payload IDs in different files.
+    // Validate ownership and active state from the exact file being modified.
+    const session = readRecord(root, id);
     if (session.id !== id || repositoryRoot(session.cwd) !== root || session.taskId !== record.id || !WORKSPACE_SLOT_AGENTS.has(session.agent)) {
       throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to modify a Session owned by another task.', { recoverable: false, taskId: record.id, sessionId: id });
     }

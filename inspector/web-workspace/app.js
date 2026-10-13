@@ -2,6 +2,7 @@ import {
   isActiveTerminalSession,
   selectTerminalPanes,
   terminalSessionKey,
+  terminalBackendKey,
   TERMINAL_MAX_BYTES,
   TERMINAL_MAX_LINES,
   TERMINAL_POLL_MS,
@@ -35,7 +36,9 @@ const I18N = {
     'empty.archivedBody': 'Add a project to continue, or open settings to clear archived conversations.',
     'zen.enter': 'Zen mode',
     'zen.exit': 'Exit Zen mode',
-    'repo.label': 'BOUND REPOSITORY',
+    'repo.label': 'CURRENT PROJECT',
+    'project.switch': 'Switch project',
+    'project.new': 'New project',
     'repo.loading': 'Loading repository…',
     'repo.details': 'Show repository details',
     'repo.hideDetails': 'Hide repository details',
@@ -47,6 +50,11 @@ const I18N = {
     'task.new': 'New task',
     'task.list': 'Workspace tasks',
     'task.none': 'No workspace tasks yet.',
+    'task.search': 'Search tasks or projects',
+    'task.searchClear': 'Clear search',
+    'task.searchNone': 'No matching tasks found',
+    'task.searchUnloaded': 'Tasks in {count} projects are not loaded; only loaded/cached tasks are searched.',
+    'task.notLoaded': 'Tasks not loaded',
     'task.restart': 'Restart pair',
     'task.closeAll': 'Close all terminals',
     'task.allClosed': 'All workspace terminals closed.',
@@ -92,6 +100,13 @@ const I18N = {
     'terminal.closed': 'Terminal is closed.',
     'terminal.inputError': 'Terminal input could not be sent.',
     'terminal.resizeError': 'Terminal resize could not be applied.',
+    'terminal.split': 'Resize terminals (double-click to reset)',
+    'terminal.focus': 'Focus terminal',
+    'terminal.restore': 'Restore split view',
+    'terminal.switchFocus': 'Focus {terminal}',
+    'terminal.nativeBackend': 'Native PTY',
+    'terminal.fallbackBackend': 'stdio fallback',
+    'terminal.unknownBackend': 'Backend unknown',
     'action.refreshError': 'Workspace refresh failed.',
     'action.createError': 'Could not create the dual-terminal task.',
     'action.closeError': 'Could not close the task pair.',
@@ -115,7 +130,9 @@ const I18N = {
     'empty.archivedBody': '新增项目继续工作，或进入设置清除已归档对话。',
     'zen.enter': '禅模式',
     'zen.exit': '退出禅模式',
-    'repo.label': '当前仓库',
+    'repo.label': '当前项目',
+    'project.switch': '切换项目',
+    'project.new': '新增项目',
     'repo.loading': '正在读取仓库…',
     'repo.details': '显示仓库详情',
     'repo.hideDetails': '隐藏仓库详情',
@@ -127,6 +144,11 @@ const I18N = {
     'task.new': '新建任务',
     'task.list': '工作台任务',
     'task.none': '还没有工作台任务。',
+    'task.search': '搜索任务或项目',
+    'task.searchClear': '清空搜索',
+    'task.searchNone': '没有找到匹配的任务',
+    'task.searchUnloaded': '有 {count} 个项目的任务尚未加载；仅搜索已加载或缓存的任务。',
+    'task.notLoaded': '任务尚未加载',
     'task.restart': '重启终端组',
     'task.close': '关闭任务',
     'task.closed': '任务已关闭',
@@ -172,6 +194,13 @@ const I18N = {
     'terminal.closed': '终端已关闭。',
     'terminal.inputError': '终端输入发送失败。',
     'terminal.resizeError': '终端尺寸调整失败。',
+    'terminal.split': '调整终端宽度（双击恢复均分）',
+    'terminal.focus': '聚焦终端',
+    'terminal.restore': '恢复分屏',
+    'terminal.switchFocus': '聚焦 {terminal}',
+    'terminal.nativeBackend': '原生 PTY',
+    'terminal.fallbackBackend': '已降级到 stdio',
+    'terminal.unknownBackend': '后端未知',
     'action.refreshError': '工作台刷新失败。',
     'action.createError': '无法创建双终端任务。',
     'action.closeError': '无法关闭终端组。',
@@ -187,6 +216,7 @@ const state = {
   projectTasks: new Map(),
   projectSelections: new Map(),
   expandedProjects: new Set(),
+  taskSearch: '',
   locale: loadLocale(),
   repository: null,
   tasks: [],
@@ -194,6 +224,9 @@ const state = {
   selectedTask: null,
   terminalViews: new Map(),
   terminalPairKey: '',
+  terminalSplitRatio: loadTerminalSplitRatio(),
+  focusedTerminal: null,
+  layoutFrame: null,
   actionBusy: false,
   refreshTimer: null,
   taskTimer: null,
@@ -208,6 +241,25 @@ const state = {
 };
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
+
+function loadTerminalSplitRatio() {
+  try {
+    const stored = localStorage.getItem('coordinate-agents-terminal-split');
+    const ratio = stored?.trim() ? Number(stored) : NaN;
+    if (Number.isFinite(ratio)) return Math.max(0.25, Math.min(0.75, ratio));
+  } catch { /* Browser storage is optional. */ }
+  return 0.5;
+}
+
+function setTerminalSplitRatio(ratio, persist = true) {
+  if (!Number.isFinite(ratio)) return;
+  state.terminalSplitRatio = Math.max(0.25, Math.min(0.75, ratio));
+  if (persist) {
+    try { localStorage.setItem('coordinate-agents-terminal-split', String(state.terminalSplitRatio)); }
+    catch { /* Browser storage is optional. */ }
+  }
+  updateTerminalLayout();
+}
 
 function loadLocale() {
   try {
@@ -315,7 +367,7 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button']) {
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -504,8 +556,6 @@ function renderLocale() {
   document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
   document.body.dataset.locale = state.locale === 'zh' ? 'zh-CN' : 'en';
   for (const element of document.querySelectorAll('[data-i18n]')) element.textContent = t(element.dataset.i18n);
-  const repoToggle = document.querySelector('#repo-facts-toggle');
-  if (repoToggle) repoToggle.textContent = state.repoFactsOpen ? t('repo.hideDetails') : t('repo.details');
   document.querySelector('#lang-zh')?.classList.toggle('active', state.locale === 'zh');
   document.querySelector('#lang-en')?.classList.toggle('active', state.locale === 'en');
   document.querySelector('#lang-zh')?.setAttribute('aria-pressed', `${state.locale === 'zh'}`);
@@ -513,6 +563,7 @@ function renderLocale() {
   renderRepository();
   renderTaskList();
   renderSelectedTask();
+  updateTerminalLayout();
   renderArchiveSummary();
 }
 
@@ -529,10 +580,104 @@ function setZenMode(enabled) {
   });
 }
 
+function updateTerminalLayout() {
+  const grid = document.querySelector('#agent-terminal-grid');
+  if (!grid) return;
+  grid.style.setProperty('--codex-width', `${state.terminalSplitRatio}fr`);
+  grid.style.setProperty('--antigravity-width', `${1 - state.terminalSplitRatio}fr`);
+  grid.dataset.focusedTerminal = state.focusedTerminal || '';
+  for (const [slotId, controller] of state.terminalViews) {
+    const hidden = Boolean(state.focusedTerminal && state.focusedTerminal !== slotId);
+    if (hidden && !controller.card.hidden && controller.terminal) {
+      controller.hiddenViewportAnchor = captureTerminalViewport(controller.terminal);
+    }
+    controller.card.hidden = hidden;
+    const focusButton = controller.card.querySelector('[data-terminal-focus]');
+    const focused = state.focusedTerminal === slotId;
+    if (focusButton) {
+      focusButton.title = t(focused ? 'terminal.restore' : 'terminal.focus');
+      focusButton.setAttribute('aria-label', focusButton.title);
+      focusButton.setAttribute('aria-pressed', String(focused));
+      focusButton.querySelector('[data-focus-expand]').hidden = focused;
+      focusButton.querySelector('[data-focus-restore]').hidden = !focused;
+    }
+    const switchButton = controller.card.querySelector('[data-terminal-focus-other]');
+    if (switchButton) {
+      switchButton.hidden = !focused;
+      switchButton.title = t('terminal.switchFocus').replace('{terminal}', slotId === 'codex' ? 'Antigravity' : 'Codex');
+      switchButton.setAttribute('aria-label', switchButton.title);
+    }
+  }
+  const splitter = grid.querySelector('[data-terminal-splitter]');
+  if (splitter) splitter.hidden = Boolean(state.focusedTerminal);
+  splitter?.setAttribute('aria-valuenow', String(Math.round(state.terminalSplitRatio * 100)));
+  splitter?.setAttribute('aria-label', t('terminal.split'));
+  if (splitter) splitter.title = t('terminal.split');
+  if (state.layoutFrame !== null) return;
+  state.layoutFrame = window.requestAnimationFrame(() => {
+    state.layoutFrame = null;
+    for (const controller of state.terminalViews.values()) {
+      resizeTerminal(controller);
+      if (!controller.card.hidden && controller.hiddenViewportAnchor !== undefined) {
+        restoreTerminalViewport(controller.terminal, controller.hiddenViewportAnchor);
+        delete controller.hiddenViewportAnchor;
+      }
+    }
+  });
+}
+
+function setTerminalFocus(slotId) {
+  if (!state.terminalViews.has(slotId)) return;
+  state.focusedTerminal = state.focusedTerminal === slotId ? null : slotId;
+  updateTerminalLayout();
+}
+
+function bindTerminalLayout() {
+  const grid = document.querySelector('#agent-terminal-grid');
+  const splitter = grid?.querySelector('[data-terminal-splitter]');
+  if (!splitter) return;
+  let pointerId = null;
+  const finish = event => {
+    if (event.pointerId !== pointerId) return;
+    pointerId = null;
+    document.body.classList.remove('terminal-split-dragging');
+    if (splitter.hasPointerCapture(event.pointerId)) splitter.releasePointerCapture(event.pointerId);
+    setTerminalSplitRatio(state.terminalSplitRatio);
+  };
+  splitter.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || window.matchMedia('(max-width: 900px)').matches) return;
+    event.preventDefault();
+    pointerId = event.pointerId;
+    splitter.setPointerCapture(pointerId);
+    document.body.classList.add('terminal-split-dragging');
+  });
+  splitter.addEventListener('pointermove', event => {
+    if (event.pointerId !== pointerId) return;
+    const rect = grid.getBoundingClientRect();
+    const dividerWidth = splitter.getBoundingClientRect().width;
+    const available = rect.width - dividerWidth;
+    if (available > 0) setTerminalSplitRatio((event.clientX - rect.left - dividerWidth / 2) / available, false);
+  });
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) splitter.addEventListener(name, finish);
+  splitter.addEventListener('dblclick', () => setTerminalSplitRatio(0.5));
+  splitter.addEventListener('keydown', event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return;
+    event.preventDefault();
+    setTerminalSplitRatio(event.key === 'Home' ? 0.5 : state.terminalSplitRatio + (event.key === 'ArrowLeft' ? -0.05 : 0.05));
+  });
+}
+
 function renderRepository() {
   const repository = state.repository;
   const name = document.querySelector('#repo-name');
   const branch = document.querySelector('#repo-branch');
+  renderProjectSwitcher();
+  const repoToggle = document.querySelector('#repo-facts-toggle');
+  if (repoToggle) {
+    repoToggle.title = t(state.repoFactsOpen ? 'repo.hideDetails' : 'repo.details');
+    repoToggle.setAttribute('aria-label', repoToggle.title);
+    repoToggle.setAttribute('aria-expanded', `${state.repoFactsOpen}`);
+  }
   if (!repository) {
     if (name) name.textContent = t('repo.loading');
     if (branch) branch.textContent = '—';
@@ -540,9 +685,9 @@ function renderRepository() {
   }
   if (name) name.textContent = repository.name || repository.root || '—';
   if (branch) branch.textContent = repository.branch || (repository.detached ? 'detached' : '—');
-  const repoToggle = document.querySelector('#repo-facts-toggle');
+  if (branch) branch.title = branch.textContent;
+  if (name) name.title = repository.root || repository.name || '';
   const facts = document.querySelector('#repo-facts');
-  repoToggle?.setAttribute('aria-expanded', `${state.repoFactsOpen}`);
   if (!facts) return;
   facts.hidden = !state.repoFactsOpen;
   facts.innerHTML = [
@@ -554,6 +699,22 @@ function renderRepository() {
 
 function projectText(zh, en) { return state.locale === 'zh' ? zh : en; }
 
+function renderProjectSwitcher() {
+  const select = document.querySelector('#project-switcher');
+  if (!select) return;
+  const key = JSON.stringify([state.locale, state.projects]);
+  if (select.dataset.renderKey !== key) {
+    select.dataset.renderKey = key;
+    select.innerHTML = state.projects.length ? state.projects.map(project => `<option value="${escapeHtml(project.id)}" ${project.available === false ? 'disabled' : ''}>${escapeHtml(project.name)}${project.available === false ? ` · ${projectText('不可用', 'Unavailable')}` : ''}</option>`).join('') : `<option value="">${escapeHtml(t('project.none'))}</option>`;
+  }
+  select.value = state.projectId || '';
+  select.disabled = state.actionBusy || state.settingsBusy || state.projects.length === 0;
+  select.title = t('project.switch');
+  select.setAttribute('aria-label', t('project.switch'));
+  const add = document.querySelector('[data-project-add-label]');
+  if (add) add.textContent = t('project.new');
+}
+
 function rememberSelection() {
   if (!state.projectId) return;
   state.projectSelections.set(state.projectId, state.selectedId);
@@ -563,47 +724,82 @@ function rememberSelection() {
   } catch { /* Optional browser persistence. */ }
 }
 
+function searchTaskGroups() {
+  const query = state.taskSearch.trim().toLowerCase();
+  let unloaded = 0;
+  const groups = [];
+  for (const project of state.projects) {
+    const loaded = state.projectTasks.has(project.id);
+    if (!loaded) unloaded++;
+    const cached = project.id === state.projectId ? state.tasks : state.projectTasks.get(project.id) || [];
+    const projectMatches = project.name.toLowerCase().includes(query);
+    const tasks = !query || projectMatches ? cached : cached.filter(task => `${task.title || ''}`.toLowerCase().includes(query));
+    if (!query || projectMatches || tasks.length) groups.push({ project, tasks, loaded });
+  }
+  return { groups, unloaded };
+}
+
 function renderProjects() {
+  renderProjectSwitcher();
   const host = document.querySelector('#project-list');
   const list = document.querySelector('#workspace-task-list');
   if (!host || !list) return;
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.projects, [...state.expandedProjects],
-    state.projects.filter(project => project.id !== state.projectId).map(project => state.projectTasks.get(project.id) || [])]);
+  const searching = Boolean(state.taskSearch.trim());
+  const { groups, unloaded } = searchTaskGroups();
+  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, groups, [...state.expandedProjects]]);
   if (host.dataset.renderKey === renderKey) return;
   host.dataset.renderKey = renderKey;
   list.remove();
-  host.innerHTML = state.projects.map(project => `<section class="project-group">
-    <button type="button" class="project-heading${project.id === state.projectId ? ' selected' : ''}" data-project="${escapeHtml(project.id)}" aria-expanded="${state.expandedProjects.has(project.id)}" title="${escapeHtml(project.root)}">
+  list.hidden = false;
+  host.innerHTML = groups.map(({ project }) => `<section class="project-group">
+    <button type="button" class="project-heading${project.id === state.projectId ? ' selected' : ''}" data-project="${escapeHtml(project.id)}" aria-current="${project.id === state.projectId}" aria-expanded="${searching || state.expandedProjects.has(project.id)}" title="${escapeHtml(project.root)}">
       <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
       <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
       <strong>${escapeHtml(project.name)}</strong>
-      ${project.available ? '' : `<small>${projectText('不可用', 'Unavailable')}</small>`}
-    </button><div data-project-tasks="${escapeHtml(project.id)}" ${state.expandedProjects.has(project.id) ? '' : 'hidden'}></div></section>`).join('');
-  for (const project of state.projects) {
+      ${project.available ? '' : `<small class="project-unavailable">${projectText('不可用', 'Unavailable')}</small>`}
+    </button><div class="project-tasks" data-project-tasks="${escapeHtml(project.id)}" ${searching || state.expandedProjects.has(project.id) ? '' : 'hidden'}></div></section>`).join('');
+  for (const { project, tasks, loaded } of groups) {
     const container = host.querySelector(`[data-project-tasks="${project.id}"]`);
+    if (searching && !loaded) {
+      const notice = document.createElement('p');
+      notice.className = 'task-list-empty';
+      notice.textContent = t('task.notLoaded');
+      container.append(notice);
+    }
     if (project.id === state.projectId) container.append(list);
-    else for (const task of state.projectTasks.get(project.id) || []) {
-      const button = document.createElement('button');
-      button.className = 'project-task-link';
-      button.dataset.workspaceTaskId = task.id; button.dataset.projectId = project.id;
-      button.textContent = task.title;
-      button.title = task.title;
-      button.onclick = () => void selectProject(project.id, task.id);
-      container.append(button);
+    else {
+      container.insertAdjacentHTML('beforeend', tasks.map(task => taskItemMarkup(task, project.id)).join(''));
+      container.querySelectorAll('[data-workspace-task-id]').forEach(button => {
+        button.onclick = () => void selectProject(project.id, button.dataset.workspaceTaskId);
+      });
     }
   }
-  if (!list.isConnected) host.append(list);
+  if (!list.isConnected) { list.hidden = searching; host.append(list); }
+  if (searching) {
+    const messages = [];
+    if (!groups.some(group => group.tasks.length)) messages.push(t('task.searchNone'));
+    if (unloaded) messages.push(t('task.searchUnloaded').replace('{count}', unloaded));
+    for (const message of messages) {
+      const notice = document.createElement('p');
+      notice.className = 'task-search-notice';
+      notice.setAttribute('role', 'status');
+      notice.textContent = message;
+      host.append(notice);
+    }
+  }
   host.querySelectorAll('[data-project]').forEach(button => {
     button.onclick = async () => {
       const id = button.dataset.project;
+      if (searching) {
+        if (id !== state.projectId) await selectProject(id);
+        return;
+      }
       if (id === state.projectId) {
         if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
         renderProjects();
       } else await selectProject(id);
     };
   });
-  const add = document.querySelector('#new-project-button');
-  if (add) add.textContent = projectText('＋ 新增项目', '＋ New project');
 }
 
 async function selectProject(id, taskId) {
@@ -616,7 +812,7 @@ async function selectProject(id, taskId) {
   disposeTerminalViews();
   state.projectEpoch++;
   state.projectId = id;
-  state.expandedProjects.add(id);
+  if (!state.taskSearch.trim()) state.expandedProjects.add(id);
   let stored = null;
   try { stored = localStorage.getItem(`workspace-selection-${id}`); } catch { /* Optional. */ }
   state.selectedId = taskId === undefined ? state.projectSelections.get(id) || stored || null : taskId;
@@ -727,28 +923,36 @@ function renderTaskList() {
   renderProjects();
   const list = document.querySelector('#workspace-task-list');
   const count = document.querySelector('#task-count');
+  const input = document.querySelector('#task-search-input');
+  if (input) { input.placeholder = t('task.search'); input.setAttribute('aria-label', t('task.search')); }
+  const clear = document.querySelector('#task-search-clear');
+  if (clear) { clear.hidden = !state.taskSearch; clear.title = t('task.searchClear'); clear.setAttribute('aria-label', clear.title); }
   if (!list) return;
-  if (count) count.textContent = `${state.tasks.length}`;
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.tasks]);
+  const searching = Boolean(state.taskSearch.trim());
+  const groups = searchTaskGroups().groups;
+  const tasks = searching ? groups.find(group => group.project.id === state.projectId)?.tasks || [] : state.tasks;
+  if (count) count.textContent = `${searching ? groups.reduce((sum, group) => sum + group.tasks.length, 0) : state.tasks.length}`;
+  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, tasks]);
   if (list.dataset.renderKey === renderKey) return;
   list.dataset.renderKey = renderKey;
-  if (state.tasks.length === 0) {
-    list.innerHTML = `<p class="task-list-empty">${escapeHtml(t('task.none'))}</p>`;
+  if (tasks.length === 0) {
+    list.innerHTML = searching ? '' : `<p class="task-list-empty">${escapeHtml(t('task.none'))}</p>`;
     return;
   }
-  list.innerHTML = state.tasks.map(task => {
-    const selected = task.id === state.selectedId ? ' selected' : '';
-    const codexState = statusKey(sessionState(task.sessions?.codex));
-    const agyState = statusKey(sessionState(task.sessions?.antigravity));
-    return `<button class="workspace-task-item${selected}" type="button" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(state.projectId || '')}">
-      <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-label="${escapeHtml(statusLabel(task.status))}"></span></span>
-      <span class="task-item-meta"><span>${escapeHtml(statusLabel(task.status))}</span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
-      <span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span>
-    </button>`;
-  }).join('');
+  list.innerHTML = tasks.map(task => taskItemMarkup(task, state.projectId)).join('');
   for (const item of list.querySelectorAll('[data-workspace-task-id]')) {
     item.addEventListener('click', () => selectTask(item.dataset.workspaceTaskId));
   }
+}
+
+function taskItemMarkup(task, projectId) {
+  const selected = projectId === state.projectId && task.id === state.selectedId ? ' selected' : '';
+  const codexState = statusKey(sessionState(task.sessions?.codex));
+  const agyState = statusKey(sessionState(task.sessions?.antigravity));
+  return `<button class="workspace-task-item${selected}" type="button" aria-current="${Boolean(selected)}" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(projectId || '')}">
+      <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-hidden="true"></span></span>
+      <span class="task-item-meta"><span class="task-item-status" title="${escapeHtml(statusLabel(task.status))}">${escapeHtml(statusLabel(task.status))}</span><span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
+    </button>`;
 }
 
 function renderSelectedTask() {
@@ -812,17 +1016,26 @@ function terminalCardMarkup(pane) {
   return `<article class="terminal-card" data-terminal-slot="${escapeHtml(pane.slotId)}">
     <header class="terminal-card-header">
       <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span>${escapeHtml(t(roleKey))}</span></div></div>
-      <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
+      <div class="terminal-card-actions">
+        <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
+        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${pane.slotId === 'codex' ? 'antigravity' : 'codex'}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
+        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus="${escapeHtml(pane.slotId)}" aria-pressed="false" title="${escapeHtml(t('terminal.focus'))}" aria-label="${escapeHtml(t('terminal.focus'))}">
+          <svg data-focus-expand viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg>
+          <svg data-focus-restore viewBox="0 0 20 20" aria-hidden="true" hidden><path d="M7 3v4H3m14 0h-4V3M3 13h4v4m6 0v-4h4"/></svg>
+        </button>
+      </div>
     </header>
     <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(t(`terminal.${pane.slotId}`))}"></div>
-    <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-updated>—</span></footer>
+    <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-backend></span><span data-terminal-updated>—</span></footer>
   </article>`;
 }
 
 function renderTerminalViews(panes) {
   const grid = document.querySelector('#agent-terminal-grid');
   if (!grid) return;
-  grid.innerHTML = panes.map(terminalCardMarkup).join('');
+  const splitter = '<div class="terminal-splitter" data-terminal-splitter role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="25" aria-valuemax="75" aria-controls="agent-terminal-grid"></div>';
+  grid.innerHTML = panes.map(terminalCardMarkup).join(splitter);
+  bindTerminalLayout();
   for (const pane of panes) {
     const card = grid.querySelector(`[data-terminal-slot="${CSS.escape(pane.slotId)}"]`);
     if (!card) continue;
@@ -835,7 +1048,9 @@ function renderTerminalViews(panes) {
       session: pane.session || null,
       inputQueue: Promise.resolve(),
       queuedInputBytes: 0,
-      resizePromise: Promise.resolve(),
+      resizeTimer: null,
+      resizeSending: false,
+      pendingResize: null,
       lastSize: null,
       polling: false,
       pollTimer: null,
@@ -875,6 +1090,7 @@ function renderTerminalViews(panes) {
     screen.addEventListener('click', () => controller.terminal?.focus());
     window.requestAnimationFrame(() => resizeTerminal(controller));
   }
+  updateTerminalLayout();
   void pollTerminalViews();
 }
 
@@ -894,6 +1110,13 @@ function updateTerminalHeader(pane) {
   if (controller?.terminal && status) controller.terminal.options.disableStdin = !sessionIsActive(session);
   const sessionElement = card.querySelector('[data-terminal-session]');
   if (sessionElement) sessionElement.textContent = pane.sessionId || '—';
+  const backendElement = card.querySelector('[data-terminal-backend]');
+  if (backendElement) {
+    backendElement.textContent = t(terminalBackendKey(session));
+    const diagnostic = session?.diagnostics;
+    backendElement.title = diagnostic ? [diagnostic.platform, `Node ${diagnostic.nodeVersion || '?'}`, diagnostic.nativeStatus,
+      diagnostic.failure?.stage, diagnostic.failure?.code].filter(Boolean).join(' · ') : '';
+  }
   const updated = card.querySelector('[data-terminal-updated]');
   if (updated) updated.textContent = formatTime(session?.lastActivityAt || session?.createdAt);
 }
@@ -904,13 +1127,16 @@ function disposeTerminalViews() {
   for (const controller of state.terminalViews.values()) {
     controller.disposed = true;
     window.clearTimeout(controller.pollTimer);
+    window.clearTimeout(controller.resizeTimer);
     controller.resizeObserver?.disconnect();
+    controller.hiddenViewportAnchor?.marker?.dispose();
     controller.terminal?.dispose();
   }
   state.terminalViews.clear();
   state.terminalPairKey = '';
   const grid = document.querySelector('#agent-terminal-grid');
   if (grid) grid.innerHTML = '';
+  document.body.classList.remove('terminal-split-dragging');
 }
 
 function enqueueRawInput(controller, input) {
@@ -978,20 +1204,55 @@ function terminalSize(controller) {
 }
 
 function resizeTerminal(controller) {
-  if (!controller.terminal || !controller.pane.sessionId) return;
+  if (controller.disposed || !controller.terminal || !controller.pane.sessionId) return;
   const size = terminalSize(controller);
   if (!size || size.cols < 1 || size.rows < 1) return;
   const key = `${size.cols}x${size.rows}`;
-  if (controller.lastSize === key) return;
-  try { controller.terminal.resize(size.cols, size.rows); } catch { return; }
-  controller.lastSize = key;
-  controller.resizePromise = controller.resizePromise.then(async () => {
-    try {
-      await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size }, controller.projectId);
-    } catch (error) {
-      showToast(error.payload?.error?.message || t('terminal.resizeError'), 'error');
+  if (controller.lastSize === key && !controller.pendingResize && !controller.resizeSending) return;
+  if (controller.pendingResize && `${controller.pendingResize.cols}x${controller.pendingResize.rows}` === key) return;
+  const viewport = captureTerminalViewport(controller.terminal);
+  try {
+    controller.terminal.resize(size.cols, size.rows);
+    restoreTerminalViewport(controller.terminal, viewport);
+  } catch { viewport?.marker?.dispose(); return; }
+  controller.pendingResize = size;
+  // Fit xterm immediately, but send only the latest PTY size at a bounded rate.
+  if (!controller.resizeTimer && !controller.resizeSending) {
+    controller.resizeTimer = window.setTimeout(() => void flushTerminalResize(controller), 100);
+  }
+}
+
+function captureTerminalViewport(terminal) {
+  const buffer = terminal.buffer.active;
+  if (buffer.viewportY >= buffer.baseY) return null;
+  // Markers follow the original output when a width change reflows wrapped lines.
+  return { line: buffer.viewportY, marker: terminal.registerMarker?.(buffer.viewportY - buffer.baseY - buffer.cursorY) };
+}
+
+function restoreTerminalViewport(terminal, anchor) {
+  try {
+    if (anchor === null) terminal.scrollToBottom();
+    else terminal.scrollToLine(anchor.marker && !anchor.marker.isDisposed ? anchor.marker.line : anchor.line);
+  } finally { anchor?.marker?.dispose(); }
+}
+
+async function flushTerminalResize(controller) {
+  controller.resizeTimer = null;
+  if (controller.disposed || controller.resizeSending || !controller.pendingResize) return;
+  const size = controller.pendingResize;
+  controller.pendingResize = null;
+  controller.resizeSending = true;
+  try {
+    await postAction('sessionResize', { sessionId: controller.pane.sessionId, ...size }, controller.projectId);
+    controller.lastSize = `${size.cols}x${size.rows}`;
+  } catch (error) {
+    if (!controller.disposed) showToast(error.payload?.error?.message || t('terminal.resizeError'), 'error');
+  } finally {
+    controller.resizeSending = false;
+    if (!controller.disposed && controller.pendingResize) {
+      controller.resizeTimer = window.setTimeout(() => void flushTerminalResize(controller), 100);
     }
-  });
+  }
 }
 
 async function pollTerminalViews() {
@@ -1293,6 +1554,34 @@ async function clearArchivedConversations() {
 }
 
 function bindEvents() {
+  document.querySelector('#project-switcher')?.addEventListener('change', event => {
+    const id = event.target.value;
+    if (id && id !== state.projectId) void selectProject(id);
+    renderProjectSwitcher();
+  });
+  const searchInput = document.querySelector('#task-search-input');
+  const clearSearch = () => {
+    state.taskSearch = '';
+    if (searchInput) searchInput.value = '';
+    renderTaskList();
+  };
+  searchInput?.addEventListener('input', () => {
+    state.taskSearch = searchInput.value;
+    closeContextMenu();
+    renderTaskList();
+  });
+  searchInput?.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearSearch();
+    searchInput.blur();
+  });
+  document.querySelector('#task-search-clear')?.addEventListener('click', () => { clearSearch(); searchInput?.focus(); });
+  document.querySelector('#agent-terminal-grid')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-terminal-focus], [data-terminal-focus-other]');
+    if (button) setTerminalFocus(button.dataset.terminalFocus || button.dataset.terminalFocusOther);
+  });
   document.querySelector('#project-list')?.addEventListener('contextmenu', event => showArchiveMenu(event, event.target));
   document.querySelector('#project-list')?.addEventListener('keydown', event => {
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) showArchiveMenu(event, event.target);

@@ -52,3 +52,7 @@
 ## 2026-09-20 - Pre-indexed session task map and pre-read session records in workspace archive cleanup
 **Learning:** `runtimeWorkspaceArchivesClear` repeatedly invoked `ownedTaskSessionFiles` per archived task record, causing $O(A \times S)$ disk reads and JSON parses for session files, and evaluated cross-task session references using `records.some(other => ...includes(file.id))` ($O(A \times S \times R)$ array/Set allocations).
 **Action:** Pre-read session records once and pre-build a `sessionTaskMap` (`Map<sessionId, Set<taskId>>`) before looping over archived task records. Pass pre-read session records to child functions to avoid redundant file I/O.
+
+## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents
+**Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
+**Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.

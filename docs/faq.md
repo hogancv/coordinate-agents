@@ -55,7 +55,7 @@ Yes. Custom CLI agents can be registered dynamically using `coordinate-agents ag
 
 The built-in Antigravity Adapter does not automatically add full permissions. Its legacy one-shot
 path passes configured arguments and then appends `--prompt-interactive <prompt>`; a persistent
-Session starts with `--prompt-interactive ""` for current `agy`/`agy-proxy` parsers, then writes its
+Session starts with `--prompt-interactive=` for current `agy`/`agy-proxy` parsers, then writes its
 first instruction through the PTY unless `{prompt}` is explicitly configured. If the local `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, set it with
 `config set agent.antigravity.args`; otherwise the local `agy` configuration remains authoritative.

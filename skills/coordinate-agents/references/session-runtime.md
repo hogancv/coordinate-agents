@@ -124,6 +124,21 @@ conversation. No command is assembled as a shell string.
   cannot initialize, may use the same bounded Session protocol over owned
   stdio pipes as a degraded compatibility backend; it never broadens process
   ownership or shell access.
+- Windows Node >=20 runs a bounded disposable detached Host preflight before
+  enabling native PTY. The probe launches only the current Node executable and
+  checks real TTY output; it does not launch an Agent or use model accounts.
+  Failure/abort/timeout selects pipes only after exact owned-PID cleanup. An
+  unconfirmed cleanup fails startup rather than launching another process.
+  Node 18 remains on pipes. Public/persisted Session records expose `backend`.
+- On Windows, logical submitted text translates LF to console Enter (CR).
+  Raw writes (`submit: false`) are not normalized. Native resize reaches ConPTY;
+  pipe resize has no child-terminal effect and is not native acceptance.
+- Host RPC disconnect/EPIPE is local to that socket. During close, natural PTY
+  exit cannot shut down the Host before its close response is flushed. Runtime
+  state/output tails are written by the Host, not replayed from delayed RPCs.
+- Source-only diagnostics: `npm run test:native-pty`, or
+  `node test/support/native-pty-probe.mjs native` / `runtime` / `powershell`.
+  Windows native failures fail these tests; stdio fallback is tested separately.
 - Ctrl+C is sent through the PTY when available. Forced termination is bounded
   and can target only the process created by that Session host.
 - Output is bounded in memory and in every read/inspect response. Metadata
