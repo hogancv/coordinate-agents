@@ -79,6 +79,10 @@ export async function runtimeSessionRead(input = {}) {
   return jsonSuccess('session.read', { root, ...output });
 }
 
+export async function runtimeSessionSubscribe(input = {}) {
+  return getExecutionSessionManager().subscribe(sessionInputRoot(input), input.sessionId, input);
+}
+
 export async function runtimeSessionClose(input = {}) {
   const root = sessionInputRoot(input);
   const session = await getExecutionSessionManager().close(root, input.sessionId, {

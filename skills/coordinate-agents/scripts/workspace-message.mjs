@@ -76,7 +76,10 @@ export async function workspaceMessage(root, taskId, operation, value, api = DEF
         throw new Error(`Dispatch write failed; input may have been partially sent. Do not resend automatically. ${error.message}`);
       }
     });
-    return { ok: true, sent: true, sessionId, cursor: before.nextCursor, ...cooperation,
+    // Sending starts a new response window at the stream head. A normal read
+    // cursor only acknowledges the history page that was actually returned.
+    return { ok: true, sent: true, sessionId,
+      cursor: Number.isSafeInteger(before.latestCursor) ? before.latestCursor : before.nextCursor, ...cooperation,
       hint: 'SENT means written to the terminal, not received or started. Wait using cursor and revision; never resend automatically.' };
   }
   if (operation === 'read') {

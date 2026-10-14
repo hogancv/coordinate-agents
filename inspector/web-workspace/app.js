@@ -1,3 +1,4 @@
+import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
 import { mountChangesDrawer } from './git-changes.mjs';
 import {
   isActiveTerminalSession,
@@ -157,6 +158,10 @@ const I18N = {
     'terminal.planner': 'planner · reviewer',
     'terminal.implementer': 'implementer',
     'terminal.connecting': 'Connecting…',
+    'terminal.live': '● Live',
+    'terminal.reconnecting': '○ Reconnecting',
+    'terminal.polling': '○ Polling fallback',
+    'terminal.outputGap': '[Coordinate Agents] Some terminal output was lost because the buffer overflowed.',
     'terminal.unavailable': 'No Session is bound to this task.',
     'terminal.closed': 'Terminal is closed.',
     'terminal.inputError': 'Terminal input could not be sent.',
@@ -310,6 +315,10 @@ const I18N = {
     'terminal.planner': '规划 · 审查',
     'terminal.implementer': '实现者',
     'terminal.connecting': '连接中…',
+    'terminal.live': '● 实时',
+    'terminal.reconnecting': '○ 重连中',
+    'terminal.polling': '○ 兼容轮询',
+    'terminal.outputGap': '[Coordinate Agents] 部分终端输出因缓冲区溢出而丢失。',
     'terminal.unavailable': '此任务没有绑定可用的 Session。',
     'terminal.closed': '终端已关闭。',
     'terminal.inputError': '终端输入发送失败。',
@@ -1372,6 +1381,7 @@ function terminalCardMarkup(pane) {
     <header class="terminal-card-header">
       <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup))}</span></div></div>
       <div class="terminal-card-actions">
+        <span class="terminal-status" data-terminal-transport></span>
         <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
         <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${pane.slotId === 'codex' ? 'antigravity' : 'codex'}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
         <button class="icon-button terminal-focus-button" type="button" data-terminal-focus="${escapeHtml(pane.slotId)}" aria-pressed="false" title="${escapeHtml(t('terminal.focus'))}" aria-label="${escapeHtml(t('terminal.focus'))}">
@@ -1407,6 +1417,11 @@ function renderTerminalViews(panes) {
       resizeSending: false,
       pendingResize: null,
       lastSize: null,
+      transport: null,
+      streamAbort: null,
+      readAbort: null,
+      retryTimer: null,
+      retryDelay: 5_000,
       polling: false,
       pollTimer: null,
       readAgain: false,
@@ -1454,6 +1469,11 @@ function updateTerminalHeader(pane) {
   const taskSession = state.selectedTask?.sessions?.[pane.slotId] || null;
   const session = controller?.session || pane.session || taskSession;
   const status = sessionState(session);
+  const transportElement = card.querySelector('[data-terminal-transport]');
+  if (transportElement) {
+    transportElement.textContent = controller?.transport && !controller.finished ? t(`terminal.${controller.transport}`) : '';
+    transportElement.classList.toggle('active', controller?.transport === 'live');
+  }
   const statusElement = card.querySelector('[data-terminal-status]');
   if (statusElement) statusElement.textContent = pane.sessionId
     ? (status ? statusLabel(status) : t('terminal.connecting'))
@@ -1479,6 +1499,10 @@ function disposeTerminalViews() {
   state.pollTimer = null;
   for (const controller of state.terminalViews.values()) {
     controller.disposed = true;
+    controller.streamAbort?.abort();
+    controller.readAbort?.abort();
+    controller.pendingWriteResolve?.();
+    window.clearTimeout(controller.retryTimer);
     window.clearTimeout(controller.pollTimer);
     window.clearTimeout(controller.resizeTimer);
     controller.resizeObserver?.disconnect();
@@ -1610,11 +1634,54 @@ async function flushTerminalResize(controller) {
 
 async function pollTerminalViews() {
   const controllers = [...state.terminalViews.values()].filter(controller => controller.pane.sessionId && !controller.polling && !controller.finished);
-  for (const controller of controllers) scheduleTerminalRead(controller, 0);
+  for (const controller of controllers) void connectTerminalStream(controller);
+}
+
+async function connectTerminalStream(controller) {
+  if (controller.disposed || controller.finished) return;
+  controller.transport = 'reconnecting';
+  window.clearTimeout(controller.pollTimer);
+  updateTerminalHeader(controller.pane);
+  // An in-flight fallback read owns the cursor until it finishes rendering.
+  // Wait for it before opening SSE, so the transports never overlap.
+  if (controller.polling) await new Promise(resolve => { controller.readIdle = resolve; });
+  if (controller.disposed || controller.finished) return;
+  const abort = new AbortController();
+  controller.streamAbort = abort;
+  const params = new URLSearchParams();
+  if (Number.isSafeInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
+  const path = `/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/stream?${params}`;
+  const endpoint = controller.projectId ? `/api/projects/${encodeURIComponent(controller.projectId)}${path}` : path;
+  const timeout = window.setTimeout(() => abort.abort(), 3_000);
+  try {
+    const response = await fetch(endpoint, { cache: 'no-store', signal: abort.signal,
+      headers: { [CAPABILITY_HEADER]: capability } });
+    window.clearTimeout(timeout);
+    await consumeTerminalStream(response, { signal: abort.signal, async onEvent(event, payload) {
+      if (controller.disposed || controller.streamAbort !== abort) return;
+      controller.transport = 'live';
+      if (event === 'terminal-gap') controller.pendingGap = true;
+      else if (event === 'terminal-output') await applyTerminalPayload(controller, payload, false);
+      else if (event === 'terminal-state') await applyTerminalPayload(controller, { session: payload.session }, true);
+      updateTerminalHeader(controller.pane);
+    } });
+    if (!controller.finished) throw new Error('Terminal stream disconnected.');
+  } catch {
+    if (controller.disposed || controller.finished) return;
+    controller.transport = 'polling';
+    updateTerminalHeader(controller.pane);
+    scheduleTerminalRead(controller, 0);
+    controller.retryTimer = window.setTimeout(() => void connectTerminalStream(controller), controller.retryDelay);
+    controller.retryDelay = Math.min(30_000, controller.retryDelay * 2);
+  } finally {
+    window.clearTimeout(timeout);
+    abort.abort();
+    if (controller.streamAbort === abort) controller.streamAbort = null;
+  }
 }
 
 function scheduleTerminalRead(controller, delay) {
-  if (controller.disposed || controller.finished) return;
+  if (controller.disposed || controller.finished || (controller.transport && controller.transport !== 'polling')) return;
   window.clearTimeout(controller.pollTimer);
   if (controller.polling) {
     controller.readAgain = true;
@@ -1623,35 +1690,55 @@ function scheduleTerminalRead(controller, delay) {
   controller.pollTimer = window.setTimeout(() => void readTerminal(controller), delay);
 }
 
-async function readTerminal(controller) {
-  if (controller.disposed || controller.polling || controller.finished) return;
-  controller.polling = true;
-  try {
-    const params = new URLSearchParams({
-      maxLines: `${TERMINAL_MAX_LINES}`,
-      maxBytes: `${TERMINAL_MAX_BYTES}`,
-    });
-    if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
-    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`, { projectId: controller.projectId });
-    if (controller.disposed) return;
-    controller.session = payload.session || controller.session;
-    const output = payload.output?.output || '';
-    if (output) controller.activeUntil = Date.now() + 1500;
-    if (controller.terminal && output) controller.terminal.write(output);
-    controller.cursor = Number.isInteger(payload.output?.nextCursor) ? payload.output.nextCursor : null;
-    if (payload.session && !sessionIsActive(payload.session)) controller.finished = true;
-    updateTerminalHeader(controller.pane);
-    if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
-      const previousTerminalHealth = healthTerminal();
-      state.selectedTask.sessions[controller.pane.slotId] = {
-        ...state.selectedTask.sessions[controller.pane.slotId],
-        ...payload.session,
-        state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
-        status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
-      };
-      const currentTerminalHealth = healthTerminal();
-      if (previousTerminalHealth.status !== currentTerminalHealth.status || previousTerminalHealth.backend !== currentTerminalHealth.backend) renderWorkspaceHealth();
+async function applyTerminalPayload(controller, payload, finishOnState = true) {
+  if (controller.disposed) return;
+  if (payload.output) {
+    if (payload.output.truncated || controller.pendingGap) {
+      showToast(t('terminal.outputGap'), 'error');
+      controller.pendingGap = false;
     }
+    const output = payload.output.output || '';
+    if (output) controller.activeUntil = Date.now() + 1500;
+    await deliverTerminalOutput(controller, payload.output, text => new Promise(resolve => {
+      if (controller.disposed || !controller.terminal) { resolve(); return; }
+      controller.pendingWriteResolve = resolve;
+      controller.terminal.write(text, () => { controller.pendingWriteResolve = null; resolve(); });
+    }));
+  }
+  if (controller.disposed) return;
+  controller.session = payload.session || controller.session;
+  if (finishOnState && payload.session && !sessionIsActive(payload.session) && !payload.output?.hasMore) {
+    controller.finished = true;
+    window.clearTimeout(controller.retryTimer);
+  }
+  updateTerminalHeader(controller.pane);
+  if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
+    const previousTerminalHealth = healthTerminal();
+    state.selectedTask.sessions[controller.pane.slotId] = {
+      ...state.selectedTask.sessions[controller.pane.slotId],
+      ...payload.session,
+      state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
+      status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
+    };
+    const currentTerminalHealth = healthTerminal();
+    if (previousTerminalHealth.status !== currentTerminalHealth.status || previousTerminalHealth.backend !== currentTerminalHealth.backend) renderWorkspaceHealth();
+  }
+}
+
+async function readTerminal(controller) {
+  if (controller.disposed || controller.polling || controller.finished || (controller.transport && controller.transport !== 'polling')) return;
+  controller.polling = true;
+  const abort = new AbortController();
+  controller.readAbort = abort;
+  try {
+    const params = new URLSearchParams({ maxLines: `${TERMINAL_MAX_LINES}`, maxBytes: `${TERMINAL_MAX_BYTES}` });
+    if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
+    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`, {
+      projectId: controller.projectId, signal: abort.signal,
+    });
+    if (controller.disposed) return;
+    await applyTerminalPayload(controller, payload);
+    if (payload.output?.hasMore) controller.readAgain = true;
   } catch (error) {
     if (controller.disposed) return;
     controller.activeUntil = 0;
@@ -1659,9 +1746,12 @@ async function readTerminal(controller) {
     else updateTerminalHeader({ ...controller.pane, session: { state: 'failed' } });
   } finally {
     controller.polling = false;
+    controller.readAbort = null;
     const delay = controller.readAgain ? 0 : Date.now() < controller.activeUntil ? 50 : TERMINAL_POLL_MS;
     controller.readAgain = false;
     scheduleTerminalRead(controller, delay);
+    controller.readIdle?.();
+    controller.readIdle = null;
   }
 }
 
@@ -2052,3 +2142,5 @@ async function boot() {
 }
 
 void boot();
+
+window.addEventListener('pagehide', disposeTerminalViews);

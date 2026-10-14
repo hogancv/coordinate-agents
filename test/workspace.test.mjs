@@ -367,7 +367,7 @@ test('Workspace serves the composer model module for the browser bundle', async 
     const xtermCss = await fetch(`${started.url}/vendor/xterm.css`);
     assert.equal(xtermCss.status, 200);
     assert.match(xtermCss.headers.get('content-type'), /text\/css/);
-    const missingSession = await fetch(`${started.url}/api/sessions/session_missing1/read`);
+    const missingSession = await fetch(`${started.url}/api/sessions/session_missing1/read`, { headers: { 'x-coordinate-agents-capability': started.capability } });
     assert.equal(missingSession.status, 404);
     assert.match((await missingSession.json()).code, /SESSION_NOT_FOUND/);
   } finally {
@@ -431,14 +431,14 @@ test('Workspace exposes bounded cursor Session reads but Inspector does not', as
       };
     },
   };
-  const server = createInspectorServer({ root: repositoryRoot, data, ui: 'workspace' });
+  const server = createInspectorServer({ root: repositoryRoot, data, ui: 'workspace', capability: 'read-test' });
   await new Promise((resolvePromise, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolvePromise);
   });
   const port = server.address().port;
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/session_terminal/read?cursor=7&maxLines=999&maxBytes=999999`);
+    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/session_terminal/read?cursor=7&maxLines=999&maxBytes=999999`, { headers: { 'x-coordinate-agents-capability': 'read-test' } });
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.session.id, 'session_terminal');
