@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readGitChanges } from './workspace-git-changes.mjs';
 import { randomUUID } from 'node:crypto';
 import { readWorkspaceTask, dispatchWorkspaceTask, reportWorkspaceTask } from './workspace-task-runtime.mjs';
 import { runtimeSessionRead, runtimeSessionWrite } from './session-service.mjs';
@@ -8,7 +9,7 @@ import { realpathSync } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
 
 const DEFAULT_API = { readWorkspaceTask, runtimeSessionRead, runtimeSessionWrite, dispatchWorkspaceTask, reportWorkspaceTask };
-const USAGE = 'Expected send <instruction>, read <cursor>, wait <cursor> [revision] [timeout-ms], or report <status> <roundId> [summary].';
+const USAGE = 'Expected send <instruction>, read <cursor>, wait <cursor> [revision] [timeout-ms], changes, or report <status> <roundId> [summary].';
 const FINAL_RECEIPTS = new Set(['DONE', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED']);
 
 function nonnegativeInteger(value, name) {
@@ -23,7 +24,11 @@ function receipt(cooperation) {
 // Resolve only the recorded pair; never fall back to another task's Session.
 // The fifth argument remains the injectable API used by existing callers.
 export async function workspaceMessage(root, taskId, operation, value, api = DEFAULT_API, options = {}) {
-  if (!['send', 'read', 'wait', 'report'].includes(operation)) throw new Error(USAGE);
+  if (!['send', 'read', 'wait', 'report', 'changes'].includes(operation)) throw new Error(USAGE);
+  if (operation === 'changes') {
+    await api.readWorkspaceTask(root, taskId); // Validate the task in this root; no Session or cooperation writes.
+    return readGitChanges(root);
+  }
   if (operation === 'report') {
     const status = `${value || ''}`.toUpperCase().replaceAll('-', '_');
     const cooperation = await api.reportWorkspaceTask(root, taskId, status, options.roundId, options.summary ?? '');
@@ -133,6 +138,7 @@ if (isInvokedDirectly()) {
   try {
     const [taskId, operation, value, ...args] = process.argv.slice(2);
     if ((operation === 'report' && args.length > 2) || (operation === 'wait' && args.length > 2) || (!['report', 'wait'].includes(operation) && args.length)) throw new Error(USAGE);
+    if (operation === 'changes' && value !== undefined) throw new Error(USAGE);
     const options = operation === 'report' ? { roundId: args[0], summary: args[1] }
       : { revision: args[0], timeoutMs: args[1] };
     console.log(JSON.stringify(await workspaceMessage(process.cwd(), taskId, operation, value, DEFAULT_API, options)));

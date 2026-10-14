@@ -17,6 +17,7 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
 const WORKSPACE_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
+  ['/git-changes.mjs', { file: 'git-changes.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/terminal-model.mjs', { file: 'terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
@@ -210,6 +211,15 @@ export function createLocalServer({
     }
 
     try {
+      if (ui === 'workspace' && (pathname === '/api/git-changes' || pathname === '/api/git-changes/diff')) {
+        if (!workspaceRequestAuthorized(request, capability)) {
+          json(response, 403, { error: 'Git changes require an authorized local request.' }); return;
+        }
+        const result = pathname.endsWith('/diff')
+          ? await data.readGitDiff(url.searchParams.get('path')) : await data.readGitChanges();
+        json(response, result.ok ? 200 : result.code === 'GIT_INVALID_PATH' || result.code === 'GIT_FILE_NOT_CHANGED' ? 400 : 503, result);
+        return;
+      }
       if (pathname === '/api/repository' && typeof data.readRepository === 'function') {
         json(response, 200, data.readRepository());
         return;
