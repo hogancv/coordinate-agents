@@ -4,6 +4,7 @@ import { getAdapter } from '../../skills/coordinate-agents/adapters/index.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 
 const PROBE_TIMEOUT = 3000;
+const ACTIVE_SESSION_STATES = new Set(['starting', 'running', 'idle', 'busy']);
 
 // Adapter discovery includes synchronous Windows executable lookup. Keep it
 // off the HTTP event loop; version execution below is asynchronous and bounded.
@@ -71,7 +72,8 @@ async function checkCli(settings, timeout, root) {
 }
 
 export function terminalHealth(sessions = [], nodeVersion = process.version) {
-  const backends = sessions.map(session => session?.backend);
+  const backends = sessions.filter(session => (session?.sessionId || session?.id)
+    && ACTIVE_SESSION_STATES.has(`${session.status || session.state || ''}`.toLowerCase())).map(session => session.backend);
   if (backends.includes('stdio-fallback')) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
   if (backends.includes('node-pty')) return { status: 'ok', backend: 'node-pty' };
   return { status: 'pending', backend: null,

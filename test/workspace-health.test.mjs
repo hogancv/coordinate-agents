@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readWorkspaceHealth, terminalHealth } from '../inspector/server/workspace-health.mjs';
@@ -62,10 +62,18 @@ test('version timeout is bounded and unavailable version does not invent success
 test('terminal uses existing session backends and Node 18 pending is compatible', () => {
   assert.deepEqual(terminalHealth([], 'v22.1.0'), { status: 'pending', backend: null });
   assert.equal(terminalHealth([], 'v18.20.8').reason, 'NODE18_STDIO_COMPATIBILITY');
-  assert.deepEqual(terminalHealth([{ backend: 'node-pty' }]), { status: 'ok', backend: 'node-pty' });
-  assert.deepEqual(terminalHealth([{ backend: 'node-pty' }, { backend: 'stdio-fallback' }]), {
+  assert.deepEqual(terminalHealth([{ sessionId: 'native', state: 'running', backend: 'node-pty' }]), { status: 'ok', backend: 'node-pty' });
+  assert.deepEqual(terminalHealth([{ sessionId: 'native', state: 'running', backend: 'node-pty' }, { sessionId: 'fallback', state: 'idle', backend: 'stdio-fallback' }]), {
     status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK',
   });
+});
+
+test('terminal health ignores historical, invalid and inactive sessions', () => {
+  const history = [{ sessionId: 'old', state: 'exited', backend: 'stdio-fallback' },
+    { sessionId: 'closed', status: 'closed', backend: 'node-pty' },
+    { state: 'running', backend: 'stdio-fallback' }];
+  assert.deepEqual(terminalHealth(history), { status: 'pending', backend: null });
+  assert.deepEqual(terminalHealth([...history, { sessionId: 'current', state: 'busy', backend: 'node-pty' }]), { status: 'ok', backend: 'node-pty' });
 });
 
 test('HTTP health is project scoped, responds during a slow probe, and uses saved settings', async t => {
@@ -83,6 +91,20 @@ test('HTTP health is project scoped, responds during a slow probe, and uses save
   assert.equal(healthy.checks.codex.command, command);
   assert.equal(healthy.checks.codex.status, 'ok');
   assert.equal((await createWorkspaceData(root).readWorkspaceHealth()).checks.antigravity.command, command);
+  for (const folder of ['workspace-tasks', 'sessions']) mkdirSync(join(root, '.agent-bus', folder), { recursive: true });
+  for (const [name, state, backend] of [['historical', 'exited', 'stdio-fallback'], ['selected', 'running', 'node-pty'], ['other-task', 'idle', 'stdio-fallback']]) {
+    const taskId = `workspace-health-${name}`;
+    const sessionId = `session_health_${name}`;
+    writeFileSync(join(root, '.agent-bus', 'sessions', `${sessionId}.json`), JSON.stringify({ id: sessionId, agent: 'codex', command, cwd: root, state, backend }));
+    writeFileSync(join(root, '.agent-bus', 'workspace-tasks', `${taskId}.json`), JSON.stringify({ schemaVersion: 1, id: taskId, title: name,
+      status: state === 'exited' ? 'EXITED' : 'RUNNING', promptVersion: 'test', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      sessions: { codex: { agent: 'codex', role: 'planner-reviewer', sessionId }, antigravity: { agent: 'antigravity', role: 'implementer', sessionId: null } } }));
+  }
+  for (const [taskName, expected] of [['selected', 'ok'], ['historical', 'pending'], ['other-task', 'warning']]) {
+    const response = await fetch(`${scoped}/api/workspace-health?workspaceTaskId=workspace-health-${taskName}`, { headers });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).checks.terminal.status, expected);
+  }
   writeFileSync(command, 'setInterval(() => {}, 1000);');
   const pending = fetch(`${scoped}/api/workspace-health`, { headers });
   const before = Date.now();

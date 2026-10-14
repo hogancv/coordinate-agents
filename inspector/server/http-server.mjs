@@ -219,7 +219,7 @@ export function createLocalServer({
         return;
       }
       if (ui === 'workspace' && pathname === '/api/workspace-health' && typeof data.readWorkspaceHealth === 'function') {
-        json(response, 200, await data.readWorkspaceHealth());
+        json(response, 200, await data.readWorkspaceHealth(url.searchParams.get('workspaceTaskId')));
         return;
       }
       if (ui === 'workspace' && pathname === '/api/workspace-tasks' && typeof data.readWorkspaceTasks === 'function') {

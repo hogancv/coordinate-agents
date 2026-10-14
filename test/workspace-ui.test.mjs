@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { isActiveTerminalSession } from '../inspector/web-workspace/terminal-model.mjs';
 
 const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
 function runFunctions(start, end, globals) {
@@ -13,18 +14,43 @@ function runFunctions(start, end, globals) {
 }
 
 function healthContext(globals = {}) {
-  return runFunctions('healthTerminal', 'renderLocale', { ...globals });
+  return runFunctions('healthTerminal', 'renderLocale', { isActiveTerminalSession, ...globals });
 }
 
 test('health treats unknown sign-in and unstarted PTY as neutral, but notices live fallback', () => {
   const state = { health: { checks: Object.fromEntries(['node', 'git', 'codex', 'antigravity'].map(id => [id, { status: 'ok', authenticated: 'unknown' }])) }, tasks: [] };
   const context = healthContext({ state });
   assert.equal(context.healthSummaryStatus(), 'ok');
-  state.tasks = [{ id: 't1', sessions: { codex: { backend: 'node-pty' } } }];
-  state.selectedTask = { id: 't1', sessions: { codex: { backend: 'stdio-fallback' } } };
+  state.selectedId = 't1';
+  state.tasks = [{ id: 't1', sessions: { codex: { sessionId: 'native', state: 'running', backend: 'node-pty' } } }];
+  state.selectedTask = { id: 't1', sessions: { codex: { sessionId: 'fallback', state: 'idle', backend: 'stdio-fallback' } } };
   assert.equal(context.healthSummaryStatus(), 'warning');
   state.health.checks.antigravity.status = 'missing';
   assert.equal(context.healthSummaryStatus(), 'missing');
+});
+
+test('terminal health follows selection and ignores fallback from other or inactive tasks', () => {
+  const historical = { id: 'old', sessions: { codex: { sessionId: 'old-session', state: 'exited', backend: 'stdio-fallback' } } };
+  const other = { id: 'other', sessions: { codex: { sessionId: 'other-session', state: 'running', backend: 'stdio-fallback' } } };
+  const selectedTask = { id: 'new', sessions: { codex: { sessionId: 'new-session', state: 'running', backend: 'node-pty' } } };
+  const state = { selectedId: 'new', selectedTask, tasks: [historical, other, selectedTask] };
+  const context = healthContext({ state });
+  assert.equal(context.healthTerminal().status, 'ok');
+  assert.equal(context.healthTerminal().backend, 'node-pty');
+  selectedTask.status = 'CLOSED';
+  assert.equal(context.healthTerminal().status, 'pending');
+  selectedTask.status = 'RUNNING';
+  state.selectedId = 'old'; state.selectedTask = historical;
+  assert.equal(context.healthTerminal().status, 'pending');
+  state.selectedId = 'other'; state.selectedTask = other;
+  assert.equal(context.healthTerminal().status, 'warning');
+  state.selectedId = null; state.selectedTask = null;
+  assert.equal(context.healthTerminal().status, 'pending');
+  state.selectedId = 'new'; state.selectedTask = selectedTask;
+  selectedTask.sessions.codex.state = 'failed';
+  assert.equal(context.healthTerminal().status, 'pending');
+  state.selectedId = 'other'; // An old selectedTask object must not leak during a switch.
+  assert.equal(context.healthTerminal().status, 'pending');
 });
 
 test('onboarding remembers dismissal only and never opens over an existing active task', () => {
@@ -54,7 +80,7 @@ test('project changes discard stale health responses and detect the current comm
   });
   context.renderWorkspaceHealth = () => {};
   const first = context.checkWorkspaceHealth();
-  state.projectId = 'p2'; state.projectEpoch++;
+  state.projectId = 'p2'; state.projectEpoch++; state.selectedId = 'workspace-current-task';
   const second = context.checkWorkspaceHealth();
   assert.equal(requests[0].options.signal.aborted, true);
   requests[1].resolve({ checks: { codex: { command: 'second-cli' } } });
@@ -63,7 +89,8 @@ test('project changes discard stale health responses and detect the current comm
   await first;
   assert.equal(state.health.checks.codex.command, 'second-cli');
   assert.equal(state.healthBusy, false);
-  assert.equal(requests[1].path, '/api/workspace-health');
+  assert.equal(requests[0].path, '/api/workspace-health');
+  assert.equal(requests[1].path, '/api/workspace-health?workspaceTaskId=workspace-current-task');
   assert.equal(requests[1].options.projectId, 'p2');
 });
 

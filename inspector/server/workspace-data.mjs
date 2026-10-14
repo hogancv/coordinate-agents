@@ -178,10 +178,10 @@ export function createWorkspaceData(root) {
     root: repository,
     readRepository: () => repositoryFacts(repository),
     readWorkspaceSettings: () => readWorkspaceSettings(repository),
-    async readWorkspaceHealth() {
-      const tasks = await readWorkspaceTasks(repository);
+    async readWorkspaceHealth(workspaceTaskId = null) {
+      const tasks = workspaceTaskId ? [await readWorkspaceTask(repository, workspaceTaskId)] : await readWorkspaceTasks(repository);
       return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),
-        sessions: tasks.flatMap(task => Object.values(task.sessions)) });
+        sessions: tasks.filter(task => !task.archivedAt && task.status !== 'CLOSED').flatMap(task => Object.values(task.sessions)) });
     },
     readWorkspaceTasks: () => readWorkspaceTasks(repository),
     readWorkspaceTask: id => readWorkspaceTask(repository, id),

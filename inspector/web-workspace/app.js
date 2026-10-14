@@ -24,8 +24,8 @@ const I18N = {
     'health.open': 'Environment check',
     'health.title': 'Check your local environment',
     'health.loading': 'Checking local commands…',
-    'health.ready': 'Environment ready',
-    'health.warning': 'Environment ready with limitations',
+    'health.ready': 'Basic environment ready',
+    'health.warning': 'Basic environment ready with limitations',
     'health.missing': 'Environment needs configuration',
     'health.pending': 'Environment awaiting verification',
     'health.error': 'Could not check the environment. You can continue or recheck.',
@@ -177,8 +177,8 @@ const I18N = {
     'health.open': '环境自检',
     'health.title': '开始使用前，检查一下本地环境',
     'health.loading': '正在检测本地命令…',
-    'health.ready': '环境已就绪',
-    'health.warning': '环境可用，存在兼容性限制',
+    'health.ready': '基础环境已就绪',
+    'health.warning': '基础环境可用，存在兼容性限制',
     'health.missing': '环境需配置',
     'health.pending': '环境待验证',
     'health.error': '暂时无法检测环境，可继续使用或重新检测。',
@@ -728,8 +728,9 @@ async function saveSettings(event) {
 }
 
 function healthTerminal() {
-  const tasks = state.tasks.map(task => task.id === state.selectedTask?.id ? state.selectedTask : task);
-  const sessions = tasks.flatMap(task => Object.values(task.sessions || {}));
+  const task = state.selectedTask?.id === state.selectedId ? state.selectedTask : null;
+  const sessions = (!task?.archivedAt && task?.status !== 'CLOSED' ? Object.values(task?.sessions || {}) : [])
+    .filter(session => (session.sessionId || session.id) && isActiveTerminalSession(session));
   if (sessions.some(session => session.backend === 'stdio-fallback')) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
   if (sessions.some(session => session.backend === 'node-pty')) return { status: 'ok', backend: 'node-pty' };
   return { status: 'pending', backend: null,
@@ -801,7 +802,8 @@ async function checkWorkspaceHealth() {
   state.healthController = controller;
   const timer = window.setTimeout(() => controller.abort(), 10000);
   try {
-    const health = await fetchJson('/api/workspace-health', { projectId, signal: controller.signal });
+    const taskQuery = state.selectedId ? `?workspaceTaskId=${encodeURIComponent(state.selectedId)}` : '';
+    const health = await fetchJson(`/api/workspace-health${taskQuery}`, { projectId, signal: controller.signal });
     if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId) return;
     state.health = health;
   } catch {
@@ -1635,12 +1637,15 @@ async function readTerminal(controller) {
     if (payload.session && !sessionIsActive(payload.session)) controller.finished = true;
     updateTerminalHeader(controller.pane);
     if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
+      const previousTerminalHealth = healthTerminal();
       state.selectedTask.sessions[controller.pane.slotId] = {
         ...state.selectedTask.sessions[controller.pane.slotId],
         ...payload.session,
         state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
         status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
       };
+      const currentTerminalHealth = healthTerminal();
+      if (previousTerminalHealth.status !== currentTerminalHealth.status || previousTerminalHealth.backend !== currentTerminalHealth.backend) renderWorkspaceHealth();
     }
   } catch (error) {
     if (controller.disposed) return;
@@ -1681,6 +1686,7 @@ async function loadSelectedTask() {
     state.selectedTask = null;
     disposeTerminalViews();
     renderSelectedTask();
+    renderWorkspaceHealth();
     return;
   }
   const projectId = state.projectId;
@@ -1691,6 +1697,7 @@ async function loadSelectedTask() {
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
+  renderWorkspaceHealth();
   void continueTaskStartup(task, projectId, epoch);
 }
 
@@ -1707,6 +1714,7 @@ async function continueTaskStartup(task, projectId, epoch) {
     state.projectTasks.set(projectId, state.tasks);
     renderTaskList();
     renderSelectedTask();
+    renderWorkspaceHealth();
   } catch { /* Retry through the existing refresh; terminal input stays usable. */ }
   finally { state.startupContinuing.delete(key); }
 }
@@ -1738,6 +1746,7 @@ async function refresh({ showError = false } = {}) {
 async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
+  renderWorkspaceHealth();
   rememberSelection();
   renderTaskList();
   await loadSelectedTask();
