@@ -169,3 +169,32 @@ test('resizing the bundled xterm preserves the same output line across scrollbac
     assert.match(terminal.buffer.active.getLine(terminal.buffer.active.viewportY).translateToString(true), /^10:/);
   } finally { terminal.dispose(); }
 });
+
+test('cooperation labels hide idle and distinguish implementation from review', () => {
+  const context = runFunctions('cooperationLabel', 'terminalCardMarkup', { t: key => key });
+  assert.equal(context.cooperationLabel(), '');
+  assert.equal(context.cooperationLabel({ status: 'IDLE' }), '');
+  assert.equal(context.cooperationLabel({ status: 'RUNNING' }), '');
+  assert.equal(context.cooperationLabel({ status: 'WORKING' }), 'cooperation.WORKING');
+  assert.equal(context.cooperationLabel({ status: 'DONE' }), 'cooperation.DONE');
+  assert.equal(context.cooperationLabel({ status: 'APPROVED' }), 'cooperation.APPROVED');
+  assert.equal(context.terminalRoleLabel('antigravity', { status: 'WORKING' }), 'cooperation.agentWorking');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'DONE' }), 'cooperation.awaitingReview');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'REVIEWING' }), 'cooperation.agentReviewing');
+  assert.equal(context.terminalRoleLabel('codex', { status: 'IDLE' }), 'terminal.planner');
+});
+
+test('startup guidance asks for confirmation inside the selected Web terminal', () => {
+  const context = runFunctions('startupHint', 'terminalCardMarkup', { t: key => key });
+  assert.equal(context.startupHint(), '');
+  assert.equal(context.startupHint({ slots: { codex: 'READY', antigravity: 'READY' } }), '');
+  assert.equal(context.startupHint({ slots: { codex: 'TRUST_REQUIRED', antigravity: 'READY' } }), 'startup.trust');
+  assert.equal(context.startupHint({ slots: { codex: 'READY', antigravity: 'AUTH_REQUIRED' } }), 'startup.auth');
+});
+
+test('task errors explain a failed CLI account bootstrap even without a task-level error', () => {
+  const context = runFunctions('taskErrorMessage', 'terminalCardMarkup', { t: key => key });
+  assert.equal(context.taskErrorMessage({ sessions: { codex: { startupFailure: 'account-init-timeout', error: 'raw timeout' } } }), 'Codex: terminal.accountInitTimeout');
+  assert.equal(context.taskErrorMessage({ error: { message: 'Could not open terminal' } }), 'Could not open terminal');
+  assert.equal(context.taskErrorMessage({ sessions: {} }), '');
+});

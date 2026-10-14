@@ -1,6 +1,6 @@
 // Only Workspace-owned sessions and task pairs are writable from the Web.
 import * as sessions from './session-service.mjs';
-import { readWorkspaceTask, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive } from './workspace-task-runtime.mjs';
+import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive } from './workspace-task-runtime.mjs';
 import { resolve } from 'node:path';
 import { runtimeError } from './runtime-contract.mjs';
 export async function assertWorkspaceSession(input) {
@@ -13,6 +13,7 @@ export async function assertWorkspaceSession(input) {
 const sessionHandler = handler => async input => { await assertWorkspaceSession(input); return handler(input); };
 export const WORKSPACE_OPERATIONS = Object.freeze({
   workspaceTaskCreate: runtimeWorkspaceTaskCreate,
+  workspaceTaskContinue: runtimeWorkspaceTaskContinue,
   workspaceTaskClose: runtimeWorkspaceTaskClose,
   workspaceTaskRestart: runtimeWorkspaceTaskRestart,
   workspaceTaskArchive: runtimeWorkspaceTaskArchive,

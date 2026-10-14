@@ -86,6 +86,7 @@
             <div class="task-heading-title-row">
               <h2 id="selected-task-title">—</h2>
               <span id="selected-task-status" class="status-pill">—</span>
+              <span id="selected-task-cooperation" class="status-pill cooperation-pill" role="status" aria-live="polite" hidden></span>
             </div>
             <div class="task-meta-row" hidden>
               <code id="selected-task-id">—</code>
@@ -121,6 +122,7 @@
         </section>
 
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
+          <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
