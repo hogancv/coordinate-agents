@@ -20,6 +20,7 @@
     "inspector/server/workspace-projects.mjs",
     "inspector/server/native-folder-picker.mjs",
     "inspector/web-workspace/app.js",
+    "inspector/web-workspace/i18n.mjs",
     "inspector/web-workspace/git-changes.mjs",
     "inspector/web-workspace/composer-model.mjs",
     "inspector/web-workspace/index.html",

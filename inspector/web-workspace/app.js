@@ -1,3 +1,4 @@
+import { I18N } from './i18n.mjs';
 import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
 import { mountChangesDrawer } from './git-changes.mjs';
 import {
@@ -20,323 +21,6 @@ const UTF8_ENCODER = new TextEncoder();
 const WORKSPACE_SETTINGS_ENDPOINT = '/api/workspace-settings';
 const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: 'agy' });
 const HEALTH_SEEN_KEY = 'coordinate-agents-workspace-onboarding-seen';
-
-const I18N = {
-  en: {
-    'health.open': 'Environment check',
-    'health.title': 'Check your local environment',
-    'health.loading': 'Checking local commands…',
-    'health.ready': 'Basic environment ready',
-    'health.warning': 'Basic environment ready with limitations',
-    'health.missing': 'Environment needs configuration',
-    'health.pending': 'Environment awaiting verification',
-    'health.error': 'Could not check the environment. You can continue or recheck.',
-    'health.ok': 'OK',
-    'health.statusWarning': 'Limited',
-    'health.statusMissing': 'Configure',
-    'health.statusPending': 'Pending',
-    'health.recheck': 'Recheck',
-    'health.continue': 'Continue',
-    'health.close': 'Close environment check',
-    'health.notStarted': 'Not started',
-    'health.codexMissing': 'Install Codex CLI, then recheck. You can also update its command in terminal settings.',
-    'health.antigravityMissing': 'Install Antigravity CLI or update its command in terminal settings, then recheck.',
-    'health.authUnknown': 'Sign-in status awaiting verification',
-    'health.authHint': 'CLI installed. Complete sign-in in the Web terminal when starting a task.',
-    'health.command': 'Current command',
-    'health.copy': 'Copy install command',
-    'health.copied': 'Install command copied.',
-    'health.copyError': 'Could not copy. Select the command and copy it manually.',
-    'health.versionUnknown': 'Version unavailable. Recheck or review the configured command.',
-    'health.timeout': 'Check timed out. Review the command or recheck; the workspace remains available.',
-    'health.nodeHint': 'Node.js 18 or later is required. Install a supported Node.js version and restart the Web server.',
-    'health.gitHint': 'Install Git for your system and make it available to the Web server, then recheck.',
-    'health.fallback': 'Terminal uses stdio fallback. Some native TUI features and terminal resizing may be limited.',
-    'health.node18': 'Node.js 18 uses the expected stdio compatibility mode. The workspace can still be used.',
-    'health.terminalPending': 'The terminal backend will be checked after you create a task.',
-    'health.details': 'Details',
-    'status.failed': 'Failed',
-    'terminal.accountInitTimeout': 'Account initialization timed out. Check the network or proxy, then restart the terminal pair.',
-    'status.awaiting_input': 'Awaiting confirmation',
-    'status.idle': 'Idle',
-    'status.busy': 'Busy',
-    'startup.trust': 'Confirm folder trust and any sign-in prompts in the terminals below. Startup continues automatically afterwards.',
-    'startup.auth': 'Complete sign-in in the terminals below. Startup continues automatically afterwards.',
-    'startup.waiting': 'Preparing terminals. Complete any prompts shown below; startup continues automatically.',
-    'startup.roleTrust': 'confirm folder trust',
-    'startup.roleAuth': 'sign-in required',
-    'startup.roleWaiting': 'preparing',
-    'cooperation.SENT': 'Sent to Antigravity',
-    'cooperation.WORKING': 'Antigravity implementing',
-    'cooperation.DONE': 'Awaiting Codex review',
-    'cooperation.REVIEWING': 'Codex reviewing',
-    'cooperation.APPROVED': 'Review complete',
-    'cooperation.CHANGES_REQUESTED': 'Changes requested',
-    'cooperation.FAILED': 'Agent reported failure',
-    'cooperation.reported': 'Agent-reported collaboration state',
-    'cooperation.agentWorking': 'working',
-    'cooperation.awaitingReview': 'awaiting review',
-    'cooperation.agentReviewing': 'reviewing',
-    'cooperation.agentDone': 'implementation complete',
-    'cooperation.agentApproved': 'review complete',
-    'cooperation.agentChanges': 'awaiting corrections',
-    'archive.task': 'Archive conversation',
-    'archive.project': 'Archive project and conversations',
-    'archive.title': 'Archived conversations',
-    'archive.hint': 'Permanently clear archived conversation records across all projects. Project source files are preserved.',
-    'archive.clear': 'Clear archived conversations',
-    'archive.summary': '{tasks} conversations · {projects} projects archived',
-    'archive.unavailable': '{count} project directories unavailable',
-    'archive.done': 'Archived.',
-    'archive.cleared': 'Cleared {count} archived conversations.',
-    'archive.partial': 'Some project directories could not be cleared.',
-    'archive.failed': 'Archive operation failed.',
-    'project.none': 'No active project',
-    'empty.archivedTitle': 'All projects are archived',
-    'empty.archivedBody': 'Add a project to continue, or open settings to clear archived conversations.',
-    'zen.enter': 'Zen mode',
-    'zen.exit': 'Exit Zen mode',
-    'theme.toDark': 'Switch to dark mode',
-    'theme.toLight': 'Switch to light mode',
-    'repo.label': 'CURRENT PROJECT',
-    'project.switch': 'Switch project',
-    'project.new': 'New project',
-    'repo.loading': 'Loading repository…',
-    'repo.details': 'Show repository details',
-    'repo.hideDetails': 'Hide repository details',
-    'repo.branch': 'Branch',
-    'repo.commit': 'Commit',
-    'repo.root': 'Root',
-    'workspace.eyebrow': 'DUAL-TERMINAL WORKSPACE',
-    'workspace.title': 'Workspace',
-    'task.new': 'New task',
-    'task.list': 'Workspace tasks',
-    'task.none': 'No workspace tasks yet.',
-    'task.search': 'Search tasks or projects',
-    'task.searchClear': 'Clear search',
-    'task.searchNone': 'No matching tasks found',
-    'task.searchUnloaded': 'Tasks in {count} projects are not loaded; only loaded/cached tasks are searched.',
-    'task.notLoaded': 'Tasks not loaded',
-    'task.restart': 'Restart pair',
-    'task.closeAll': 'Close all terminals',
-    'task.allClosed': 'All workspace terminals closed.',
-    'settings.model': 'Codex model',
-    'settings.effort': 'Reasoning effort',
-    'settings.default': 'Use default',
-    'settings.modelHint': 'Choose a model and reasoning effort. Applies to new tasks and restarts.',
-    'task.close': 'Close task',
-    'task.closed': 'Task closed',
-    'task.created': 'New dual-terminal task created.',
-    'task.restarted': 'The terminal pair was restarted.',
-    'task.error': 'Task error',
-    'settings.open': 'Terminal settings',
-    'settings.eyebrow': 'TERMINAL SETTINGS',
-    'settings.title': 'Terminal startup commands',
-    'settings.body': 'New tasks and restarts use these saved commands.',
-    'settings.codex': 'Codex',
-    'settings.antigravity': 'Antigravity',
-    'settings.hint': 'Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.',
-    'settings.cancel': 'Cancel',
-    'settings.save': 'Save settings',
-    'settings.saving': 'Saving…',
-    'settings.saved': 'Terminal startup commands saved.',
-    'settings.loadError': 'Could not load terminal settings.',
-    'settings.saveError': 'Could not save terminal settings.',
-    'settings.invalid': 'Both startup commands are required and must be single-line executable names or paths.',
-    'empty.title': 'Start a dual-terminal task',
-    'empty.body': 'Create a task to open fresh Codex and Antigravity terminals. Enter the requirement directly in the Codex terminal.',
-    'empty.failed': 'This task did not start both terminals. Review the error, then restart the pair.',
-    'status.live': 'localhost · live',
-    'status.starting': 'Starting',
-    'status.running': 'Running',
-    'status.degraded': 'One terminal unavailable',
-    'status.exited': 'Exited',
-    'status.closed': 'Closed',
-    'status.error': 'Failed',
-    'terminal.codex': 'Codex',
-    'terminal.antigravity': 'Antigravity',
-    'terminal.planner': 'planner · reviewer',
-    'terminal.implementer': 'implementer',
-    'terminal.connecting': 'Connecting…',
-    'terminal.live': '● Live',
-    'terminal.reconnecting': '○ Reconnecting',
-    'terminal.polling': '○ Polling fallback',
-    'terminal.outputGap': '[Coordinate Agents] Some terminal output was lost because the buffer overflowed.',
-    'terminal.unavailable': 'No Session is bound to this task.',
-    'terminal.closed': 'Terminal is closed.',
-    'terminal.inputError': 'Terminal input could not be sent.',
-    'terminal.resizeError': 'Terminal resize could not be applied.',
-    'terminal.split': 'Resize terminals (double-click to reset)',
-    'terminal.focus': 'Focus terminal',
-    'terminal.restore': 'Restore split view',
-    'terminal.switchFocus': 'Focus {terminal}',
-    'terminal.nativeBackend': 'Native PTY',
-    'terminal.fallbackBackend': 'stdio fallback',
-    'terminal.unknownBackend': 'Backend unknown',
-    'action.refreshError': 'Workspace refresh failed.',
-    'action.createError': 'Could not create the dual-terminal task.',
-    'action.closeError': 'Could not close the task pair.',
-    'action.restartError': 'Could not restart the task pair.',
-    'action.retry': 'Retry',
-  },
-  zh: {
-    'health.open': '环境自检',
-    'health.title': '开始使用前，检查一下本地环境',
-    'health.loading': '正在检测本地命令…',
-    'health.ready': '基础环境已就绪',
-    'health.warning': '基础环境可用，存在兼容性限制',
-    'health.missing': '环境需配置',
-    'health.pending': '环境待验证',
-    'health.error': '暂时无法检测环境，可继续使用或重新检测。',
-    'health.ok': '正常',
-    'health.statusWarning': '有限制',
-    'health.statusMissing': '需配置',
-    'health.statusPending': '待检测',
-    'health.recheck': '重新检测',
-    'health.continue': '继续使用',
-    'health.close': '关闭环境自检',
-    'health.notStarted': '尚未启动',
-    'health.codexMissing': '请先安装 Codex CLI，安装完成后重新检测；也可在终端设置中修改启动命令。',
-    'health.antigravityMissing': '请安装 Antigravity CLI，或在终端设置中修改启动命令，然后重新检测。',
-    'health.authUnknown': '登录状态待验证',
-    'health.authHint': 'CLI 已安装。启动任务时可直接在 Web 终端中完成登录。',
-    'health.command': '当前使用的命令',
-    'health.copy': '复制安装命令',
-    'health.copied': '安装命令已复制。',
-    'health.copyError': '无法自动复制，请选中命令手动复制。',
-    'health.versionUnknown': '版本信息暂不可用，请重新检测或检查启动命令。',
-    'health.timeout': '检测超时，请检查启动命令或重新检测；工作台仍可使用。',
-    'health.nodeHint': '需要 Node.js 18 或更高版本。请安装受支持的 Node.js 版本并重启 Web 服务。',
-    'health.gitHint': '请安装适用于当前系统的 Git，并确保 Web 服务能执行 Git，然后重新检测。',
-    'health.fallback': '当前终端使用 stdio 兼容模式，部分原生 TUI 和终端尺寸调整能力可能受限。',
-    'health.node18': 'Node.js 18 使用预期的 stdio 兼容模式，仍可正常使用工作台。',
-    'health.terminalPending': '新建任务后会复用实际终端信息检测运行后端。',
-    'health.details': '详情',
-    'status.failed': '失败',
-    'terminal.accountInitTimeout': '账户初始化超时。请检查网络或代理，然后重启终端组。',
-    'status.awaiting_input': '等待确认',
-    'status.idle': '空闲',
-    'status.busy': '忙碌',
-    'startup.trust': '请在下方终端确认目录信任，并完成出现的登录提示。确认后会自动继续启动。',
-    'startup.auth': '请直接在下方终端完成登录，完成后会自动继续启动。',
-    'startup.waiting': '终端正在准备，请完成下方出现的提示，随后会自动继续启动。',
-    'startup.roleTrust': '等待目录信任确认',
-    'startup.roleAuth': '等待登录',
-    'startup.roleWaiting': '准备中',
-    'cooperation.SENT': '已派发给 Antigravity',
-    'cooperation.WORKING': 'Antigravity 实现中',
-    'cooperation.DONE': '等待 Codex 审查',
-    'cooperation.REVIEWING': 'Codex 审查中',
-    'cooperation.APPROVED': '已完成审查',
-    'cooperation.CHANGES_REQUESTED': '需要修改',
-    'cooperation.FAILED': 'Agent 报告失败',
-    'cooperation.reported': 'Agent 主动报告的协作状态',
-    'cooperation.agentWorking': '正在处理',
-    'cooperation.awaitingReview': '等待审查',
-    'cooperation.agentReviewing': '正在审查',
-    'cooperation.agentDone': '实现完成',
-    'cooperation.agentApproved': '审查完成',
-    'cooperation.agentChanges': '等待修改指令',
-    'archive.task': '归档对话',
-    'archive.project': '归档项目及其对话',
-    'archive.title': '已归档对话',
-    'archive.hint': '永久清除所有项目的已归档对话记录。项目源码文件会保留。',
-    'archive.clear': '一键清除归档对话',
-    'archive.summary': '已归档 {tasks} 个对话 · {projects} 个项目',
-    'archive.unavailable': '有 {count} 个项目目录不可用',
-    'archive.done': '已归档。',
-    'archive.cleared': '已清除 {count} 个归档对话。',
-    'archive.partial': '部分项目目录无法访问，未完成全部清除。',
-    'archive.failed': '归档操作失败。',
-    'project.none': '暂无活动项目',
-    'empty.archivedTitle': '所有项目均已归档',
-    'empty.archivedBody': '新增项目继续工作，或进入设置清除已归档对话。',
-    'zen.enter': '禅模式',
-    'zen.exit': '退出禅模式',
-    'theme.toDark': '切换为深色模式',
-    'theme.toLight': '切换为浅色模式',
-    'repo.label': '当前项目',
-    'project.switch': '切换项目',
-    'project.new': '新增项目',
-    'repo.loading': '正在读取仓库…',
-    'repo.details': '显示仓库详情',
-    'repo.hideDetails': '隐藏仓库详情',
-    'repo.branch': '分支',
-    'repo.commit': '提交',
-    'repo.root': '路径',
-    'workspace.eyebrow': '双终端工作台',
-    'workspace.title': '工作台',
-    'task.new': '新建任务',
-    'task.list': '工作台任务',
-    'task.none': '还没有工作台任务。',
-    'task.search': '搜索任务或项目',
-    'task.searchClear': '清空搜索',
-    'task.searchNone': '没有找到匹配的任务',
-    'task.searchUnloaded': '有 {count} 个项目的任务尚未加载；仅搜索已加载或缓存的任务。',
-    'task.notLoaded': '任务尚未加载',
-    'task.restart': '重启终端组',
-    'task.close': '关闭任务',
-    'task.closed': '任务已关闭',
-    'task.created': '新的双终端任务已创建。',
-    'task.restarted': '终端组已重启。',
-    'task.error': '任务错误',
-    'settings.open': '终端设置',
-    'settings.eyebrow': '终端设置',
-    'task.closeAll': '关闭所有终端',
-    'task.allClosed': '所有工作台终端已关闭。',
-    'settings.model': 'Codex 模型',
-    'settings.effort': '推理强度',
-    'settings.default': '使用默认设置',
-    'settings.modelHint': '选择模型和推理强度，新建任务或重启终端组后生效。',
-    'settings.title': '两个终端的启动命令',
-    'settings.body': '新建任务和重启终端组都会使用这里保存的命令。',
-    'settings.codex': 'Codex',
-    'settings.antigravity': 'Antigravity',
-    'settings.hint': '填写可执行文件名或绝对路径，例如 agy-proxy；不要填写 shell 参数。',
-    'settings.cancel': '取消',
-    'settings.save': '保存设置',
-    'settings.saving': '保存中…',
-    'settings.saved': '两个终端的启动命令已保存。',
-    'settings.loadError': '无法读取终端设置。',
-    'settings.saveError': '无法保存终端设置。',
-    'settings.invalid': '两个启动命令都不能为空，并且必须是单行的可执行文件名或路径。',
-    'empty.title': '开始一个双终端任务',
-    'empty.body': '新建任务会打开全新的 Codex 与 Antigravity 终端，请直接在 Codex 终端中输入需求。',
-    'empty.failed': '这项任务没有成功启动两个终端，请检查错误后重启终端组。',
-    'status.live': 'localhost · 已连接',
-    'status.starting': '启动中',
-    'status.running': '运行中',
-    'status.degraded': '有一个终端不可用',
-    'status.exited': '已退出',
-    'status.closed': '已关闭',
-    'status.error': '失败',
-    'terminal.codex': 'Codex',
-    'terminal.antigravity': 'Antigravity',
-    'terminal.planner': '规划 · 审查',
-    'terminal.implementer': '实现者',
-    'terminal.connecting': '连接中…',
-    'terminal.live': '● 实时',
-    'terminal.reconnecting': '○ 重连中',
-    'terminal.polling': '○ 兼容轮询',
-    'terminal.outputGap': '[Coordinate Agents] 部分终端输出因缓冲区溢出而丢失。',
-    'terminal.unavailable': '此任务没有绑定可用的 Session。',
-    'terminal.closed': '终端已关闭。',
-    'terminal.inputError': '终端输入发送失败。',
-    'terminal.resizeError': '终端尺寸调整失败。',
-    'terminal.split': '调整终端宽度（双击恢复均分）',
-    'terminal.focus': '聚焦终端',
-    'terminal.restore': '恢复分屏',
-    'terminal.switchFocus': '聚焦 {terminal}',
-    'terminal.nativeBackend': '原生 PTY',
-    'terminal.fallbackBackend': '已降级到 stdio',
-    'terminal.unknownBackend': '后端未知',
-    'action.refreshError': '工作台刷新失败。',
-    'action.createError': '无法创建双终端任务。',
-    'action.closeError': '无法关闭终端组。',
-    'action.restartError': '无法重启终端组。',
-    'action.retry': '重试',
-  },
-};
 
 const state = {
   projects: [],
@@ -1044,60 +728,142 @@ function renderProjects() {
   if (!host || !list) return;
   const searching = Boolean(state.taskSearch.trim());
   const { groups, unloaded } = searchTaskGroups();
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, groups, [...state.expandedProjects]]);
-  if (host.dataset.renderKey === renderKey) return;
-  host.dataset.renderKey = renderKey;
-  list.remove();
-  list.hidden = false;
-  host.innerHTML = groups.map(({ project }) => `<section class="project-group">
-    <button type="button" class="project-heading${project.id === state.projectId ? ' selected' : ''}" data-project="${escapeHtml(project.id)}" aria-current="${project.id === state.projectId}" aria-expanded="${searching || state.expandedProjects.has(project.id)}" title="${escapeHtml(project.root)}">
-      <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
-      <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
-      <strong>${escapeHtml(project.name)}</strong>
-      ${project.available ? '' : `<small class="project-unavailable">${projectText('不可用', 'Unavailable')}</small>`}
-    </button><div class="project-tasks" data-project-tasks="${escapeHtml(project.id)}" ${searching || state.expandedProjects.has(project.id) ? '' : 'hidden'}></div></section>`).join('');
-  for (const { project, tasks, loaded } of groups) {
-    const container = host.querySelector(`[data-project-tasks="${project.id}"]`);
-    if (searching && !loaded) {
-      const notice = document.createElement('p');
-      notice.className = 'task-list-empty';
-      notice.textContent = t('task.notLoaded');
-      container.append(notice);
-    }
-    if (project.id === state.projectId) container.append(list);
-    else {
-      container.insertAdjacentHTML('beforeend', tasks.map(task => taskItemMarkup(task, project.id)).join(''));
-      container.querySelectorAll('[data-workspace-task-id]').forEach(button => {
-        button.onclick = () => void selectProject(project.id, button.dataset.workspaceTaskId);
-      });
-    }
-  }
-  if (!list.isConnected) { list.hidden = searching; host.append(list); }
-  if (searching) {
-    const messages = [];
-    if (!groups.some(group => group.tasks.length)) messages.push(t('task.searchNone'));
-    if (unloaded) messages.push(t('task.searchUnloaded').replace('{count}', unloaded));
-    for (const message of messages) {
-      const notice = document.createElement('p');
-      notice.className = 'task-search-notice';
-      notice.setAttribute('role', 'status');
-      notice.textContent = message;
-      host.append(notice);
-    }
-  }
-  host.querySelectorAll('[data-project]').forEach(button => {
-    button.onclick = async () => {
-      const id = button.dataset.project;
-      if (searching) {
-        if (id !== state.projectId) await selectProject(id);
-        return;
-      }
-      if (id === state.projectId) {
-        if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
-        renderProjects();
-      } else await selectProject(id);
-    };
+  const existing = new Map([...host.children].filter(element => element.classList.contains('project-group'))
+    .map(element => [element.dataset.projectGroup, element]));
+  const elements = groups.map(({ project }) => {
+    const element = existing.get(project.id) || createProjectGroup(project);
+    existing.set(project.id, element);
+    updateProjectGroup(element, project, searching);
+    return element;
   });
+  const currentGroup = elements.find(element => element.dataset.projectGroup === state.projectId);
+  const target = currentGroup?.querySelector('.project-tasks') || host;
+  const movingList = list.parentElement !== target;
+  const focused = movingList ? document.activeElement : null;
+  const focusedInList = movingList && host.contains(focused);
+  const scrollTop = movingList ? host.scrollTop : null;
+  if (movingList) {
+    const previous = list.parentElement;
+    // On a project switch, keep cached buttons with their project and reuse the
+    // target project's buttons inside the singleton current-task list.
+    if (previous?.dataset.projectTasks && previous.dataset.projectTasks !== state.projectId) {
+      for (const child of [...list.children]) {
+        if (child.dataset.projectId === previous.dataset.projectTasks) previous.append(child);
+      }
+    }
+    if (target !== host) {
+      for (const child of [...target.children]) {
+        if (child.dataset.workspaceTaskId !== undefined) list.append(child);
+      }
+    }
+    target.append(list);
+  }
+  list.hidden = searching && !currentGroup;
+  for (const { project, tasks, loaded } of groups) {
+    const container = existing.get(project.id).querySelector('.project-tasks');
+    const notice = searching && !loaded ? listNotice(container, 'task-list-empty', t('task.notLoaded')) : null;
+    if (project.id === state.projectId) reconcileListChildren(container, [...(notice ? [notice] : []), list]);
+    else reconcileTaskItems(container, tasks, project.id, notice);
+  }
+  const children = [...elements];
+  if (!currentGroup) children.push(list);
+  if (searching) {
+    if (!groups.some(group => group.tasks.length)) children.push(listNotice(host, 'task-search-notice', t('task.searchNone'), 'empty'));
+    if (unloaded) children.push(listNotice(host, 'task-search-notice', t('task.searchUnloaded').replace('{count}', unloaded), 'unloaded'));
+  }
+  reconcileListChildren(host, children);
+  if (movingList) {
+    if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    else if (focusedInList && !focused.isConnected && document.activeElement === document.body) {
+      (currentGroup?.querySelector('.project-heading') || host.querySelector('button')
+        || document.querySelector('#task-search-input'))?.focus({ preventScroll: true });
+    }
+    if (host.scrollTop !== scrollTop) host.scrollTop = scrollTop;
+  }
+}
+
+function setListText(element, value) {
+  const text = `${value ?? ''}`;
+  if (element.textContent !== text) element.textContent = text;
+}
+
+function setListAttribute(element, name, value) {
+  const text = `${value ?? ''}`;
+  if (element.getAttribute(name) !== text) element.setAttribute(name, text);
+}
+
+function listNotice(container, className, text, key = className) {
+  const element = [...container.children].find(child => child.dataset.listNotice === key) || document.createElement('p');
+  element.className = className;
+  element.dataset.listNotice = key;
+  if (className === 'task-search-notice') setListAttribute(element, 'role', 'status');
+  setListText(element, text);
+  return element;
+}
+
+function reconcileListChildren(container, children) {
+  const previous = [...container.children];
+  if (previous.length === children.length && previous.every((child, index) => child === children[index])) return;
+  // Only structural changes need scroll/focus restoration. Status updates do
+  // not detach nodes, write scrollTop, or call focus.
+  const sidebar = container.closest('.project-list');
+  const scrollTop = sidebar?.scrollTop;
+  const ownScrollTop = container.scrollTop;
+  const focused = document.activeElement;
+  const focusIndex = previous.findIndex(child => child.contains(focused));
+  const wanted = new Set(children);
+  for (const child of previous) if (!wanted.has(child)) child.remove();
+  let next = container.firstElementChild;
+  for (const child of children) {
+    if (child !== next) container.insertBefore(child, next);
+    next = child.nextElementSibling;
+  }
+  if (focusIndex !== -1 && document.activeElement !== focused) {
+    const neighbor = children[Math.min(focusIndex, children.length - 1)];
+    const fallback = neighbor?.matches('button') ? neighbor : neighbor?.querySelector('button');
+    (focused.isConnected ? focused : fallback || container.parentElement?.querySelector('.project-heading')
+      || document.querySelector('#task-search-input'))?.focus({ preventScroll: true });
+  }
+  if (sidebar && sidebar.scrollTop !== scrollTop) sidebar.scrollTop = scrollTop;
+  if (container.scrollTop !== ownScrollTop) container.scrollTop = ownScrollTop;
+}
+
+function createProjectGroup(project) {
+  const element = document.createElement('section');
+  element.className = 'project-group';
+  element.dataset.projectGroup = project.id;
+  element.innerHTML = `<button type="button" class="project-heading">
+    <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+    <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
+    <strong></strong><small class="project-unavailable"></small>
+  </button><div class="project-tasks"></div>`;
+  const button = element.querySelector('.project-heading');
+  button.dataset.project = project.id;
+  element.querySelector('.project-tasks').dataset.projectTasks = project.id;
+  button.onclick = async () => {
+    const id = button.dataset.project;
+    if (state.taskSearch.trim()) {
+      if (id !== state.projectId) await selectProject(id);
+    } else if (id === state.projectId) {
+      if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
+      renderProjects();
+    } else await selectProject(id);
+  };
+  return element;
+}
+
+function updateProjectGroup(element, project, searching) {
+  const button = element.querySelector('.project-heading');
+  const expanded = searching || state.expandedProjects.has(project.id);
+  button.classList.toggle('selected', project.id === state.projectId);
+  setListAttribute(button, 'aria-current', project.id === state.projectId);
+  setListAttribute(button, 'aria-expanded', expanded);
+  setListAttribute(button, 'title', project.root);
+  setListText(button.querySelector('strong'), project.name);
+  const unavailable = button.querySelector('.project-unavailable');
+  unavailable.hidden = Boolean(project.available);
+  setListText(unavailable, projectText('不可用', 'Unavailable'));
+  element.querySelector('.project-tasks').hidden = !expanded;
 }
 
 async function selectProject(id, taskId) {
@@ -1116,7 +882,7 @@ async function selectProject(id, taskId) {
   try { stored = localStorage.getItem(`workspace-selection-${id}`); } catch { /* Optional. */ }
   state.selectedId = taskId === undefined ? state.projectSelections.get(id) || stored || null : taskId;
   state.selectedTask = null;
-  state.tasks = [];
+  state.tasks = state.projectTasks.get(id) || [];
   state.repository = { name: project.name, root: project.root };
   void checkWorkspaceHealth();
   renderRepository(); renderTaskList(); renderSelectedTask(); rememberSelection();
@@ -1224,35 +990,67 @@ function renderTaskList() {
   const list = document.querySelector('#workspace-task-list');
   const count = document.querySelector('#task-count');
   const input = document.querySelector('#task-search-input');
-  if (input) { input.placeholder = t('task.search'); input.setAttribute('aria-label', t('task.search')); }
+  if (input) { if (input.placeholder !== t('task.search')) input.placeholder = t('task.search'); setListAttribute(input, 'aria-label', t('task.search')); }
   const clear = document.querySelector('#task-search-clear');
-  if (clear) { clear.hidden = !state.taskSearch; clear.title = t('task.searchClear'); clear.setAttribute('aria-label', clear.title); }
+  if (clear) { clear.hidden = !state.taskSearch; setListAttribute(clear, 'title', t('task.searchClear')); setListAttribute(clear, 'aria-label', clear.title); }
   if (!list) return;
   const searching = Boolean(state.taskSearch.trim());
   const groups = searchTaskGroups().groups;
   const tasks = searching ? groups.find(group => group.project.id === state.projectId)?.tasks || [] : state.tasks;
-  if (count) count.textContent = `${searching ? groups.reduce((sum, group) => sum + group.tasks.length, 0) : state.tasks.length}`;
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, tasks]);
-  if (list.dataset.renderKey === renderKey) return;
-  list.dataset.renderKey = renderKey;
-  if (tasks.length === 0) {
-    list.innerHTML = searching ? '' : `<p class="task-list-empty">${escapeHtml(t('task.none'))}</p>`;
-    return;
-  }
-  list.innerHTML = tasks.map(task => taskItemMarkup(task, state.projectId)).join('');
-  for (const item of list.querySelectorAll('[data-workspace-task-id]')) {
-    item.addEventListener('click', () => selectTask(item.dataset.workspaceTaskId));
-  }
+  if (count) setListText(count, searching ? groups.reduce((sum, group) => sum + group.tasks.length, 0) : state.tasks.length);
+  const notice = !searching && !tasks.length ? listNotice(list, 'task-list-empty', t('task.none')) : null;
+  reconcileTaskItems(list, tasks, state.projectId, notice);
 }
 
-function taskItemMarkup(task, projectId) {
-  const selected = projectId === state.projectId && task.id === state.selectedId ? ' selected' : '';
-  const codexState = statusKey(sessionState(task.sessions?.codex));
-  const agyState = statusKey(sessionState(task.sessions?.antigravity));
-  return `<button class="workspace-task-item${selected}" type="button" aria-current="${Boolean(selected)}" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(projectId || '')}">
-      <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-hidden="true"></span></span>
-      <span class="task-item-meta"><span class="task-item-status" title="${escapeHtml(statusLabel(task.status))}">${escapeHtml(statusLabel(task.status))}</span><span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
-    </button>`;
+function createTaskItem(task, projectId) {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.className = 'workspace-task-item';
+  element.dataset.workspaceTaskId = task.id;
+  element.dataset.projectId = projectId || '';
+  element.innerHTML = `<span class="task-item-top"><strong></strong><span class="status-dot" aria-hidden="true"></span></span>
+    <span class="task-item-meta"><span class="task-item-status"></span><span class="task-item-agents"><span class="mini-agent">Codex</span><span class="mini-agent">Antigravity</span></span><time></time></span>`;
+  element.onclick = () => {
+    const id = element.dataset.workspaceTaskId;
+    if (element.dataset.projectId === state.projectId) void selectTask(id);
+    else void selectProject(element.dataset.projectId, id);
+  };
+  return element;
+}
+
+function updateTaskItem(element, task, projectId) {
+  const selected = projectId === state.projectId && task.id === state.selectedId;
+  element.classList.toggle('selected', selected);
+  setListAttribute(element, 'aria-current', selected);
+  setListAttribute(element, 'title', task.title);
+  setListText(element.querySelector('strong'), task.title);
+  const status = element.querySelector('.task-item-status');
+  const label = statusLabel(task.status);
+  setListText(status, label);
+  setListAttribute(status, 'title', label);
+  const dot = element.querySelector('.status-dot');
+  const dotClass = `status-dot ${statusKey(task.status)}`;
+  if (dot.className !== dotClass) dot.className = dotClass;
+  const agents = element.querySelectorAll('.mini-agent');
+  for (const [index, slotId] of ['codex', 'antigravity'].entries()) {
+    const className = `mini-agent ${statusKey(sessionState(task.sessions?.[slotId]))}`;
+    if (agents[index].className !== className) agents[index].className = className;
+  }
+  setListText(element.querySelector('time'), formatTime(task.updatedAt));
+}
+
+function reconcileTaskItems(container, tasks, projectId, notice = null) {
+  // Match both IDs; the current list can move between projects with equal task IDs.
+  const existing = new Map([...container.children]
+    .filter(element => element.dataset.workspaceTaskId !== undefined && element.dataset.projectId === (projectId || ''))
+    .map(element => [element.dataset.workspaceTaskId, element]));
+  const children = notice ? [notice] : [];
+  for (const task of tasks) {
+    const element = existing.get(task.id) || createTaskItem(task, projectId);
+    updateTaskItem(element, task, projectId);
+    children.push(element);
+  }
+  reconcileListChildren(container, children);
 }
 
 function renderSelectedTask() {

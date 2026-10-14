@@ -8,6 +8,23 @@ import { pathToFileURL } from 'node:url';
 import { startWorkspace } from './support/workspace-server.mjs';
 
 const repo = resolve('.');
+test('the Web server serves the dictionary imported by app.js as a JavaScript module', async () => {
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'dictionary-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const app = await (await fetch(`${base}/app.js`)).text();
+    const specifier = app.match(/import \{ I18N \} from ['"]([^'"]+)['"]/)[1];
+    const response = await fetch(new URL(specifier, `${base}/app.js`));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /javascript/);
+    const { I18N } = await import(`data:text/javascript;base64,${Buffer.from(await response.text()).toString('base64')}`);
+    assert.equal(I18N.en['terminal.live'], '● Live');
+    assert.equal(I18N.zh['terminal.live'], '● 实时');
+  } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
+
 test('npm CLI help loads no Legacy runtime', () => {
   const temporary = mkdtempSync(join(tmpdir(), 'web-imports-'));
   try {
