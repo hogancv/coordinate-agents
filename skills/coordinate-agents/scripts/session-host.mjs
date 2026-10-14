@@ -21,6 +21,72 @@ let server;
 let shuttingDown = false;
 let metadataWriteTimer = null;
 let pendingCloseResponses = 0;
+const subscribers = new Set();
+
+function notifySubscribers() {
+  for (const subscriber of subscribers) subscriber.schedule();
+}
+
+function subscribeSocket(socket, command) {
+  let cursor = Number.isSafeInteger(command.cursor) ? command.cursor : null;
+  let scheduled = null;
+  let blocked = false;
+  let blockedTimer = null;
+  let closed = false;
+  let lastState = null;
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearImmediate(scheduled);
+    clearTimeout(blockedTimer);
+    subscribers.delete(subscriber);
+    socket.off('drain', drained);
+  };
+  const send = event => {
+    if (socket.destroyed || socket.writableEnded) { cleanup(); return false; }
+    const writable = socket.write(`${JSON.stringify(event)}\n`);
+    if (!writable) {
+      blocked = true;
+      blockedTimer = setTimeout(() => socket.destroy(), 5_000);
+      blockedTimer.unref();
+    }
+    return writable;
+  };
+  const push = () => {
+    scheduled = null;
+    if (closed || blocked) return;
+    // Bound each turn's work; unread data stays in the existing OutputBuffer.
+    for (let page = 0; page < 4; page += 1) {
+      const output = runtime.read({ cursor, maxBytes: 32 * 1024, maxLines: 200 });
+      cursor = output.nextCursor;
+      if (output.output || output.truncated) {
+        if (!send({ event: 'terminal-output', output, session: runtime.snapshot() })) return;
+      }
+      if (output.hasMore) continue;
+      if (lastState !== runtime.state) {
+        lastState = runtime.state;
+        if (!send({ event: 'terminal-state', session: runtime.snapshot() })) return;
+      }
+      if (!runtime.isActive()) { cleanup(); socket.end(); }
+      return;
+    }
+    subscriber.schedule();
+  };
+  const drained = () => {
+    blocked = false;
+    clearTimeout(blockedTimer);
+    blockedTimer = null;
+    subscriber.schedule();
+  };
+  const subscriber = { schedule() { if (!closed && !blocked && scheduled === null) scheduled = setImmediate(push); } };
+  // Register before scheduling history. Output between these steps is retained
+  // and read from the same cursor, so history/live handoff has no race.
+  subscribers.add(subscriber);
+  socket.once('close', cleanup);
+  socket.on('drain', drained);
+  respond(socket, command.id, { subscribed: true });
+  subscriber.schedule();
+}
 
 function respond(socket, id, payload, error = null) {
   const message = error
@@ -37,7 +103,7 @@ function safeSessionError(message, code = 'SESSION_HOST_ERROR') {
 
 function outputTail() {
   try {
-    return redactOutput(runtime?.read?.({ maxLines: 60, maxBytes: MAX_PERSISTED_OUTPUT_BYTES })?.output || '', MAX_PERSISTED_OUTPUT_BYTES);
+    return redactOutput(runtime?.read?.({ tail: true, maxLines: 60, maxBytes: MAX_PERSISTED_OUTPUT_BYTES })?.output || '', MAX_PERSISTED_OUTPUT_BYTES);
   } catch {
     return '';
   }
@@ -45,6 +111,8 @@ function outputTail() {
 
 function metadataFromRuntime() {
   const snapshot = runtime?.snapshot?.() || {};
+  const tail = runtime?.read?.({ tail: true, maxLines: 60, maxBytes: MAX_PERSISTED_OUTPUT_BYTES });
+  const persistedTail = redactOutput(tail?.output || '', MAX_PERSISTED_OUTPUT_BYTES);
   return {
     schemaVersion: 1,
     id: session.id,
@@ -64,7 +132,11 @@ function metadataFromRuntime() {
     exitCode: snapshot.exitCode ?? null,
     signal: snapshot.signal || null,
     error: snapshot.error ? redactOutput(snapshot.error, 2 * 1024) : null,
-    outputTail: outputTail(),
+    outputTail: persistedTail,
+    outputCursor: snapshot.outputCursor ?? 0,
+    // Redacted snapshots cannot be mapped to original byte offsets. Report a
+    // gap on resume in that case instead of replaying incorrectly aligned text.
+    outputTailStartCursor: tail?.output === persistedTail ? tail.startCursor : null,
     endpoint: session.endpoint,
     hostPid: process.pid,
     taskId: session.taskId || null,
@@ -103,7 +175,8 @@ function shutdown() {
   try { persistMetadata(); } catch { /* Preserve the process exit. */ }
   try { server?.close(); } catch { /* Already closed. */ }
   cleanupEndpoint();
-  setTimeout(() => process.exit(0), 10).unref();
+  // Give subscriptions a bounded window to flush final buffered output/state.
+  setTimeout(() => process.exit(0), subscribers.size ? 1_000 : 10).unref();
 }
 
 async function handleCommand(command) {
@@ -125,6 +198,7 @@ async function handleCommand(command) {
         cursor: command.cursor ?? null,
         maxLines: command.maxLines ?? null,
         maxBytes: command.maxBytes ?? undefined,
+        tail: command.tail === true,
       });
     case 'write':
       if (typeof command.input !== 'string') throw safeSessionError('Session input must be a string.', 'SESSION_WRITE_FAILED');
@@ -166,6 +240,15 @@ function handleSocket(socket) {
       let command;
       try { command = JSON.parse(line); } catch {
         respond(socket, null, null, safeSessionError('Invalid session host JSON.', 'SESSION_RUNTIME_ERROR'));
+        continue;
+      }
+      if (command.op === 'subscribe') {
+        if (!runtime || socket.subscribed) {
+          respond(socket, command.id, null, safeSessionError('Session subscription is unavailable.', 'SESSION_RUNTIME_ERROR'));
+        } else {
+          socket.subscribed = true;
+          subscribeSocket(socket, command);
+        }
         continue;
       }
       let closeFinished = false;
@@ -256,8 +339,9 @@ async function main() {
     cwd: session.cwd,
     maxOutputBytes: session.maxOutputBytes,
     nativePtyVerified: session.nativePtyVerified === true,
-    onOutput: () => scheduleMetadata(),
+    onOutput: () => { scheduleMetadata(); notifySubscribers(); },
     onStateChange: () => {
+      notifySubscribers();
       try { persistMetadata(); } catch { /* Keep the PTY alive if metadata is temporarily unavailable. */ }
       if (runtime.state === 'exited' || runtime.state === 'failed') {
         // Native exit may arrive while close() is still awaiting taskkill's

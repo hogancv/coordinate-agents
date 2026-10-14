@@ -63,10 +63,10 @@ test('artifact loader runs from a temporary directory containing spaces', async 
 
 test('HTTP read defaults preserve bounded terminal output without query parameters', async () => {
   const { createLocalServer } = await import('../inspector/server/http-server.mjs');
-  const server = createLocalServer({ ui: 'workspace', data: { readSessionOutput: async (_id, options) => options } });
+  const server = createLocalServer({ ui: 'workspace', capability: 'read-test', data: { readSessionOutput: async (_id, options) => options } });
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   try {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/sessions/session-fixture/read`);
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/sessions/session-fixture/read`, { headers: { 'x-coordinate-agents-capability': 'read-test' } });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { cursor: null, maxLines: 200, maxBytes: 32768 });
   } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }

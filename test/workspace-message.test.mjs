@@ -30,6 +30,13 @@ test('send binds to this pair, captures cursor before input, and writes Enter se
   await workspaceMessage('/repo', 'task-a', 'read', '42', api);
   assert.equal(writes.length, 2);
 });
+test('send captures the stream head even when the initial read contains only the first history page', async () => {
+  const { api } = fixture();
+  api.runtimeSessionRead = async () => ({ session: { taskId: 'task-a', agent: 'antigravity' },
+    output: 'earliest page', nextCursor: 8192, latestCursor: 60000, hasMore: true });
+  const result = await workspaceMessage('/repo', 'task-a', 'send', 'new instruction', api);
+  assert.equal(result.cursor, 60000);
+});
 test('mismatched and starting tasks never receive input', async () => {
   for (const options of [{ taskId: 'task-b' }, { status: 'STARTING' }]) {
     const { writes, api } = fixture(options);

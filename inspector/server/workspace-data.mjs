@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { basename, join, resolve } from 'node:path';
 import { assertSafePath, readConfig } from '../../skills/coordinate-agents/scripts/config.mjs';
 import { readUserConfig, resolveAgentConfig } from '../../skills/coordinate-agents/scripts/user-config.mjs';
-import { runtimeSessionRead } from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import { runtimeSessionRead, runtimeSessionSubscribe } from '../../skills/coordinate-agents/scripts/session-service.mjs';
 import { readWorkspaceTask, readWorkspaceTasks } from '../../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { assertWorkspaceSession } from '../../skills/coordinate-agents/scripts/workspace-services.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
@@ -165,9 +165,10 @@ async function readSessionOutput(root, sessionId, {
   return {
     session,
     output: {
-      output: redactOutput(output, MAX_TERMINAL_READ_BYTES),
+      output,
       nextCursor: Number.isInteger(result.nextCursor) ? result.nextCursor : null,
       truncated: result.truncated === true,
+      hasMore: result.hasMore === true,
     },
   };
 }
@@ -191,6 +192,10 @@ export function createWorkspaceData(root) {
     async readSessionOutput(sessionId, options) {
       await assertWorkspaceSession({ root: repository, sessionId });
       return readSessionOutput(repository, sessionId, options);
+    },
+    async subscribeSessionOutput(sessionId, options) {
+      await assertWorkspaceSession({ root: repository, sessionId });
+      return runtimeSessionSubscribe({ root: repository, sessionId, ...options });
     },
     async readSessions() {
       const tasks = await readWorkspaceTasks(repository);

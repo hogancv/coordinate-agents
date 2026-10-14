@@ -25,6 +25,7 @@
     "inspector/web-workspace/index.html",
     "inspector/web-workspace/styles.css",
     "inspector/web-workspace/terminal-model.mjs",
+    "inspector/web-workspace/terminal-stream.mjs",
     "inspector/web-workspace/vendor/xterm.LICENSE",
     "inspector/web-workspace/vendor/xterm.css",
     "inspector/web-workspace/vendor/xterm.js",
