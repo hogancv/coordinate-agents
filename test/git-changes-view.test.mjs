@@ -23,3 +23,19 @@ test('diff hunk line numbers handle additions, deletions, headers and no-newline
   assert.deepEqual(rows.slice(3).map(row => [row.kind, row.old, row.new]), [['delete', 4, null], ['add', null, 8], ['context', 5, 9], ['meta', null, null]]);
   assert.equal(rows[4].text, '+<script>bad()</script>');
 });
+
+test('removing the last project closes the drawer and cancels pending changes while normal switches keep it open', async () => {
+  let resolveList;
+  const model = createChangesModel({ request: () => new Promise(resolve => { resolveList = resolve; }) });
+  model.reset('a'); model.state.open = true;
+  model.reset('b'); assert.equal(model.state.open, true);
+  const pending = model.refresh();
+  model.reset(null);
+  assert.equal(model.state.open, false);
+  assert.equal(model.state.loading, false);
+  assert.equal(model.state.projectId, null);
+  resolveList({ ok: true, files: [{ path: 'stale' }], summary: { files: 1 } });
+  await pending;
+  assert.deepEqual(model.state.files, []);
+  assert.equal(model.state.summary, null);
+});

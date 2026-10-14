@@ -1,5 +1,5 @@
 // Lightweight prompts shared by the npm Workspace and source Runtime.
-export const WORKSPACE_ROLE_PROMPT_VERSION = '2.3.0-web-lite-2';
+export const WORKSPACE_ROLE_PROMPT_VERSION = '2.3.0-web-lite-3';
 
 export function workspaceRolePrompt(agentId, language = 'en') {
   const zh = `${language}`.toLowerCase().startsWith('zh');

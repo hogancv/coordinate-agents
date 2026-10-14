@@ -8,7 +8,7 @@ export function createChangesModel({ request, onChange = () => {} }) {
   return {
     state,
     reset(projectId) {
-      cancel(); Object.assign(state, { projectId, files: [], summary: null, path: null, diff: null,
+      cancel(); Object.assign(state, { projectId, open: projectId ? state.open : false, files: [], summary: null, path: null, diff: null,
         error: null, diffError: null, truncated: false }); onChange();
     },
     close() { cancel(); state.open = false; onChange(); },
@@ -62,7 +62,8 @@ const WORDS = {
     empty: 'No working-tree changes', choose: 'Select a file to view its diff.', files: '{n} files changed',
     scope: 'Current working tree · includes existing user changes', copyPath: 'Copy path', copyDiff: 'Copy diff',
     copied: 'Copied', copyError: 'Could not copy. Check clipboard permissions.', retry: 'Retry',
-    truncated: 'File list truncated. Totals include all changed files.',
+    truncated: 'File list truncated. File count includes all changed files.',
+    lineTotals: 'Line totals exclude untracked file contents.',
     'too-large': 'Diff is too large. View it in your local IDE.', binary: 'Binary file — no text preview.',
     untracked: 'Untracked file — content preview is not available.', noDiff: 'No net diff against the base.',
     previewLimit: 'Preview limited to 3,000 lines. Copy the diff for the complete text.',
@@ -71,7 +72,8 @@ const WORDS = {
     empty: '当前工作区没有变更', choose: '选择文件查看 Diff。', files: '{n} 个文件变更',
     scope: '当前 Git 工作区 · 包含用户已有修改', copyPath: '复制路径', copyDiff: '复制 Diff',
     copied: '已复制', copyError: '复制失败，请检查剪贴板权限。', retry: '重试',
-    truncated: '文件列表已截断，统计包含所有变更文件。',
+    truncated: '文件列表已截断，文件数量包含所有变更文件。',
+    lineTotals: '增删行数统计不包含未跟踪文件内容。',
     'too-large': 'Diff 过大，建议在本地 IDE 查看。', binary: '二进制文件，不支持文本预览。',
     untracked: '未跟踪文件，暂不支持内容预览。', noDiff: '与基准相比没有净变更。',
     previewLimit: '预览仅显示前 3,000 行，复制 Diff 可获取完整文本。',
@@ -101,6 +103,8 @@ export function mountChangesDrawer({ request, locale, toast }) {
     const summary = $('changes-summary'); summary.replaceChildren();
     if (state.summary) summary.append(node('span', '', text('files').replace('{n}', state.summary.files)),
       node('span', 'changes-additions', ` +${state.summary.additions}`), node('span', 'changes-deletions', ` −${state.summary.deletions}`));
+    $('changes-stat-note').textContent = text('lineTotals');
+    $('changes-stat-note').hidden = !state.summary;
     const message = $('changes-message');
     message.textContent = state.loading ? text('loading') : state.error || (state.truncated ? text('truncated') : !state.files.length ? text('empty') : '');
     message.hidden = !message.textContent;

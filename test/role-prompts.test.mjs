@@ -41,7 +41,7 @@ test('CLI quickstart retains the bilingual v2.3 role prompts', () => {
 });
 
 test('Web uses a distinct lightweight profile in both languages', () => {
-  assert.equal(WORKSPACE_ROLE_PROMPT_VERSION, '2.3.0-web-lite-2');
+  assert.equal(WORKSPACE_ROLE_PROMPT_VERSION, '2.3.0-web-lite-3');
   for (const language of ['en', 'zh-CN']) {
     for (const agent of ['codex', 'antigravity']) {
       assert.notEqual(workspaceRolePrompt(agent, language), quickstartRolePrompt(agent, language));

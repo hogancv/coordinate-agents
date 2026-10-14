@@ -97,6 +97,7 @@ test('single-task reads ignore Session payload identities that differ from the r
       diagnostics: { nativeStatus: 'running' } }));
     const detail = await readWorkspaceTask(root, id);
     const listed = (await readWorkspaceTasks(root))[0];
+    assert.equal(detail.promptVersion, '2.3.0-web-lite-2');
     assert.equal(detail.sessions.codex.state, null);
     assert.equal(detail.sessions.codex.backend, null);
     assert.equal(detail.sessions.codex.diagnostics, null);
@@ -223,7 +224,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.match(first.id, /^workspace-[A-Za-z0-9_-]{8,}$/);
     assert.match(first.title, /^Task · \d{4}-\d{2}-\d{2} \d{2}:\d{2} · [A-Za-z0-9]{6}$/);
     assert.equal(first.status, 'RUNNING');
-    assert.equal(first.promptVersion, '2.3.0-web-lite-2');
+    assert.equal(first.promptVersion, '2.3.0-web-lite-3');
     assert.ok(first.sessions.codex.sessionId);
     assert.ok(first.sessions.antigravity.sessionId);
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
@@ -280,7 +281,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const saved = JSON.parse(readFileSync(join(root, '.agent-bus', 'workspace-tasks', `${workspaceTaskId}.json`), 'utf8'));
     assert.equal(saved.sessions.codex.sessionId, restarted.workspaceTask.sessions.codex.sessionId);
     assert.equal(saved.sessions.antigravity.sessionId, restarted.workspaceTask.sessions.antigravity.sessionId);
-    assert.equal(saved.promptVersion, '2.3.0-web-lite-2');
+    assert.equal(saved.promptVersion, '2.3.0-web-lite-3');
     assert.equal((await readWorkspaceTask(root, workspaceTaskId)).id, workspaceTaskId);
   } finally {
     await closeGroup(root, workspaceTaskId);
