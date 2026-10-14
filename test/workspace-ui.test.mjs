@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { isActiveTerminalSession } from '../inspector/web-workspace/terminal-model.mjs';
+import { listDocument } from './support/list-dom.mjs';
 
 const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
 function runFunctions(start, end, globals) {
@@ -183,6 +184,153 @@ test('search matches cached Chinese titles and case-insensitive project names wi
   assert.deepEqual([...state.expandedProjects], ['p1']);
   state.taskSearch = 'absent';
   assert.equal(context.searchTaskGroups().groups.length, 0);
+});
+
+function listContext() {
+  const document = listDocument();
+  const task = (id, title) => ({ id, title, status: 'WORKING', updatedAt: '2026-10-14T01:00:00Z', sessions: { codex: { state: 'running' }, antigravity: { state: 'idle' } } });
+  const state = { locale: 'en', projectId: 'p1', selectedId: 't1', taskSearch: '', actionBusy: false,
+    projects: [{ id: 'p1', name: 'Alpha', root: '/alpha', available: true }, { id: 'p2', name: 'Beta', root: '/beta', available: true }, { id: 'p3', name: 'Unloaded', root: '/unloaded', available: false }],
+    tasks: [task('t1', 'First'), task('t2', 'Second')], projectTasks: new Map(), expandedProjects: new Set(['p1', 'p2']) };
+  state.projectTasks.set('p1', state.tasks); state.projectTasks.set('p2', [task('t1', 'Other project')]);
+  const calls = [];
+  const context = vm.createContext({ state, document, t: key => `${state.locale}:${key}`,
+    selectTask: id => calls.push(['task', id]), selectProject: (...args) => calls.push(['project', ...args]),
+    disposeTerminalViews: () => assert.fail('list refresh disposed terminals'),
+  });
+  for (const [start, end] of [['function escapeHtml(', 'function bounded('], ['function formatTime(', 'function sessionIsActive('],
+    ['function projectText(', 'async function selectProject('], ['function renderTaskList(', 'function renderSelectedTask(']]) {
+    vm.runInContext(app.slice(app.indexOf(start), app.indexOf(end)), context);
+  }
+  context.renderTaskList();
+  return { context, state, document, calls, task };
+}
+
+test('list status and project updates retain buttons, singleton, focus and scroll', () => {
+  const { context, state, document } = listContext();
+  const host = document.querySelector('#project-list'), list = document.querySelector('#workspace-task-list');
+  const heading = host.querySelector('[data-project="p1"]'), group = heading.parentElement;
+  const button = list.querySelector('[data-workspace-task-id="t1"]');
+  button.focus(); host.scrollTop = 130; list.scrollTop = 40;
+  const moves = document.moves, writes = document.writes;
+  context.renderTaskList();
+  assert.equal(document.moves, moves); assert.equal(document.writes, writes);
+  state.tasks[0] = { ...state.tasks[0], title: '<img onerror=alert(1)>', status: 'DONE', updatedAt: '2026-10-14T02:00:00Z', sessions: { codex: { state: 'exited' }, antigravity: { state: 'running' } } };
+  state.projects[0] = { ...state.projects[0], name: 'Renamed <project>', available: false };
+  context.renderTaskList();
+  assert.equal(host.querySelector('[data-project="p1"]'), heading); assert.equal(heading.parentElement, group);
+  assert.equal(list.querySelector('[data-workspace-task-id="t1"]'), button); assert.equal(document.activeElement, button);
+  assert.equal(document.moves, moves); assert.equal(host.scrollTop, 130); assert.equal(list.scrollTop, 40);
+  assert.equal(button.querySelector('strong').textContent, '<img onerror=alert(1)>');
+  assert.equal(button.querySelector('.task-item-status').textContent, 'en:status.done');
+  assert.equal(button.querySelector('.status-dot').className, 'status-dot done');
+  assert.equal(button.querySelectorAll('.mini-agent')[0].className, 'mini-agent exited');
+  assert.equal(button.querySelectorAll('.mini-agent')[1].className, 'mini-agent running');
+  assert.equal(heading.querySelector('strong').textContent, 'Renamed <project>');
+  assert.equal(heading.querySelector('.project-unavailable').hidden, false);
+  heading.focus(); state.selectedId = 't2'; context.renderTaskList();
+  assert.equal(document.activeElement, heading); assert.equal(button.getAttribute('aria-current'), 'false');
+  assert.equal(document.querySelectorAll('#workspace-task-list').length, 1);
+});
+
+test('task insertion, removal and reorder reuse survivors and bind one click per button', () => {
+  const { context, state, document, calls, task } = listContext();
+  const list = document.querySelector('#workspace-task-list');
+  const first = list.children[0], second = list.children[1];
+  first.focus(); state.tasks = [state.tasks[1], task('t3', 'New'), state.tasks[0]]; context.renderTaskList();
+  assert.deepEqual(list.children.map(node => node.dataset.workspaceTaskId), ['t2', 't3', 't1']);
+  assert.equal(list.children[0], second); assert.equal(list.children[2], first); assert.equal(document.activeElement, first);
+  state.tasks = state.tasks.slice(0, 2); context.renderTaskList();
+  assert.equal(first.isConnected, false); assert.equal(document.activeElement, list.children[1]);
+  context.renderTaskList(); second.click();
+  assert.deepEqual(calls, [['task', 't2']]);
+});
+
+test('search, expansion and project switching preserve the singleton and project boundaries', () => {
+  const { context, state, document, calls } = listContext();
+  const list = document.querySelector('#workspace-task-list'), search = document.querySelector('#task-search-input');
+  const heading = document.querySelector('[data-project="p1"]');
+  heading.click(); assert.equal(state.expandedProjects.has('p1'), false);
+  assert.equal(list.parentElement.hidden, true); heading.click(); assert.equal(list.parentElement.hidden, false);
+  search.focus(); state.taskSearch = 'Other'; context.renderTaskList();
+  assert.equal(document.activeElement, search); assert.equal(list.hidden, true); assert.equal(list.isConnected, true);
+  const other = document.querySelector('[data-workspace-task-id="t1"]'); other.click();
+  assert.deepEqual(calls, [['project', 'p2', 't1']]);
+  state.projectId = 'p2'; state.tasks = state.projectTasks.get('p2'); context.renderTaskList();
+  assert.equal(list.parentElement.dataset.projectTasks, 'p2'); assert.equal(list.children[0], other);
+  state.taskSearch = 'absent'; search.focus(); context.renderTaskList();
+  assert.equal(list.isConnected, true); assert.equal(list.hidden, true); assert.equal(document.activeElement, search);
+  assert.equal(document.querySelectorAll('.task-search-notice').length, 2);
+  state.taskSearch = 'Unloaded'; context.renderTaskList();
+  assert.equal(document.querySelector('[data-project-tasks="p3"]').querySelector('.task-list-empty').textContent, 'en:task.notLoaded');
+  state.taskSearch = ''; context.renderTaskList();
+  assert.equal(list.parentElement.dataset.projectTasks, 'p2'); assert.equal(list.hidden, false);
+  assert.deepEqual([...state.expandedProjects], ['p2', 'p1']);
+  state.projects = []; state.projectId = null; state.selectedId = null; state.tasks = []; state.projectTasks.clear(); context.renderTaskList();
+  assert.equal(document.querySelectorAll('.project-group').length, 0); assert.equal(list.parentElement, document.querySelector('#project-list'));
+  assert.equal(list.querySelectorAll('[data-workspace-task-id]').length, 0); assert.equal(list.querySelector('.task-list-empty').textContent, 'en:task.none');
+});
+
+test('cached tasks update in place, locale changes relabel them and unusual IDs remain safe', () => {
+  const { context, state, document } = listContext();
+  const group = document.querySelector('[data-project-tasks="p2"]'), button = group.children[0];
+  state.projectTasks.get('p2')[0].status = 'DONE'; context.renderTaskList();
+  assert.equal(group.children[0], button); assert.equal(button.querySelector('.task-item-status').textContent, 'en:status.done');
+  state.locale = 'zh'; context.renderTaskList();
+  assert.equal(group.children[0], button); assert.equal(button.querySelector('.task-item-status').textContent, 'zh:status.done');
+  state.projects[1].id = 'p"[\\]'; state.projectTasks.set('p"[\\]', [{ id: 't"[\\]', title: '<b>safe</b>', status: 'DONE' }]);
+  context.renderTaskList();
+  const unusual = document.querySelectorAll('[data-workspace-task-id]').find(item => item.dataset.projectId === 'p"[\\]');
+  assert.equal(unusual.dataset.workspaceTaskId, 't"[\\]'); assert.equal(unusual.querySelector('strong').textContent, '<b>safe</b>');
+  assert.equal(unusual.querySelector('b'), null);
+});
+
+test('real project selection reuses cached task buttons through the loading render', async () => {
+  const { context, state, document } = listContext();
+  const list = document.querySelector('#workspace-task-list');
+  const old = list.children[0], other = document.querySelector('[data-project-tasks="p2"]').children[0];
+  const heading = document.querySelector('[data-project="p2"]');
+  let disposals = 0;
+  Object.assign(context, { closeSettings() {}, closeContextMenu() {}, changesDrawer: { reset() {} },
+    disposeTerminalViews: () => disposals++, checkWorkspaceHealth() {}, renderRepository() {}, renderSelectedTask() {},
+    rememberSelection() {}, localStorage: { getItem: () => null }, refresh: async () => {},
+  });
+  state.projectSelections = new Map(); state.projectEpoch = 0;
+  vm.runInContext(app.slice(app.indexOf('async function selectProject('), app.indexOf('let folderPage =')), context);
+  await context.selectProject('p2', 't1');
+  assert.equal(disposals, 1, 'user selection keeps the existing terminal disposal lifecycle');
+  assert.equal(list.parentElement.dataset.projectTasks, 'p2'); assert.equal(list.children[0], other);
+  assert.equal(document.querySelector('[data-project-tasks="p1"]').children[0], old);
+  assert.equal(document.querySelector('[data-project="p2"]'), heading); assert.equal(heading.getAttribute('aria-current'), 'true');
+});
+
+test('project reorder preserves focus and removing its focused task chooses a surviving project', () => {
+  const { context, state, document } = listContext();
+  const host = document.querySelector('#project-list'), list = document.querySelector('#workspace-task-list');
+  const firstHeading = document.querySelector('[data-project="p1"]'), otherHeading = document.querySelector('[data-project="p2"]');
+  firstHeading.focus(); state.projects = [state.projects[1], state.projects[0], state.projects[2]]; context.renderTaskList();
+  assert.equal(host.children[0], otherHeading.parentElement); assert.equal(document.activeElement, firstHeading);
+  list.children[0].focus(); state.projects = state.projects.filter(project => project.id !== 'p1');
+  state.projectId = 'p2'; state.tasks = state.projectTasks.get('p2'); context.renderTaskList();
+  assert.equal(document.activeElement, otherHeading);
+  assert.equal(document.querySelectorAll('#workspace-task-list').length, 1);
+});
+
+test('the standalone dictionary retains both locales and relabels existing list nodes', async () => {
+  const { I18N } = await import('../inspector/web-workspace/i18n.mjs');
+  assert.deepEqual(Object.keys(I18N.en).sort(), Object.keys(I18N.zh).sort());
+  for (const key of ['health.title', 'task.searchUnloaded', 'status.closed', 'terminal.live', 'terminal.polling', 'terminal.outputGap']) {
+    assert.equal(typeof I18N.en[key], 'string', key); assert.equal(typeof I18N.zh[key], 'string', key);
+  }
+  const { context, state, document } = listContext();
+  const button = document.querySelector('[data-workspace-task-id="t1"]');
+  context.I18N = I18N;
+  vm.runInContext(app.slice(app.indexOf('function t('), app.indexOf('function localeCode(')), context);
+  state.tasks[0].status = 'CLOSED'; context.renderTaskList();
+  assert.equal(button.querySelector('.task-item-status').textContent, 'Closed');
+  state.locale = 'zh'; context.renderTaskList();
+  assert.equal(document.querySelector('[data-workspace-task-id="t1"]'), button);
+  assert.equal(button.querySelector('.task-item-status').textContent, '已关闭');
 });
 
 test('resize fits xterm immediately but sends only the latest size and never overlaps HTTP', async () => {

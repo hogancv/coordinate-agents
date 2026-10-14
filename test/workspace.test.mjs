@@ -623,11 +623,12 @@ test('Session chat entry handles no output, running, ended, failed, and review s
   assert.equal(boundedEntry.body.length, CHAT_MAX_OUTPUT);
 });
 
-test('Bilingual Workspace text describes the fixed dual-terminal flow', () => {
+test('Bilingual Workspace text describes the fixed dual-terminal flow', async () => {
   const appJs = readFileSync(join(root, 'inspector', 'web-workspace', 'app.js'), 'utf8');
+  const { I18N } = await import('../inspector/web-workspace/i18n.mjs');
 
-  assert.match(appJs, /Create a task to open fresh Codex and Antigravity terminals/);
-  assert.match(appJs, /新建任务会打开全新的 Codex 与 Antigravity 终端/);
+  assert.match(I18N.en['empty.body'], /Create a task to open fresh Codex and Antigravity terminals/);
+  assert.match(I18N.zh['empty.body'], /新建任务会打开全新的 Codex 与 Antigravity 终端/);
   assert.match(appJs, /workspaceTaskCreate/);
   assert.match(appJs, /workspaceTaskRestart/);
   assert.equal(appJs.includes('Nothing runs automatically'), false);
