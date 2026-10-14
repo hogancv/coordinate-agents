@@ -1,3 +1,6 @@
+import { I18N } from './i18n.mjs';
+import { selectDiffRange, buildReviewFeedback, reviewLocation, reviewTarget, sameReviewTarget, reviewTargetError, reviewError } from './review-feedback.mjs';
+
 // Bounded, on-demand changes UI. No terminal or Session lifecycle dependencies.
 export function createChangesModel({ request, onChange = () => {} }) {
   const state = { projectId: null, open: false, files: [], summary: null, truncated: false,
@@ -44,15 +47,15 @@ export function createChangesModel({ request, onChange = () => {} }) {
 }
 
 export function diffRows(diff) {
-  let old = 0, next = 0, inHunk = false;
+  let old = 0, next = 0, inHunk = false, hunkId = -1, hunkHeader = null;
   const lines = diff.split('\n'); if (lines.at(-1) === '') lines.pop();
   return lines.map(text => {
     if (text.startsWith('diff --')) inHunk = false;
     const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(text);
-    if (match) { old = Number(match[1]); next = Number(match[2]); inHunk = true; }
+    if (match) { old = Number(match[1]); next = Number(match[2]); inHunk = true; hunkId++; hunkHeader = text; }
     const kind = match ? 'hunk' : !inHunk || text.startsWith('\\') ? 'meta'
       : text.startsWith('+') ? 'add' : text.startsWith('-') ? 'delete' : text.startsWith(' ') ? 'context' : 'meta';
-    return { text, kind, old: kind === 'delete' || kind === 'context' ? old++ : null,
+    return { text, kind, hunkId, hunkHeader, old: kind === 'delete' || kind === 'context' ? old++ : null,
       new: kind === 'add' || kind === 'context' ? next++ : null };
   });
 }
@@ -80,12 +83,107 @@ const WORDS = {
     binaryLabel: '二进制', modified: '已修改', added: '已新增', deleted: '已删除', renamed: '已重命名', conflicted: '冲突' },
 };
 
-export function mountChangesDrawer({ request, locale, toast }) {
+export function mountChangesDrawer({ request, locale, toast, getTaskContext = () => ({}), sendToCodex }) {
   const $ = id => document.getElementById(id);
-  const text = key => WORDS[locale()]?.[key] || WORDS.en[key] || key;
+  const text = key => I18N[locale()]?.[`changes.${key}`] || WORDS[locale()]?.[key] || WORDS.en[key] || key;
   const model = createChangesModel({ request, onChange: render });
   const state = model.state;
-  let trigger;
+  let trigger, renderedDiff, renderedPath, renderedProject, renderedLocale, rows = [], selection = null;
+  let sending = false, generation = 0, outcome = null, confirmedInputRevision = null;
+  function clearReview() {
+    generation++; selection = null; outcome = null;
+    $('review-comment').value = ''; $('review-ready').checked = false;
+    $('review-status').textContent = '';
+  }
+  function prompt() {
+    if (!selection) throw reviewError('reviewSelection');
+    return buildReviewFeedback({ ...selection, comment: $('review-comment').value, locale: locale() });
+  }
+  function targetError() {
+    if (!selection || selection.stale) return 'reviewStale';
+    const context = getTaskContext();
+    if (selection.projectId !== state.projectId || !sameReviewTarget(selection.target, reviewTarget(context))) return 'reviewTargetChanged';
+    return reviewTargetError(context);
+  }
+  function renderFeedback() {
+    $('review-feedback').hidden = !selection;
+    $('review-title').textContent = text('reviewTitle');
+    $('review-comment').placeholder = text('reviewPlaceholder');
+    $('review-comment').setAttribute('aria-label', text('reviewPlaceholder'));
+    $('review-clear').textContent = text('reviewClear');
+    $('review-copy').textContent = text('reviewCopy');
+    $('review-send').textContent = text(sending ? 'reviewSending' : 'reviewSend');
+    $('review-ready-label').textContent = text('reviewReady');
+    if (!selection) return;
+    $('review-selection').textContent = `${text('reviewSelected').replace('{n}', selection.selectedLines.length)} · ${selection.path} · ${reviewLocation(selection.selectedLines, locale())}`;
+    const error = targetError();
+    if (error || confirmedInputRevision !== getTaskContext().inputRevision) $('review-ready').checked = false;
+    let promptError = null;
+    try { prompt(); } catch (failure) { promptError = failure.code; }
+    $('review-copy').disabled = Boolean(promptError);
+    $('review-send').disabled = sending || Boolean(outcome || error || promptError || !sendToCodex || !$('review-ready').checked);
+    $('review-ready').disabled = sending || Boolean(outcome || error);
+    $('review-clear').disabled = sending;
+    $('review-hint').textContent = text(promptError || error || 'reviewWarning');
+  }
+  function highlight() {
+    for (const line of $('changes-diff').querySelectorAll('[data-diff-row]')) {
+      const index = Number(line.dataset.diffRow);
+      const selected = Boolean(selection && index >= selection.startRow && index <= selection.endRow && ['add', 'delete', 'context'].includes(rows[index]?.kind));
+      line.classList.toggle('diff-selected', selected);
+      if (line.getAttribute('role') === 'button') line.setAttribute('aria-pressed', String(selected));
+    }
+  }
+  function selectRow(index, extend) {
+    if (sending) return;
+    try {
+      const next = selectDiffRange(rows, selection, index, extend);
+      if (next === selection) return;
+      generation++; outcome = null;
+      selection = next ? { ...next, projectId: state.projectId, path: state.path, sourceDiff: state.diff.diff,
+        target: reviewTarget(getTaskContext()) } : null;
+      $('review-ready').checked = false; $('review-status').textContent = '';
+      highlight(); renderFeedback();
+    } catch (error) { toast(text(error.code), 'error'); }
+  }
+  async function sendFeedback() {
+    renderFeedback();
+    if (sending || outcome || targetError() || !$('review-ready').checked || !sendToCodex) return;
+    let content;
+    try { content = prompt(); } catch (error) { toast(text(error.code), 'error'); return; }
+    const captured = selection, currentGeneration = generation;
+    sending = true; $('review-comment').disabled = true;
+    $('review-status').textContent = text('reviewSending'); renderFeedback();
+    const assertSelection = () => {
+      if (generation !== currentGeneration || selection !== captured || !state.open
+        || state.projectId !== captured.projectId || state.path !== captured.path || targetError()) throw reviewError('reviewTargetChanged');
+    };
+    try {
+      await sendToCodex({ target: captured.target, prompt: content, assertSelection, validateSelection: async () => {
+        assertSelection();
+        const fresh = await request(`/api/git-changes/diff?path=${encodeURIComponent(captured.path)}`, { projectId: captured.projectId });
+        assertSelection();
+        if (!fresh.ok || fresh.reason || fresh.diff !== captured.sourceDiff) {
+          captured.stale = true; throw reviewError('reviewStale');
+        }
+      } });
+      if (generation === currentGeneration) {
+        outcome = 'sent'; confirmedInputRevision = null; $('review-ready').checked = false;
+        $('review-status').textContent = text('reviewSent');
+      }
+      toast(text('reviewSent'));
+    } catch (error) {
+      if (generation === currentGeneration) {
+        if (error.code === 'reviewUncertain') outcome = 'uncertain';
+        $('review-status').textContent = text(error.code || 'reviewFailed');
+        $('review-ready').checked = false;
+      }
+      toast(text(error.code || 'reviewFailed'), 'error');
+    } finally {
+      sending = false; $('review-comment').disabled = false; renderFeedback();
+    }
+  }
+
   function node(tag, className, value) {
     const element = document.createElement(tag); element.className = className;
     if (value !== undefined) element.textContent = value; return element;
@@ -126,6 +224,19 @@ export function mountChangesDrawer({ request, locale, toast }) {
     $('changes-path').textContent = state.path || '';
     $('changes-copy-path').textContent = text('copyPath'); $('changes-copy-path').disabled = !state.path;
     $('changes-copy-diff').textContent = text('copyDiff'); $('changes-copy-diff').disabled = !state.diff?.diff;
+    renderFeedback();
+    if (renderedDiff === state.diff && renderedPath === state.path && renderedProject === state.projectId && !state.diffError && !state.diffLoading) {
+      if (renderedLocale !== locale()) {
+        for (const line of $('changes-diff').querySelectorAll('[role="button"]')) line.title = text('reviewSelectHint');
+        const hint = $('changes-diff').querySelector('.changes-hint');
+        if (hint) hint.textContent = text(state.diff?.reason || (!state.path ? 'choose' : !state.diff?.diff ? 'noDiff' : 'previewLimit'));
+        renderedLocale = locale();
+      }
+      return;
+    }
+    clearReview(); renderFeedback();
+    renderedLocale = locale(); renderedDiff = state.diff; renderedPath = state.path; renderedProject = state.projectId;
+    rows = [];
     const view = $('changes-diff'); view.replaceChildren(); view.setAttribute('aria-busy', String(state.diffLoading));
     const hint = state.diffLoading ? text('loading') : state.diffError || (state.diff?.reason ? text(state.diff.reason)
       : !state.path ? text('choose') : !state.diff?.diff ? text('noDiff') : null);
@@ -137,30 +248,50 @@ export function mountChangesDrawer({ request, locale, toast }) {
       }
     } else {
       const fragment = document.createDocumentFragment();
-      const rows = diffRows(state.diff.diff);
+      rows = diffRows(state.diff.diff);
       if (rows.length > 3000) view.append(node('p', 'changes-hint', text('previewLimit')));
-      for (const row of rows.slice(0, 3000)) {
-        const line = node('div', `diff-line diff-${row.kind}`);
+      for (const [index, row] of rows.slice(0, 3000).entries()) {
+        const line = node('div', `diff-line diff-${row.kind}`); line.dataset.diffRow = String(index);
+        if (['add', 'delete', 'context'].includes(row.kind)) {
+          line.tabIndex = 0; line.setAttribute('role', 'button'); line.setAttribute('aria-pressed', 'false');
+          line.title = text('reviewSelectHint');
+        }
         line.append(node('span', 'diff-number', row.old ?? ''), node('span', 'diff-number', row.new ?? ''), node('code', 'diff-code', row.text));
         fragment.append(line);
       }
       view.append(fragment);
     }
   }
-  function close() { model.close(); (trigger?.isConnected ? trigger : $('changes-button'))?.focus(); }
+  function close() { clearReview(); model.close(); (trigger?.isConnected ? trigger : $('changes-button'))?.focus(); }
   $('changes-button').addEventListener('click', () => {
     if (state.open) { close(); return; }
     trigger = document.activeElement; state.open = true; void model.refresh(); $('changes-close').focus();
   });
   $('changes-close').addEventListener('click', close);
   $('changes-refresh').addEventListener('click', () => void model.refresh());
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); } });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.open && !selection && !sending) { event.preventDefault(); close(); } });
   for (const [id, value] of [['changes-copy-path', () => state.path], ['changes-copy-diff', () => state.diff?.diff]]) {
     $(id).addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(value()); toast(text('copied')); }
       catch { toast(text('copyError'), 'error'); }
     });
   }
+  $('changes-diff').addEventListener('click', event => {
+    const line = event.target.closest('[data-diff-row]');
+    if (line) selectRow(Number(line.dataset.diffRow), event.shiftKey);
+  });
+  $('changes-diff').addEventListener('keydown', event => {
+    const line = event.target.closest('[data-diff-row]');
+    if (line && ['Enter', ' '].includes(event.key)) { event.preventDefault(); selectRow(Number(line.dataset.diffRow), event.shiftKey); }
+  });
+  $('review-comment').addEventListener('input', () => { if (outcome === 'sent') outcome = null; renderFeedback(); });
+  $('review-ready').addEventListener('change', () => { confirmedInputRevision = getTaskContext().inputRevision; renderFeedback(); });
+  $('review-clear').addEventListener('click', () => { if (!sending) { clearReview(); highlight(); renderFeedback(); } });
+  $('review-copy').addEventListener('click', async () => {
+    try { const content = prompt(); await navigator.clipboard.writeText(content); toast(text('copied')); }
+    catch (error) { toast(text(error.code || 'copyError'), 'error'); }
+  });
+  $('review-send').addEventListener('click', () => void sendFeedback());
   render();
-  return { reset(projectId) { model.reset(projectId); void model.refresh(); }, render };
+  return { reset(projectId) { clearReview(); model.reset(projectId); void model.refresh(); }, render, updateContext: renderFeedback };
 }

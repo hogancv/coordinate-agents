@@ -44,6 +44,8 @@ tarball; this is not a packaged Codex Skill. No build or prepack step is needed.
 
 Web task-group status describes terminal lifecycle, **not implementation or review completion**. Role prompts guide agent behavior; they are not an enforced workflow state machine. Both modes retain explicit user authorization for commit, push, and release as applicable to their workflow. The Web prompt forbids these actions without authorization.
 
+Diff review feedback requires confirmation that Codex is at a blank input prompt before each send. A successful send clears that confirmation; editing sent feedback requires confirming again. Switching files, refreshing the diff, or closing the Changes drawer during preflight cancels the pending feedback before terminal input is dispatched.
+
 ### Web Workspace preview
 
 The Web Workspace pairs Codex with a configured Implementer in a local,

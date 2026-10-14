@@ -428,3 +428,81 @@ test('task errors explain a failed CLI account bootstrap even without a task-lev
   assert.equal(context.taskErrorMessage({ error: { message: 'Could not open terminal' } }), 'Could not open terminal');
   assert.equal(context.taskErrorMessage({ sessions: {} }), '');
 });
+
+// Review handoff runs through the same controller as raw xterm input.
+async function reviewContext(overrides = {}) {
+  const review = await import('../inspector/web-workspace/review-feedback.mjs');
+  const task = { id: 't', status: 'RUNNING', startup: { slots: { codex: 'READY' } }, sessions: { codex: { sessionId: 'c', state: 'idle' } } };
+  const controller = { projectId: 'p', pane: { sessionId: 'c' }, inputQueue: Promise.resolve(), queuedInputBytes: 0, session: task.sessions.codex };
+  const state = { projectId: 'p', projectEpoch: 1, reviewTaskEpoch: 2, selectedId: 't', selectedTask: task, terminalViews: new Map([['codex', controller]]), locale: 'en' };
+  const writes = [];
+  const globals = { ...review, state, MAX_INPUT_BYTES: 16 * 1024, UTF8_ENCODER: new TextEncoder(),
+    fetchJson: async () => task, postAction: async (...args) => { writes.push(args); return { ok: true }; },
+    scheduleTerminalRead() {}, showToast() {}, ...overrides };
+  const context = runFunctions('getReviewTaskContext', 'terminalSize', globals);
+  return { context, state, controller, writes, target: review.reviewTarget(context.getReviewTaskContext()) };
+}
+
+test('review handoff rechecks binding, submits once, and blocks concurrent raw terminal input', async () => {
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  const checks = [];
+  const env = await reviewContext({ fetchJson: async () => { await gate; checks.push('task'); return env.state.selectedTask; } });
+  const request = { target: env.target, prompt: 'review\n中文', validateSelection: async () => { checks.push('diff'); },
+    assertSelection: () => { assert.equal(env.writes.length, 0); checks.push('selection'); } };
+  const send = env.context.sendReviewToCodex(request);
+  assert.equal(env.controller.reviewWriting, true);
+  await assert.rejects(env.context.sendReviewToCodex(request), { code: 'reviewInputBusy' });
+  // Raw input is explicitly refused during the review transaction.
+  env.context.enqueueRawInput(env.controller, 'x');
+  assert.equal(env.controller.queuedInputBytes, 0);
+  release(); await send;
+  assert.deepEqual(checks, ['diff', 'task', 'selection']);
+  assert.equal(env.writes.length, 1);
+  assert.equal(env.writes[0][0], 'sessionWrite');
+  assert.equal(env.writes[0][1].sessionId, 'c');
+  assert.equal(env.writes[0][1].submit, true);
+  assert.equal(env.writes[0][2], 'p');
+  assert.equal(env.controller.reviewWriting, false);
+});
+
+test('review handoff cancels on project/task/session changes during preflight', async () => {
+  for (const mutation of [env => { env.state.projectEpoch++; }, env => { env.state.reviewTaskEpoch++; }, env => { env.state.selectedTask.sessions.codex.sessionId = 'replacement'; }, env => { env.controller.disposed = true; }]) {
+    const env = await reviewContext();
+    await assert.rejects(env.context.sendReviewToCodex({ target: env.target, prompt: 'review', validateSelection: async () => mutation(env), assertSelection() {} }), { code: 'reviewTargetChanged' });
+    assert.equal(env.writes.length, 0);
+  }
+});
+
+test('review handoff rejects a freshly closed task and never retries an uncertain write', async () => {
+  const closed = await reviewContext({ fetchJson: async () => ({ id: 't', status: 'CLOSED', sessions: { codex: { sessionId: 'c', state: 'idle' } } }) });
+  await assert.rejects(closed.context.sendReviewToCodex({ target: closed.target, prompt: 'review', validateSelection: async () => {}, assertSelection() {} }), { code: 'reviewTaskUnavailable' });
+  assert.equal(closed.writes.length, 0);
+  let calls = 0;
+  const uncertain = await reviewContext({ postAction: async () => { calls++; throw new Error('lost response'); } });
+  await assert.rejects(uncertain.context.sendReviewToCodex({ target: uncertain.target, prompt: 'review', validateSelection: async () => {}, assertSelection() {} }), { code: 'reviewUncertain' });
+  assert.equal(calls, 1);
+  assert.equal(uncertain.controller.reviewWriting, false);
+});
+
+test('review handoff rechecks selection after task lookup and cancels before writing', async () => {
+  let release, started, selectionValid = true;
+  const gate = new Promise(resolve => { release = resolve; });
+  const taskReadStarted = new Promise(resolve => { started = resolve; });
+  const env = await reviewContext({ fetchJson: async () => { started(); await gate; return env.state.selectedTask; } });
+  let validations = 0, assertions = 0;
+  const send = env.context.sendReviewToCodex({ target: env.target, prompt: 'review',
+    validateSelection: async () => { validations++; },
+    assertSelection: () => { assertions++; if (!selectionValid) throw Object.assign(new Error('selection abandoned'), { code: 'reviewTargetChanged' }); },
+  });
+  await taskReadStarted;
+  assert.equal(validations, 1);
+  selectionValid = false;
+  const rejection = assert.rejects(send, { code: 'reviewTargetChanged' });
+  release(); await rejection;
+  assert.equal(assertions, 1);
+  assert.equal(validations, 1);
+  assert.equal(env.writes.length, 0);
+  assert.equal(env.controller.reviewWriting, false);
+  assert.equal(env.state.reviewWriteTarget, null);
+  await env.controller.inputQueue;
+});

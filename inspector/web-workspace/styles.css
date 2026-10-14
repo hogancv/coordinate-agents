@@ -389,3 +389,17 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 @media (max-width: 700px) { .changes-drawer { top: 100px; } }
 
 .changes-drawer ~ .toast-region { z-index: 40; }
+
+.diff-line[role="button"] { cursor: pointer; }
+.diff-line[role="button"]:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.diff-line.diff-selected { background: color-mix(in srgb, var(--accent) 17%, var(--panel)); box-shadow: inset 3px 0 var(--accent); }
+.review-feedback { flex-shrink: 0; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; max-height: 48%; overflow: auto; }
+.review-feedback h3 { margin: 0 0 6px; font-size: 13px; }
+.review-selection, .review-hint { font-size: 11px; color: var(--muted); line-height: 1.5; margin: 6px 0; overflow-wrap: anywhere; }
+.review-feedback textarea { display: block; width: 100%; box-sizing: border-box; min-height: 60px; max-height: 140px; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; font-size: 12px; }
+.review-feedback textarea:focus { outline: 1px solid var(--accent); }
+.review-ready { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0; font-size: 11px; color: var(--muted); }
+.review-ready input { margin: 2px 0; }
+.review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-actions button { font-size: 11px; padding: 6px 9px; }
+#review-status:empty { display: none; }

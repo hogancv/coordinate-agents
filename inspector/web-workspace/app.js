@@ -1,6 +1,7 @@
 import { I18N } from './i18n.mjs';
 import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
 import { mountChangesDrawer } from './git-changes.mjs';
+import { reviewTarget, sameReviewTarget, reviewTargetError, reviewError, reviewSessionInput } from './review-feedback.mjs';
 import {
   isActiveTerminalSession,
   selectTerminalPanes,
@@ -26,6 +27,8 @@ const state = {
   projects: [],
   projectId: null,
   projectEpoch: 0,
+  reviewTaskEpoch: 0,
+  reviewWriteTarget: null,
   projectTasks: new Map(),
   projectSelections: new Map(),
   expandedProjects: new Set(),
@@ -61,7 +64,8 @@ const state = {
   contextTrigger: null,
 };
 
-const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast });
+const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
+  getTaskContext: getReviewTaskContext, sendToCodex: sendReviewToCodex });
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
 
@@ -1054,6 +1058,7 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
 }
 
 function renderSelectedTask() {
+  changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
   const taskActions = document.querySelector('#task-toolbar-actions');
@@ -1314,8 +1319,58 @@ function disposeTerminalViews() {
   document.body.classList.remove('terminal-split-dragging');
 }
 
+function getReviewTaskContext(task = state.selectedTask) {
+  return { projectId: state.projectId, projectEpoch: state.projectEpoch, taskEpoch: state.reviewTaskEpoch,
+    taskId: state.selectedId, task, actionBusy: state.actionBusy, inputRevision: state.terminalViews.get('codex')?.inputRevision || 0 };
+}
+
+async function sendReviewToCodex({ target, prompt, validateSelection, assertSelection }) {
+  const controller = state.terminalViews.get('codex');
+  function assertCurrent() {
+    if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext())) || controller?.disposed
+      || controller?.projectId !== target.projectId || controller?.pane.sessionId !== target.sessionId
+      || state.terminalViews.get('codex') !== controller) throw reviewError('reviewTargetChanged');
+    const error = reviewTargetError(getReviewTaskContext());
+    if (error) throw reviewError(error);
+    if (controller.finished || !['running', 'idle'].includes(controller.session?.state || controller.session?.status)) throw reviewError('reviewSessionUnavailable');
+  }
+  assertCurrent();
+  if (state.reviewWriteTarget || controller.reviewWriting || controller.queuedInputBytes) throw reviewError('reviewInputBusy');
+  const input = reviewSessionInput(prompt, state.locale);
+  if (UTF8_ENCODER.encode(input).byteLength > MAX_INPUT_BYTES) throw reviewError('reviewByteLimit');
+  // Reserve the existing input queue throughout preflight and the single write.
+  // Raw xterm input is refused while reserved, never interleaved or replayed.
+  controller.reviewWriting = true;
+  state.reviewWriteTarget = target;
+  const previous = controller.inputQueue;
+  const operation = (async () => {
+    await previous;
+    assertCurrent();
+    await validateSelection();
+    assertCurrent();
+    const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(target.taskId)}`, { projectId: target.projectId });
+    assertCurrent();
+    if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext(task)))) throw reviewError('reviewTargetChanged');
+    const error = reviewTargetError(getReviewTaskContext(task));
+    if (error) throw reviewError(error);
+    // No await between this selection check and dispatching the PTY write.
+    assertSelection();
+    try {
+      await postAction('sessionWrite', { sessionId: target.sessionId, input, submit: true }, target.projectId);
+    } catch {
+      // An HTTP failure cannot establish that no PTY bytes were written.
+      throw reviewError('reviewUncertain');
+    }
+    if (!controller.disposed) scheduleTerminalRead(controller, 0);
+  })();
+  controller.inputQueue = operation.catch(() => {});
+  try { await operation; }
+  finally { controller.reviewWriting = false; state.reviewWriteTarget = null; }
+}
+
 function enqueueRawInput(controller, input) {
   if (controller.disposed) return;
+  if (controller.reviewWriting || (state.reviewWriteTarget?.projectId === controller.projectId && state.reviewWriteTarget?.sessionId === controller.pane.sessionId)) { showToast(state.locale === 'zh' ? '正在发送审查反馈，请稍后输入。' : 'Sending review feedback. Wait before typing.', 'error'); return; }
   controller.activeUntil = Date.now() + 1500;
   if (!controller.pane.sessionId || typeof input !== 'string' || input.length === 0) return;
   const knownSession = controller.session || state.selectedTask?.sessions?.[controller.pane.slotId];
@@ -1340,6 +1395,8 @@ function enqueueRawInput(controller, input) {
     showToast(t('terminal.inputError'), 'error');
     return;
   }
+  controller.inputRevision = (controller.inputRevision || 0) + 1;
+  changesDrawer.updateContext();
   controller.queuedInputBytes += bytes;
   controller.inputQueue = controller.inputQueue.then(async () => {
     for (const chunk of chunks) {
@@ -1639,6 +1696,8 @@ async function refresh({ showError = false } = {}) {
 async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
+  state.reviewTaskEpoch++;
+  changesDrawer.updateContext();
   renderWorkspaceHealth();
   rememberSelection();
   renderTaskList();

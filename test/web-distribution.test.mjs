@@ -88,3 +88,19 @@ test('HTTP read defaults preserve bounded terminal output without query paramete
     assert.deepEqual(await response.json(), { cursor: null, maxLines: 200, maxBytes: 32768 });
   } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
 });
+
+test('review helper ships in the explicit whitelist and is served as JavaScript', async () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  assert.ok(manifest.files.includes('inspector/web-workspace/review-feedback.mjs'));
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'review-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/review-feedback.mjs`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /javascript/);
+    const helpers = await import(`data:text/javascript;base64,${Buffer.from(await response.text()).toString('base64')}`);
+    assert.equal(helpers.REVIEW_MAX_LINES, 40);
+    assert.equal(helpers.REVIEW_MAX_BYTES, 8192);
+  } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});

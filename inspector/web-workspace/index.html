@@ -144,6 +144,15 @@
           <div id="changes-files" class="changes-files"></div>
           <div class="changes-detail-header"><code id="changes-path"></code><div class="changes-copy-actions"><button id="changes-copy-path" class="secondary-button" type="button" disabled>Copy path</button><button id="changes-copy-diff" class="secondary-button" type="button" disabled>Copy diff</button></div></div>
           <div id="changes-diff" class="changes-diff" tabindex="0" aria-label="Diff"></div>
+          <section id="review-feedback" class="review-feedback" aria-labelledby="review-title" hidden>
+            <h3 id="review-title">Review Feedback</h3>
+            <p id="review-selection" class="review-selection"></p>
+            <textarea id="review-comment" rows="3" maxlength="2000" spellcheck="true"></textarea>
+            <p id="review-hint" class="review-hint"></p>
+            <label class="review-ready"><input id="review-ready" type="checkbox"><span id="review-ready-label"></span></label>
+            <div class="review-actions"><button id="review-clear" class="secondary-button" type="button">Clear</button><button id="review-copy" class="secondary-button" type="button">Copy Prompt</button><button id="review-send" class="primary-button" type="button">Send to Codex</button></div>
+            <p id="review-status" class="review-hint" role="status" aria-live="polite"></p>
+          </section>
         </aside>
         <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
       </main>
