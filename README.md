@@ -215,13 +215,19 @@ The startup folder is registered automatically (Git subfolders use their reposit
 Workspace storage initialization, without a commit. Switching projects keeps terminals running.
 Terminal settings and close-all apply only to the selected project.
 Right-click a conversation or project heading to archive it. Archiving closes its owned terminals and hides the records; project source files remain. Settings provides one-click permanent clearing of archived conversations across all registered projects. Archived projects stay hidden after refresh/restart; explicitly adding the same folder shows the project again.
-**New task** starts a fresh Codex + Antigravity pair with Web-lite prompts;
+**New task** opens a mode picker. Default Collaboration starts a fresh Codex + Antigravity pair with unchanged Web-lite prompts;
 enter requirements directly in the Codex terminal. Terminal settings accept
 custom executable commands such as `agy-proxy`, plus Codex model and reasoning
 choices. Refresh, close, restart, and close-all-terminal controls are available.
 Drag the divider to resize the terminals (25–75%); double-click to reset to 50:50. The ratio survives refresh. Each terminal's focus button expands it without restarting sessions; restore returns to the saved split, and the adjacent switch button focuses the other terminal. These controls also work in Zen mode. Small screens keep the stacked layout.
 The sidebar search filters task titles and project names across loaded/cached tasks, preserving project groups. Projects whose tasks have not loaded are explicitly noted. Clear the search or press Escape to restore the previous project expansion state.
 There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.
+
+**Custom Terminals** opens two independent CLI sessions with stable Terminal 1/2 slots. Enter only executable names or absolute paths (spaces in paths are supported), never flags or shell syntax. Both commands may be identical. Generic CLI launch reuses the existing executable checks and PTY Host; known Codex Windows entrypoints and agy interactive transport are preserved without assigning collaboration roles.
+
+Terminal settings has a separate **Custom Terminal Defaults** section: two commands, an optional shared Project Prompt (8KB UTF-8), and two optional Terminal Prompts (4KB each). This project-local schema is atomically saved to `.agent-bus/workspace-custom.json`; it does not change default agent settings. New tasks snapshot these settings; project edits never alter old Custom tasks, even on restart. Commands can be overridden for one creation.
+
+Custom mode never injects built-in roles, starts a collaboration round, or enables Send to Codex review feedback. Git diff viewing/copying remains available. Each terminal's **Project Prompt** button previews its shared + terminal Prompt, separated by `---`. Copy it, or explicitly confirm that the CLI is ready and supports bracketed multiline paste before sending. Delivery reserves the keyboard queue and uses one raw Session write with one final Enter. Uncertain delivery is never retried or restarted automatically. Refresh, close, restart and archive remain task-and-slot bound; no global Session discovery fallback is used.
 
 Workspace groups live in `.agent-bus/workspace-tasks/*.json`, separately from
 standard Tasks. Selection and refresh never launch sessions; explicit actions

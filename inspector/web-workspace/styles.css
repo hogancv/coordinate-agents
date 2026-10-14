@@ -403,3 +403,9 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .review-actions button { font-size: 11px; padding: 6px 9px; }
 #review-status:empty { display: none; }
+.task-mode-fields { display: grid; gap: .6rem; border: 1px solid var(--line); border-radius: .5rem; padding: .8rem; }
+.task-mode-fields label { display: flex; align-items: center; gap: .5rem; }
+.custom-settings { border-top: 1px solid var(--line); padding-top: 1rem; }
+.custom-settings textarea, #custom-prompt-preview { width: 100%; box-sizing: border-box; resize: vertical; padding: .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--panel); color: var(--text); font: inherit; }
+#custom-prompt-preview { min-height: 14rem; max-height: 40vh; }
+.terminal-prompt-button { font-size: 11px; padding: 4px 7px; }

@@ -3,7 +3,7 @@ import { AgentAdapter } from './base.mjs';
 import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
 import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
 
-function codexWindowsEntrypoint(path) {
+export function codexWindowsEntrypoint(path) {
   return join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
 }
 

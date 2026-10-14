@@ -8,6 +8,15 @@ import { pathToFileURL } from 'node:url';
 import { startWorkspace } from './support/workspace-server.mjs';
 
 const repo = resolve('.');
+test('custom terminal modules ship in the precise package whitelist and UI helper is served', async () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  for (const file of ['inspector/web-workspace/custom-terminal-model.mjs', 'skills/coordinate-agents/scripts/workspace-custom-config.mjs']) assert.ok(manifest.files.includes(file), file);
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'custom-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try { assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/custom-terminal-model.mjs`)).status, 200); }
+  finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
 test('the Web server serves the dictionary imported by app.js as a JavaScript module', async () => {
   const { createLocalServer } = await import('../inspector/server/http-server.mjs');
   const server = createLocalServer({ ui: 'workspace', capability: 'dictionary-test', data: {} });

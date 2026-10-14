@@ -1,4 +1,7 @@
-import { resolve } from 'node:path';
+import { resolve, win32 } from 'node:path';
+import { GenericCliAdapter } from '../adapters/generic-cli.mjs';
+import { codexWindowsEntrypoint } from '../adapters/codex-cli.mjs';
+import { validateTerminalCommand } from './workspace-custom-config.mjs';
 import {
   getExecutionSessionManager,
   resolveConfiguredSessionAgent,
@@ -7,6 +10,23 @@ import { jsonSuccess } from './runtime-contract.mjs';
 
 function sessionInputRoot(input) {
   return resolve(`${input?.root || process.cwd()}`);
+}
+
+// Task-only entry, not an arbitrary command endpoint. Resolve the immutable
+// command from the owning task and never modify the project agent registry.
+export async function runtimeWorkspaceCustomSessionOpen({ root, taskId, slot, language = 'en' }) {
+  const { readWorkspaceTask } = await import('./workspace-task-runtime.mjs');
+  const task = await readWorkspaceTask(root, taskId);
+  if (task.mode !== 'custom' || !['terminal1', 'terminal2'].includes(slot)
+    || task.archivedAt || task.status !== 'STARTING' || task.sessions[slot].sessionId) throw new Error('Custom Session launch does not belong to a starting task slot.');
+  const command = validateTerminalCommand(task.custom[slot].command);
+  const name = win32.basename(command).replace(/\.(exe|cmd|ps1)$/i, '').toLowerCase();
+  // Only known executable transport requirements, never role or prompt inference.
+  const resolved = { adapter: 'generic-cli', command, args: ['agy', 'agy-proxy'].includes(name) ? ['--prompt-interactive='] : [],
+    ...(name === 'codex' ? { windowsEntrypoint: codexWindowsEntrypoint } : {}) };
+  const opened = await getExecutionSessionManager().open({ root, agent: 'workspace-custom', resolved,
+    adapter: new GenericCliAdapter(resolved), initialPrompt: '', language, taskId, subtaskId: slot, reuseExisting: false });
+  return jsonSuccess('session.open', { root, session: opened.session, reused: false });
 }
 
 export async function runtimeSessionOpen(input = {}) {

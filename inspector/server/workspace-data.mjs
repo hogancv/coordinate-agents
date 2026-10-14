@@ -11,6 +11,7 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
 import { readGitChanges, readGitDiff } from '../../skills/coordinate-agents/scripts/workspace-git-changes.mjs';
 import { readWorkspaceHealth } from './workspace-health.mjs';
+import { readCustomWorkspaceConfig } from '../../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_TERMINAL_READ_BYTES = 32 * 1024;
 const MAX_TERMINAL_READ_LINES = 200;
@@ -181,7 +182,7 @@ export function createWorkspaceData(root) {
     readGitChanges: () => readGitChanges(repository),
     readGitDiff: path => readGitDiff(repository, path),
     readRepository: () => repositoryFacts(repository),
-    readWorkspaceSettings: () => readWorkspaceSettings(repository),
+    readWorkspaceSettings: () => ({ ...readWorkspaceSettings(repository), custom: readCustomWorkspaceConfig(repository) }),
     async readWorkspaceHealth(workspaceTaskId = null) {
       const tasks = workspaceTaskId ? [await readWorkspaceTask(repository, workspaceTaskId)] : await readWorkspaceTasks(repository);
       return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),

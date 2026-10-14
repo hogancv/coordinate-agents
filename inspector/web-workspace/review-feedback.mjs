@@ -96,6 +96,7 @@ export function sameReviewTarget(a, b) {
 }
 export function reviewTargetError(context = {}) {
   const task = context.task, session = task?.sessions?.codex;
+  if (task?.mode === 'custom') return 'reviewCustomTask';
   if (!context.projectId || !context.taskId || task?.id !== context.taskId) return 'reviewNoTask';
   if (task.archivedAt || task.status !== 'RUNNING' || context.actionBusy) return 'reviewTaskUnavailable';
   if (!session?.sessionId || !['running', 'idle'].includes(session.state || session.status)

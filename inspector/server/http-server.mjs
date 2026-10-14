@@ -22,6 +22,7 @@ const WORKSPACE_STATIC_FILES = new Map([
   ['/i18n.mjs', { file: 'i18n.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
   ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/custom-terminal-model.mjs', { file: 'custom-terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/terminal-model.mjs', { file: 'terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/terminal-stream.mjs', { file: 'terminal-stream.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],

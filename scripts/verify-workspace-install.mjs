@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFi
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { stripVTControlCharacters } from 'node:util';
 
 const [packagePath, temporaryPath, expectedVersion] = process.argv.slice(2);
 const packageRoot = realpathSync.native(packagePath);
@@ -96,7 +97,7 @@ async function action(name,params={},scoped=true) {
 async function read(sessionId) {return get(`/api/sessions/${sessionId}/read`);}
 try {
   await start();
-  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
+  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/custom-terminal-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
   assert.ok((await get('/api/repository')).root);
   assert.equal((await get('/api/workspace-settings')).codex.command,executable);
   assert.deepEqual(await get('/api/workspace-tasks'),[]);
@@ -117,7 +118,9 @@ try {
   await action('sessionResize',{sessionId:codex,cols:91,rows:27});
   const message=join(packageRoot,'skills/coordinate-agents/scripts/workspace-message.mjs');
   const sent=JSON.parse(run([message,task.id,'send','directed-message-check'])); assert.equal(sent.sessionId,agy); assert.equal(sent.sent,true);
-  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:') && r.output.output.includes('directed-message-check') && r.output.output.includes(sent.roundId),'directed reply');
+  // ConPTY can soft-wrap a UUID across rows. Verify rendered bytes without
+  // interpreting a layout newline as a different cooperation identity.
+  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:') && r.output.output.includes('directed-message-check') && stripVTControlCharacters(r.output.output).replace(/[\r\n]/g,'').includes(sent.roundId),'directed reply');
   const received=JSON.parse(run([message,task.id,'read',String(sent.cursor)])); assert.match(received.output,/directed-message-check/);
   const another=await action('workspaceTaskCreate',{language:'zh-CN'}); const task2=another.workspaceTask || another.task; allTasks.push(task2.id);
   assert.notEqual(task2.sessions.antigravity.sessionId,agy);

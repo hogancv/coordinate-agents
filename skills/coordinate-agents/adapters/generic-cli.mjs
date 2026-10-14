@@ -18,13 +18,14 @@ export class GenericCliAdapter extends AgentAdapter {
     return checkAdapterExecutable(command, {
       versionArgs: version ? versionArgs : null,
       conformanceFixture: this.config.conformanceFixture,
+      windowsEntrypoint: this.config.windowsEntrypoint,
     });
   }
 
   resolveLaunch({ root, prompt, agent, language }) {
     const command = this.config.command;
     if (!command) throw new Error('Cannot launch generic CLI without configured command');
-    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture, windowsEntrypoint: this.config.windowsEntrypoint });
     if (!resolved.available) throw executableError(resolved, 'Cannot launch generic CLI safely');
     const templateArgs = Array.isArray(this.config.args) && this.config.args.length > 0
       ? this.config.args
@@ -57,7 +58,7 @@ export class GenericCliAdapter extends AgentAdapter {
   resolveSessionLaunch({ root, initialPrompt = '', agent, language }) {
     const command = this.config.command;
     if (!command) throw new Error('Cannot open generic CLI session without configured command');
-    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
+    const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture, windowsEntrypoint: this.config.windowsEntrypoint });
     if (!resolved.available) throw executableError(resolved, 'Cannot open generic CLI session safely');
     const templateArgs = Array.isArray(this.config.args) && this.config.args.length > 0
       ? this.config.args

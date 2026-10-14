@@ -10,11 +10,17 @@ description: A localhost-only dual-terminal workbench with lightweight collabora
 
 
 The **Web Workspace** is the lightweight interactive entry for Coordinate
-Agents. Each Workspace task group owns a fresh **Codex + Antigravity** terminal
-pair. The **Skill / CLI / MCP** path remains the structured workflow for durable
+Agents. Each Workspace task group owns a fresh terminal pair: **Default
+Collaboration (Codex + Antigravity)** or **Custom Terminals**. The **Skill / CLI / MCP** path remains the structured workflow for durable
 Tasks, Task Graphs, implementation evidence, recorded review, and recovery.
 These modes share Session Runtime infrastructure, not an identical workflow.
 The `inspector` command remains the compatible read-only observation UI.
+
+## Custom Terminals / 自定义双终端
+
+Custom mode launches two independent, task-and-slot-bound Generic CLI Sessions. Commands are executable names or absolute paths only, without arguments or shell syntax. Same-command pairs are supported. Project defaults and three optional Prompts are atomically stored in `.agent-bus/workspace-custom.json`; each task snapshots its commands and Prompts, including across restart. The shared Prompt is bounded to 8KB UTF-8; each terminal Prompt to 4KB. Prompt preview/copy and explicit confirmed bracketed-paste delivery are available per terminal, with keyboard queue reservation and no automatic retry. Unknown CLI readiness is never inferred. Default roles, rounds and cooperation reports are not available in Custom; diff viewing/copying remains usable.
+
+自定义模式通过 Generic CLI 启动两个独立且归属于当前 Task / Slot 的 Session。命令仅支持可执行文件名或绝对路径，不能包含参数或 Shell 语法；允许两个相同命令。项目默认配置与三个可选 Prompt 原子保存于 `.agent-bus/workspace-custom.json`，任务创建时快照化，重启不受新配置影响。共享 Prompt 最多 8KB UTF-8，终端 Prompt 各 4KB。每个终端可预览、复制或在确认 CLI 支持多行括号粘贴后显式发送；发送预留键盘队列、不自动重试，不推断未知 CLI 就绪状态。Custom 不启用默认角色、roundId 或协作报告；Diff 仍可查看和复制。
 
 ## Start the Web Workspace
 
@@ -46,7 +52,7 @@ agent CLIs still require their own provider configuration and login.
 - **Sidebar:** expandable project groups, New project, New task, Terminal
   settings, and Workspace groups only. Standard Tasks and Task Graphs are
   hidden, not deleted.
-- **New task:** starts two new persistent PTYs, waits for CLI readiness, and
+- **New task:** opens a Default / Custom mode picker. Default starts two new persistent PTYs, waits for CLI readiness, and
   submits role prompts. Titles are generated from time and ID, not output.
   There is no requirements form: enter requirements in Codex.
 - **Interactive terminals:** keyboard input, Enter, arrows, and Ctrl-C are

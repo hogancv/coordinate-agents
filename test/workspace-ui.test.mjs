@@ -291,7 +291,7 @@ test('real project selection reuses cached task buttons through the loading rend
   const old = list.children[0], other = document.querySelector('[data-project-tasks="p2"]').children[0];
   const heading = document.querySelector('[data-project="p2"]');
   let disposals = 0;
-  Object.assign(context, { closeSettings() {}, closeContextMenu() {}, changesDrawer: { reset() {} },
+  Object.assign(context, { closeSettings() {}, closeCreateTask() {}, closeCustomPrompt() {}, closeContextMenu() {}, changesDrawer: { reset() {} },
     disposeTerminalViews: () => disposals++, checkWorkspaceHealth() {}, renderRepository() {}, renderSelectedTask() {},
     rememberSelection() {}, localStorage: { getItem: () => null }, refresh: async () => {},
   });
