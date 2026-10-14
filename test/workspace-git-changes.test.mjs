@@ -19,7 +19,7 @@ function repo(t) {
 
 test('reads all statuses, staged and unstaged totals and literal special paths without mutating index', async t => {
   const { root, git, put } = repo(t);
-  const odd = '中文 space\t[1]*.txt';
+  const odd = process.platform === 'win32' ? '中文 space [1].txt' : '中文 space\t[1]*.txt';
   put(odd, 'old\n'); put('deleted', 'gone\n'); put('before', 'rename\n');
   git('add', '.'); git('commit', '-qm', 'base');
   put(odd, 'staged\n'); git('add', '--', odd); put(odd, 'staged\nextra\n');
@@ -51,7 +51,7 @@ test('rejects traversal, unchanged files and symlink ancestors; bounds large and
   assert.ok(Buffer.byteLength(JSON.stringify(await readGitChanges(root))) < 256 * 1024);
   const limited = await readGitChanges(root, { maxFiles: 1 }); assert.equal(limited.truncated, true); assert.equal(limited.files.length, 1); assert.equal(limited.summary.files, 2);
   mkdirSync(join(root, 'sub')); put('sub/file', 'base\n'); git('add', 'sub'); git('commit', '-qm', 'sub');
-  rmSync(join(root, 'sub'), { recursive: true }); symlinkSync(tmpdir(), join(root, 'sub'));
+  rmSync(join(root, 'sub'), { recursive: true }); symlinkSync(tmpdir(), join(root, 'sub'), process.platform === 'win32' ? 'junction' : 'dir');
   assert.equal((await readGitDiff(root, 'sub/file')).ok, false);
 });
 
