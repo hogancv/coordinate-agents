@@ -17,6 +17,7 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
 const WORKSPACE_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
+  ['/review-feedback.mjs', { file: 'review-feedback.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/git-changes.mjs', { file: 'git-changes.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/i18n.mjs', { file: 'i18n.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
