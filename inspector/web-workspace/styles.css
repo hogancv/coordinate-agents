@@ -170,7 +170,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .sidebar-footer { display: flex; align-items: center; gap: .4rem; margin-top: auto; min-height: 1.8rem; padding: .55rem .4rem 0; border-top: 1px solid rgba(170, 190, 235, .08); color: var(--muted); font-size: .59rem; }
 .live-dot { width: .3rem; height: .3rem; flex: 0 0 auto; border-radius: 50%; background: var(--green); }
 
-.main-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
+.main-column { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
 .topbar { flex-shrink: 0; min-width: 0; min-height: 64px; justify-content: space-between; gap: 1rem; padding: .75rem 1.5rem; border-bottom: 1px solid var(--line); background: var(--topbar); backdrop-filter: blur(16px); }
 .topbar-copy { min-width: 0; flex: 1; }
 h1, h2, p { margin: 0; }
@@ -178,6 +178,29 @@ h1 { font-size: 1.35rem; letter-spacing: -.04em; }
 h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .topbar-actions { min-width: 0; flex: 0 1 auto; gap: .45rem; overflow-x: auto; scrollbar-width: thin; }
 .topbar-actions .secondary-button, .topbar-actions .danger-button { flex-shrink: 0; padding: .5rem .65rem; font-size: .75rem; white-space: nowrap; }
+
+.health-button { display: inline-flex; align-items: center; gap: .35rem; }
+.health-panel { position: absolute; z-index: 20; top: 4.5rem; right: 1.5rem; width: min(32rem, calc(100% - 2rem)); max-height: calc(100% - 5.5rem); overflow: auto; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 12px 32px rgba(0, 0, 0, .18); }
+.health-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+.health-panel h2 { margin: 0; font-size: 1rem; }
+.health-panel-header p { margin: .35rem 0 .7rem; color: var(--muted); font-size: .8rem; }
+.health-row { padding: .6rem 0; border-top: 1px solid var(--line); font-size: .8rem; }
+.health-row-heading { display: grid; grid-template-columns: 1rem 6.5rem minmax(0, 1fr) auto; align-items: baseline; gap: .45rem; }
+.health-value { color: var(--muted); overflow-wrap: anywhere; }
+.health-status { font-size: .75rem; }
+[data-health-status="ok"] { color: var(--green); }
+[data-health-status="warning"] { color: var(--yellow); }
+[data-health-status="missing"] { color: var(--red); }
+[data-health-status="pending"] { color: var(--muted); }
+.health-row details { margin: .35rem 0 0 1.45rem; color: var(--muted); font-size: .75rem; line-height: 1.55; }
+.health-row summary { cursor: pointer; }
+.health-row details p { margin: .35rem 0; }
+.health-row code { font-size: .72rem; overflow-wrap: anywhere; }
+.health-copy { margin-top: .25rem; }
+.health-panel-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
+.health-panel-actions button { padding: .45rem .65rem; font-size: .78rem; }
+.health-panel-actions .primary-button { margin-left: auto; }
+@media (max-width: 900px) { .health-panel { top: 8rem; right: 1rem; max-height: calc(100% - 9rem); } }
 .language-toggle { display: flex; gap: .15rem; padding: .18rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface-subtle); }
 .language-button { padding: .27rem .45rem; border-radius: .32rem; color: var(--muted); background: transparent; font-size: .67rem; }
 .language-button.active { color: var(--text); background: rgba(157, 181, 255, .16); }

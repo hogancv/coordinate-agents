@@ -94,6 +94,7 @@
             </div>
           </div>
           <div class="topbar-actions">
+            <button id="workspace-health-button" class="secondary-button health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.open">Environment check</span></button>
             <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
               <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
               <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
@@ -111,6 +112,12 @@
             <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
           </div>
         </header>
+
+        <section id="workspace-health-panel" class="health-panel" aria-labelledby="workspace-health-title" hidden>
+          <header class="health-panel-header"><div><h2 id="workspace-health-title" data-i18n="health.title">Check your local environment</h2><p id="workspace-health-summary" role="status" aria-live="polite"></p></div><button id="workspace-health-close" class="icon-button" type="button" aria-label="Close environment check">×</button></header>
+          <div id="workspace-health-checks" class="health-checks"></div>
+          <footer class="health-panel-actions"><button id="workspace-health-recheck" class="secondary-button" type="button" data-i18n="health.recheck">Recheck</button><button id="workspace-health-settings" class="secondary-button" type="button" data-i18n="settings.open">Terminal settings</button><button id="workspace-health-continue" class="primary-button" type="button" data-i18n="health.continue">Continue</button></footer>
+        </section>
 
         <button id="zen-exit" class="secondary-button zen-exit" type="button" data-i18n="zen.exit" hidden>Exit Zen mode</button>
 

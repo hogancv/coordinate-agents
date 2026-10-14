@@ -15,6 +15,7 @@
     "inspector/server/http-server.mjs",
     "inspector/server/workspace-server.mjs",
     "inspector/server/workspace-data.mjs",
+    "inspector/server/workspace-health.mjs",
     "inspector/server/action-gateway.mjs",
     "inspector/server/workspace-projects.mjs",
     "inspector/server/native-folder-picker.mjs",

@@ -9,6 +9,7 @@ import { readWorkspaceTask, readWorkspaceTasks } from '../../skills/coordinate-a
 import { assertWorkspaceSession } from '../../skills/coordinate-agents/scripts/workspace-services.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
+import { readWorkspaceHealth } from './workspace-health.mjs';
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_TERMINAL_READ_BYTES = 32 * 1024;
 const MAX_TERMINAL_READ_LINES = 200;
@@ -64,7 +65,7 @@ function readCodexModels() {
 }
 
 
-function readWorkspaceSettings(root) {
+function readWorkspaceSettings(root, { forDetection = false } = {}) {
   const bus = busFor(root);
   let projectAgents = [];
   try {
@@ -84,11 +85,11 @@ function readWorkspaceSettings(root) {
     try {
       const resolved = resolveAgentConfig(projectAgent, userConfig);
       return [id, {
-        command: safeWorkspaceCommand(resolved.command, fallback),
+        command: forDetection ? resolved.command || fallback : safeWorkspaceCommand(resolved.command, fallback),
         adapter: resolved.adapter || adapter,
         source: resolved.commandSource || 'adapter-default',
         args: resolved.args || [],
-        ...(id === 'codex' ? { models: readCodexModels() } : {}),
+        ...(id === 'codex' && !forDetection ? { models: readCodexModels() } : {}),
         argsSource: resolved.argsSource,
       }];
     } catch {
@@ -177,6 +178,11 @@ export function createWorkspaceData(root) {
     root: repository,
     readRepository: () => repositoryFacts(repository),
     readWorkspaceSettings: () => readWorkspaceSettings(repository),
+    async readWorkspaceHealth() {
+      const tasks = await readWorkspaceTasks(repository);
+      return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),
+        sessions: tasks.flatMap(task => Object.values(task.sessions)) });
+    },
     readWorkspaceTasks: () => readWorkspaceTasks(repository),
     readWorkspaceTask: id => readWorkspaceTask(repository, id),
     async readSessionOutput(sessionId, options) {
