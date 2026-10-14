@@ -13,6 +13,7 @@ import {
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { withConfigTransaction } from '../../skills/coordinate-agents/scripts/config.mjs';
 import { join } from 'node:path';
+import { validateCustomWorkspaceConfig, resolveCustomTaskConfig } from '../../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
 
 export const ACTION_ENDPOINT = '/api/action';
 export const CAPABILITY_HEADER = 'x-coordinate-agents-capability';
@@ -29,11 +30,23 @@ const ACTION_DEFINITIONS = Object.freeze({
     command: 'workspace.task.create',
     params: {
       language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] },
+      mode: { type: 'string', max: 16, enum: ['default', 'custom'] },
+      custom: { type: 'object', max: 64 * 1024 },
     },
   },
   workspaceTaskContinue: {
     operation: 'workspaceTaskContinue', command: 'workspace.task.continue',
     params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
+  },
+  workspaceCustomSettingsSave: {
+    operation: 'workspaceCustomSettingsSave', command: 'workspace.custom.settings.save',
+    params: { custom: { type: 'object', required: true, max: 64 * 1024 } },
+  },
+  workspaceTaskPromptSend: {
+    operation: 'workspaceTaskPromptSend', command: 'workspace.task.prompt.send',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 },
+      slot: { type: 'string', required: true, max: 16, enum: ['terminal1', 'terminal2'] }, confirmed: { type: 'boolean', required: true },
+      sessionCreatedAt: { type: 'string', required: true, max: 64 } },
   },
   workspaceTaskArchive: {
     operation: 'workspaceTaskArchive', command: 'workspace.task.archive',
@@ -367,6 +380,14 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
         send(400, gatewayError('ACTION_PARAMS_INVALID', invalid));
         return;
       }
+      try {
+        if (['workspaceTaskCreate', 'workspaceCustomSettingsSave'].includes(action) && read.body.length > 64 * 1024) throw new Error('Workspace configuration request exceeds 64KB.');
+        if (action === 'workspaceTaskCreate') {
+          if ((params.mode || 'default') === 'default' && params.custom !== undefined) throw new Error('Default tasks cannot have custom settings.');
+          if (params.mode === 'custom') params.custom = resolveCustomTaskConfig(boundRoot, params.custom);
+        }
+        if (action === 'workspaceCustomSettingsSave') params.custom = validateCustomWorkspaceConfig(params.custom);
+      } catch (error) { send(400, gatewayError('ACTION_PARAMS_INVALID', error.message)); return; }
 
       try {
         const payload = await invoke(definition.operation, params, { before: () => { if (projectStore?.isArchived(boundRoot)) throw new Error('Project is archived.'); } });

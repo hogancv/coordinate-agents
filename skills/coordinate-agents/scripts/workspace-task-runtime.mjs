@@ -27,7 +27,8 @@ import {
   serializeRuntimeError,
 } from './runtime-contract.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
-import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen } from './session-service.mjs';
+import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen, runtimeWorkspaceCustomSessionOpen } from './session-service.mjs';
+import { resolveCustomTaskConfig, validateCustomWorkspaceConfig, composeCustomPrompt, customPromptInput } from './workspace-custom-config.mjs';
 import { listRecords, readRecord } from './session-manager.mjs';
 import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './workspace-role-prompts.mjs';
 
@@ -36,6 +37,14 @@ export const WORKSPACE_TASK_SLOTS = Object.freeze([
   Object.freeze({ slot: 'codex', agent: 'codex', role: 'planner-reviewer' }),
   Object.freeze({ slot: 'antigravity', agent: 'antigravity', role: 'implementer' }),
 ]);
+const CUSTOM_TASK_SLOTS = Object.freeze(['terminal1', 'terminal2'].map(slot => Object.freeze({ slot, agent: 'workspace-custom', role: 'custom' })));
+function taskSlots(record) { return record.mode === 'custom' ? CUSTOM_TASK_SLOTS : WORKSPACE_TASK_SLOTS; }
+function sessionBelongsToTask(root, record, session, expected = null) {
+  const slot = expected || taskSlots(record).find(item => item.agent === session.agent && (record.mode !== 'custom' || item.slot === session.subtaskId));
+  return Boolean(slot && session.taskId === record.id && session.agent === slot.agent
+    && (record.mode !== 'custom' || session.subtaskId === slot.slot)
+    && repositoryRoot(session.cwd) === repositoryRoot(root));
+}
 export const WORKSPACE_TASK_STATUSES = Object.freeze([
   'STARTING',
   'AWAITING_INPUT',
@@ -185,8 +194,8 @@ function validateSessionId(id, { allowNull = true } = {}) {
   return id;
 }
 
-function defaultSessions() {
-  return Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot, agent, role }) => [slot, {
+function defaultSessions(record = {}) {
+  return Object.fromEntries(taskSlots(record).map(({ slot, agent, role }) => [slot, {
     slot,
     agent,
     role,
@@ -238,16 +247,29 @@ function validateWorkspaceTaskRecord(value) {
       taskId: value.id,
     });
   }
-  const sessions = Object.fromEntries(WORKSPACE_TASK_SLOTS.map(expected => [
+  const mode = value.mode === undefined ? 'default' : value.mode;
+  if (!['default', 'custom'].includes(mode)) throw new Error('Invalid Workspace task mode.');
+  const custom = mode === 'custom' ? validateCustomWorkspaceConfig(value.custom) : null;
+  if (mode === 'custom' && (value.cooperation != null || value.startup != null)) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
+  const slots = taskSlots({ mode });
+  if (Object.keys(value.sessions).some(slot => !slots.some(expected => expected.slot === slot))) throw new Error('Unexpected Workspace task slot.');
+  const sessions = Object.fromEntries(slots.map(expected => [
     expected.slot,
     validateSessionSlot(value.sessions[expected.slot], expected),
   ]));
+  const ids = Object.values(sessions).map(session => session.sessionId).filter(Boolean);
+  if (new Set(ids).size !== ids.length) throw new Error('Workspace terminals must have distinct Sessions.');
   const sessionHistory = Array.isArray(value.sessionHistory)
     ? value.sessionHistory.slice(-MAX_HISTORY).map(entry => {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
       return {
+        ...(mode === 'custom' ? {
+          terminal1SessionId: entry.terminal1SessionId ? validateSessionId(entry.terminal1SessionId, { allowNull: false }) : null,
+          terminal2SessionId: entry.terminal2SessionId ? validateSessionId(entry.terminal2SessionId, { allowNull: false }) : null,
+        } : {
         codexSessionId: entry.codexSessionId ? validateSessionId(entry.codexSessionId, { allowNull: false }) : null,
         antigravitySessionId: entry.antigravitySessionId ? validateSessionId(entry.antigravitySessionId, { allowNull: false }) : null,
+        }),
         closedAt: typeof entry.closedAt === 'string' ? entry.closedAt : null,
       };
     }).filter(Boolean)
@@ -260,6 +282,8 @@ function validateWorkspaceTaskRecord(value) {
     : null;
   return {
     schemaVersion: 1,
+    mode,
+    ...(custom ? { custom } : {}),
     id: value.id,
     title: redactOutput(value.title, 512),
     status: value.status,
@@ -268,8 +292,8 @@ function validateWorkspaceTaskRecord(value) {
     updatedAt: value.updatedAt,
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
-    cooperation: validateCooperation(value.cooperation),
-    startup: validateStartup(value.startup),
+    cooperation: mode === 'custom' ? null : validateCooperation(value.cooperation),
+    startup: mode === 'custom' ? null : validateStartup(value.startup),
     sessionHistory,
     error,
   };
@@ -295,7 +319,7 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     const current = existsSync(path) ? readWorkspaceTaskRecord(repository, record.id) : null;
     let base = record;
     if (replaceCooperation && current) {
-      if (current.status !== 'RUNNING' || current.archivedAt || WORKSPACE_TASK_SLOTS.some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
+      if (current.status !== 'RUNNING' || current.archivedAt || taskSlots(record).some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
         throw new Error('Task pair changed during cooperation update; dispatch input may have been sent. Do not resend automatically.');
       }
       // A receipt may only change cooperation fields, never restore stale Sessions or lifecycle state.
@@ -303,12 +327,12 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     }
     if (replaceStartup && current) {
       if (!['STARTING', 'AWAITING_INPUT'].includes(current.status) || current.archivedAt
-        || WORKSPACE_TASK_SLOTS.some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
+        || taskSlots(record).some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
         throw new Error('Task pair changed during startup; no automatic retry will run.');
       }
       base = { ...current, status: record.status, startup: record.startup, error: record.error, updatedAt: record.updatedAt };
     }
-    const cooperation = resetCooperation ? idleCooperation((current?.cooperation.revision || 0) + 1)
+    const cooperation = record.mode === 'custom' ? null : resetCooperation ? idleCooperation((current?.cooperation?.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
     const validated = validateWorkspaceTaskRecord({ ...base, cooperation });
     atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
@@ -414,6 +438,7 @@ function statusFromFacts(record, sessions) {
   if (record.status === 'ERROR' || record.status === 'CLOSED') return record.status;
   if (record.startup && Object.values(record.startup.slots).some(state => state !== 'READY')) return record.status;
   const states = sessions.map(session => session.state).filter(Boolean);
+  if (record.mode === 'custom' && record.status === 'STARTING') return states.some(state => TERMINAL_SESSION_STATES.has(state)) ? 'ERROR' : 'STARTING';
   const active = states.filter(state => ACTIVE_SESSION_STATES.has(state)).length;
   if (active === 2) return 'RUNNING';
   if (active === 1) return 'DEGRADED';
@@ -423,12 +448,14 @@ function statusFromFacts(record, sessions) {
 }
 
 function workspaceTaskView(record, facts = new Map()) {
-  const sessions = Object.fromEntries(WORKSPACE_TASK_SLOTS.map(expected => [
+  const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
     sessionView(record.sessions[expected.slot], facts),
   ]));
   return {
     id: record.id,
+    mode: record.mode,
+    ...(record.custom ? { custom: record.custom } : {}),
     title: record.title,
     status: statusFromFacts(record, Object.values(sessions)),
     promptVersion: record.promptVersion,
@@ -438,7 +465,7 @@ function workspaceTaskView(record, facts = new Map()) {
     sessions,
     cooperation: record.cooperation,
     startup: record.startup,
-    sessionIds: Object.fromEntries(WORKSPACE_TASK_SLOTS.map(({ slot }) => [slot, record.sessions[slot].sessionId])),
+    sessionIds: Object.fromEntries(taskSlots(record).map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
     error: record.error,
   };
@@ -478,7 +505,7 @@ async function closeSessionIds(root, sessionIds) {
 }
 
 function sessionIdsFor(record) {
-  return WORKSPACE_TASK_SLOTS.map(({ slot }) => record.sessions[slot].sessionId).filter(Boolean);
+  return taskSlots(record).map(({ slot }) => record.sessions[slot].sessionId).filter(Boolean);
 }
 
 function updateRecord(record, update = {}) {
@@ -489,7 +516,7 @@ function updateRecord(record, update = {}) {
   };
 }
 
-function initialWorkspaceTask(language) {
+function initialWorkspaceTask(language, mode = 'default', custom = null) {
   const id = `workspace-${randomUUID().replaceAll('-', '')}`;
   const timestamp = now();
   return {
@@ -497,21 +524,22 @@ function initialWorkspaceTask(language) {
     id,
     title: `Task · ${localTitleTimestamp()} · ${id.slice(-6)}`,
     status: 'STARTING',
-    promptVersion: WORKSPACE_TASK_PROMPT_VERSION,
+    promptVersion: mode === 'custom' ? 'custom-terminal-v1' : WORKSPACE_TASK_PROMPT_VERSION,
     createdAt: timestamp,
     updatedAt: timestamp,
-    sessions: defaultSessions(),
-    startup: initialStartup(language),
+    mode,
+    ...(custom ? { custom } : {}),
+    sessions: defaultSessions({ mode }),
+    startup: mode === 'custom' ? null : initialStartup(language),
     sessionHistory: [],
     error: null,
   };
 }
 
-async function discoverTaskSessions(root, taskId) {
+async function discoverTaskSessions(root, task) {
   try {
     return listRecords(root).filter(record => {
-      if (record.taskId !== taskId || !WORKSPACE_TASK_SLOTS.some(slot => slot.agent === record.agent)) return false;
-      try { return repositoryRoot(record.cwd) === repositoryRoot(root); } catch { return false; }
+      try { return sessionBelongsToTask(root, task, record); } catch { return false; }
     });
   } catch {
     return [];
@@ -662,8 +690,10 @@ function workspaceSlotPrompt(record, slot, language) {
 }
 
 async function openWorkspaceSlot(root, record, slot, language) {
-  const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
-  const opened = await runtimeSessionOpen({
+  const expected = taskSlots(record).find(item => item.slot === slot);
+  const opened = record.mode === 'custom'
+    ? await runtimeWorkspaceCustomSessionOpen({ root, taskId: record.id, slot, language })
+    : await runtimeSessionOpen({
     root,
     agent: expected.agent,
     // Do not inject the role prompt during Session Host startup. Interactive
@@ -743,17 +773,29 @@ export async function runtimeWorkspaceTaskContinue(input = {}) {
 }
 
 async function rollbackTaskSessions(root, record) {
-  const discovered = await discoverTaskSessions(root, record.id);
-  return closeSessionIds(root, [
+  // Validate every recorded ID before closing any process, including rollback.
+  for (const expected of taskSlots(record)) {
+    const id = record.sessions[expected.slot].sessionId;
+    if (!id) continue;
+    const session = readRecord(root, id);
+    if (session.id !== id || !sessionBelongsToTask(root, record, session, expected)) throw new Error('Session task binding mismatch during cleanup.');
+  }
+  const discovered = await discoverTaskSessions(root, record);
+  const ids = [
     ...sessionIdsFor(record),
     ...discovered.map(session => session.id),
-  ]);
+  ];
+  for (const id of ids) {
+    const session = readRecord(root, id);
+    if (session.id !== id || !sessionBelongsToTask(root, record, session)) throw new Error('Session task binding mismatch during cleanup.');
+  }
+  return closeSessionIds(root, ids);
 }
 
 async function attachDiscoveredSessions(root, record) {
-  const discovered = await discoverTaskSessions(root, record.id);
+  const discovered = await discoverTaskSessions(root, record);
   for (const session of discovered) {
-    const slot = WORKSPACE_TASK_SLOTS.find(item => item.agent === session.agent);
+    const slot = taskSlots(record).find(item => item.agent === session.agent && (record.mode !== 'custom' || item.slot === session.subtaskId));
     if (slot && !record.sessions[slot.slot].sessionId) record.sessions[slot.slot].sessionId = session.id;
   }
   return discovered;
@@ -779,17 +821,47 @@ function workspaceStartError(record, error) {
   });
 }
 
+async function startWorkspaceSlots(root, record, language) {
+  for (const { slot } of taskSlots(record)) await openWorkspaceSlot(root, record, slot, language);
+  if (record.mode !== 'custom') {
+    for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(root, record, slot);
+  }
+}
+
+export async function runtimeWorkspaceTaskPromptSend(input = {}) {
+  if (input.confirmed !== true) throw new Error('Confirm the CLI is ready to receive input before sending.');
+  const root = repositoryRoot(input.root);
+  return withCooperationLock(root, input.workspaceTaskId, async () => {
+    const record = readWorkspaceTaskRecord(root, input.workspaceTaskId);
+    if (record.mode !== 'custom' || record.archivedAt || ['CLOSED', 'ERROR'].includes(record.status)) throw new Error('Custom task is not writable.');
+    const expected = taskSlots(record).find(item => item.slot === input.slot);
+    if (!expected) throw new Error('Invalid custom terminal slot.');
+    const id = record.sessions[input.slot].sessionId;
+    const session = id ? readRecord(root, id) : null;
+    if (!session || session.id !== id || !sessionBelongsToTask(root, record, session, expected)
+      || !ACTIVE_SESSION_STATES.has(session.state)) throw new Error('Session task binding mismatch or terminal is not running.');
+    if (input.sessionCreatedAt !== session.createdAt) throw new Error('Terminal changed since Prompt confirmation. No input was sent.');
+    const prompt = composeCustomPrompt(record.custom, input.slot);
+    if (!prompt) throw new Error('There is no custom Prompt to send.');
+    // A single raw Host write keeps paste + Enter atomic, including multiline
+    // text. User confirms paste readiness; no implicit retry or CLI inference.
+    const updated = await getExecutionSessionManager().write(root, id, customPromptInput(prompt), { submit: false, taskId: record.id, subtaskId: input.slot });
+    return jsonSuccess('workspace.task.prompt.send', { session: updated });
+  });
+}
+
 export async function runtimeWorkspaceTaskCreate(input = {}) {
   const root = repositoryRoot(input.root);
   const language = normalizeLanguage(input.language);
-  let record = initialWorkspaceTask(language);
+  const mode = input.mode === undefined ? 'default' : input.mode;
+  if (!['default', 'custom'].includes(mode) || (mode === 'default' && input.custom !== undefined)) throw new Error('Invalid Workspace task mode parameters.');
+  const custom = mode === 'custom' ? resolveCustomTaskConfig(root, input.custom) : null;
+  let record = initialWorkspaceTask(language, mode, custom);
   writeWorkspaceTask(root, record);
   return withCooperationLock(root, record.id, async () => {
     try {
-      await openWorkspaceSlot(root, record, 'codex', language);
-      await openWorkspaceSlot(root, record, 'antigravity', language);
-      for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(root, record, slot);
-      record = updateRecord(record, { status: startupStatus(record), error: null });
+      await startWorkspaceSlots(root, record, language);
+      record = updateRecord(record, { status: record.mode === 'custom' ? 'RUNNING' : startupStatus(record), error: null });
       writeWorkspaceTask(root, record);
       return jsonSuccess('workspace.task.create', {
         workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
@@ -811,7 +883,13 @@ export async function runtimeWorkspaceTaskCreate(input = {}) {
 
 export async function runtimeWorkspaceTaskClose(input = {}) {
   const root = repositoryRoot(input.root);
-  let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  const task = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  if (task.mode === 'custom') return withCooperationLock(root, task.id, () => closeWorkspaceTask(root, task.id));
+  return closeWorkspaceTask(root, task.id);
+}
+
+async function closeWorkspaceTask(root, id) {
+  let record = readWorkspaceTaskRecord(root, id);
   const closed = await rollbackTaskSessions(root, record);
   record.status = 'CLOSED';
   record.error = closed.errors.length > 0
@@ -851,24 +929,21 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
       record.sessionHistory = [
         ...record.sessionHistory,
         {
-          codexSessionId: record.sessions.codex.sessionId,
-          antigravitySessionId: record.sessions.antigravity.sessionId,
+          ...Object.fromEntries(taskSlots(record).map(({ slot }) => [`${slot}SessionId`, record.sessions[slot].sessionId])),
           closedAt: now(),
         },
       ].slice(-MAX_HISTORY);
     }
-    record.sessions = defaultSessions();
-    record.promptVersion = WORKSPACE_TASK_PROMPT_VERSION;
-    record.startup = initialStartup(language);
+    record.sessions = defaultSessions(record);
+    record.promptVersion = record.mode === 'custom' ? 'custom-terminal-v1' : WORKSPACE_TASK_PROMPT_VERSION;
+    record.startup = record.mode === 'custom' ? null : initialStartup(language);
     record.status = 'STARTING';
     record.error = null;
     record.updatedAt = now();
     writeWorkspaceTask(root, record, { resetCooperation: true });
     try {
-      await openWorkspaceSlot(root, record, 'codex', language);
-      await openWorkspaceSlot(root, record, 'antigravity', language);
-      for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(root, record, slot);
-      record = updateRecord(record, { status: startupStatus(record), error: null });
+      await startWorkspaceSlots(root, record, language);
+      record = updateRecord(record, { status: record.mode === 'custom' ? 'RUNNING' : startupStatus(record), error: null });
       writeWorkspaceTask(root, record);
       return jsonSuccess('workspace.task.restart', {
         workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
@@ -890,17 +965,16 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
 }
 
 function allTaskSessionIds(record) {
-  return [...new Set([...sessionIdsFor(record), ...record.sessionHistory.flatMap(entry => [entry.codexSessionId, entry.antigravitySessionId])].filter(Boolean))];
+  return [...new Set([...sessionIdsFor(record), ...record.sessionHistory.flatMap(entry => taskSlots(record).map(({ slot }) => entry[`${slot}SessionId`]))].filter(Boolean))];
 }
 
-const WORKSPACE_SLOT_AGENTS = new Set(WORKSPACE_TASK_SLOTS.map(slot => slot.agent));
 
 function ownedTaskSessionFiles(root, record, sessionRecords = null) {
   const directory = join(root, '.agent-bus', 'sessions');
   assertSafePath(root, directory);
   // Performance optimization: reuse pre-read session records when provided to avoid O(A * S) disk reads
   const sessions = sessionRecords !== null ? sessionRecords : (existsSync(directory) ? listRecords(root) : []);
-  const owned = sessions.filter(session => session.taskId === record.id && WORKSPACE_SLOT_AGENTS.has(session.agent));
+  const owned = sessions.filter(session => session.taskId === record.id && taskSlots(record).some(slot => slot.agent === session.agent));
   // Restart history is bounded, but transcript cleanup must cover every owned Session.
   return [...new Set([...allTaskSessionIds(record), ...owned.map(session => session.id)])].flatMap(id => {
     const path = join(root, '.agent-bus', 'sessions', `${id}.json`);
@@ -909,7 +983,7 @@ function ownedTaskSessionFiles(root, record, sessionRecords = null) {
     // Discovery records may contain duplicate payload IDs in different files.
     // Validate ownership and active state from the exact file being modified.
     const session = readRecord(root, id);
-    if (session.id !== id || repositoryRoot(session.cwd) !== root || session.taskId !== record.id || !WORKSPACE_SLOT_AGENTS.has(session.agent)) {
+    if (session.id !== id || !sessionBelongsToTask(root, record, session)) {
       throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Refusing to modify a Session owned by another task.', { recoverable: false, taskId: record.id, sessionId: id });
     }
     return [{ id, path, session }];
@@ -918,7 +992,13 @@ function ownedTaskSessionFiles(root, record, sessionRecords = null) {
 
 export async function runtimeWorkspaceTaskArchive(input = {}) {
   const root = repositoryRoot(input.root);
-  let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  const task = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+  if (task.mode === 'custom') return withCooperationLock(root, task.id, () => archiveWorkspaceTask(root, task.id));
+  return archiveWorkspaceTask(root, task.id);
+}
+
+async function archiveWorkspaceTask(root, id) {
+  let record = readWorkspaceTaskRecord(root, id);
   if (record.archivedAt) return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(record, sessionFactMap(root)) });
   const files = ownedTaskSessionFiles(root, record);
   const closed = await closeSessionIds(root, files.map(file => file.id));
@@ -1011,6 +1091,7 @@ async function withCooperationLock(root, id, operation) {
 }
 
 function assertCooperationSession(root, record, slot) {
+  if (record.mode === 'custom') throw new Error('Custom tasks do not support default collaboration.');
   if (record.archivedAt || record.status !== 'RUNNING') throw new Error('Task pair is not ready. No input was sent.');
   const sessionId = record.sessions[slot].sessionId;
   if (!sessionId) throw new Error('Session task binding mismatch: no recorded Session.');

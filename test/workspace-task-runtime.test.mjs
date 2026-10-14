@@ -20,6 +20,11 @@ import {
   runtimeWorkspaceTaskClose,
   runtimeWorkspaceTaskCreate,
   runtimeWorkspaceTaskRestart,
+  runtimeWorkspaceTaskArchive,
+  runtimeWorkspaceArchivesClear,
+  runtimeWorkspaceTaskPromptSend,
+  dispatchWorkspaceTask,
+  reportWorkspaceTask,
   workspaceTerminalReady,
 } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
@@ -27,9 +32,117 @@ import { startWorkspace } from './support/workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
 import { workspaceRolePrompt } from '../skills/coordinate-agents/scripts/role-prompts.mjs';
 import { workspaceMessage } from '../skills/coordinate-agents/scripts/workspace-message.mjs';
+import { saveCustomWorkspaceConfig } from '../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
+import { invokeRuntimeOperation } from '../skills/coordinate-agents/scripts/workspace-services.mjs';
+import { readRuntimeEvents } from '../skills/coordinate-agents/scripts/runtime-events.mjs';
 
 const busTool = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'agent-bus.mjs');
 const ACTIVE = new Set(['starting', 'running', 'idle', 'busy']);
+
+test('Custom lifecycle keeps distinct generic slots, snapshots, explicit input and no cooperation', { timeout: 60_000 }, async () => {
+  const root = repository();
+  const custom = { terminal1: { command: process.execPath }, terminal2: { command: process.execPath }, prompts: { project: '"CUSTOM_SHARED"', terminal1: '', terminal2: '"CUSTOM_TWO"' } };
+  let task, other;
+  try {
+    saveCustomWorkspaceConfig(root, custom);
+    task = (await runtimeWorkspaceTaskCreate({ root, mode: 'custom' })).workspaceTask;
+    assert.equal(task.mode, 'custom');
+    assert.equal(task.startup, null);
+    assert.equal(task.cooperation, null);
+    assert.notEqual(task.sessions.terminal1.sessionId, task.sessions.terminal2.sessionId);
+    for (const session of listRecords(root)) {
+      assert.equal(session.agent, 'workspace-custom');
+      assert.equal(session.taskId, task.id);
+      assert.ok(['terminal1', 'terminal2'].includes(session.subtaskId));
+      assert.deepEqual(session.args, []);
+      assert.doesNotMatch(session.outputTail, /CUSTOM_SHARED|workspace-message|planner-reviewer/);
+    }
+    await assert.rejects(runtimeWorkspaceTaskPromptSend({ root, workspaceTaskId: task.id, slot: 'terminal1' }), /confirm/i);
+    await runtimeWorkspaceTaskPromptSend({ root, workspaceTaskId: task.id, slot: 'terminal1', confirmed: true, sessionCreatedAt: task.sessions.terminal1.createdAt });
+    assert.doesNotMatch(JSON.stringify(readRuntimeEvents(root, { limit: 200 })), /CUSTOM_SHARED|CUSTOM_TWO/);
+    await assert.rejects(dispatchWorkspaceTask(root, task.id, 'round-custom', () => assert.fail('must not deliver')), /custom/i);
+    await assert.rejects(reportWorkspaceTask(root, task.id, 'DONE', 'round-custom'), /custom/i);
+    await assert.rejects(workspaceMessage(root, task.id, 'send', 'not allowed'), /custom/i);
+    assert.equal((await readWorkspaceTask(root, task.id)).sessions.terminal1.sessionId, task.sessions.terminal1.sessionId);
+    saveCustomWorkspaceConfig(root, { ...custom, terminal1: { command: 'not-installed-irrelevant' }, prompts: { ...custom.prompts, project: 'changed' } });
+    const firstIds = Object.values(task.sessions).map(s => s.sessionId);
+    task = (await runtimeWorkspaceTaskRestart({ root, workspaceTaskId: task.id })).workspaceTask;
+    assert.deepEqual(task.custom, custom);
+    assert.ok(Object.values(task.sessions).every(s => !firstIds.includes(s.sessionId)));
+    await assert.rejects(runtimeWorkspaceTaskPromptSend({ root, workspaceTaskId: task.id, slot: 'terminal1', confirmed: true, sessionCreatedAt: 'stale-generation' }), /changed/i);
+    await assert.rejects(invokeRuntimeOperation('sessionWrite', { root, sessionId: firstIds[0], input: 'x' }), /owned/i);
+    const file = join(root, '.agent-bus', 'workspace-tasks', `${task.id}.json`);
+    const original = readFileSync(file, 'utf8');
+    const corrupt = JSON.parse(original);
+    [corrupt.sessions.terminal1.sessionId, corrupt.sessions.terminal2.sessionId] = [corrupt.sessions.terminal2.sessionId, corrupt.sessions.terminal1.sessionId];
+    writeFileSync(file, JSON.stringify(corrupt));
+    try {
+      await assert.rejects(invokeRuntimeOperation('sessionRead', { root, sessionId: task.sessions.terminal1.sessionId }), /owned/i);
+      await assert.rejects(runtimeWorkspaceTaskClose({ root, workspaceTaskId: task.id }), /binding/i);
+      assert.ok(listRecords(root).filter(s => s.taskId === task.id && !firstIds.includes(s.id)).every(s => ACTIVE.has(s.state)));
+    } finally { writeFileSync(file, original); }
+    other = (await runtimeWorkspaceTaskCreate({ root, mode: 'custom', custom })).workspaceTask;
+    await runtimeWorkspaceTaskArchive({ root, workspaceTaskId: task.id });
+    assert.ok(listRecords(root).filter(s => s.taskId === task.id).every(s => !ACTIVE.has(s.state)));
+    assert.equal((await runtimeWorkspaceArchivesClear({ root })).deletedSessions, 4);
+    assert.ok(listRecords(root).filter(s => s.taskId === other.id).every(s => ACTIVE.has(s.state)));
+  } finally { if (task) await closeGroup(root, task.id); if (other) await closeGroup(root, other.id); await removeTree(root); }
+});
+
+test('Custom partial startup failure rolls back only the owning task', { timeout: 40_000 }, async () => {
+  const root = repository();
+  const custom = { terminal1: { command: process.execPath }, terminal2: { command: 'not-installed-custom-fixture' }, prompts: { project: '', terminal1: '', terminal2: '' } };
+  try {
+    await assert.rejects(runtimeWorkspaceTaskCreate({ root, mode: 'custom', custom }));
+    const tasks = await readWorkspaceTasks(root);
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, 'ERROR');
+    assert.ok(listRecords(root).every(s => !ACTIVE.has(s.state)));
+  } finally { for (const task of await readWorkspaceTasks(root)) await closeGroup(root, task.id); await removeTree(root); }
+});
+
+test('Custom HTTP configuration, bounded creation, current-slot input and SSE are project bound', { timeout: 60_000 }, async () => {
+  const root = repository();
+  let started, task;
+  try {
+    started = await startWorkspace({ root, port: 0 });
+    const base = started.url.replace('localhost', '127.0.0.1');
+    const headers = { 'content-type': 'application/json', 'x-coordinate-agents-capability': started.capability };
+    const post = (action, params) => fetch(`${base}/api/action`, { method: 'POST', headers, body: JSON.stringify({ action, params }) });
+    const custom = { terminal1: { command: process.execPath }, terminal2: { command: process.execPath }, prompts: { project: '"HTTP_CUSTOM"', terminal1: '', terminal2: '' } };
+    assert.equal((await post('workspaceCustomSettingsSave', { custom })).status, 200);
+    assert.deepEqual((await (await fetch(`${base}/api/workspace-settings`, { headers })).json()).custom, custom);
+    for (const params of [ { mode: 'custom', custom: { terminal1: { command: 'node --eval x' } } },
+      { mode: 'default', custom }, { mode: 'custom', custom: { ...custom, extra: 'x' } }, { mode: 'custom', root: tmpdir() } ]) {
+      assert.ok([400, 403].includes((await post('workspaceTaskCreate', params)).status));
+    }
+    task = (await (await post('workspaceTaskCreate', { mode: 'custom', custom: { terminal1: { command: process.execPath }, terminal2: { command: process.execPath } } })).json()).workspaceTask;
+    assert.equal(task.mode, 'custom');
+    assert.equal(task.custom.prompts.project, '"HTTP_CUSTOM"');
+    assert.equal((await (await post('workspaceTaskPromptSend', { workspaceTaskId: task.id, slot: 'terminal1', confirmed: true, sessionCreatedAt: 'stale' })).json()).ok, false);
+    for (const [slot, label] of [['terminal1', 'ONE'], ['terminal2', 'TWO']]) {
+      const sessionId = task.sessions[slot].sessionId;
+      assert.equal((await (await post('sessionWrite', { sessionId, input: `console.log("STREAM_${label}")`, submit: true })).json()).ok, true);
+      const abort = new AbortController();
+      const stream = await fetch(`${base}/api/sessions/${sessionId}/stream`, { headers, signal: abort.signal });
+      assert.equal(stream.status, 200);
+      const reader = stream.body.getReader();
+      let output = '';
+      const timeout = setTimeout(() => abort.abort(), 8000);
+      try {
+        while (!output.includes(`STREAM_${label}`)) { const chunk = await reader.read(); if (chunk.done) break; output += new TextDecoder().decode(chunk.value); }
+        assert.match(output, new RegExp(`STREAM_${label}`));
+        assert.doesNotMatch(output, new RegExp(`STREAM_${label === 'ONE' ? 'TWO' : 'ONE'}`));
+      } finally { clearTimeout(timeout); abort.abort(); }
+    }
+    assert.equal((await (await post('workspaceTaskPromptSend', { workspaceTaskId: task.id, slot: 'terminal1', confirmed: true, sessionCreatedAt: task.sessions.terminal1.createdAt })).json()).ok, true);
+    assert.equal((await post('workspaceCustomSettingsSave', { root: tmpdir(), custom })).status, 403);
+  } finally {
+    if (task) await closeGroup(root, task.id);
+    if (started) await new Promise(done => { started.server.close(done); started.server.closeAllConnections?.(); });
+    await removeTree(root);
+  }
+});
 
 test('Workspace readiness recognizes ANSI-redrawn interactive prompts', () => {
   const paint = value => [...value].map(character => `\u001b[38;5;252m${character}\u001b[39m`).join('');

@@ -14,6 +14,7 @@ export const WORKSPACE_TERMINAL_SLOTS = Object.freeze([
   Object.freeze({ slot: 'codex', agentId: 'codex', role: 'planner-reviewer', label: 'Codex' }),
   Object.freeze({ slot: 'antigravity', agentId: 'antigravity', role: 'implementer', label: 'Antigravity' }),
 ]);
+const CUSTOM_TERMINAL_SLOTS = Object.freeze(['terminal1', 'terminal2'].map((slot, index) => Object.freeze({ slot, agentId: 'workspace-custom', role: 'custom', label: `Terminal ${index + 1}` })));
 
 const ACTIVE_SESSION_STATES = new Set(['starting', 'running', 'idle', 'busy']);
 
@@ -36,7 +37,7 @@ export function selectTerminalPanes({ workspaceTask = null, pair = null, count =
     TERMINAL_PANE_COUNT,
     Number.isInteger(count) ? count : TERMINAL_PANE_COUNT,
   ));
-  return WORKSPACE_TERMINAL_SLOTS.slice(0, slots).map((definition, slot) => {
+  return (sourceTask?.mode === 'custom' ? CUSTOM_TERMINAL_SLOTS : WORKSPACE_TERMINAL_SLOTS).slice(0, slots).map((definition, slot) => {
     const stored = sourceTask?.sessions?.[definition.slot] || null;
     const session = stored?.session || stored;
     const sessionId = sessionIdOf(session);
@@ -46,6 +47,7 @@ export function selectTerminalPanes({ workspaceTask = null, pair = null, count =
       agentId: definition.agentId,
       role: definition.role,
       label: definition.label,
+      command: sourceTask?.custom?.[definition.slot]?.command || null,
       agent: { id: definition.agentId, role: definition.role },
       session,
       sessionId,

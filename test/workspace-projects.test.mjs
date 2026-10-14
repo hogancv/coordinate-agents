@@ -110,7 +110,7 @@ test('rapid project switches discard stale repository, task list and selected ta
   let rendered = 0;
   const context = vm.createContext({ state, fetchJson: () => new Promise(resolve => pending.push(resolve)),
     renderRepository() { rendered++; }, renderTaskList() { rendered++; }, renderSelectedTask() { rendered++; },
-    rememberSelection() {}, disposeTerminalViews() {} });
+    rememberSelection() {}, disposeTerminalViews() {}, checkWorkspaceHealth() {} });
   vm.runInContext(source, context);
   const reads = [context.loadRepository(), context.loadTaskList(), context.loadSelectedTask()];
   // Return to the same project before the first request finishes (ABA race).

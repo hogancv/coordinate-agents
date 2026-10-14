@@ -95,6 +95,63 @@ test('project changes discard stale health responses and detect the current comm
   assert.equal(requests[1].options.projectId, 'p2');
 });
 
+test('Custom health summary follows its two slots and ignores unrelated default CLI checks', () => {
+  const task = { id: 'workspace-custom', mode: 'custom', sessions: {} };
+  const state = { selectedId: task.id, selectedTask: task, health: { workspaceTaskId: task.id, requiredChecks: ['node', 'git', 'terminal1', 'terminal2'], checks: {
+    node: { status: 'ok' }, git: { status: 'ok' }, terminal1: { status: 'ok' }, terminal2: { status: 'pending' } } } };
+  const context = healthContext({ state });
+  assert.equal(context.healthSummaryStatus(), 'pending');
+  state.health.checks.terminal2.status = 'ok';
+  assert.equal(context.healthSummaryStatus(), 'ok');
+  state.health.checks.terminal2.status = 'missing';
+  assert.equal(context.healthSummaryStatus(), 'missing');
+  state.selectedId = 'workspace-another';
+  assert.equal(context.healthSummaryStatus(), 'pending');
+});
+
+test('Custom health rendering names its slots and uses generic missing-executable guidance', () => {
+  const nodes = new Map();
+  const node = id => { if (!nodes.has(id)) nodes.set(id, { dataset: {}, setAttribute() {}, querySelectorAll: () => [], innerHTML: '' }); return nodes.get(id); };
+  const state = { selectedId: 'workspace-custom', selectedTask: { id: 'workspace-custom', mode: 'custom', sessions: {} }, health: { workspaceTaskId: 'workspace-custom', requiredChecks: ['node', 'git', 'terminal1', 'terminal2'], checks: {
+    node: { status: 'ok' }, git: { status: 'ok' }, terminal1: { status: 'ok', command: 'claude' }, terminal2: { status: 'missing', command: 'my-cli' } } } };
+  const context = healthContext({ state, document: { querySelector: node }, escapeHtml: value => value,
+    t: key => ({ 'custom.terminal1': 'Terminal 1', 'custom.terminal2': 'Terminal 2' })[key] || key });
+  context.renderWorkspaceHealth();
+  const rows = node('#workspace-health-checks').innerHTML;
+  assert.match(rows, /Terminal 1/); assert.match(rows, /Terminal 2/);
+  assert.match(rows, /health.customMissing/);
+  assert.doesNotMatch(rows, /Codex CLI|Antigravity CLI|health.antigravityMissing|npm install/);
+});
+
+test('loading a newly selected task refreshes health while regular same-task refresh does not reprobe', async () => {
+  const state = { projectId: 'p1', projectEpoch: 0, selectedId: 'workspace-custom', healthTaskId: 'workspace-default' };
+  let checks = 0;
+  const context = vm.createContext({ state, fetchJson: async () => ({ id: state.selectedId, mode: 'custom' }),
+    checkWorkspaceHealth: () => { checks++; state.healthTaskId = state.selectedId; },
+    rememberSelection() {}, renderSelectedTask() {}, renderWorkspaceHealth() {}, continueTaskStartup() {}, disposeTerminalViews() {} });
+  vm.runInContext(app.slice(app.indexOf('async function loadSelectedTask('), app.indexOf('async function continueTaskStartup(')), context);
+  await context.loadSelectedTask(); assert.equal(checks, 1);
+  await context.loadSelectedTask(); assert.equal(checks, 1);
+  state.selectedId = null; await context.loadSelectedTask(); assert.equal(checks, 2);
+});
+
+test('task selection changes discard a stale health response within the same project', async () => {
+  const requests = [];
+  const state = { projectId: 'p1', projectEpoch: 0, healthRequest: 0, selectedId: 'workspace-first', health: null };
+  const context = healthContext({ state, AbortController, window: { setTimeout, clearTimeout },
+    fetchJson: (path, options) => new Promise(resolve => requests.push({ path, options, resolve })) });
+  context.renderWorkspaceHealth = () => {};
+  const first = context.checkWorkspaceHealth();
+  state.selectedId = 'workspace-second';
+  requests[0].resolve({ workspaceTaskId: 'workspace-first', checks: {} });
+  await first;
+  assert.equal(state.health, null);
+  assert.equal(state.healthBusy, false);
+  const second = context.checkWorkspaceHealth();
+  requests[1].resolve({ workspaceTaskId: 'workspace-second', checks: {} }); await second;
+  assert.equal(state.health.workspaceTaskId, state.selectedId);
+});
+
 test('theme defaults to light and restores only valid saved choices', () => {
   let saved = null;
   const context = runFunctions('loadTheme', 'loadLocale', { localStorage: { getItem: () => saved } });
@@ -291,7 +348,7 @@ test('real project selection reuses cached task buttons through the loading rend
   const old = list.children[0], other = document.querySelector('[data-project-tasks="p2"]').children[0];
   const heading = document.querySelector('[data-project="p2"]');
   let disposals = 0;
-  Object.assign(context, { closeSettings() {}, closeContextMenu() {}, changesDrawer: { reset() {} },
+  Object.assign(context, { closeSettings() {}, closeCreateTask() {}, closeCustomPrompt() {}, closeContextMenu() {}, changesDrawer: { reset() {} },
     disposeTerminalViews: () => disposals++, checkWorkspaceHealth() {}, renderRepository() {}, renderSelectedTask() {},
     rememberSelection() {}, localStorage: { getItem: () => null }, refresh: async () => {},
   });

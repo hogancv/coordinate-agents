@@ -1,4 +1,5 @@
 import { I18N } from './i18n.mjs';
+import { customTerminalDefaults, customTerminalPrompt, sameCustomPromptTarget } from './custom-terminal-model.mjs';
 import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
 import { mountChangesDrawer } from './git-changes.mjs';
 import { reviewTarget, sameReviewTarget, reviewTargetError, reviewError, reviewSessionInput } from './review-feedback.mjs';
@@ -53,10 +54,18 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  customSettings: customTerminalDefaults(),
+  customDrafts: new Map(),
+  createOpen: false,
+  createLoading: false,
+  createCommandEdited: { terminal1: false, terminal2: false },
+  promptTarget: null,
+  promptBusy: false,
   health: null,
   healthBusy: false,
   healthError: false,
   healthRequest: 0,
+  healthTaskId: null,
   healthController: null,
   healthOpen: false,
   archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
@@ -296,6 +305,9 @@ function setSettingsBusy(busy) {
     const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
   }
   renderArchiveSummary();
+  for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt', 'custom-settings-save']) {
+    const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
+  }
 }
 
 function closeSettings({ force = false } = {}) {
@@ -317,6 +329,7 @@ async function openSettings() {
   state.settingsOpen = true;
   settingsError();
   renderSettingsForm();
+  renderCustomSettings();
   dialog.hidden = false;
   setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
@@ -327,6 +340,8 @@ async function openSettings() {
     else settingsError(archiveResult.reason?.message || t('settings.loadError'));
     if (settingsResult.status !== 'fulfilled') { settingsError(settingsResult.reason?.message || t('settings.loadError')); return; }
     const payload = settingsResult.value;
+    state.customSettings = customTerminalDefaults(payload);
+    renderCustomSettings();
     state.settings = {
       models: payload?.codex?.models || [],
       effort: readCodexEffort(payload?.codex?.args || []),
@@ -439,9 +454,10 @@ function healthTerminal() {
 
 function healthSummaryStatus() {
   if (state.healthBusy || state.healthError || !state.health) return 'pending';
+  if (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null)) return 'pending';
   const checks = { ...state.health.checks, terminal: healthTerminal() };
   if (Object.values(checks).some(check => check.status === 'missing')) return 'missing';
-  if (['node', 'git', 'codex', 'antigravity'].some(id => checks[id]?.status === 'pending')) return 'pending';
+  if ((state.health.requiredChecks || ['node', 'git', 'codex', 'antigravity']).some(id => !checks[id] || checks[id].status === 'pending')) return 'pending';
   return Object.values(checks).some(check => check.status === 'warning') ? 'warning' : 'ok';
 }
 
@@ -464,13 +480,13 @@ function renderWorkspaceHealth() {
   document.querySelector('#workspace-health-close').setAttribute('aria-label', t('health.close'));
   document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
   const rows = document.querySelector('#workspace-health-checks');
-  if (state.healthBusy || !state.health) { rows.innerHTML = ''; return; }
+  if (state.healthBusy || !state.health || (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null))) { rows.innerHTML = ''; return; }
   const expanded = new Set([...rows.querySelectorAll('details[open]')].map(detail => detail.dataset.healthDetail));
-  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal: 'Terminal / PTY' };
+  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal1: t('custom.terminal1'), terminal2: t('custom.terminal2'), terminal: 'Terminal / PTY' };
   const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
   rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
     let hint = t('health.details');
-    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : 'health.antigravityMissing');
+    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : id === 'antigravity' ? 'health.antigravityMissing' : 'health.customMissing');
     else if (check.reason?.includes('TIMEOUT') || check.reason === 'DETECTION_FAILED') hint = t('health.timeout');
     else if (check.reason === 'STDIO_FALLBACK') hint = t('health.fallback');
     else if (check.reason === 'NODE18_STDIO_COMPATIBILITY') hint = t('health.node18');
@@ -493,6 +509,8 @@ async function checkWorkspaceHealth() {
   const request = ++state.healthRequest;
   const epoch = state.projectEpoch;
   const projectId = state.projectId;
+  const taskId = state.selectedId || null;
+  state.healthTaskId = taskId;
   state.health = null;
   state.healthError = false;
   state.healthBusy = Boolean(projectId);
@@ -502,12 +520,12 @@ async function checkWorkspaceHealth() {
   state.healthController = controller;
   const timer = window.setTimeout(() => controller.abort(), 10000);
   try {
-    const taskQuery = state.selectedId ? `?workspaceTaskId=${encodeURIComponent(state.selectedId)}` : '';
+    const taskQuery = taskId ? `?workspaceTaskId=${encodeURIComponent(taskId)}` : '';
     const health = await fetchJson(`/api/workspace-health${taskQuery}`, { projectId, signal: controller.signal });
-    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId) return;
+    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId || taskId !== (state.selectedId || null)) return;
     state.health = health;
   } catch {
-    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) state.healthError = true;
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId && taskId === (state.selectedId || null)) state.healthError = true;
   } finally {
     window.clearTimeout(timer);
     if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) {
@@ -590,7 +608,8 @@ function updateTerminalLayout() {
     const switchButton = controller.card.querySelector('[data-terminal-focus-other]');
     if (switchButton) {
       switchButton.hidden = !focused;
-      switchButton.title = t('terminal.switchFocus').replace('{terminal}', slotId === 'codex' ? 'Antigravity' : 'Codex');
+      const other = switchButton.dataset.terminalFocusOther;
+      switchButton.title = t('terminal.switchFocus').replace('{terminal}', state.selectedTask?.mode === 'custom' ? t(`custom.${other}`) : other === 'codex' ? 'Codex' : 'Antigravity');
       switchButton.setAttribute('aria-label', switchButton.title);
     }
   }
@@ -876,6 +895,8 @@ async function selectProject(id, taskId) {
   if (!project) return;
   if (state.projectId) state.projectSelections.set(state.projectId, state.selectedId);
   closeSettings();
+  closeCreateTask();
+  closeCustomPrompt();
   closeContextMenu();
   disposeTerminalViews();
   state.projectEpoch++;
@@ -1036,9 +1057,10 @@ function updateTaskItem(element, task, projectId) {
   const dotClass = `status-dot ${statusKey(task.status)}`;
   if (dot.className !== dotClass) dot.className = dotClass;
   const agents = element.querySelectorAll('.mini-agent');
-  for (const [index, slotId] of ['codex', 'antigravity'].entries()) {
+  for (const [index, slotId] of (task.mode === 'custom' ? ['terminal1', 'terminal2'] : ['codex', 'antigravity']).entries()) {
     const className = `mini-agent ${statusKey(sessionState(task.sessions?.[slotId]))}`;
     if (agents[index].className !== className) agents[index].className = className;
+    setListText(agents[index], task.mode === 'custom' ? t(`custom.${slotId}`) : slotId === 'codex' ? 'Codex' : 'Antigravity');
   }
   setListText(element.querySelector('time'), formatTime(task.updatedAt));
 }
@@ -1083,6 +1105,8 @@ function renderSelectedTask() {
   if (empty) empty.hidden = true;
   if (panel) panel.hidden = false;
   const task = state.selectedTask;
+  const modeBadge = document.querySelector('#selected-task-mode');
+  if (modeBadge) modeBadge.textContent = t(task.mode === 'custom' ? 'custom.customBadge' : 'custom.defaultBadge');
   const title = document.querySelector('#selected-task-title');
   const status = document.querySelector('#selected-task-status');
   const collaboration = document.querySelector('#selected-task-cooperation');
@@ -1123,6 +1147,8 @@ function renderSelectedTask() {
   if (restart) restart.disabled = state.actionBusy;
 
   const panes = selectTerminalPanes({ workspaceTask: task });
+  const grid = document.querySelector('#agent-terminal-grid');
+  if (grid) grid.setAttribute('aria-label', t(task.mode === 'custom' ? 'custom.customBadge' : 'custom.defaultBadge'));
   const pairKey = panes.map(terminalSessionKey).join('|');
   if (pairKey !== state.terminalPairKey) {
     disposeTerminalViews();
@@ -1143,7 +1169,8 @@ function cooperationLabel(cooperation) {
     ? t(`cooperation.${status}`) : '';
 }
 
-function terminalRoleLabel(slot, cooperation, startup) {
+function terminalRoleLabel(slot, cooperation, startup, custom = null) {
+  if (custom) return custom[slot]?.command || '';
   const startupState = startup?.slots?.[slot];
   if (startupState === 'TRUST_REQUIRED') return t('startup.roleTrust');
   if (startupState === 'AUTH_REQUIRED') return t('startup.roleAuth');
@@ -1172,7 +1199,7 @@ function startupHint(startup) {
 function taskErrorMessage(task) {
   if (task.error?.message || task.error?.details) return task.error.message || task.error.details;
   for (const [slot, session] of Object.entries(task.sessions || {})) {
-    const agent = slot === 'codex' ? 'Codex' : 'Antigravity';
+    const agent = task.mode === 'custom' ? t(`custom.${slot}`) : slot === 'codex' ? 'Codex' : 'Antigravity';
     if (session.startupFailure === 'account-init-timeout') return `${agent}: ${t('terminal.accountInitTimeout')}`;
     if (session.error) return `${agent}: ${session.error}`;
   }
@@ -1180,20 +1207,24 @@ function taskErrorMessage(task) {
 }
 
 function terminalCardMarkup(pane) {
+  const custom = state.selectedTask?.mode === 'custom';
+  const label = custom ? t(`custom.${pane.slotId}`) : t(`terminal.${pane.slotId}`);
+  const otherSlot = selectTerminalPanes({ workspaceTask: state.selectedTask }).find(item => item.slotId !== pane.slotId)?.slotId || '';
   return `<article class="terminal-card" data-terminal-slot="${escapeHtml(pane.slotId)}">
     <header class="terminal-card-header">
-      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup))}</span></div></div>
+      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${custom ? pane.slot + 1 : pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong data-terminal-label>${escapeHtml(label)}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup, state.selectedTask?.custom))}</span></div></div>
       <div class="terminal-card-actions">
+        ${custom ? `<button class="secondary-button terminal-prompt-button" type="button" data-custom-prompt="${escapeHtml(pane.slotId)}">${escapeHtml(t('custom.prompt'))}</button>` : ''}
         <span class="terminal-status" data-terminal-transport></span>
         <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
-        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${pane.slotId === 'codex' ? 'antigravity' : 'codex'}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
+        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${escapeHtml(otherSlot)}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
         <button class="icon-button terminal-focus-button" type="button" data-terminal-focus="${escapeHtml(pane.slotId)}" aria-pressed="false" title="${escapeHtml(t('terminal.focus'))}" aria-label="${escapeHtml(t('terminal.focus'))}">
           <svg data-focus-expand viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg>
           <svg data-focus-restore viewBox="0 0 20 20" aria-hidden="true" hidden><path d="M7 3v4H3m14 0h-4V3M3 13h4v4m6 0v-4h4"/></svg>
         </button>
       </div>
     </header>
-    <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(t(`terminal.${pane.slotId}`))}"></div>
+    <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(label)}"></div>
     <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-backend></span><span data-terminal-updated>—</span></footer>
   </article>`;
 }
@@ -1234,6 +1265,7 @@ function renderTerminalViews(panes) {
       resizeObserver: null,
     };
     state.terminalViews.set(pane.slotId, controller);
+    card.querySelector('[data-custom-prompt]')?.addEventListener('click', () => openCustomPrompt(pane.slotId));
     updateTerminalHeader(pane);
     if (!pane.sessionId || typeof window.Terminal !== 'function') {
       continue;
@@ -1266,9 +1298,15 @@ function renderTerminalViews(panes) {
 function updateTerminalHeader(pane) {
   const controller = state.terminalViews.get(pane.slotId);
   const card = controller?.card || document.querySelector(`[data-terminal-slot="${CSS.escape(pane.slotId)}"]`);
+  const label = state.selectedTask?.mode === 'custom' ? t(`custom.${pane.slotId}`) : t(`terminal.${pane.slotId}`);
+  if (card) {
+    const heading = card.querySelector('[data-terminal-label]'); if (heading) heading.textContent = label;
+    card.querySelector('[data-terminal-screen]')?.setAttribute('aria-label', label);
+    const promptButton = card.querySelector('[data-custom-prompt]'); if (promptButton) promptButton.textContent = t('custom.prompt');
+  }
   if (!card) return;
   const role = card.querySelector('[data-terminal-role]');
-  if (role) role.textContent = terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup);
+  if (role) role.textContent = terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup, state.selectedTask?.custom);
   const taskSession = state.selectedTask?.sessions?.[pane.slotId] || null;
   const session = controller?.session || pane.session || taskSession;
   const status = sessionState(session);
@@ -1298,6 +1336,7 @@ function updateTerminalHeader(pane) {
 }
 
 function disposeTerminalViews() {
+  closeCustomPrompt();
   window.clearTimeout(state.pollTimer);
   state.pollTimer = null;
   for (const controller of state.terminalViews.values()) {
@@ -1370,6 +1409,7 @@ async function sendReviewToCodex({ target, prompt, validateSelection, assertSele
 
 function enqueueRawInput(controller, input) {
   if (controller.disposed) return;
+  if (controller.promptWriting) { showToast(t('custom.inputReserved'), 'error'); return; }
   if (controller.reviewWriting || (state.reviewWriteTarget?.projectId === controller.projectId && state.reviewWriteTarget?.sessionId === controller.pane.sessionId)) { showToast(state.locale === 'zh' ? '正在发送审查反馈，请稍后输入。' : 'Sending review feedback. Wait before typing.', 'error'); return; }
   controller.activeUntil = Date.now() + 1500;
   if (!controller.pane.sessionId || typeof input !== 'string' || input.length === 0) return;
@@ -1632,6 +1672,7 @@ async function loadTaskList({ selectFirst = true } = {}) {
 }
 
 async function loadSelectedTask() {
+  if (state.healthTaskId !== (state.selectedId || null)) void checkWorkspaceHealth();
   if (!state.selectedId) {
     state.selectedTask = null;
     disposeTerminalViews();
@@ -1704,20 +1745,172 @@ async function selectTask(id) {
   await loadSelectedTask();
 }
 
-async function createTask() {
+function renderCustomSettings() {
+  const custom = state.customDrafts.get(state.projectId) || state.customSettings;
+  for (const [id, value] of Object.entries({ 'custom-command1': custom.terminal1.command, 'custom-command2': custom.terminal2.command,
+    'custom-project-prompt': custom.prompts.project, 'custom-terminal1-prompt': custom.prompts.terminal1, 'custom-terminal2-prompt': custom.prompts.terminal2 })) {
+    const field = document.querySelector(`#${id}`); if (field) field.value = value;
+  }
+}
+
+function customSettingsForm() {
+  return { terminal1: { command: document.querySelector('#custom-command1').value.trim() },
+    terminal2: { command: document.querySelector('#custom-command2').value.trim() }, prompts: {
+      project: document.querySelector('#custom-project-prompt').value,
+      terminal1: document.querySelector('#custom-terminal1-prompt').value,
+      terminal2: document.querySelector('#custom-terminal2-prompt').value } };
+}
+
+async function saveCustomSettings() {
+  if (state.settingsBusy || state.actionBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  const custom = customSettingsForm();
+  state.customDrafts.set(projectId, custom);
+  setSettingsBusy(true); settingsError();
+  try {
+    const result = await postAction('workspaceCustomSettingsSave', { custom }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.customSettings = result.custom;
+    state.customDrafts.delete(projectId);
+    syncCreateCommands();
+    showToast(t('custom.saved'), 'success');
+    renderCreateMode();
+  } catch (error) { settingsError(error.payload?.error?.message || error.message); }
+  finally { if (projectId === state.projectId && epoch === state.projectEpoch) setSettingsBusy(false); }
+}
+
+function syncCreateCommands() {
+  if (!state.createOpen) return;
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    if (!state.createCommandEdited[slot]) document.querySelector(`#${id}`).value = state.customSettings[slot].command;
+  }
+}
+
+function creationMode() { return document.querySelector('input[name="workspaceMode"]:checked')?.value || 'default'; }
+function renderCreateMode() {
+  const custom = creationMode() === 'custom';
+  document.querySelector('#workspace-create-custom').hidden = !custom;
+  document.querySelector('#workspace-create-default').hidden = custom;
+  for (const id of ['workspace-create-command1', 'workspace-create-command2']) document.querySelector(`#${id}`).required = custom;
+  document.querySelector('#workspace-create-prompt-status').textContent = t(Object.values(state.customSettings.prompts).some(Boolean) ? 'custom.configured' : 'custom.empty');
+}
+
+function setCreateBusy(busy) {
+  for (const field of document.querySelectorAll('#workspace-create-form input, #workspace-create-form button')) field.disabled = busy;
+  document.querySelector('#workspace-create-submit').textContent = t(state.actionBusy ? 'custom.creating' : 'custom.create');
+}
+
+function closeCreateTask() {
   if (state.actionBusy) return;
+  state.createOpen = false;
+  document.querySelector('#workspace-create-dialog').hidden = true;
+  document.querySelector('#new-task-button')?.focus();
+}
+
+async function openCreateTask() {
+  if (state.actionBusy || state.settingsBusy || !canEditProjectSettings() || state.createOpen) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  state.createOpen = true; state.createLoading = true;
+  state.createCommandEdited = { terminal1: false, terminal2: false };
+  document.querySelector('#workspace-create-dialog').hidden = false;
+  document.querySelector('input[name="workspaceMode"][value="default"]').checked = true;
+  document.querySelector('#workspace-create-error').hidden = true;
+  setCreateBusy(true); renderCreateMode();
+  try {
+    const settings = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT, { projectId });
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || !state.createOpen) return;
+    state.customSettings = customTerminalDefaults(settings);
+    syncCreateCommands();
+    renderCreateMode();
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch && state.createOpen) {
+      const notice = document.querySelector('#workspace-create-error'); notice.textContent = error.message; notice.hidden = false;
+    }
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) { state.createLoading = false; setCreateBusy(false); document.querySelector('input[name="workspaceMode"]')?.focus(); }
+  }
+}
+
+function currentPromptTarget(slot) {
+  return { projectId: state.projectId, projectEpoch: state.projectEpoch, taskId: state.selectedId, slot, sessionId: state.selectedTask?.sessions?.[slot]?.sessionId || null };
+}
+function closeCustomPrompt() {
+  state.promptTarget = null;
+  const dialog = document.querySelector('#custom-prompt-dialog'); if (dialog) dialog.hidden = true;
+}
+function updateCustomPromptSend() {
+  const target = state.promptTarget;
+  const available = target && sameCustomPromptTarget(target, currentPromptTarget(target.slot)) && target.sessionId
+    && sessionIsActive(state.selectedTask?.sessions?.[target.slot]) && state.selectedTask?.mode === 'custom'
+    && !state.selectedTask.archivedAt && !['CLOSED', 'ERROR'].includes(state.selectedTask.status);
+  document.querySelector('#custom-prompt-send').disabled = state.promptBusy || !available
+    || !document.querySelector('#custom-prompt-ready').checked || !document.querySelector('#custom-prompt-preview').value;
+  document.querySelector('#custom-prompt-ready').disabled = state.promptBusy;
+}
+function openCustomPrompt(slot) {
+  if (state.promptBusy || state.selectedTask?.mode !== 'custom') return;
+  state.promptTarget = currentPromptTarget(slot);
+  state.promptTarget.sessionCreatedAt = state.selectedTask.sessions[slot]?.createdAt;
+  document.querySelector('#custom-prompt-title').textContent = `${t(`custom.${slot}`)} · ${t('custom.prompt')}`;
+  document.querySelector('#custom-prompt-preview').value = customTerminalPrompt(state.selectedTask, slot);
+  document.querySelector('#custom-prompt-ready').checked = false;
+  document.querySelector('#custom-prompt-status').textContent = '';
+  document.querySelector('#custom-prompt-dialog').hidden = false;
+  updateCustomPromptSend(); document.querySelector('#custom-prompt-close').focus();
+}
+async function sendCustomPrompt() {
+  updateCustomPromptSend();
+  if (document.querySelector('#custom-prompt-send').disabled) return;
+  const target = state.promptTarget, controller = state.terminalViews.get(target.slot);
+  if (!controller || controller.disposed || controller.promptWriting) return;
+  const assertCurrent = () => {
+    if (state.promptTarget !== target || controller.disposed || !sameCustomPromptTarget(target, currentPromptTarget(target.slot))
+      || state.terminalViews.get(target.slot) !== controller) throw new Error(t('custom.targetChanged'));
+  };
+  controller.promptWriting = true; state.promptBusy = true; updateCustomPromptSend();
+  const previous = controller.inputQueue;
+  const operation = (async () => {
+    await previous; assertCurrent();
+    const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(target.taskId)}`, { projectId: target.projectId });
+    assertCurrent();
+    if (task.mode !== 'custom' || task.sessions?.[target.slot]?.sessionId !== target.sessionId
+      || task.sessions[target.slot].createdAt !== target.sessionCreatedAt || !sessionIsActive(task.sessions[target.slot])) throw new Error(t('custom.targetChanged'));
+    assertCurrent(); // Closing the dialog cancels until the write is dispatched.
+    await postAction('workspaceTaskPromptSend', { workspaceTaskId: target.taskId, slot: target.slot, confirmed: true, sessionCreatedAt: target.sessionCreatedAt }, target.projectId);
+    if (!controller.disposed) scheduleTerminalRead(controller, 0);
+  })();
+  controller.inputQueue = operation.catch(() => {});
+  try { await operation; if (state.promptTarget === target) document.querySelector('#custom-prompt-status').textContent = t('custom.sent'); }
+  catch { if (state.promptTarget === target) document.querySelector('#custom-prompt-status').textContent = t('custom.uncertain'); }
+  finally {
+    controller.promptWriting = false; state.promptBusy = false;
+    document.querySelector('#custom-prompt-ready').checked = false; updateCustomPromptSend();
+  }
+}
+
+async function createTask(event) {
+  event?.preventDefault();
+  if (state.actionBusy) return;
+  if (!state.createOpen || state.createLoading) return;
   if (!state.projectId || state.projects.find(project => project.id === state.projectId)?.available === false) return;
   setBusy(true);
+  setCreateBusy(true);
   try {
-    const payload = await postAction('workspaceTaskCreate', { language: localeCode() });
+    const mode = creationMode();
+    const params = { language: localeCode(), mode };
+    if (mode === 'custom') params.custom = { terminal1: { command: document.querySelector('#workspace-create-command1').value.trim() }, terminal2: { command: document.querySelector('#workspace-create-command2').value.trim() } };
+    const payload = await postAction('workspaceTaskCreate', params);
+    state.createOpen = false; document.querySelector('#workspace-create-dialog').hidden = true;
     state.selectedId = payload.workspaceTask?.id || null;
     showToast(t('task.created'), 'success');
     await refresh();
   } catch (error) {
+    const notice = document.querySelector('#workspace-create-error'); notice.hidden = false; notice.textContent = error.payload?.error?.message || error.message;
     showToast(error.payload?.error?.message || t('action.createError'), 'error');
     await refresh();
   } finally {
     setBusy(false);
+    setCreateBusy(false);
     renderTaskList();
     renderSelectedTask();
   }
@@ -1923,8 +2116,24 @@ function bindEvents() {
   document.querySelector('#project-list')?.addEventListener('scroll', closeContextMenu);
   document.querySelector('#zen-button')?.addEventListener('click', () => setZenMode(true));
   document.querySelector('#zen-exit')?.addEventListener('click', () => setZenMode(false));
-  document.querySelector('#new-task-button')?.addEventListener('click', createTask);
-  document.querySelector('#empty-new-task')?.addEventListener('click', createTask);
+  document.querySelector('#new-task-button')?.addEventListener('click', openCreateTask);
+  document.querySelector('#empty-new-task')?.addEventListener('click', openCreateTask);
+  document.querySelector('#workspace-create-form')?.addEventListener('submit', event => void createTask(event));
+  for (const field of document.querySelectorAll('input[name="workspaceMode"]')) field.addEventListener('change', renderCreateMode);
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });
+  }
+  for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
+  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings());
+  document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());
+  for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt']) document.querySelector(`#${id}`)?.addEventListener('input', () => state.customDrafts.set(state.projectId, customSettingsForm()));
+  document.querySelector('#custom-prompt-close')?.addEventListener('click', closeCustomPrompt);
+  document.querySelector('#custom-prompt-ready')?.addEventListener('change', updateCustomPromptSend);
+  document.querySelector('#custom-prompt-send')?.addEventListener('click', () => void sendCustomPrompt());
+  document.querySelector('#custom-prompt-copy')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(document.querySelector('#custom-prompt-preview').value); showToast(t('custom.copied'), 'success'); }
+    catch { showToast(t('terminal.inputError'), 'error'); }
+  });
   document.querySelector('#codex-model')?.addEventListener('change', () => renderEffortChoices());
   document.querySelector('#terminal-settings-button')?.addEventListener('click', () => void openSettings());
   document.querySelector('#terminal-settings-close')?.addEventListener('click', closeSettings);
@@ -1935,6 +2144,8 @@ function bindEvents() {
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && state.settingsOpen) closeSettings();
+    else if (event.key === 'Escape' && state.createOpen) closeCreateTask();
+    else if (event.key === 'Escape' && state.promptTarget) closeCustomPrompt();
     else if (event.key === 'Escape' && state.healthOpen) setHealthOpen(false, { focus: true });
   });
   document.querySelector('#workspace-health-button')?.addEventListener('click', () => {

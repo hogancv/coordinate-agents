@@ -41,6 +41,7 @@ export async function workspaceMessage(root, taskId, operation, value, api = DEF
   if (timeoutMs > 60_000) throw new Error('Wait timeout must be at most 60000 ms.');
   const pollMs = Math.max(5, Math.min(1000, options.pollMs || 1000));
   const task = await api.readWorkspaceTask(root, taskId);
+  if (task.mode === 'custom') throw new Error('Custom tasks do not support default collaboration.');
   const sessionId = task.sessions.antigravity.sessionId;
   if (!sessionId || task.archivedAt || task.status !== 'RUNNING') throw new Error('Task pair is not ready. No input was sent.');
   const readOptions = { root, sessionId, maxBytes: 8192, maxLines: 80, cursor };

@@ -1,12 +1,14 @@
 // Only Workspace-owned sessions and task pairs are writable from the Web.
 import * as sessions from './session-service.mjs';
-import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive } from './workspace-task-runtime.mjs';
+import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive, runtimeWorkspaceTaskPromptSend } from './workspace-task-runtime.mjs';
+import { saveCustomWorkspaceConfig } from './workspace-custom-config.mjs';
 import { resolve } from 'node:path';
 import { runtimeError } from './runtime-contract.mjs';
 export async function assertWorkspaceSession(input) {
   const { session } = await sessions.runtimeSessionStatus(input);
   const task = session.taskId ? await readWorkspaceTask(input.root, session.taskId) : null;
-  const owned = task && Object.values(task.sessions).some(slot => slot.sessionId === session.id && slot.agent === session.agent);
+  const owned = task && resolve(session.cwd) === resolve(input.root) && Object.values(task.sessions).some(slot => slot.sessionId === session.id && slot.agent === session.agent
+    && (task.mode !== 'custom' || slot.slot === session.subtaskId));
   if (!owned || task.archivedAt) throw runtimeError('SESSION_STATE_CONFLICT', 'Session is not owned by a Workspace Task in this project.', { recoverable: false, sessionId: input.sessionId });
   return session;
 }
@@ -17,6 +19,8 @@ export const WORKSPACE_OPERATIONS = Object.freeze({
   workspaceTaskClose: runtimeWorkspaceTaskClose,
   workspaceTaskRestart: runtimeWorkspaceTaskRestart,
   workspaceTaskArchive: runtimeWorkspaceTaskArchive,
+  workspaceTaskPromptSend: runtimeWorkspaceTaskPromptSend,
+  workspaceCustomSettingsSave: async input => ({ ok: true, custom: saveCustomWorkspaceConfig(input.root, input.custom) }),
   sessionStatus: sessionHandler(sessions.runtimeSessionStatus),
   sessionInspect: sessionHandler(sessions.runtimeSessionInspect),
   sessionRead: sessionHandler(sessions.runtimeSessionRead),
