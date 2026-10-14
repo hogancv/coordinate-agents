@@ -110,14 +110,14 @@ try {
   const detail=await get(`/api/workspace-tasks/${task.id}`); assert.equal(detail.status,'RUNNING');
   const codex=detail.sessions.codex.sessionId, agy=detail.sessions.antigravity.sessionId; assert.notEqual(codex,agy);
   for (const id of [codex,agy]) {const record=JSON.parse(readFileSync(join(project,'.agent-bus/sessions',`${id}.json`),'utf8')); assert.equal(record.taskId,task.id);}
-  await poll(()=>read(codex),r=>r.output.output.includes('You clarify and review.'),'Codex role prompt');
+  await poll(()=>read(codex),r=>r.output.output.includes('You clarify, delegate and review.'),'Codex role prompt');
   await poll(()=>read(agy),r=>r.output.output.includes('You implement.'),'Antigravity role prompt');
   await action('sessionWrite',{sessionId:codex,input:'input-output-check',submit:true});
   await poll(()=>read(codex),r=>r.output.output.includes('mock-reply:codex:input-output-check'),'terminal reply');
   await action('sessionResize',{sessionId:codex,cols:91,rows:27});
   const message=join(packageRoot,'skills/coordinate-agents/scripts/workspace-message.mjs');
   const sent=JSON.parse(run([message,task.id,'send','directed-message-check'])); assert.equal(sent.sessionId,agy); assert.equal(sent.sent,true);
-  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:directed-message-check'),'directed reply');
+  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:') && r.output.output.includes('directed-message-check') && r.output.output.includes(sent.roundId),'directed reply');
   const received=JSON.parse(run([message,task.id,'read',String(sent.cursor)])); assert.match(received.output,/directed-message-check/);
   const another=await action('workspaceTaskCreate',{language:'zh-CN'}); const task2=another.workspaceTask || another.task; allTasks.push(task2.id);
   assert.notEqual(task2.sessions.antigravity.sessionId,agy);
