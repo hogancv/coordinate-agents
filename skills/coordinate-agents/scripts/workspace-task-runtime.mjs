@@ -565,7 +565,7 @@ export function workspaceTerminalReady(agent, output) {
   const marker = workspaceTerminalMarker(agent);
   const normalized = normalizeWorkspaceTerminalOutput(output);
   if (workspaceTerminalFailure(agent, normalized)) return false;
-  if (agent === 'codex' && /OpenAI Codex[^\n]*\n?[^\n]*\bloading\b/i.test(normalized)) return false;
+  if (agent === 'codex' && /OpenAI Codex[^\n]*(?:\n[^\n]*){0,4}\bloading\b/i.test(normalized)) return false;
   if (workspaceTerminalNeedsTrust(agent, normalized)) return false;
   const markerIndex = normalized.lastIndexOf(marker);
   if (markerIndex < 0) return false;

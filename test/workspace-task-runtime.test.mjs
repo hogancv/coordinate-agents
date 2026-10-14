@@ -47,7 +47,9 @@ test('Workspace readiness does not mistake a stale input marker for folder trust
 
 test('Codex placeholder input is not ready while its model header is still loading', () => {
   assert.equal(workspaceTerminalReady('codex', 'OpenAI Codex (v0.162.1)\nloading\nAsk Codex to do anything'), false);
+  assert.equal(workspaceTerminalReady('codex', '│ OpenAI Codex (v0.162.1) │\n│                       │\n│ model: loading        │\nAsk Codex to do anything'), false);
   assert.equal(workspaceTerminalReady('codex', 'OpenAI Codex (v0.162.1)\ngpt-5.6-luna · max\nAsk Codex to do anything'), true);
+  assert.equal(workspaceTerminalReady('codex', '│ OpenAI Codex (v0.162.1) │\n│                       │\n│ model: gpt-5.6-luna   │\nAsk Codex to do anything'), true);
   assert.equal(workspaceTerminalReady('codex', 'Ask Codex to do anything\nError: account/read failed during TUI bootstrap: workspace routing discovery timed out'), false);
 });
 
