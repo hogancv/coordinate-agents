@@ -8,6 +8,7 @@ import { createWorkspaceData } from '../inspector/server/workspace-data.mjs';
 import { startWorkspace } from './support/workspace-server.mjs';
 import { writeUserConfig } from '../skills/coordinate-agents/scripts/user-config.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
+import { saveCustomWorkspaceConfig } from '../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
 
 function fixture(t, source = 'console.log("fixture-cli 1.2.3");') {
   const root = mkdtempSync(join(tmpdir(), 'workspace-health with spaces-'));
@@ -43,6 +44,71 @@ test('missing custom command is preserved and does not prevent other checks', as
   assert.equal(result.checks.antigravity.status, 'missing');
   assert.equal(result.checks.antigravity.reason, 'COMMAND_NOT_FOUND');
   assert.equal(result.checks.antigravity.command, settings.antigravity.command);
+});
+
+test('Custom health probes snapshot commands, not the missing default collaboration CLIs', async t => {
+  const { root } = fixture(t);
+  const workspaceTask = { id: 'workspace-health-custom', mode: 'custom', custom: { terminal1: { command: process.execPath }, terminal2: { command: process.execPath } } };
+  const settings = { codex: { command: join(root, 'missing-codex'), adapter: 'codex-cli' }, antigravity: { command: join(root, 'missing-agy'), adapter: 'antigravity-cli' } };
+  const result = await readWorkspaceHealth({ root, settings, workspaceTask });
+  assert.equal(result.ready, true);
+  assert.equal(result.mode, 'custom');
+  assert.equal(result.workspaceTaskId, workspaceTask.id);
+  assert.deepEqual(result.requiredChecks, ['node', 'git', 'terminal1', 'terminal2']);
+  assert.equal(result.checks.codex, undefined);
+  assert.equal(result.checks.antigravity, undefined);
+  for (const slot of ['terminal1', 'terminal2']) {
+    assert.equal(result.checks[slot].status, 'ok');
+    assert.equal(result.checks[slot].command, process.execPath);
+  }
+  workspaceTask.custom.terminal2.command = join(root, 'missing-custom');
+  const missing = await readWorkspaceHealth({ root, settings, workspaceTask });
+  assert.equal(missing.ready, false);
+  assert.equal(missing.checks.terminal1.status, 'ok');
+  assert.equal(missing.checks.terminal2.status, 'missing');
+});
+
+test('Custom health uses the same safe Windows Codex npm entrypoint as Custom launch', { skip: process.platform !== 'win32' }, async t => {
+  const { root, settings } = fixture(t);
+  const command = join(root, 'codex.cmd');
+  const bin = join(root, 'node_modules', '@openai', 'codex', 'bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(command, '@echo off\r\nexit /b 99\r\n'); // Never execute the shell wrapper.
+  writeFileSync(join(bin, 'codex.js'), 'console.log("codex-fixture 3.4.5");');
+  const workspaceTask = { id: 'workspace-health-codex-shim', mode: 'custom', custom: { terminal1: { command }, terminal2: { command: process.execPath } } };
+  const result = await readWorkspaceHealth({ root, settings, workspaceTask });
+  assert.equal(result.ready, true);
+  assert.equal(result.checks.terminal1.command, command);
+  assert.equal(result.checks.terminal1.version, '3.4.5');
+});
+
+test('HTTP Custom health is driven by the selected task snapshot, not current project defaults', async t => {
+  const { root } = fixture(t);
+  const started = await startWorkspace({ root, port: 0 });
+  t.after(() => new Promise(done => { started.server.close(done); started.server.closeAllConnections?.(); }));
+  const bus = join(root, '.agent-bus');
+  const config = readConfig(bus);
+  for (const agent of config.agents) agent.command = join(root, `missing-${agent.id}`);
+  writeConfig(bus, config);
+  const custom = { terminal1: { command: process.execPath }, terminal2: { command: process.execPath }, prompts: { project: '', terminal1: '', terminal2: '' } };
+  const id = 'workspace-health-custom-snapshot';
+  mkdirSync(join(bus, 'workspace-tasks'), { recursive: true });
+  const timestamp = new Date().toISOString();
+  writeFileSync(join(bus, 'workspace-tasks', `${id}.json`), JSON.stringify({ schemaVersion: 1, id, mode: 'custom', custom, title: 'Custom fixture', status: 'CLOSED', promptVersion: 'custom-terminal-v1', createdAt: timestamp, updatedAt: timestamp,
+    sessions: Object.fromEntries(['terminal1', 'terminal2'].map(slot => [slot, { slot, agent: 'workspace-custom', role: 'custom', sessionId: null }])) }));
+  saveCustomWorkspaceConfig(root, { ...custom, terminal1: { command: join(root, 'changed-missing-custom-default') } });
+  const headers = { 'x-coordinate-agents-capability': started.capability };
+  const base = `http://127.0.0.1:${started.port}`;
+  const selected = await (await fetch(`${base}/api/workspace-health?workspaceTaskId=${id}`, { headers })).json();
+  assert.equal(selected.mode, 'custom');
+  assert.equal(selected.ready, true);
+  assert.equal(selected.checks.terminal1.command, process.execPath);
+  assert.equal(selected.checks.antigravity, undefined);
+  const unselected = await (await fetch(`${base}/api/workspace-health`, { headers })).json();
+  assert.equal(unselected.mode, 'default');
+  assert.equal(unselected.ready, false);
+  assert.equal(unselected.checks.antigravity.status, 'missing');
+  assert.equal(unselected.checks.terminal1, undefined);
 });
 
 test('version timeout is bounded and unavailable version does not invent success or expose output', async t => {

@@ -186,6 +186,7 @@ export function createWorkspaceData(root) {
     async readWorkspaceHealth(workspaceTaskId = null) {
       const tasks = workspaceTaskId ? [await readWorkspaceTask(repository, workspaceTaskId)] : await readWorkspaceTasks(repository);
       return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),
+        workspaceTask: workspaceTaskId ? tasks[0] : null,
         sessions: tasks.filter(task => !task.archivedAt && task.status !== 'CLOSED').flatMap(task => Object.values(task.sessions)) });
     },
     readWorkspaceTasks: () => readWorkspaceTasks(repository),

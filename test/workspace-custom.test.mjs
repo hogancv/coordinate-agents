@@ -113,3 +113,68 @@ test('Custom UI drains prior input, blocks raw typing, and never retries uncerta
   assert.equal(fields.get('#custom-prompt-status').textContent, 'custom.uncertain');
   await context.sendCustomPrompt(); assert.equal(calls, 1);
 });
+
+for (const phase of ['queue', 'lookup', 'replaced-target']) {
+  test(`Closing or replacing the Custom Prompt during ${phase} cancels preflight without writing`, async () => {
+    const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
+    const fields = new Map(['custom-prompt-dialog', 'custom-prompt-send', 'custom-prompt-ready', 'custom-prompt-preview', 'custom-prompt-status'].map(id => [`#${id}`, { disabled: false, checked: true, value: 'Prompt', textContent: '' }]));
+    const task = { id: 'task', mode: 'custom', status: 'RUNNING', sessions: { terminal1: { sessionId: 'session', createdAt: 'time', state: 'running' } } };
+    const target = { projectId: 'project', projectEpoch: 1, taskId: 'task', slot: 'terminal1', sessionId: 'session', sessionCreatedAt: 'time' };
+    let releaseQueue, releaseLookup, lookups = 0, writes = 0;
+    const controller = { inputQueue: phase === 'queue' ? new Promise(done => { releaseQueue = done; }) : Promise.resolve() };
+    const state = { projectId: 'project', projectEpoch: 1, selectedId: 'task', selectedTask: task, promptTarget: target, terminalViews: new Map([['terminal1', controller]]) };
+    const context = vm.createContext({ state, document: { querySelector: id => fields.get(id) }, t: key => key, sameCustomPromptTarget,
+      sessionIsActive: s => s?.state === 'running', fetchJson: () => { lookups++; return phase === 'queue' ? Promise.resolve(task) : new Promise(done => { releaseLookup = done; }); },
+      postAction: async () => { writes++; }, scheduleTerminalRead() {} });
+    vm.runInContext(app.slice(app.indexOf('function currentPromptTarget('), app.indexOf('async function createTask(')), context);
+    const sent = context.sendCustomPrompt();
+    await new Promise(setImmediate);
+    if (phase === 'replaced-target') state.promptTarget = { ...target };
+    else context.closeCustomPrompt();
+    if (phase === 'queue') releaseQueue(); else releaseLookup(task);
+    await sent;
+    assert.equal(writes, 0);
+    assert.equal(lookups, phase === 'queue' ? 0 : 1);
+    assert.equal(controller.promptWriting, false);
+    assert.equal(state.promptBusy, false);
+    assert.equal(fields.get('#custom-prompt-ready').checked, false);
+    assert.equal(fields.get('#custom-prompt-status').textContent, '');
+  });
+}
+
+test('Saving Custom project commands updates only untouched fields in the open creation dialog', async () => {
+  const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
+  const fields = new Map(Object.entries({ 'custom-command1': 'claude', 'custom-command2': 'my-cli', 'custom-project-prompt': 'new', 'custom-terminal1-prompt': '', 'custom-terminal2-prompt': '', 'workspace-create-command1': 'codex', 'workspace-create-command2': 'my-temporary-cli' }).map(([id, value]) => [`#${id}`, { value }]));
+  const custom = { terminal1: { command: 'claude' }, terminal2: { command: 'my-cli' }, prompts: { project: 'new', terminal1: '', terminal2: '' } };
+  const state = { projectId: 'project', projectEpoch: 1, createOpen: true, createCommandEdited: { terminal1: false, terminal2: true }, customSettings: custom, customDrafts: new Map() };
+  const context = vm.createContext({ state, document: { querySelector: id => fields.get(id) }, canEditProjectSettings: () => true,
+    postAction: async () => ({ custom }), setSettingsBusy() {}, settingsError() {}, showToast() {}, t: key => key });
+  vm.runInContext(app.slice(app.indexOf('function renderCustomSettings('), app.indexOf('function currentPromptTarget(')), context);
+  context.renderCreateMode = () => {};
+  await context.saveCustomSettings();
+  assert.equal(fields.get('#workspace-create-command1').value, 'claude');
+  assert.equal(fields.get('#workspace-create-command2').value, 'my-temporary-cli');
+  assert.equal(state.customDrafts.has('project'), false);
+});
+
+test('Creation command synchronization preserves either temporary override and resets on reopening', async () => {
+  const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
+  const fields = new Map();
+  const node = id => { if (!fields.has(id)) fields.set(id, { value: 'temporary', focus() {} }); return fields.get(id); };
+  const custom = { terminal1: { command: 'claude' }, terminal2: { command: 'my-cli' }, prompts: { project: '', terminal1: '', terminal2: '' } };
+  const state = { projectId: 'project', projectEpoch: 1, createOpen: true, createCommandEdited: { terminal1: true, terminal2: false }, customSettings: custom };
+  const context = vm.createContext({ state, document: { querySelector: node }, customTerminalDefaults,
+    canEditProjectSettings: () => true, fetchJson: async () => ({ custom }), WORKSPACE_SETTINGS_ENDPOINT: '/api/workspace-settings' });
+  vm.runInContext(app.slice(app.indexOf('function renderCustomSettings('), app.indexOf('function currentPromptTarget(')), context);
+  context.renderCreateMode = () => {}; context.setCreateBusy = () => {};
+  context.syncCreateCommands();
+  assert.equal(node('#workspace-create-command1').value, 'temporary');
+  assert.equal(node('#workspace-create-command2').value, 'my-cli');
+  state.createOpen = false;
+  state.createCommandEdited = { terminal1: true, terminal2: true };
+  await context.openCreateTask();
+  assert.equal(state.createCommandEdited.terminal1, false);
+  assert.equal(state.createCommandEdited.terminal2, false);
+  assert.equal(node('#workspace-create-command1').value, 'claude');
+  assert.equal(node('#workspace-create-command2').value, 'my-cli');
+});

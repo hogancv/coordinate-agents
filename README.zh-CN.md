@@ -196,6 +196,8 @@ Workspace 支持 `zh-CN` / `en-US` 双语，左侧按“项目 → 任务”分�
 
 ### 自定义双终端
 
+预检期间关闭 Prompt 预览会取消待发送操作；已经派发的终端输入无法撤回。创建窗口打开时保存自定义默认配置，仅同步未编辑过的命令框，不覆盖临时命令。选中 Custom 任务时，健康检查检测该任务快照中的两个命令，不再要求安装 Codex / Antigravity；未选中 Custom 任务时保留默认检查。
+
 选择 Custom 后使用独立的 Terminal 1 / Terminal 2 槽位，通过原有 Generic CLI、安全 executable 检查和 PTY Host 启动两个真实 Session。命令只能是可执行文件名或绝对路径（支持路径中的空格），不能包含参数或 Shell 语法；两个命令允许相同。保留 Codex 的 Windows 安全入口和 agy 的交互启动要求，但不据此分配默认协作角色。
 
 终端设置中有独立的 **自定义终端默认配置**：两个命令、可选项目共享 Prompt（UTF-8 最多 8KB）以及两个终端 Prompt（各 4KB）。配置使用明确 Schema 原子写入当前项目的 `.agent-bus/workspace-custom.json`，不修改默认 Agent 设置。新建任务保存快照，可临时覆盖命令；后续项目配置修改不会影响已有任务，重启同样使用旧快照。

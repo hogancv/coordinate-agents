@@ -24,6 +24,10 @@ Custom mode launches two independent, task-and-slot-bound Generic CLI Sessions. 
 
 ## Start the Web Workspace
 
+During Prompt preflight, closing its preview cancels the send; input already dispatched cannot be recalled. Saving Custom defaults refreshes untouched command fields in an open creation dialog without replacing temporary overrides. A selected Custom task's health checks use its command snapshot; default checks remain for Default tasks or no selected task.
+
+Prompt 预检期间关闭预览会取消发送；已经派发的输入无法撤回。保存自定义默认配置会同步仍打开的创建窗口中未编辑过的命令框，不覆盖临时命令。选中 Custom 任务时按命令快照进行健康检查；Default 任务或未选择任务时保留默认检查。
+
 From a local folder, using an npm version
 that includes the desired Web features:
 

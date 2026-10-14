@@ -229,6 +229,8 @@ Terminal settings has a separate **Custom Terminal Defaults** section: two comma
 
 Custom mode never injects built-in roles, starts a collaboration round, or enables Send to Codex review feedback. Git diff viewing/copying remains available. Each terminal's **Project Prompt** button previews its shared + terminal Prompt, separated by `---`. Copy it, or explicitly confirm that the CLI is ready and supports bracketed multiline paste before sending. Delivery reserves the keyboard queue and uses one raw Session write with one final Enter. Uncertain delivery is never retried or restarted automatically. Refresh, close, restart and archive remain task-and-slot bound; no global Session discovery fallback is used.
 
+Closing the Prompt preview during preflight cancels the pending send; already dispatched terminal input cannot be recalled. Saving Custom defaults while the creation dialog is open updates only untouched command fields, preserving temporary overrides. Health checks for a selected Custom task probe its saved two commands rather than requiring Codex/Antigravity; without a selected Custom task, default checks remain.
+
 Workspace groups live in `.agent-bus/workspace-tasks/*.json`, separately from
 standard Tasks. Selection and refresh never launch sessions; explicit actions
 use the guarded `POST /api/action` gateway. Task/Graph actions and reads are absent from the default Web API. Existing structured CLI/MCP and read-only Inspector contracts remain in the GitHub source through the Legacy entry. For this checkout's new Web

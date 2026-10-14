@@ -58,12 +58,14 @@ const state = {
   customDrafts: new Map(),
   createOpen: false,
   createLoading: false,
+  createCommandEdited: { terminal1: false, terminal2: false },
   promptTarget: null,
   promptBusy: false,
   health: null,
   healthBusy: false,
   healthError: false,
   healthRequest: 0,
+  healthTaskId: null,
   healthController: null,
   healthOpen: false,
   archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
@@ -452,9 +454,10 @@ function healthTerminal() {
 
 function healthSummaryStatus() {
   if (state.healthBusy || state.healthError || !state.health) return 'pending';
+  if (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null)) return 'pending';
   const checks = { ...state.health.checks, terminal: healthTerminal() };
   if (Object.values(checks).some(check => check.status === 'missing')) return 'missing';
-  if (['node', 'git', 'codex', 'antigravity'].some(id => checks[id]?.status === 'pending')) return 'pending';
+  if ((state.health.requiredChecks || ['node', 'git', 'codex', 'antigravity']).some(id => !checks[id] || checks[id].status === 'pending')) return 'pending';
   return Object.values(checks).some(check => check.status === 'warning') ? 'warning' : 'ok';
 }
 
@@ -477,13 +480,13 @@ function renderWorkspaceHealth() {
   document.querySelector('#workspace-health-close').setAttribute('aria-label', t('health.close'));
   document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
   const rows = document.querySelector('#workspace-health-checks');
-  if (state.healthBusy || !state.health) { rows.innerHTML = ''; return; }
+  if (state.healthBusy || !state.health || (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null))) { rows.innerHTML = ''; return; }
   const expanded = new Set([...rows.querySelectorAll('details[open]')].map(detail => detail.dataset.healthDetail));
-  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal: 'Terminal / PTY' };
+  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal1: t('custom.terminal1'), terminal2: t('custom.terminal2'), terminal: 'Terminal / PTY' };
   const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
   rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
     let hint = t('health.details');
-    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : 'health.antigravityMissing');
+    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : id === 'antigravity' ? 'health.antigravityMissing' : 'health.customMissing');
     else if (check.reason?.includes('TIMEOUT') || check.reason === 'DETECTION_FAILED') hint = t('health.timeout');
     else if (check.reason === 'STDIO_FALLBACK') hint = t('health.fallback');
     else if (check.reason === 'NODE18_STDIO_COMPATIBILITY') hint = t('health.node18');
@@ -506,6 +509,8 @@ async function checkWorkspaceHealth() {
   const request = ++state.healthRequest;
   const epoch = state.projectEpoch;
   const projectId = state.projectId;
+  const taskId = state.selectedId || null;
+  state.healthTaskId = taskId;
   state.health = null;
   state.healthError = false;
   state.healthBusy = Boolean(projectId);
@@ -515,12 +520,12 @@ async function checkWorkspaceHealth() {
   state.healthController = controller;
   const timer = window.setTimeout(() => controller.abort(), 10000);
   try {
-    const taskQuery = state.selectedId ? `?workspaceTaskId=${encodeURIComponent(state.selectedId)}` : '';
+    const taskQuery = taskId ? `?workspaceTaskId=${encodeURIComponent(taskId)}` : '';
     const health = await fetchJson(`/api/workspace-health${taskQuery}`, { projectId, signal: controller.signal });
-    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId) return;
+    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId || taskId !== (state.selectedId || null)) return;
     state.health = health;
   } catch {
-    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) state.healthError = true;
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId && taskId === (state.selectedId || null)) state.healthError = true;
   } finally {
     window.clearTimeout(timer);
     if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) {
@@ -1667,6 +1672,7 @@ async function loadTaskList({ selectFirst = true } = {}) {
 }
 
 async function loadSelectedTask() {
+  if (state.healthTaskId !== (state.selectedId || null)) void checkWorkspaceHealth();
   if (!state.selectedId) {
     state.selectedTask = null;
     disposeTerminalViews();
@@ -1766,10 +1772,18 @@ async function saveCustomSettings() {
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     state.customSettings = result.custom;
     state.customDrafts.delete(projectId);
+    syncCreateCommands();
     showToast(t('custom.saved'), 'success');
     renderCreateMode();
   } catch (error) { settingsError(error.payload?.error?.message || error.message); }
   finally { if (projectId === state.projectId && epoch === state.projectEpoch) setSettingsBusy(false); }
+}
+
+function syncCreateCommands() {
+  if (!state.createOpen) return;
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    if (!state.createCommandEdited[slot]) document.querySelector(`#${id}`).value = state.customSettings[slot].command;
+  }
 }
 
 function creationMode() { return document.querySelector('input[name="workspaceMode"]:checked')?.value || 'default'; }
@@ -1797,6 +1811,7 @@ async function openCreateTask() {
   if (state.actionBusy || state.settingsBusy || !canEditProjectSettings() || state.createOpen) return;
   const projectId = state.projectId, epoch = state.projectEpoch;
   state.createOpen = true; state.createLoading = true;
+  state.createCommandEdited = { terminal1: false, terminal2: false };
   document.querySelector('#workspace-create-dialog').hidden = false;
   document.querySelector('input[name="workspaceMode"][value="default"]').checked = true;
   document.querySelector('#workspace-create-error').hidden = true;
@@ -1805,8 +1820,7 @@ async function openCreateTask() {
     const settings = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT, { projectId });
     if (projectId !== state.projectId || epoch !== state.projectEpoch || !state.createOpen) return;
     state.customSettings = customTerminalDefaults(settings);
-    document.querySelector('#workspace-create-command1').value = state.customSettings.terminal1.command;
-    document.querySelector('#workspace-create-command2').value = state.customSettings.terminal2.command;
+    syncCreateCommands();
     renderCreateMode();
   } catch (error) {
     if (projectId === state.projectId && epoch === state.projectEpoch && state.createOpen) {
@@ -1850,7 +1864,7 @@ async function sendCustomPrompt() {
   const target = state.promptTarget, controller = state.terminalViews.get(target.slot);
   if (!controller || controller.disposed || controller.promptWriting) return;
   const assertCurrent = () => {
-    if (controller.disposed || !sameCustomPromptTarget(target, currentPromptTarget(target.slot))
+    if (state.promptTarget !== target || controller.disposed || !sameCustomPromptTarget(target, currentPromptTarget(target.slot))
       || state.terminalViews.get(target.slot) !== controller) throw new Error(t('custom.targetChanged'));
   };
   controller.promptWriting = true; state.promptBusy = true; updateCustomPromptSend();
@@ -1861,6 +1875,7 @@ async function sendCustomPrompt() {
     assertCurrent();
     if (task.mode !== 'custom' || task.sessions?.[target.slot]?.sessionId !== target.sessionId
       || task.sessions[target.slot].createdAt !== target.sessionCreatedAt || !sessionIsActive(task.sessions[target.slot])) throw new Error(t('custom.targetChanged'));
+    assertCurrent(); // Closing the dialog cancels until the write is dispatched.
     await postAction('workspaceTaskPromptSend', { workspaceTaskId: target.taskId, slot: target.slot, confirmed: true, sessionCreatedAt: target.sessionCreatedAt }, target.projectId);
     if (!controller.disposed) scheduleTerminalRead(controller, 0);
   })();
@@ -2105,6 +2120,9 @@ function bindEvents() {
   document.querySelector('#empty-new-task')?.addEventListener('click', openCreateTask);
   document.querySelector('#workspace-create-form')?.addEventListener('submit', event => void createTask(event));
   for (const field of document.querySelectorAll('input[name="workspaceMode"]')) field.addEventListener('change', renderCreateMode);
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });
+  }
   for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
   document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings());
   document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());
