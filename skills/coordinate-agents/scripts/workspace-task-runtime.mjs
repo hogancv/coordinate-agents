@@ -656,7 +656,7 @@ function workspaceSlotPrompt(record, slot, language) {
   const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
   const helper = "'" + fileURLToPath(new URL('./workspace-message.mjs', import.meta.url)).replaceAll("'", "'\\''") + "'";
   const commands = slot === 'codex'
-    ? `send '<instruction>'; read <cursor>; wait <cursor> [revision] [timeout-ms]; report reviewing|approved|changes-requested <roundId> ['summary']`
+    ? `send '<instruction>'; read <cursor>; changes; wait <cursor> [revision] [timeout-ms]; report reviewing|approved|changes-requested <roundId> ['summary']`
     : `report working|done|failed <roundId> ['summary']`;
   return `${workspaceRolePrompt(expected.agent, language)}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
 }

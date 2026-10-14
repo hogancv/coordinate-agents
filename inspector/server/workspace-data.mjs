@@ -9,6 +9,7 @@ import { readWorkspaceTask, readWorkspaceTasks } from '../../skills/coordinate-a
 import { assertWorkspaceSession } from '../../skills/coordinate-agents/scripts/workspace-services.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
+import { readGitChanges, readGitDiff } from '../../skills/coordinate-agents/scripts/workspace-git-changes.mjs';
 import { readWorkspaceHealth } from './workspace-health.mjs';
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_TERMINAL_READ_BYTES = 32 * 1024;
@@ -176,6 +177,8 @@ export function createWorkspaceData(root) {
   const repository = canonicalRoot(root);
   return {
     root: repository,
+    readGitChanges: () => readGitChanges(repository),
+    readGitDiff: path => readGitDiff(repository, path),
     readRepository: () => repositoryFacts(repository),
     readWorkspaceSettings: () => readWorkspaceSettings(repository),
     async readWorkspaceHealth(workspaceTaskId = null) {

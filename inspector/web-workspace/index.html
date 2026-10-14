@@ -94,6 +94,7 @@
             </div>
           </div>
           <div class="topbar-actions">
+            <button id="changes-button" class="secondary-button" type="button" aria-expanded="false" aria-controls="changes-drawer" disabled>Changes —</button>
             <button id="workspace-health-button" class="secondary-button health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.open">Environment check</span></button>
             <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
               <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
@@ -134,6 +135,16 @@
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
 
+        <aside id="changes-drawer" class="changes-drawer" aria-labelledby="changes-title" hidden>
+          <header class="changes-header"><h2 id="changes-title">Changes</h2><button id="changes-refresh" class="secondary-button" type="button">Refresh</button><button id="changes-close" class="icon-button" type="button" aria-label="Close changes">×</button></header>
+          <p id="changes-scope" class="changes-scope"></p>
+          <div id="changes-summary" class="changes-summary" aria-live="polite"></div>
+          <p id="changes-stat-note" class="changes-scope" hidden></p>
+          <p id="changes-message" class="changes-hint" role="status"></p>
+          <div id="changes-files" class="changes-files"></div>
+          <div class="changes-detail-header"><code id="changes-path"></code><div class="changes-copy-actions"><button id="changes-copy-path" class="secondary-button" type="button" disabled>Copy path</button><button id="changes-copy-diff" class="secondary-button" type="button" disabled>Copy diff</button></div></div>
+          <div id="changes-diff" class="changes-diff" tabindex="0" aria-label="Diff"></div>
+        </aside>
         <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
       </main>
     </div>

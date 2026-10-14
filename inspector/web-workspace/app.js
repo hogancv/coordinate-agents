@@ -1,3 +1,4 @@
+import { mountChangesDrawer } from './git-changes.mjs';
 import {
   isActiveTerminalSession,
   selectTerminalPanes,
@@ -366,6 +367,8 @@ const state = {
   contextTarget: null,
   contextTrigger: null,
 };
+
+const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast });
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
 
@@ -836,6 +839,7 @@ function showHealthOnboarding() {
 }
 
 function renderLocale() {
+  changesDrawer.render();
   renderTheme();
   document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
   document.body.dataset.locale = state.locale === 'zh' ? 'zh-CN' : 'en';
@@ -1097,6 +1101,7 @@ async function selectProject(id, taskId) {
   disposeTerminalViews();
   state.projectEpoch++;
   state.projectId = id;
+  changesDrawer.reset(id);
   if (!state.taskSearch.trim()) state.expandedProjects.add(id);
   let stored = null;
   try { stored = localStorage.getItem(`workspace-selection-${id}`); } catch { /* Optional. */ }
@@ -1839,6 +1844,7 @@ function setLocale(locale) {
 }
 
 function renderNoProject() {
+  changesDrawer.reset(null);
   disposeTerminalViews(); state.repository = { name: t('project.none'), root: '', branch: null }; state.tasks = []; state.selectedId = null; state.selectedTask = null;
   renderRepository(); renderTaskList(); renderSelectedTask();
   for (const id of ['new-task-button', 'empty-new-task']) { const button = document.querySelector(`#${id}`); if (button) button.disabled = true; }
@@ -1894,6 +1900,7 @@ async function reloadProjectsAfterArchive(target) {
   if (!state.projects.some(project => project.id === state.projectId)) {
     disposeTerminalViews(); state.projectEpoch++;
     state.projectId = payload.defaultProjectId || state.projects[0]?.id || null;
+    changesDrawer.reset(state.projectId);
     state.selectedId = null; state.selectedTask = null; state.tasks = [];
     if (state.projectId) state.expandedProjects.add(state.projectId);
     try { window.history.replaceState(null, '', state.projectId ? `#${state.projectId}` : window.location.pathname); } catch { /* Optional. */ }
@@ -2033,6 +2040,7 @@ async function boot() {
     if (!state.selectedId) {
       try { state.selectedId = localStorage.getItem(`workspace-selection-${state.projectId}`) || null; } catch { /* Optional. */ }
     }
+    changesDrawer.reset(state.projectId);
     state.expandedProjects.add(state.projectId);
     document.querySelector('#new-project-button')?.addEventListener('click', openProjectDialog);
     bindProjectDialog();
