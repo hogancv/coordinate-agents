@@ -24,7 +24,7 @@ const MAX_OUTPUT = 20_000;
 const REQUIRED_FILES = [
   'bin/coordinate-agents.mjs', 'lib/web-cli.mjs',
   'inspector/server/workspace-server.mjs', 'inspector/server/http-server.mjs',
-  'inspector/server/workspace-data.mjs', 'inspector/server/action-gateway.mjs',
+  'inspector/server/workspace-data.mjs', 'inspector/server/workspace-health.mjs', 'inspector/server/action-gateway.mjs',
   'inspector/server/workspace-projects.mjs', 'inspector/server/native-folder-picker.mjs',
   ...['index.html', 'app.js', 'styles.css', 'composer-model.mjs', 'terminal-model.mjs', 'vendor/xterm.js', 'vendor/xterm.css', 'vendor/xterm.LICENSE'].map(file => `inspector/web-workspace/${file}`),
   ...['pty-runtime', 'session-host', 'session-manager', 'session-service', 'workspace-task-runtime', 'workspace-message', 'workspace-services', 'workspace-init', 'config', 'user-config', 'runtime-contract', 'runtime-events', 'workspace-role-prompts'].map(file => `skills/coordinate-agents/scripts/${file}.mjs`),

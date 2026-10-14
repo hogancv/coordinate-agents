@@ -17,9 +17,42 @@ const REFRESH_MS = 5_000;
 const UTF8_ENCODER = new TextEncoder();
 const WORKSPACE_SETTINGS_ENDPOINT = '/api/workspace-settings';
 const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: 'agy' });
+const HEALTH_SEEN_KEY = 'coordinate-agents-workspace-onboarding-seen';
 
 const I18N = {
   en: {
+    'health.open': 'Environment check',
+    'health.title': 'Check your local environment',
+    'health.loading': 'Checking local commands…',
+    'health.ready': 'Basic environment ready',
+    'health.warning': 'Basic environment ready with limitations',
+    'health.missing': 'Environment needs configuration',
+    'health.pending': 'Environment awaiting verification',
+    'health.error': 'Could not check the environment. You can continue or recheck.',
+    'health.ok': 'OK',
+    'health.statusWarning': 'Limited',
+    'health.statusMissing': 'Configure',
+    'health.statusPending': 'Pending',
+    'health.recheck': 'Recheck',
+    'health.continue': 'Continue',
+    'health.close': 'Close environment check',
+    'health.notStarted': 'Not started',
+    'health.codexMissing': 'Install Codex CLI, then recheck. You can also update its command in terminal settings.',
+    'health.antigravityMissing': 'Install Antigravity CLI or update its command in terminal settings, then recheck.',
+    'health.authUnknown': 'Sign-in status awaiting verification',
+    'health.authHint': 'CLI installed. Complete sign-in in the Web terminal when starting a task.',
+    'health.command': 'Current command',
+    'health.copy': 'Copy install command',
+    'health.copied': 'Install command copied.',
+    'health.copyError': 'Could not copy. Select the command and copy it manually.',
+    'health.versionUnknown': 'Version unavailable. Recheck or review the configured command.',
+    'health.timeout': 'Check timed out. Review the command or recheck; the workspace remains available.',
+    'health.nodeHint': 'Node.js 18 or later is required. Install a supported Node.js version and restart the Web server.',
+    'health.gitHint': 'Install Git for your system and make it available to the Web server, then recheck.',
+    'health.fallback': 'Terminal uses stdio fallback. Some native TUI features and terminal resizing may be limited.',
+    'health.node18': 'Node.js 18 uses the expected stdio compatibility mode. The workspace can still be used.',
+    'health.terminalPending': 'The terminal backend will be checked after you create a task.',
+    'health.details': 'Details',
     'status.failed': 'Failed',
     'terminal.accountInitTimeout': 'Account initialization timed out. Check the network or proxy, then restart the terminal pair.',
     'status.awaiting_input': 'Awaiting confirmation',
@@ -141,6 +174,38 @@ const I18N = {
     'action.retry': 'Retry',
   },
   zh: {
+    'health.open': '环境自检',
+    'health.title': '开始使用前，检查一下本地环境',
+    'health.loading': '正在检测本地命令…',
+    'health.ready': '基础环境已就绪',
+    'health.warning': '基础环境可用，存在兼容性限制',
+    'health.missing': '环境需配置',
+    'health.pending': '环境待验证',
+    'health.error': '暂时无法检测环境，可继续使用或重新检测。',
+    'health.ok': '正常',
+    'health.statusWarning': '有限制',
+    'health.statusMissing': '需配置',
+    'health.statusPending': '待检测',
+    'health.recheck': '重新检测',
+    'health.continue': '继续使用',
+    'health.close': '关闭环境自检',
+    'health.notStarted': '尚未启动',
+    'health.codexMissing': '请先安装 Codex CLI，安装完成后重新检测；也可在终端设置中修改启动命令。',
+    'health.antigravityMissing': '请安装 Antigravity CLI，或在终端设置中修改启动命令，然后重新检测。',
+    'health.authUnknown': '登录状态待验证',
+    'health.authHint': 'CLI 已安装。启动任务时可直接在 Web 终端中完成登录。',
+    'health.command': '当前使用的命令',
+    'health.copy': '复制安装命令',
+    'health.copied': '安装命令已复制。',
+    'health.copyError': '无法自动复制，请选中命令手动复制。',
+    'health.versionUnknown': '版本信息暂不可用，请重新检测或检查启动命令。',
+    'health.timeout': '检测超时，请检查启动命令或重新检测；工作台仍可使用。',
+    'health.nodeHint': '需要 Node.js 18 或更高版本。请安装受支持的 Node.js 版本并重启 Web 服务。',
+    'health.gitHint': '请安装适用于当前系统的 Git，并确保 Web 服务能执行 Git，然后重新检测。',
+    'health.fallback': '当前终端使用 stdio 兼容模式，部分原生 TUI 和终端尺寸调整能力可能受限。',
+    'health.node18': 'Node.js 18 使用预期的 stdio 兼容模式，仍可正常使用工作台。',
+    'health.terminalPending': '新建任务后会复用实际终端信息检测运行后端。',
+    'health.details': '详情',
     'status.failed': '失败',
     'terminal.accountInitTimeout': '账户初始化超时。请检查网络或代理，然后重启终端组。',
     'status.awaiting_input': '等待确认',
@@ -291,6 +356,12 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  health: null,
+  healthBusy: false,
+  healthError: false,
+  healthRequest: 0,
+  healthController: null,
+  healthOpen: false,
   archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
   contextTarget: null,
   contextTrigger: null,
@@ -647,12 +718,121 @@ async function saveSettings(event) {
     state.settings = { ...state.settings, ...commands, model, effort, args };
     closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
+    void checkWorkspaceHealth();
   } catch (error) {
     settingsError(error.payload?.error?.message || error.message || t('settings.saveError'));
   } finally {
     setSettingsBusy(false);
     setBusy(false);
   }
+}
+
+function healthTerminal() {
+  const task = state.selectedTask?.id === state.selectedId ? state.selectedTask : null;
+  const sessions = (!task?.archivedAt && task?.status !== 'CLOSED' ? Object.values(task?.sessions || {}) : [])
+    .filter(session => (session.sessionId || session.id) && isActiveTerminalSession(session));
+  if (sessions.some(session => session.backend === 'stdio-fallback')) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
+  if (sessions.some(session => session.backend === 'node-pty')) return { status: 'ok', backend: 'node-pty' };
+  return { status: 'pending', backend: null,
+    ...(state.health?.checks?.node?.version?.startsWith('v18.') ? { reason: 'NODE18_STDIO_COMPATIBILITY' } : {}) };
+}
+
+function healthSummaryStatus() {
+  if (state.healthBusy || state.healthError || !state.health) return 'pending';
+  const checks = { ...state.health.checks, terminal: healthTerminal() };
+  if (Object.values(checks).some(check => check.status === 'missing')) return 'missing';
+  if (['node', 'git', 'codex', 'antigravity'].some(id => checks[id]?.status === 'pending')) return 'pending';
+  return Object.values(checks).some(check => check.status === 'warning') ? 'warning' : 'ok';
+}
+
+function renderWorkspaceHealth() {
+  const button = document.querySelector('#workspace-health-button');
+  const panel = document.querySelector('#workspace-health-panel');
+  if (!button || !panel) return;
+  const status = healthSummaryStatus();
+  const symbols = { ok: '✓', warning: '!', missing: '×', pending: '○' };
+  const labels = { ok: 'health.ready', warning: 'health.warning', missing: 'health.missing', pending: 'health.pending' };
+  const summary = state.healthBusy ? t('health.loading') : state.healthError ? t('health.error') : t(labels[status]);
+  button.dataset.healthStatus = status;
+  button.setAttribute('aria-expanded', String(state.healthOpen));
+  button.title = t('health.open');
+  document.querySelector('#workspace-health-label').textContent = state.healthBusy ? t('health.loading') : t(labels[status]);
+  document.querySelector('#workspace-health-indicator').textContent = symbols[status];
+  panel.hidden = !state.healthOpen;
+  panel.setAttribute('aria-busy', String(state.healthBusy));
+  document.querySelector('#workspace-health-summary').textContent = summary;
+  document.querySelector('#workspace-health-close').setAttribute('aria-label', t('health.close'));
+  document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
+  const rows = document.querySelector('#workspace-health-checks');
+  if (state.healthBusy || !state.health) { rows.innerHTML = ''; return; }
+  const expanded = new Set([...rows.querySelectorAll('details[open]')].map(detail => detail.dataset.healthDetail));
+  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal: 'Terminal / PTY' };
+  const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
+  rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
+    let hint = t('health.details');
+    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : 'health.antigravityMissing');
+    else if (check.reason?.includes('TIMEOUT') || check.reason === 'DETECTION_FAILED') hint = t('health.timeout');
+    else if (check.reason === 'STDIO_FALLBACK') hint = t('health.fallback');
+    else if (check.reason === 'NODE18_STDIO_COMPATIBILITY') hint = t('health.node18');
+    else if (id === 'terminal' && check.status === 'pending') hint = t('health.terminalPending');
+    else if (check.status === 'warning') hint = t('health.versionUnknown');
+    else if (check.authenticated === 'unknown') hint = t('health.authUnknown');
+    const cliInstalled = check.authenticated === 'unknown' && ['ok', 'warning'].includes(check.status);
+    const value = check.command || (check.backend === 'stdio-fallback' ? 'stdio fallback' : check.backend) || check.version || t('health.notStarted');
+    return `<div class="health-row"><div class="health-row-heading"><span data-health-status="${check.status}" aria-hidden="true">${symbols[check.status]}</span><strong>${names[id]}</strong><span class="health-value">${escapeHtml(value)}${check.command && check.version ? ` · ${escapeHtml(check.version)}` : ''}</span><span class="health-status" data-health-status="${check.status}">${t(statusLabels[check.status])}</span></div>
+      <details data-health-detail="${id}"${expanded.has(id) ? ' open' : ''}><summary>${escapeHtml(hint)}</summary>
+      ${check.command ? `<p>${t('health.command')}: <code>${escapeHtml(check.command)}</code></p>` : ''}
+      ${check.reason ? `<p><code>${escapeHtml(check.reason)}</code></p>` : ''}
+      ${cliInstalled ? `<p>${t('health.authUnknown')}</p><p>${t('health.authHint')}</p>` : ''}
+      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</details></div>`;
+  }).join('');
+}
+
+async function checkWorkspaceHealth() {
+  state.healthController?.abort();
+  const request = ++state.healthRequest;
+  const epoch = state.projectEpoch;
+  const projectId = state.projectId;
+  state.health = null;
+  state.healthError = false;
+  state.healthBusy = Boolean(projectId);
+  renderWorkspaceHealth();
+  if (!projectId) return;
+  const controller = new AbortController();
+  state.healthController = controller;
+  const timer = window.setTimeout(() => controller.abort(), 10000);
+  try {
+    const taskQuery = state.selectedId ? `?workspaceTaskId=${encodeURIComponent(state.selectedId)}` : '';
+    const health = await fetchJson(`/api/workspace-health${taskQuery}`, { projectId, signal: controller.signal });
+    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId) return;
+    state.health = health;
+  } catch {
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) state.healthError = true;
+  } finally {
+    window.clearTimeout(timer);
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) {
+      state.healthBusy = false;
+      renderWorkspaceHealth();
+    }
+  }
+}
+
+function setHealthOpen(open, { focus = false } = {}) {
+  state.healthOpen = open;
+  if (!open) {
+    try { localStorage.setItem(HEALTH_SEEN_KEY, 'true'); } catch { /* Optional storage. */ }
+  }
+  renderWorkspaceHealth();
+  if (focus) document.querySelector(open ? '#workspace-health-recheck' : '#workspace-health-button')?.focus();
+}
+
+function showHealthOnboarding() {
+  try { if (localStorage.getItem(HEALTH_SEEN_KEY) === 'true') return; } catch { /* Optional storage. */ }
+  if (!state.projectTasks.has(state.projectId)) return;
+  const active = [...state.projectTasks.values()].flat().some(task =>
+    ['STARTING', 'AWAITING_INPUT', 'RUNNING', 'DEGRADED'].includes(task.status)
+    || Object.values(task.sessions || {}).some(isActiveTerminalSession));
+  if (!active) setHealthOpen(true);
 }
 
 function renderLocale() {
@@ -669,6 +849,7 @@ function renderLocale() {
   renderSelectedTask();
   updateTerminalLayout();
   renderArchiveSummary();
+  renderWorkspaceHealth();
 }
 
 function setZenMode(enabled) {
@@ -923,6 +1104,7 @@ async function selectProject(id, taskId) {
   state.selectedTask = null;
   state.tasks = [];
   state.repository = { name: project.name, root: project.root };
+  void checkWorkspaceHealth();
   renderRepository(); renderTaskList(); renderSelectedTask(); rememberSelection();
   if (!project.available) { showToast(projectText('项目目录不可用', 'Project directory unavailable'), 'error'); return; }
   await refresh({ showError: true });
@@ -1455,12 +1637,15 @@ async function readTerminal(controller) {
     if (payload.session && !sessionIsActive(payload.session)) controller.finished = true;
     updateTerminalHeader(controller.pane);
     if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
+      const previousTerminalHealth = healthTerminal();
       state.selectedTask.sessions[controller.pane.slotId] = {
         ...state.selectedTask.sessions[controller.pane.slotId],
         ...payload.session,
         state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
         status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
       };
+      const currentTerminalHealth = healthTerminal();
+      if (previousTerminalHealth.status !== currentTerminalHealth.status || previousTerminalHealth.backend !== currentTerminalHealth.backend) renderWorkspaceHealth();
     }
   } catch (error) {
     if (controller.disposed) return;
@@ -1501,6 +1686,7 @@ async function loadSelectedTask() {
     state.selectedTask = null;
     disposeTerminalViews();
     renderSelectedTask();
+    renderWorkspaceHealth();
     return;
   }
   const projectId = state.projectId;
@@ -1511,6 +1697,7 @@ async function loadSelectedTask() {
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
+  renderWorkspaceHealth();
   void continueTaskStartup(task, projectId, epoch);
 }
 
@@ -1527,6 +1714,7 @@ async function continueTaskStartup(task, projectId, epoch) {
     state.projectTasks.set(projectId, state.tasks);
     renderTaskList();
     renderSelectedTask();
+    renderWorkspaceHealth();
   } catch { /* Retry through the existing refresh; terminal input stays usable. */ }
   finally { state.startupContinuing.delete(key); }
 }
@@ -1549,6 +1737,7 @@ async function refresh({ showError = false } = {}) {
     await Promise.all([loadRepository(), loadTaskList({ selectFirst: !state.selectedId })]);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     await loadSelectedTask();
+    renderWorkspaceHealth();
   } catch (error) {
     if (showError && projectId === state.projectId && epoch === state.projectEpoch) showToast(error.message || t('action.refreshError'), 'error');
   }
@@ -1557,6 +1746,7 @@ async function refresh({ showError = false } = {}) {
 async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
+  renderWorkspaceHealth();
   rememberSelection();
   renderTaskList();
   await loadSelectedTask();
@@ -1707,6 +1897,7 @@ async function reloadProjectsAfterArchive(target) {
     state.selectedId = null; state.selectedTask = null; state.tasks = [];
     if (state.projectId) state.expandedProjects.add(state.projectId);
     try { window.history.replaceState(null, '', state.projectId ? `#${state.projectId}` : window.location.pathname); } catch { /* Optional. */ }
+    void checkWorkspaceHealth();
   }
   renderProjects();
   if (state.projectId) await refresh(); else renderNoProject();
@@ -1790,6 +1981,19 @@ function bindEvents() {
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && state.settingsOpen) closeSettings();
+    else if (event.key === 'Escape' && state.healthOpen) setHealthOpen(false, { focus: true });
+  });
+  document.querySelector('#workspace-health-button')?.addEventListener('click', () => {
+    setHealthOpen(!state.healthOpen, { focus: true });
+    if (state.healthOpen) void checkWorkspaceHealth();
+  });
+  for (const id of ['workspace-health-close', 'workspace-health-continue']) document.querySelector(`#${id}`)?.addEventListener('click', () => setHealthOpen(false, { focus: true }));
+  document.querySelector('#workspace-health-recheck')?.addEventListener('click', () => void checkWorkspaceHealth());
+  document.querySelector('#workspace-health-settings')?.addEventListener('click', () => { setHealthOpen(false); void openSettings(); });
+  document.querySelector('#workspace-health-checks')?.addEventListener('click', async event => {
+    if (!event.target.closest('[data-health-copy]')) return;
+    try { await navigator.clipboard.writeText('npm install -g @openai/codex'); showToast(t('health.copied'), 'success'); }
+    catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
@@ -1834,6 +2038,8 @@ async function boot() {
     bindProjectDialog();
   } catch (error) { showToast(error.message, 'error'); }
   await refresh({ showError: true });
+  void checkWorkspaceHealth();
+  showHealthOnboarding();
   state.refreshTimer = window.setInterval(() => void refresh(), REFRESH_MS);
 }
 

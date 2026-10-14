@@ -96,7 +96,10 @@ test('payload verifier rejects omitted runtime files and added Legacy or secret 
       const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); writeFileSync(target, 'unexpected');
       assert.throws(() => verifyPayload(temporary), /Unexpected or Legacy payload file/); rmSync(target);
     }
-    rmSync(join(temporary, 'skills/coordinate-agents/scripts/session-host.mjs'));
-    assert.throws(() => verifyPayload(temporary), /session-host.mjs is missing/);
+    for (const file of ['inspector/server/workspace-health.mjs', 'skills/coordinate-agents/scripts/session-host.mjs']) {
+      rmSync(join(temporary, file));
+      assert.throws(() => verifyPayload(temporary), new RegExp(`${file.split('/').at(-1).replaceAll('.', '\\.')} is missing`));
+      cpSync(join(root, file), join(temporary, file));
+    }
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 });
