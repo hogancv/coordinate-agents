@@ -1324,7 +1324,7 @@ function getReviewTaskContext(task = state.selectedTask) {
     taskId: state.selectedId, task, actionBusy: state.actionBusy, inputRevision: state.terminalViews.get('codex')?.inputRevision || 0 };
 }
 
-async function sendReviewToCodex({ target, prompt, validateSelection }) {
+async function sendReviewToCodex({ target, prompt, validateSelection, assertSelection }) {
   const controller = state.terminalViews.get('codex');
   function assertCurrent() {
     if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext())) || controller?.disposed
@@ -1353,6 +1353,8 @@ async function sendReviewToCodex({ target, prompt, validateSelection }) {
     if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext(task)))) throw reviewError('reviewTargetChanged');
     const error = reviewTargetError(getReviewTaskContext(task));
     if (error) throw reviewError(error);
+    // No await between this selection check and dispatching the PTY write.
+    assertSelection();
     try {
       await postAction('sessionWrite', { sessionId: target.sessionId, input, submit: true }, target.projectId);
     } catch {

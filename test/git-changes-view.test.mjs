@@ -61,13 +61,14 @@ function drawerDocument() {
 }
 const tick = () => new Promise(setImmediate);
 const fixtureDiff = '@@ -1,2 +1,2 @@\n-old\n+中文 😀\n same\n';
-async function setupDrawer({ locale = () => 'zh', sendToCodex = async ({ validateSelection }) => validateSelection() } = {}) {
+async function setupDrawer({ locale = () => 'zh', sendToCodex = async ({ validateSelection }) => validateSelection(),
+  files = [{ path: '<文件>.js', status: 'modified' }] } = {}) {
   const document = drawerDocument(); globalThis.document = document;
   const task = { id: 't', status: 'RUNNING', startup: { slots: { codex: 'READY' } }, sessions: { codex: { sessionId: 'c', state: 'idle' } } };
   const context = { projectId: 'a', taskId: 't', task, taskEpoch: 1, projectEpoch: 1 };
   let currentDiff = fixtureDiff; const requests = [];
   const drawer = mountChangesDrawer({ locale, toast() {}, getTaskContext: () => context, sendToCodex,
-    request: async path => { requests.push(path); return path.includes('/diff?') ? { ok: true, diff: currentDiff } : { ok: true, files: [{ path: '<文件>.js', status: 'modified' }], summary: { files: 1 } }; } });
+    request: async path => { requests.push(path); return path.includes('/diff?') ? { ok: true, diff: currentDiff } : { ok: true, files, summary: { files: files.length } }; } });
   drawer.reset('a'); await tick(); document.getElementById('changes-button').click(); await tick();
   document.getElementById('changes-files').children[0].click(); await tick();
   const $ = id => document.getElementById(id);
@@ -106,6 +107,56 @@ test('drawer single send keeps failed drafts, suppresses duplicate clicks and bl
   env.$('review-send').click(); await tick();
   assert.equal(writes, 1); assert.equal(env.$('review-send').disabled, true);
   assert.equal(env.$('review-comment').value, 'fix');
+});
+
+test('successful feedback sends consume readiness and edited comments require confirmation again', async () => {
+  let writes = 0;
+  const env = await setupDrawer({ sendToCodex: async ({ validateSelection }) => { await validateSelection(); writes++; } });
+  env.context.inputRevision = 0;
+  env.select(2); env.comment('first feedback'); env.ready();
+  env.$('review-send').click(); await tick();
+  assert.equal(writes, 1);
+  assert.equal(env.$('review-ready').checked, false);
+  assert.equal(env.$('review-send').disabled, true);
+  env.comment('updated feedback');
+  assert.equal(env.$('review-send').disabled, true);
+  env.$('review-send').click(); await tick();
+  assert.equal(writes, 1);
+  env.ready();
+  assert.equal(env.$('review-send').disabled, false);
+  env.$('review-send').click(); await tick();
+  assert.equal(writes, 2);
+  assert.equal(env.$('review-ready').checked, false);
+});
+
+test('drawer provides a synchronous final selection guard after diff validation', async t => {
+  const mutations = {
+    'switch file': env => env.$('changes-files').children[1].click(),
+    'refresh diff': env => env.$('changes-refresh').click(),
+    'close drawer': env => env.$('changes-close').click(),
+  };
+  for (const [name, mutate] of Object.entries(mutations)) {
+    await t.test(name, async () => {
+      let release, validated, writes = 0, selectionGuard;
+      const taskRead = new Promise(resolve => { release = resolve; });
+      const diffValidated = new Promise(resolve => { validated = resolve; });
+      const env = await setupDrawer({
+        files: [{ path: '<文件>.js', status: 'modified' }, { path: 'other.js', status: 'modified' }],
+        sendToCodex: async ({ validateSelection, assertSelection }) => {
+          await validateSelection(); selectionGuard = assertSelection; validated();
+          await taskRead;
+          // Model the handoff's final synchronous check without another diff request.
+          assertSelection?.(); writes++;
+        },
+      });
+      env.select(2); env.comment('feedback'); env.ready();
+      env.$('review-send').click(); await diffValidated;
+      mutate(env); release(); await tick();
+      assert.equal(writes, 0);
+      assert.throws(selectionGuard, { code: 'reviewTargetChanged' });
+      assert.equal(env.requests.filter(path => path.includes('/diff?path=%3C')).length, 2);
+    });
+  }
 });
 
 test('task change disables the bound draft; project switch and close discard the previous target', async () => {

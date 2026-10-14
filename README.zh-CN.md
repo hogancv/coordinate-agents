@@ -39,6 +39,8 @@ conformance kit、示例、测试及开发脚本。tarball 的 `skills/` 路径�
 
 Web 任务组状态表示终端生命周期，**不代表实现或审查完成**。角色提示词是行为约定，不是强制执行的工作流状态机。Web 提示词要求未经用户授权不得提交、推送或发布；结构化模式继续遵守原有审查与发布授权流程。
 
+每次发送 Diff 审查反馈前，都必须确认 Codex 停在空白输入框。发送成功后会清除该确认；修改已发送的反馈后，必须重新确认才能再次发送。预检期间切换文件、刷新 Diff 或关闭变更抽屉，会在终端输入发出前取消待发送的反馈。
+
 ![完整端到端终端演示](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/assets/demo.gif)
 
 该动图由 `npm run demo` 在隔离 Git 仓库中生成；脱敏后的原始记录见 [assets/demo-transcript.txt](./assets/demo-transcript.txt)。

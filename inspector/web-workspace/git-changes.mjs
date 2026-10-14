@@ -159,7 +159,7 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
         || state.projectId !== captured.projectId || state.path !== captured.path || targetError()) throw reviewError('reviewTargetChanged');
     };
     try {
-      await sendToCodex({ target: captured.target, prompt: content, validateSelection: async () => {
+      await sendToCodex({ target: captured.target, prompt: content, assertSelection, validateSelection: async () => {
         assertSelection();
         const fresh = await request(`/api/git-changes/diff?path=${encodeURIComponent(captured.path)}`, { projectId: captured.projectId });
         assertSelection();
@@ -167,7 +167,10 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
           captured.stale = true; throw reviewError('reviewStale');
         }
       } });
-      if (generation === currentGeneration) { outcome = 'sent'; $('review-status').textContent = text('reviewSent'); }
+      if (generation === currentGeneration) {
+        outcome = 'sent'; confirmedInputRevision = null; $('review-ready').checked = false;
+        $('review-status').textContent = text('reviewSent');
+      }
       toast(text('reviewSent'));
     } catch (error) {
       if (generation === currentGeneration) {
