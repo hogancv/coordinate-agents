@@ -273,3 +273,37 @@ Coordinate Agents 是本地优先项目，同时维护轻量 Web 与结构化 Pl
 ## 许可证
 
 [MIT](./LICENSE)
+
+### 桌面通知（Windows 10/11 和 macOS）
+
+在 **终端设置 → 桌面通知** 中启用并保存当前项目的通知设置。总开关默认关闭；
+启用后默认通知 APPROVED（审查通过）和 FAILED（执行失败），DONE（实现完成、等待审查）
+可单独开启。点击 **发送测试通知** 使用固定模板，不创建 Task，不修改协作回执。
+「通知命令已接受」不代表系统已经展示；请同时检查通知权限、专注模式或勿扰模式。
+
+只有 Default Collaboration 中通过校验、成功持久化的正式回执会触发通知。
+关闭网页后仍可通知：`workspace-message report` 直接在 Node 侧派发，不依赖网页、
+浏览器权限、SSE 或轮询。后端、Agent 和操作系统交互登录会话需要继续运行；关闭这些
+进程后不保证通知。Custom 终端输出、idle、退出、Task 关闭、重启和归档都不算完成。
+
+Windows 使用系统自带的 Windows PowerShell 5.1 和 WinRT Toast。首次启用派发或测试时，
+按[微软桌面 Toast 身份要求](https://learn.microsoft.com/en-us/windows/win32/shell/enable-desktop-toast-with-appusermodelid)
+创建当前用户的「Coordinate Agents Notifications」开始菜单快捷方式，设置稳定的
+`CoordinateAgents.Workspace` AppUserModelID，之后重复使用。不修改注册表、不要求管理员
+权限、不安装第三方模块或常驻服务。macOS 使用 `/usr/bin/osascript` 固定脚本与独立文本
+参数，发送者权限由系统控制。Linux 返回不支持，不影响任务或配置。
+
+设置原子保存在 `.agent-bus/workspace-notifications.json`，下次回执立即读取。
+`.agent-bus/notifications/` 中的持久去重记录按项目、Task、roundId 和状态的哈希，
+先标记、后调用系统；采用尽力而为、至多派发一次语义，失败不重试，标记后进程崩溃
+允许丢失该次通知。修改 summary 不重发，新一轮 roundId 可再次通知。
+通知只显示经过清理和截断的项目名、任务标题及状态，不包含 Prompt、输出、摘要或绝对路径。
+
+去重表最多保存 4096 个事件；满额时仅清理对应 Task 记录已删除的条目。如果对应 Task
+仍然存在，停止新派发并记录容量诊断，避免遗忘旧记录后重复通知。清理归档会话可回收
+已删除 Task 的容量。仅保留一条有限诊断，不保存系统 stderr。配置或路径异常会停止
+派发，绝不影响正式回执；系统命令超时上限 10 秒，report 返回结构保持兼容。
+
+真实展示仍需在 Windows 10、Windows 11、macOS 人工验收：点击测试通知、完成一次默认
+协作、检查启用事件和 APPROVED 不重复，再关闭网页、保持后端与 Agent 运行后测试新一轮。
+自动化测试模拟系统通知命令，不能证明桌面实际展示成功。

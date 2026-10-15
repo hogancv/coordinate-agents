@@ -32,7 +32,7 @@ The **GitHub Plugin / Legacy CLI / MCP / Task Graph source remains complete**, i
 Install the GitHub Plugin for structured collaboration; its version is managed
 independently (currently 2.4.0). npm 3.x excludes Plugin manifests, Skill
 resources, MCP, Task Graph, Adapter SDK/conformance/examples, tests and developer
-tooling. Only the required shared `.mjs` modules remain under `skills/` in the
+tooling. Only required runtime modules and the trusted notification script remain under `skills/` in the
 tarball; this is not a packaged Codex Skill. No build or prepack step is needed.
 
 ## Two collaboration modes
@@ -323,3 +323,50 @@ Contributor setup and required validation commands are defined in [AGENTS.md](./
 ## License
 
 [MIT](./LICENSE)
+
+### Desktop notifications (Windows 10/11 and macOS)
+
+In **Terminal settings → Desktop Notifications**, enable system notifications
+for the current project and save. By default, APPROVED (review passed) and
+FAILED are selected; DONE (implementation ready, awaiting review) is optional.
+Notifications start disabled. **Send test notification** uses a fixed template
+and does not create a task or change cooperation. A command being accepted does
+not prove that the OS displayed it. Check notification permissions and Focus /
+Do Not Disturb settings if the test is accepted but invisible.
+
+Only validated, persisted Default Collaboration receipts trigger notifications.
+Closing the browser is fine: `workspace-message report` dispatches from Node,
+independently of Web/SSE connections. The backend, Agents and interactive OS
+session must continue running. Closing those processes can prevent notifications.
+Custom terminal output, idle, exits, task close/restart and archive do not count.
+
+Windows uses built-in Windows PowerShell 5.1 and WinRT Toast, with a stable
+`CoordinateAgents.Workspace` AppUserModelID. On the first enabled dispatch or
+test it creates a per-user **Coordinate Agents Notifications** Start Menu
+shortcut and sets `System.AppUserModel.ID`; subsequent calls reuse it. This is
+required for [unpackaged desktop Toast identity](https://learn.microsoft.com/en-us/windows/win32/shell/enable-desktop-toast-with-appusermodelid).
+There is no registry edit, admin requirement, third-party module or service.
+macOS uses `/usr/bin/osascript` with a fixed script and separate text arguments;
+its sender/permission behavior is controlled by macOS. Linux reports unsupported.
+
+Preferences are atomically saved in `.agent-bus/workspace-notifications.json` and
+read on the next receipt. The dispatch ledger in `.agent-bus/notifications/`
+claims a hash of project/task/round/status **before** invoking the OS. Attempts
+are at most once, including failures; a crash after the claim may lose a
+notification. Summary edits do not resend. New rounds can notify again.
+No prompt, output, summary or absolute project path is included in notifications
+or the ledger. Only a bounded, sanitized project name and task title are shown.
+
+The ledger holds at most 4096 claims. At capacity, claims for deleted task
+records are reclaimed; if all records still exist, dispatch stops with a
+capacity diagnostic instead of forgetting claims and risking duplicates.
+Clear archived conversations to reclaim deleted tasks. Only the most recent
+bounded diagnostic is stored, with no native stderr. Corrupt or unsafe paths
+fail closed and never change the task receipt. A notification command has a
+10-second timeout; the report return structure stays unchanged.
+
+Release acceptance still requires real Windows 10, Windows 11 and macOS checks:
+run the test button, complete a Default task, verify enabled DONE/APPROVED/FAILED
+events and no duplicate APPROVED, then repeat a new round with the browser
+closed while the backend/Agents remain running. Automated tests mock native
+notification commands and do not establish on-screen delivery.

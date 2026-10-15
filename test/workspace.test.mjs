@@ -143,7 +143,9 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.deepEqual(workspaceTasks, [], 'standard Task and Graph records stay hidden from the Workspace task list');
 
     const workspaceSettings = await (await fetch(`${started.url}/api/workspace-settings`)).json();
-    assert.deepEqual(Object.keys(workspaceSettings).sort(), ['antigravity', 'codex', 'custom']);
+    assert.deepEqual(Object.keys(workspaceSettings).sort(), ['antigravity', 'codex', 'custom', 'notifications']);
+    assert.deepEqual(workspaceSettings.notifications.config, { enabled: false, events: { done: false, approved: true, failed: true } });
+    assert.equal(typeof workspaceSettings.notifications.capability.supported, 'boolean');
     assert.equal(workspaceSettings.custom.terminal1.command, workspaceSettings.codex.command);
     assert.equal(workspaceSettings.custom.terminal2.command, workspaceSettings.antigravity.command);
     assert.equal(workspaceSettings.codex.adapter, 'codex-cli');

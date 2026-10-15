@@ -412,3 +412,9 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .custom-settings textarea, #custom-prompt-preview { width: 100%; box-sizing: border-box; resize: vertical; padding: .6rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--panel); color: var(--text); font: inherit; }
 #custom-prompt-preview { min-height: 14rem; max-height: 40vh; }
 .terminal-prompt-button { font-size: 11px; padding: 4px 7px; }
+
+.notification-settings { border-top: 1px solid var(--line-strong); padding-top: 1rem; }
+.notification-settings fieldset { display: grid; gap: .6rem; min-width: 0; margin: 0; padding: .7rem; border: 1px solid var(--line-strong); border-radius: .4rem; }
+.notification-settings label { display: flex; align-items: baseline; gap: .4rem; font-size: .8rem; }
+.notification-settings input[type="checkbox"] { width: auto; flex: 0 0 auto; }
+.notification-actions { display: flex; flex-wrap: wrap; gap: .5rem; }

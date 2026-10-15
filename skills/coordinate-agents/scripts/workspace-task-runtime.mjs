@@ -1,3 +1,4 @@
+import { notifyWorkspaceReceipt } from './workspace-notifications.mjs';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 import {
@@ -1115,11 +1116,12 @@ export async function dispatchWorkspaceTask(root, id, roundId, deliver) {
   });
 }
 
-export async function reportWorkspaceTask(root, id, status, roundId, summary = '') {
+export async function reportWorkspaceTask(root, id, status, roundId, summary = '', { notify = notifyWorkspaceReceipt } = {}) {
   if (!['WORKING', 'DONE', 'REVIEWING', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED'].includes(status)) throw new Error('Invalid report status. Use working, done, reviewing, approved, changes-requested, or failed.');
   if (!ROUND_ID_PATTERN.test(roundId || '')) throw new Error('A valid roundId is required.');
   if (typeof summary !== 'string' || Buffer.byteLength(summary) > 2048) throw new Error('Summary must be at most 2048 bytes.');
-  return withCooperationLock(root, id, repository => {
+  let committedEvent = null;
+  const result = await withCooperationLock(root, id, repository => {
     const record = readWorkspaceTaskRecord(repository, id);
     const slot = ['REVIEWING', 'APPROVED', 'CHANGES_REQUESTED'].includes(status) ? 'codex' : 'antigravity';
     assertCooperationSession(repository, record, slot);
@@ -1130,6 +1132,18 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
     if (previous.status === status && previous.summary === cleaned) return previous;
     record.cooperation = { status, roundId, revision: previous.revision + 1, summary: cleaned, updatedAt: now() };
     record.updatedAt = now();
-    return writeWorkspaceTask(repository, record, { replaceCooperation: true }).cooperation;
+    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true });
+    // Only new formal transitions, never summary edits, lifecycle or output.
+    if (previous.status !== status && ['DONE', 'APPROVED', 'FAILED'].includes(status)) {
+      committedEvent = { root: repository, task: { id: committed.id, mode: committed.mode, title: committed.title,
+        cooperation: { status, roundId } } };
+    }
+    return committed.cooperation;
   });
+  if (committedEvent) {
+    // Both task locks have been released. A native child keeps a short-lived
+    // report CLI alive for handoff; its result never changes this receipt.
+    try { Promise.resolve(notify(committedEvent.root, committedEvent.task)).catch(() => {}); } catch { /* Isolated side effect. */ }
+  }
+  return result;
 }

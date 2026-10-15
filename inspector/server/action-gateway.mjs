@@ -13,6 +13,7 @@ import {
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { withConfigTransaction } from '../../skills/coordinate-agents/scripts/config.mjs';
 import { join } from 'node:path';
+import { validateNotificationConfig } from '../../skills/coordinate-agents/scripts/workspace-notification-config.mjs';
 import { validateCustomWorkspaceConfig, resolveCustomTaskConfig } from '../../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
 
 export const ACTION_ENDPOINT = '/api/action';
@@ -25,6 +26,13 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const CORRELATION_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
 const ACTION_DEFINITIONS = Object.freeze({
+  workspaceNotificationsSave: {
+    operation: 'workspaceNotificationsSave', command: 'workspace.notifications.save',
+    params: { notifications: { type: 'object', required: true, max: 2048 } },
+  },
+  workspaceNotificationsTest: {
+    operation: 'workspaceNotificationsTest', command: 'workspace.notifications.test', params: {},
+  },
   workspaceTaskCreate: {
     operation: 'workspaceTaskCreate',
     command: 'workspace.task.create',
@@ -386,6 +394,7 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
           if ((params.mode || 'default') === 'default' && params.custom !== undefined) throw new Error('Default tasks cannot have custom settings.');
           if (params.mode === 'custom') params.custom = resolveCustomTaskConfig(boundRoot, params.custom);
         }
+        if (action === 'workspaceNotificationsSave') params.notifications = validateNotificationConfig(params.notifications);
         if (action === 'workspaceCustomSettingsSave') params.custom = validateCustomWorkspaceConfig(params.custom);
       } catch (error) { send(400, gatewayError('ACTION_PARAMS_INVALID', error.message)); return; }
 

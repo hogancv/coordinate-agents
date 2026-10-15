@@ -1,3 +1,4 @@
+import { readNotificationSettings } from '../../skills/coordinate-agents/scripts/workspace-notifications.mjs';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -182,7 +183,7 @@ export function createWorkspaceData(root) {
     readGitChanges: () => readGitChanges(repository),
     readGitDiff: path => readGitDiff(repository, path),
     readRepository: () => repositoryFacts(repository),
-    readWorkspaceSettings: () => ({ ...readWorkspaceSettings(repository), custom: readCustomWorkspaceConfig(repository) }),
+    readWorkspaceSettings: () => ({ ...readWorkspaceSettings(repository), custom: readCustomWorkspaceConfig(repository), notifications: readNotificationSettings(repository) }),
     async readWorkspaceHealth(workspaceTaskId = null) {
       const tasks = workspaceTaskId ? [await readWorkspaceTask(repository, workspaceTaskId)] : await readWorkspaceTasks(repository);
       return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),

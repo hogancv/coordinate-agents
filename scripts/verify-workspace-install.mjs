@@ -125,6 +125,22 @@ try {
   const another=await action('workspaceTaskCreate',{language:'zh-CN'}); const task2=another.workspaceTask || another.task; allTasks.push(task2.id);
   assert.notEqual(task2.sessions.antigravity.sessionId,agy);
   const secondRead=await read(task2.sessions.antigravity.sessionId); assert.doesNotMatch(secondRead.output.output,/directed-message-check/);
+  // Native notification modules/Windows script load from the installed tarball.
+  // Mock the OS command so package verification never displays a real toast.
+  const notifications = await import(pathToFileURL(join(packageRoot, 'skills/coordinate-agents/scripts/workspace-notifications.mjs')).href);
+  assert.equal((await get('/api/workspace-settings')).notifications.config.enabled, false);
+  const notificationConfig = { enabled: true, events: { done: false, approved: true, failed: true } };
+  await action('workspaceNotificationsSave', { notifications: notificationConfig });
+  assert.deepEqual((await get('/api/workspace-settings')).notifications.config, notificationConfig);
+  for (const platform of ['win32', 'darwin']) {
+    const result = await notifications.sendNativeNotification({ title: 'installed test', body: 'Chinese 中文 🙂' }, { platform, run: async (command, args) => {
+      if (platform === 'win32') assert.match(Buffer.from(args.at(-1), 'base64').toString('utf16le'), /CreateToastNotifier/);
+      else assert.equal(command, '/usr/bin/osascript');
+      return { stdout: platform === 'win32' ? 'CA_ACCEPTED' : '' };
+    } });
+    assert.equal(result.status, 'accepted');
+  }
+  await action('workspaceNotificationsSave', { notifications: { ...notificationConfig, enabled: false } });
   // Settings round trip preserves configured Node args and existing pair launches.
   await action('workspaceSettingsSave',{codex:executable,antigravity:executable,args:[fixture,'codex','argument with spaces','--model','fixture-model','-c','model_reasoning_effort="high"']});
   assert.ok((await get('/api/workspace-settings')).codex.args.includes('fixture-model'));
@@ -165,7 +181,7 @@ try {
   assert.equal(readFileSync(join(project, '.agent-bus/config.json'), 'utf8').length > 0, true);
   const projectCleanup = await action('workspaceArchivesClear', {}, false);
   assert.equal(projectCleanup.deletedTasks, 1); assert.equal(projectCleanup.deletedSessions, 2);
-  console.log(JSON.stringify({ok:true,version:expectedVersion,dualTerminals:true,rolePrompts:true,messageRoundTrip:true,taskIsolation:true,customPathsAndArgs:true,resize:true,settings:true,multipleProjects:true,serverReconnect:true,restart:true,cleanup:true,archive:true,archiveCleanup:true,backend:JSON.parse(readFileSync(join(temporary,'launches.jsonl'),'utf8').trim().split('\n')[0]).tty ? 'node-pty' : 'stdio-fallback',sessionCount:records.length}));
+  console.log(JSON.stringify({ok:true,version:expectedVersion,dualTerminals:true,rolePrompts:true,messageRoundTrip:true,taskIsolation:true,customPathsAndArgs:true,resize:true,settings:true,nativeNotifications:true,multipleProjects:true,serverReconnect:true,restart:true,cleanup:true,archive:true,archiveCleanup:true,backend:JSON.parse(readFileSync(join(temporary,'launches.jsonl'),'utf8').trim().split('\n')[0]).tty ? 'node-pty' : 'stdio-fallback',sessionCount:records.length}));
 } finally {
   // If any assertion fails, close only hosts persisted by this isolated install.
   try {

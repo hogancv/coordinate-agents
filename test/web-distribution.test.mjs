@@ -113,3 +113,10 @@ test('review helper ships in the explicit whitelist and is served as JavaScript'
     assert.equal(helpers.REVIEW_MAX_BYTES, 8192);
   } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
 });
+
+test('native notification core and trusted Windows script ship in the precise npm whitelist', () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  for (const name of ['workspace-notification-config.mjs', 'workspace-notifications.mjs', 'workspace-notifications-windows.ps1']) {
+    assert.ok(manifest.files.includes(`skills/coordinate-agents/scripts/${name}`), name);
+  }
+});

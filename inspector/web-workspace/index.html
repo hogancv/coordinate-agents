@@ -237,6 +237,22 @@
           <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
           <button id="custom-settings-save" class="secondary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
         </section>
+        <section class="notification-settings settings-fields" aria-labelledby="notifications-title">
+          <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
+          <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
+          <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
+          <fieldset id="notification-events">
+            <legend data-i18n="notifications.events">Notification events</legend>
+            <label><input id="notifications-done" type="checkbox"> <span data-i18n="notifications.done">Implementation ready for review (DONE)</span></label>
+            <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
+            <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
+          </fieldset>
+          <div class="notification-actions">
+            <button id="notifications-save" class="secondary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
+            <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
+          </div>
+          <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
+        </section>
         <section class="archive-settings" aria-labelledby="archive-settings-title">
           <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
           <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>

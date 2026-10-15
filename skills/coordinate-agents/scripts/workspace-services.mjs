@@ -1,4 +1,6 @@
 // Only Workspace-owned sessions and task pairs are writable from the Web.
+import { saveNotificationConfig } from './workspace-notification-config.mjs';
+import { testWorkspaceNotification } from './workspace-notifications.mjs';
 import * as sessions from './session-service.mjs';
 import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive, runtimeWorkspaceTaskPromptSend } from './workspace-task-runtime.mjs';
 import { saveCustomWorkspaceConfig } from './workspace-custom-config.mjs';
@@ -14,6 +16,8 @@ export async function assertWorkspaceSession(input) {
 }
 const sessionHandler = handler => async input => { await assertWorkspaceSession(input); return handler(input); };
 export const WORKSPACE_OPERATIONS = Object.freeze({
+  workspaceNotificationsSave: async input => ({ ok: true, notifications: saveNotificationConfig(input.root, input.notifications) }),
+  workspaceNotificationsTest: async input => ({ ok: true, notification: await testWorkspaceNotification(input.root) }),
   workspaceTaskCreate: runtimeWorkspaceTaskCreate,
   workspaceTaskContinue: runtimeWorkspaceTaskContinue,
   workspaceTaskClose: runtimeWorkspaceTaskClose,

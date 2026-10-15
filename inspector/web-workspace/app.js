@@ -54,6 +54,8 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  notifications: null,
+  notificationBusy: false,
   customSettings: customTerminalDefaults(),
   customDrafts: new Map(),
   createOpen: false,
@@ -305,6 +307,7 @@ function setSettingsBusy(busy) {
     const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
   }
   renderArchiveSummary();
+  setNotificationControlsBusy();
   for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt', 'custom-settings-save']) {
     const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
   }
@@ -330,6 +333,7 @@ async function openSettings() {
   settingsError();
   renderSettingsForm();
   renderCustomSettings();
+  renderNotificationSettings();
   dialog.hidden = false;
   setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
@@ -340,6 +344,8 @@ async function openSettings() {
     else settingsError(archiveResult.reason?.message || t('settings.loadError'));
     if (settingsResult.status !== 'fulfilled') { settingsError(settingsResult.reason?.message || t('settings.loadError')); return; }
     const payload = settingsResult.value;
+    state.notifications = payload.notifications || null;
+    renderNotificationSettings();
     state.customSettings = customTerminalDefaults(payload);
     renderCustomSettings();
     state.settings = {
@@ -410,6 +416,8 @@ function replaceCodexEffort(args, effort) {
 async function saveSettings(event) {
   event?.preventDefault();
   if (state.actionBusy || state.settingsBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  const notifications = notificationFormConfig();
   const commands = {
     codex: `${document.querySelector('#codex-command')?.value || ''}`.trim(),
     antigravity: `${document.querySelector('#antigravity-command')?.value || ''}`.trim(),
@@ -429,7 +437,11 @@ async function saveSettings(event) {
   setSettingsBusy(true);
   settingsError();
   try {
-    await postAction('workspaceSettingsSave', { ...commands, args });
+    await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    await postAction('workspaceNotificationsSave', { notifications }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.notifications = { ...state.notifications, config: notifications, configError: null };
     state.settings = { ...state.settings, ...commands, model, effort, args };
     closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
@@ -439,6 +451,82 @@ async function saveSettings(event) {
   } finally {
     setSettingsBusy(false);
     setBusy(false);
+  }
+}
+
+function renderNotificationSettings() {
+  const config = state.notifications?.config || { enabled: false, events: { done: false, approved: true, failed: true } };
+  for (const key of ['enabled', 'done', 'approved', 'failed']) {
+    const field = document.querySelector(`#notifications-${key}`);
+    if (field) field.checked = key === 'enabled' ? config.enabled : config.events[key];
+  }
+  renderNotificationStatus();
+  setNotificationControlsBusy();
+}
+
+function renderNotificationStatus() {
+  const element = document.querySelector('#notifications-status');
+  if (!element) return;
+  const settings = state.notifications;
+  if (state.notificationBusy) element.textContent = t('notifications.testing');
+  else if (settings?.configError) element.textContent = t('notifications.configError');
+  else if (!settings?.capability?.supported) element.textContent = t('notifications.unsupported');
+  else if (settings?.lastResult?.status === 'accepted') element.textContent = t('notifications.accepted');
+  else if (settings?.lastResult?.reason) {
+    const reason = settings.lastResult.reason;
+    const key = reason === 'NOTIFICATIONS_DISABLED' ? 'disabledBySystem' : reason === 'COMMAND_TIMEOUT' ? 'timeout'
+      : reason === 'DEDUP_CAPACITY_REACHED' ? 'capacity' : 'unavailable';
+    element.textContent = t(`notifications.${key}`);
+  } else element.textContent = t('notifications.untested');
+}
+
+function setNotificationControlsBusy() {
+  const busy = state.settingsBusy || state.notificationBusy || !canEditProjectSettings();
+  for (const key of ['enabled', 'done', 'approved', 'failed', 'save', 'test']) {
+    const element = document.querySelector(`#notifications-${key}`);
+    if (element) element.disabled = busy || (key === 'test' && !state.notifications?.capability?.supported);
+  }
+}
+
+function notificationFormConfig() {
+  return { enabled: Boolean(document.querySelector('#notifications-enabled')?.checked),
+    events: Object.fromEntries(['done', 'approved', 'failed'].map(key => [key, Boolean(document.querySelector(`#notifications-${key}`)?.checked)])) };
+}
+
+async function saveNotificationSettings() {
+  if (state.actionBusy || state.settingsBusy || state.notificationBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  const notifications = notificationFormConfig();
+  setSettingsBusy(true); setNotificationControlsBusy(); settingsError();
+  try {
+    await postAction('workspaceNotificationsSave', { notifications }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.notifications = { ...state.notifications, config: notifications, configError: null };
+    renderNotificationStatus();
+    showToast(t('notifications.saved'), 'success');
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch) settingsError(error.payload?.error?.message || error.message || t('notifications.saveError'));
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) { setSettingsBusy(false); setNotificationControlsBusy(); }
+  }
+}
+
+async function sendNotificationTest() {
+  if (state.actionBusy || state.settingsBusy || state.notificationBusy || !canEditProjectSettings() || !state.notifications?.capability?.supported) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  state.notificationBusy = true;
+  setSettingsBusy(true); setNotificationControlsBusy(); renderNotificationStatus(); settingsError();
+  try {
+    const result = await postAction('workspaceNotificationsTest', {}, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.notifications = { ...state.notifications, lastResult: result.notification };
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch) settingsError(error.payload?.error?.message || error.message || t('notifications.unavailable'));
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) {
+      state.notificationBusy = false;
+      setSettingsBusy(false); setNotificationControlsBusy(); renderNotificationStatus();
+    }
   }
 }
 
@@ -568,6 +656,7 @@ function renderLocale() {
   renderSelectedTask();
   updateTerminalLayout();
   renderArchiveSummary();
+  renderNotificationStatus();
   renderWorkspaceHealth();
 }
 
@@ -901,6 +990,7 @@ async function selectProject(id, taskId) {
   disposeTerminalViews();
   state.projectEpoch++;
   state.projectId = id;
+  state.notifications = null;
   changesDrawer.reset(id);
   if (!state.taskSearch.trim()) state.expandedProjects.add(id);
   let stored = null;
@@ -2136,6 +2226,8 @@ function bindEvents() {
   }
   for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
   document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings());
+  document.querySelector('#notifications-save')?.addEventListener('click', () => void saveNotificationSettings());
+  document.querySelector('#notifications-test')?.addEventListener('click', () => void sendNotificationTest());
   document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());
   for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt']) document.querySelector(`#${id}`)?.addEventListener('input', () => state.customDrafts.set(state.projectId, customSettingsForm()));
   document.querySelector('#custom-prompt-close')?.addEventListener('click', closeCustomPrompt);

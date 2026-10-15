@@ -77,7 +77,7 @@ test('packed release artifact independently installs and passes offline Web dual
     assert.equal(report.payload.legacyAbsent, true);
     assert.equal(report.installation.productionDependencies, true);
     assert.equal(report.installation.isolatedHome, true);
-    for (const capability of ['dualTerminals', 'rolePrompts', 'messageRoundTrip', 'taskIsolation', 'customPathsAndArgs', 'resize', 'settings', 'multipleProjects', 'serverReconnect', 'restart', 'cleanup', 'archive', 'archiveCleanup']) assert.equal(report.runtime[capability], true, capability);
+    for (const capability of ['dualTerminals', 'rolePrompts', 'messageRoundTrip', 'taskIsolation', 'customPathsAndArgs', 'resize', 'settings', 'nativeNotifications', 'multipleProjects', 'serverReconnect', 'restart', 'cleanup', 'archive', 'archiveCleanup']) assert.equal(report.runtime[capability], true, capability);
   } finally {
     rmSync(output, { recursive: true, force: true });
   }
@@ -96,7 +96,7 @@ test('payload verifier rejects omitted runtime files and added Legacy or secret 
       const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); writeFileSync(target, 'unexpected');
       assert.throws(() => verifyPayload(temporary), /Unexpected or Legacy payload file/); rmSync(target);
     }
-    for (const file of ['inspector/web-workspace/i18n.mjs', 'inspector/server/workspace-health.mjs', 'skills/coordinate-agents/scripts/session-host.mjs', 'inspector/web-workspace/git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-git-changes.mjs']) {
+    for (const file of ['inspector/web-workspace/i18n.mjs', 'inspector/server/workspace-health.mjs', 'skills/coordinate-agents/scripts/session-host.mjs', 'inspector/web-workspace/git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-notification-config.mjs', 'skills/coordinate-agents/scripts/workspace-notifications.mjs', 'skills/coordinate-agents/scripts/workspace-notifications-windows.ps1']) {
       rmSync(join(temporary, file));
       assert.throws(() => verifyPayload(temporary), new RegExp(`${file.split('/').at(-1).replaceAll('.', '\\.')} is missing`));
       cpSync(join(root, file), join(temporary, file));
