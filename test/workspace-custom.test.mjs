@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readCustomWorkspaceConfig, saveCustomWorkspaceConfig, validateCustomWorkspaceConfig, validateTerminalCommand, customPromptInput } from '../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
@@ -22,6 +22,36 @@ test('custom config validates executable identity and byte-bounded Unicode promp
   assert.throws(() => validateCustomWorkspaceConfig({ ...custom(), terminal1: { command: 'codex', args: ['--help'] } }));
   assert.throws(() => validateCustomWorkspaceConfig({ ...custom(), prompts: { ...custom().prompts, project: '🙂'.repeat(2049) } }));
   assert.throws(() => validateCustomWorkspaceConfig({ ...custom(), prompts: { ...custom().prompts, terminal2: '\x1b[2J' } }));
+});
+
+test('custom prompts reject CR and CRLF in every prompt field', () => {
+  for (const key of ['project', 'terminal1', 'terminal2']) {
+    for (const prompt of ['\rstart', 'first\rsecond', 'end\r', 'first\r\nsecond']) {
+      const value = custom(); value.prompts[key] = prompt;
+      assert.throws(() => validateCustomWorkspaceConfig(value), /must use LF line endings/, `${key}: ${JSON.stringify(prompt)}`);
+    }
+  }
+});
+
+test('custom prompts preserve LF, tabs and Unicode in every prompt field', () => {
+  const value = custom();
+  for (const key of ['project', 'terminal1', 'terminal2']) value.prompts[key] = '中文 🙂\n\tsecond line\n';
+  assert.deepEqual(validateCustomWorkspaceConfig(value), value);
+});
+
+test('saving or reading CR-bearing custom prompts fails without rewriting the configuration', () => {
+  const root = mkdtempSync(join(tmpdir(), 'custom-config-cr-'));
+  try {
+    mkdirSync(join(root, '.agent-bus', 'tmp'), { recursive: true });
+    const path = join(root, '.agent-bus', 'workspace-custom.json');
+    saveCustomWorkspaceConfig(root, custom());
+    const saved = readFileSync(path, 'utf8');
+    const invalid = custom(); invalid.prompts.project = 'first\r\nsecond';
+    assert.throws(() => saveCustomWorkspaceConfig(root, invalid), /must use LF line endings/);
+    assert.equal(readFileSync(path, 'utf8'), saved);
+    writeFileSync(path, JSON.stringify({ schemaVersion: 1, custom: invalid }));
+    assert.throws(() => readCustomWorkspaceConfig(root), /must use LF line endings/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test('custom config is project isolated and never modifies agent definitions', () => {

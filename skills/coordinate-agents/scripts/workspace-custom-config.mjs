@@ -30,6 +30,9 @@ export function validateCustomWorkspaceConfig(value) {
   result.prompts = {};
   for (const [key, limit] of [['project', 8192], ['terminal1', 4096], ['terminal2', 4096]]) {
     const prompt = value.prompts[key];
+    if (typeof prompt === 'string' && prompt.includes('\r')) {
+      throw new Error(`Prompt ${key} must use LF line endings.`);
+    }
     if (typeof prompt !== 'string' || Buffer.byteLength(prompt, 'utf8') > limit
       || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/u.test(prompt)
       || /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(prompt)) {
