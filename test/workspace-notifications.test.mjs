@@ -7,7 +7,7 @@ import { readNotificationConfig, saveNotificationConfig, validateNotificationCon
 import { buildTaskNotification, sendNativeNotification, notifyWorkspaceReceipt, notificationCapability } from '../skills/coordinate-agents/scripts/workspace-notifications.mjs';
 
 function project(t) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'notify-')));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'notify-')));
   mkdirSync(join(root, '.agent-bus'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
