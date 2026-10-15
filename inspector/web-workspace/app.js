@@ -417,7 +417,6 @@ async function saveSettings(event) {
   event?.preventDefault();
   if (state.actionBusy || state.settingsBusy || !canEditProjectSettings()) return;
   const projectId = state.projectId, epoch = state.projectEpoch;
-  const notifications = notificationFormConfig();
   const commands = {
     codex: `${document.querySelector('#codex-command')?.value || ''}`.trim(),
     antigravity: `${document.querySelector('#antigravity-command')?.value || ''}`.trim(),
@@ -439,9 +438,6 @@ async function saveSettings(event) {
   try {
     await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
-    await postAction('workspaceNotificationsSave', { notifications }, projectId);
-    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
-    state.notifications = { ...state.notifications, config: notifications, configError: null };
     state.settings = { ...state.settings, ...commands, model, effort, args };
     closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');

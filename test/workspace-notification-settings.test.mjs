@@ -33,6 +33,8 @@ test('notification settings API uses capability and bound root; fixed test actio
   assert.equal((await post('workspaceNotificationsSave', { notifications: config, root: other })).status, 403);
   assert.equal((await post('workspaceNotificationsSave', { notifications: { ...config, command: 'evil' } })).status, 400);
   assert.equal((await post('workspaceNotificationsTest', { script: 'evil' })).status, 400);
+  assert.equal((await post('workspaceNotificationsTest', {}, false)).status, 401);
+  assert.equal((await post('workspaceNotificationsTest', { root: other })).status, 403);
   const response = await post('workspaceNotificationsSave', { notifications: config });
   assert.equal(response.status, 200); assert.equal((await response.json()).ok, true);
   assert.deepEqual(readNotificationConfig(root), config); assert.equal(readNotificationConfig(other).enabled, false);
@@ -88,7 +90,7 @@ test('a stale notification response cannot update a newly selected project', asy
   assert.equal(submitted, 'p1'); assert.equal(state.notifications, current);
 });
 
-test('the main settings save binds both writes to its original project and cancels after a switch', async () => {
+test('the main settings save binds its terminal write to the original project and cancels after a switch', async () => {
   const { context, state } = settingsContext();
   context.document = { querySelector: () => ({ value: 'codex' }) };
   context.replaceCodexModel = () => []; context.replaceCodexEffort = () => [];
@@ -105,4 +107,74 @@ test('the main settings save binds both writes to its original project and cance
   complete({ ok: true }); await pending;
   assert.deepEqual(requests, [{ action: 'workspaceSettingsSave', projectId: 'p1' }]);
   assert.equal(state.notifications, current);
+});
+
+
+test('the main settings save only saves terminal settings and does not touch notification preferences', async () => {
+  const { context, state, error } = settingsContext();
+  context.document = { querySelector: () => ({ value: 'codex' }) };
+  context.replaceCodexModel = () => []; context.replaceCodexEffort = () => [];
+  context.notificationFormConfig = () => config;
+  context.setBusy = value => { state.actionBusy = value; };
+  let closed = false;
+  context.closeSettings = () => { closed = true; }; context.checkWorkspaceHealth = () => {};
+  state.settings = {};
+  const preferences = state.notifications;
+  vm.runInContext(app.slice(app.indexOf('async function saveSettings('), app.indexOf('function renderNotificationSettings(')), context);
+  const actions = [];
+  context.postAction = async action => {
+    actions.push(action);
+    if (action === 'workspaceNotificationsSave') throw new Error('notification save failed');
+    return { ok: true };
+  };
+  await context.saveSettings();
+  assert.deepEqual(actions, ['workspaceSettingsSave']);
+  assert.equal(closed, true);
+  assert.equal(error(), undefined);
+  assert.equal(state.notifications, preferences);
+  assert.equal(state.settings.codex, 'codex');
+});
+
+test('notification tests bypass a busy project action queue and still run the project guard', async () => {
+  const { withWorkspaceProjectOperation } = await import('../skills/coordinate-agents/scripts/workspace-services.mjs');
+  const root = join(tmpdir(), 'notification-queue-check');
+  let release, entered;
+  const started = new Promise(done => { entered = done; });
+  const queued = withWorkspaceProjectOperation(root, () => { entered(); return new Promise(done => { release = done; }); });
+  await started;
+  const denied = new Error('Project is archived.');
+  let guarded = false;
+  // Throw before any real OS notification. This exercises the production
+  // invoke path while another real project operation owns its queue.
+  const tested = invokeRuntimeOperation('workspaceNotificationsTest', { root }, { before: () => { guarded = true; throw denied; } }).catch(error => error);
+  try {
+    await new Promise(setImmediate);
+    assert.equal(guarded, true, 'test notification waited on the shared project queue');
+  } finally { release(); await queued; }
+  assert.equal(await tested, denied);
+  await assert.rejects(invokeRuntimeOperation('workspaceNotificationsTest', { root }, { before: () => { throw denied; } }), error => error === denied);
+});
+
+test('a slow notification test neither blocks normal project actions nor allows a concurrent test', async t => {
+  const { withWorkspaceNotificationTest } = await import('../skills/coordinate-agents/scripts/workspace-services.mjs');
+  assert.equal(typeof withWorkspaceNotificationTest, 'function');
+  const root = mkdtempSync(join(tmpdir(), 'notification-independent-'));
+  mkdirSync(join(root, '.agent-bus'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let complete;
+  const slow = withWorkspaceNotificationTest(root, () => new Promise(done => { complete = done; }));
+  try {
+    await assert.rejects(invokeRuntimeOperation('workspaceNotificationsTest', { root }), /already running/i);
+    const saved = invokeRuntimeOperation('workspaceNotificationsSave', { root, notifications: config });
+    let savedBeforeNotificationFinished = false;
+    saved.then(() => { savedBeforeNotificationFinished = true; });
+    await new Promise(setImmediate);
+    assert.equal(savedBeforeNotificationFinished, true);
+    assert.equal((await saved).ok, true);
+    assert.deepEqual(readNotificationConfig(root), config);
+    assert.equal(await withWorkspaceNotificationTest(root + '-other', async () => 'other project'), 'other project');
+  } finally { complete(); await slow; }
+  assert.equal(await withWorkspaceNotificationTest(root, async () => 'again'), 'again');
+  await assert.rejects(withWorkspaceNotificationTest(root, async () => { throw new Error('native failed'); }), /native failed/);
+  assert.equal(await withWorkspaceNotificationTest(root, async () => 'after failure'), 'after failure');
 });

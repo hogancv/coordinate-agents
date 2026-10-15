@@ -43,8 +43,19 @@ export async function withWorkspaceProjectOperation(root, operation) {
   try { return await operation(); }
   finally { release(); if (projectOperations.get(key) === current) projectOperations.delete(key); }
 }
+// A slow OS test must not hold up terminal input or task lifecycle actions.
+// Keep at most one test per project in this server, with no queued replay.
+const notificationTests = new Set();
+export async function withWorkspaceNotificationTest(root, operation) {
+  const key = resolve(root || process.cwd());
+  if (notificationTests.has(key)) throw new Error('A desktop notification test is already running for this project.');
+  notificationTests.add(key);
+  try { return await operation(); }
+  finally { notificationTests.delete(key); }
+}
 export async function invokeRuntimeOperation(operation, input = {}, { before } = {}) {
   const handler = Object.hasOwn(WORKSPACE_OPERATIONS, operation) ? WORKSPACE_OPERATIONS[operation] : null;
   if (!handler) throw new Error(`Unknown Workspace operation: ${operation}`);
-  return withWorkspaceProjectOperation(input.root, async () => { before?.(); return handler(input); });
+  const dispatch = operation === 'workspaceNotificationsTest' ? withWorkspaceNotificationTest : withWorkspaceProjectOperation;
+  return dispatch(input.root, async () => { before?.(); return handler(input); });
 }
