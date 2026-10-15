@@ -237,7 +237,7 @@
           <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
           <button id="custom-settings-save" class="secondary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
         </section>
-        <section class="notification-settings settings-fields" aria-labelledby="notifications-title">
+        <section class="notification-settings settings-fields" aria-labelledby="notifications-title" aria-describedby="notifications-save-hint">
           <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
           <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
           <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
@@ -247,6 +247,7 @@
             <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
             <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
           </fieldset>
+          <p id="notifications-save-hint" class="settings-hint" data-i18n="notifications.saveHint">Notification changes must be saved separately with “Save notification settings”. The bottom “Save terminal settings” button only saves terminal startup settings.</p>
           <div class="notification-actions">
             <button id="notifications-save" class="secondary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
             <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
@@ -264,7 +265,7 @@
         <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
         <footer class="settings-modal-actions">
           <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>
-          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save settings</button>
+          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save terminal settings</button>
         </footer>
       </form>
     </div>
