@@ -193,6 +193,7 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
     $('changes-button').textContent = `${text('title')} ${state.summary?.files ?? '—'}`;
     $('changes-button').setAttribute('aria-expanded', String(state.open));
     $('changes-drawer').hidden = !state.open;
+    $('changes-mask').hidden = !state.open;
     $('changes-title').textContent = text('title');
     $('changes-close').setAttribute('aria-label', text('close'));
     $('changes-refresh').textContent = text(state.error ? 'retry' : 'refresh');
@@ -268,6 +269,7 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
     trigger = document.activeElement; state.open = true; void model.refresh(); $('changes-close').focus();
   });
   $('changes-close').addEventListener('click', close);
+  $('changes-mask').addEventListener('click', close);
   $('changes-refresh').addEventListener('click', () => void model.refresh());
   document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.open && !selection && !sending) { event.preventDefault(); close(); } });
   for (const [id, value] of [['changes-copy-path', () => state.path], ['changes-copy-diff', () => state.diff?.diff]]) {

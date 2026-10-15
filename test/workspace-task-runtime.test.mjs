@@ -101,6 +101,21 @@ test('Custom partial startup failure rolls back only the owning task', { timeout
   } finally { for (const task of await readWorkspaceTasks(root)) await closeGroup(root, task.id); await removeTree(root); }
 });
 
+test('Custom Codex uses inline scrollback while other custom commands keep their arguments', { timeout: 30_000, skip: process.platform === 'win32' }, async () => {
+  const root = repository();
+  let task;
+  try {
+    const fixture = fakeCli(root, 'codex');
+    const command = join(root, 'codex');
+    writeFileSync(command, readFileSync(fixture.args[0]), { mode: 0o755 });
+    const custom = { terminal1: { command }, terminal2: { command: process.execPath }, prompts: { project: '', terminal1: '', terminal2: '' } };
+    task = (await runtimeWorkspaceTaskCreate({ root, mode: 'custom', custom })).workspaceTask;
+    const records = listRecords(root).filter(session => session.taskId === task.id);
+    assert.deepEqual(records.find(session => session.subtaskId === 'terminal1').args, ['--no-alt-screen']);
+    assert.deepEqual(records.find(session => session.subtaskId === 'terminal2').args, []);
+  } finally { if (task) await closeGroup(root, task.id); await removeTree(root); }
+});
+
 test('Custom HTTP configuration, bounded creation, current-slot input and SSE are project bound', { timeout: 60_000 }, async () => {
   const root = repository();
   let started, task;

@@ -1797,7 +1797,7 @@ function renderCreateMode() {
 
 function setCreateBusy(busy) {
   for (const field of document.querySelectorAll('#workspace-create-form input, #workspace-create-form button')) field.disabled = busy;
-  document.querySelector('#workspace-create-submit').textContent = t(state.actionBusy ? 'custom.creating' : 'custom.create');
+  document.querySelector('#workspace-create-submit-label').textContent = t(state.actionBusy ? 'custom.creating' : 'custom.create');
 }
 
 function closeCreateTask() {
@@ -2119,6 +2119,17 @@ function bindEvents() {
   document.querySelector('#new-task-button')?.addEventListener('click', openCreateTask);
   document.querySelector('#empty-new-task')?.addEventListener('click', openCreateTask);
   document.querySelector('#workspace-create-form')?.addEventListener('submit', event => void createTask(event));
+  document.querySelector('#workspace-create-dialog')?.addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeCreateTask();
+  });
+  document.querySelector('#workspace-create-dialog')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (state.settingsOpen || event.target.closest('button, textarea, select, [contenteditable="true"]')) return;
+    event.preventDefault();
+    if (event.repeat || state.actionBusy || state.createLoading) return;
+    const submit = document.querySelector('#workspace-create-submit');
+    if (!submit.disabled) document.querySelector('#workspace-create-form').requestSubmit(submit);
+  });
   for (const field of document.querySelectorAll('input[name="workspaceMode"]')) field.addEventListener('change', renderCreateMode);
   for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
     document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });

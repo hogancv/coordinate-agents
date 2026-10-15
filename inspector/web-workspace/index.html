@@ -136,6 +136,7 @@
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
 
+        <div id="changes-mask" class="changes-mask" aria-hidden="true" hidden></div>
         <aside id="changes-drawer" class="changes-drawer" aria-labelledby="changes-title" hidden>
           <header class="changes-header"><h2 id="changes-title">Changes</h2><button id="changes-refresh" class="secondary-button" type="button">Refresh</button><button id="changes-close" class="icon-button" type="button" aria-label="Close changes">×</button></header>
           <p id="changes-scope" class="changes-scope"></p>
@@ -181,7 +182,7 @@
           <p class="settings-hint" data-i18n="custom.boundary">Custom mode does not automatically enable agent collaboration or inject Prompts.</p>
         </div>
         <p id="workspace-create-error" class="settings-error" role="alert" hidden></p>
-        <footer class="settings-modal-actions"><button id="workspace-create-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button><button id="workspace-create-submit" class="primary-button" type="submit" data-i18n="custom.create">Create task</button></footer>
+        <footer class="settings-modal-actions"><button id="workspace-create-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button><button id="workspace-create-submit" class="primary-button" type="submit" aria-keyshortcuts="Enter"><span id="workspace-create-submit-label" data-i18n="custom.create">Create task</span><span class="button-shortcut" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v6H3m4-4L3 9l4 4"/></svg></span></button></footer>
       </form>
     </div>
 

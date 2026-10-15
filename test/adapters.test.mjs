@@ -123,6 +123,22 @@ test('Codex workspace sessions disable hook review without changing standard ses
   assert.deepEqual(workspace.args.slice(0, 2), ['-c', 'features.hooks=false']);
 });
 
+test('Codex workspace sessions preserve terminal scrollback without changing standard launches', () => {
+  const codex = getAdapter('codex-cli', {
+    id: 'codex', command: process.execPath, args: ['--model', 'fixture-model'],
+  });
+  const workspace = codex.resolveSessionLaunch({ root: '.', workspace: true });
+  assert.ok(workspace.args.includes('--no-alt-screen'));
+  assert.deepEqual(workspace.args.slice(0, 2), ['--model', 'fixture-model']);
+  assert.equal(codex.resolveSessionLaunch({ root: '.' }).args.includes('--no-alt-screen'), false);
+  assert.equal(codex.resolveLaunch({ root: '.', prompt: 'fixture' }).args.includes('--no-alt-screen'), false);
+
+  const configured = getAdapter('codex-cli', {
+    id: 'codex', command: process.execPath, args: ['--no-alt-screen'],
+  });
+  assert.equal(configured.resolveSessionLaunch({ root: '.', workspace: true }).args.filter(arg => arg === '--no-alt-screen').length, 1);
+});
+
 test('Antigravity persistent sessions encode the empty prompt in one argument', () => {
   const agy = getAdapter('antigravity-cli', {
     id: 'antigravity',

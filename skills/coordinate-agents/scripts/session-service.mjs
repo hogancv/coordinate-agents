@@ -22,7 +22,7 @@ export async function runtimeWorkspaceCustomSessionOpen({ root, taskId, slot, la
   const command = validateTerminalCommand(task.custom[slot].command);
   const name = win32.basename(command).replace(/\.(exe|cmd|ps1)$/i, '').toLowerCase();
   // Only known executable transport requirements, never role or prompt inference.
-  const resolved = { adapter: 'generic-cli', command, args: ['agy', 'agy-proxy'].includes(name) ? ['--prompt-interactive='] : [],
+  const resolved = { adapter: 'generic-cli', command, args: name === 'codex' ? ['--no-alt-screen'] : ['agy', 'agy-proxy'].includes(name) ? ['--prompt-interactive='] : [],
     ...(name === 'codex' ? { windowsEntrypoint: codexWindowsEntrypoint } : {}) };
   const opened = await getExecutionSessionManager().open({ root, agent: 'workspace-custom', resolved,
     adapter: new GenericCliAdapter(resolved), initialPrompt: '', language, taskId, subtaskId: slot, reuseExisting: false });

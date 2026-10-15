@@ -57,6 +57,9 @@ export class CodexCliAdapter extends AgentAdapter {
     // Disable hooks for this session instead of auto-approving them; standard
     // session_open keeps the user's normal hook policy unchanged.
     if (workspace) args.push('-c', 'features.hooks=false');
+    // xterm's alternate buffer has no scrollback. Keep Workspace history in
+    // the normal buffer rather than losing messages as they leave the screen.
+    if (workspace && !args.includes('--no-alt-screen')) args.push('--no-alt-screen');
     args.push('-C', resolve(root));
     return {
       command: resolved.command,

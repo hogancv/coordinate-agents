@@ -54,6 +54,7 @@ function drawerDocument() {
   doc.getElementById = id => doc.querySelector(`#${id}`);
   doc.createDocumentFragment = () => doc.createElement('fragment');
   doc.addEventListener = (type, fn) => doc.body.addEventListener(type, fn);
+  const mask = doc.createElement('div'); mask.setAttribute('id', 'changes-mask'); doc.body.append(mask);
   for (const id of ['changes-button', 'changes-drawer', 'changes-title', 'changes-close', 'changes-refresh', 'changes-scope', 'changes-summary', 'changes-stat-note', 'changes-message', 'changes-files', 'changes-path', 'changes-copy-path', 'changes-copy-diff', 'changes-diff', 'review-feedback', 'review-title', 'review-selection', 'review-comment', 'review-clear', 'review-copy', 'review-send', 'review-status', 'review-ready', 'review-ready-label', 'review-hint']) {
     const el = doc.createElement('div'); el.setAttribute('id', id); el.value = ''; doc.body.append(el);
   }
@@ -134,6 +135,13 @@ test('drawer provides a synchronous final selection guard after diff validation'
     'switch file': env => env.$('changes-files').children[1].click(),
     'refresh diff': env => env.$('changes-refresh').click(),
     'close drawer': env => env.$('changes-close').click(),
+    'click mask': env => {
+      assert.equal(env.$('changes-mask').hidden, false);
+      env.$('changes-mask').click();
+      assert.equal(env.$('changes-mask').hidden, true);
+      assert.equal(env.$('changes-drawer').hidden, true);
+      assert.equal(document.activeElement, env.$('changes-button'));
+    },
   };
   for (const [name, mutate] of Object.entries(mutations)) {
     await t.test(name, async () => {

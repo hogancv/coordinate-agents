@@ -215,7 +215,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .empty-icon { display: grid; width: 4rem; height: 4rem; place-items: center; border: 1px solid var(--line-strong); border-radius: 1.2rem; color: var(--accent); background: rgba(157, 181, 255, .1); font-size: 1.6rem; }
 .empty-state p { color: var(--muted); font-size: .85rem; line-height: 1.6; }
 
-.workspace-panel { display: flex; min-width: 0; max-width: 100%; min-height: 0; flex: 1; flex-direction: column; padding: .75rem 1.5rem 1.5rem; overflow: hidden; }
+.workspace-panel { display: flex; min-width: 0; max-width: 100%; min-height: 0; flex: 1; flex-direction: column; padding: 0; overflow: hidden; }
 .task-heading { min-width: 8rem; flex: 1; }
 .task-heading-title-row { min-width: 0; gap: .6rem; flex-wrap: wrap; }
 .task-heading-title-row h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -241,7 +241,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .terminal-splitter::after { content: ''; position: absolute; inset: 0 3px; background: var(--line); transition: background .15s; }
 .terminal-splitter:hover::after, .terminal-splitter:focus-visible::after, .terminal-split-dragging .terminal-splitter::after { background: var(--accent); }
 .terminal-split-dragging, .terminal-split-dragging * { cursor: col-resize !important; user-select: none !important; }
-.terminal-card { display: flex; min-width: 0; max-width: 100%; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: .8rem; background: var(--panel); box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .16); }
+.terminal-card { display: flex; min-width: 0; max-width: 100%; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: 0; background: var(--panel); box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, .16); }
 .terminal-card-header { flex-shrink: 0; justify-content: space-between; gap: .6rem; padding: .35rem .7rem; border-bottom: 1px solid var(--line); background: var(--panel-strong); }
 .terminal-card-title { min-width: 0; gap: .55rem; }
 .terminal-agent-mark { display: grid; width: 1.45rem; height: 1.45rem; flex: 0 0 auto; place-items: center; border-radius: .4rem; color: #0c1322; font-size: .75rem; font-weight: 900; }
@@ -273,6 +273,9 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .settings-field input:focus, .settings-field select:focus { border-color: var(--accent); box-shadow: 0 0 0 .15rem rgba(157, 181, 255, .12); }
 .settings-error { padding: .65rem .7rem; border: 1px solid rgba(255, 130, 146, .3); border-radius: .5rem; color: var(--error-text); background: rgba(255, 130, 146, .08); font-size: .74rem; line-height: 1.45; overflow-wrap: anywhere; }
 .settings-modal-actions { display: flex; justify-content: flex-end; gap: .55rem; }
+#workspace-create-submit { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; }
+.button-shortcut { display: inline-flex; flex-shrink: 0; padding: .1rem .2rem; border: 1px solid currentColor; border-radius: .25rem; opacity: .75; }
+.button-shortcut svg { width: 1em; height: 1em; }
 .terminal-card-footer { flex-shrink: 0; justify-content: space-between; gap: .6rem; min-height: 2rem; padding: .45rem .8rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .62rem; }
 .toast-region { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 10; display: grid; gap: .5rem; width: min(24rem, calc(100vw - 2.5rem)); }
 .toast { padding: .7rem .8rem; border: 1px solid var(--line-strong); border-radius: .55rem; color: var(--text); background: var(--toast-bg); box-shadow: 0 .75rem 2rem rgba(0, 0, 0, .3); font-size: .75rem; line-height: 1.4; }
@@ -290,7 +293,6 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
   .topbar { flex-wrap: wrap; gap: .6rem; padding-inline: 1rem; }
   .topbar-copy, .task-heading { flex-basis: calc(100% - 3.5rem); }
   .topbar-actions { max-width: 100%; margin-left: auto; overflow-x: auto; }
-  .workspace-panel { padding-inline: 1rem; }
 }
 
 @media (max-width: 560px) {
@@ -357,7 +359,8 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .archive-settings-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
 
 /* Overlay drawer leaves the dual-terminal split and xterm geometry untouched. */
-.changes-drawer { position: fixed; z-index: 15; top: 76px; right: 12px; bottom: 12px; width: min(640px, calc(100vw - 24px)); display: flex; flex-direction: column; min-height: 0; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: -12px 12px 48px rgba(0, 0, 0, .2); }
+.changes-mask { position: fixed; inset: 0; z-index: 24; background: rgba(4, 8, 16, .48); }
+.changes-drawer { position: fixed; z-index: 25; top: 76px; right: 12px; bottom: 12px; width: min(640px, calc(100vw - 24px)); display: flex; flex-direction: column; min-height: 0; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: -12px 12px 48px rgba(0, 0, 0, .2); }
 .changes-header { display: flex; align-items: center; gap: 8px; }
 .changes-header h2 { font-size: 16px; margin: 0; flex: 1; }
 .changes-scope { color: var(--muted); font-size: 11px; margin: 10px 0; }
