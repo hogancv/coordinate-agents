@@ -1,3 +1,4 @@
+import { collaborationHealth, mountCollaborationHealth } from './collaboration-health.mjs';
 import { mountCollaborationTimeline } from './collaboration-timeline.mjs';
 import { I18N } from './i18n.mjs';
 import { customTerminalDefaults, customTerminalPrompt, sameCustomPromptTarget } from './custom-terminal-model.mjs';
@@ -31,6 +32,7 @@ const state = {
   projectEpoch: 0,
   reviewTaskEpoch: 0,
   selectedTaskRequest: 0,
+  taskListRequest: 0,
   reviewWriteTarget: null,
   projectTasks: new Map(),
   projectSelections: new Map(),
@@ -81,6 +83,21 @@ const state = {
 const collaborationTimeline = mountCollaborationTimeline({ document, t,
   getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
   onResize: () => updateTerminalLayout(),
+});
+
+const collaborationHealthView = mountCollaborationHealth({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+  onChange: () => renderTaskList(),
+  onInspect: (kind, slot) => {
+    if (kind === 'terminal') setTerminalFocus(slot);
+    if (kind === 'timeline') {
+      const timeline = document.querySelector('#collaboration-timeline');
+      timeline.open = true; document.querySelector('#timeline-round').value = 'current'; collaborationTimeline.update();
+      timeline.scrollIntoView?.({ block: 'nearest' }); document.querySelector('#timeline-round').focus();
+    }
+    if (kind === 'changes') document.querySelector('#changes-button').click();
+  },
 });
 
 const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
@@ -260,6 +277,10 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
+  if (busy) {
+    state.taskListRequest = (state.taskListRequest || 0) + 1;
+    state.selectedTaskRequest = (state.selectedTaskRequest || 0) + 1;
+  }
   for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
@@ -1165,6 +1186,7 @@ function createTaskItem(task, projectId) {
   element.dataset.workspaceTaskId = task.id;
   element.dataset.projectId = projectId || '';
   element.innerHTML = `<span class="task-item-top"><strong></strong><span class="status-dot" aria-hidden="true"></span></span>
+    <span class="task-item-health"></span>
     <span class="task-item-meta"><span class="task-item-status"></span><span class="task-item-agents"><span class="mini-agent">Codex</span><span class="mini-agent">Antigravity</span></span><time></time></span>`;
   element.onclick = () => {
     const id = element.dataset.workspaceTaskId;
@@ -1193,6 +1215,13 @@ function updateTaskItem(element, task, projectId) {
     if (agents[index].className !== className) agents[index].className = className;
     setListText(agents[index], task.mode === 'custom' ? t(`custom.${slotId}`) : slotId === 'codex' ? 'Codex' : 'Antigravity');
   }
+  const health = collaborationHealth(task, { minutes: collaborationHealthView.getMinutes() });
+  const healthLabel = element.querySelector('.task-item-health');
+  if (healthLabel) {
+    healthLabel.hidden = health.state === 'normal';
+    setListText(healthLabel, t(`collaborationHealth.${health.state}`));
+    setListAttribute(healthLabel, 'data-health', health.state);
+  }
   setListText(element.querySelector('time'), formatTime(task.updatedAt));
 }
 
@@ -1212,6 +1241,7 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
 
 function renderSelectedTask() {
   collaborationTimeline.update();
+  collaborationHealthView.update();
   changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
@@ -1792,10 +1822,11 @@ async function loadRepository() {
 }
 
 async function loadTaskList({ selectFirst = true } = {}) {
+  const request = state.taskListRequest = (state.taskListRequest || 0) + 1;
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   const tasks = await fetchJson('/api/workspace-tasks');
-  if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || request !== state.taskListRequest) return;
   state.tasks = Array.isArray(tasks) ? tasks : [];
   state.projectTasks.set(projectId, state.tasks);
   if (state.selectedId && !state.tasks.some(task => task.id === state.selectedId)) state.selectedId = null;
@@ -1877,6 +1908,7 @@ async function selectTask(id) {
   state.selectedId = id;
   state.reviewTaskEpoch++;
   collaborationTimeline.update();
+  collaborationHealthView.update();
   changesDrawer.updateContext();
   renderWorkspaceHealth();
   rememberSelection();

@@ -457,3 +457,15 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .timeline-events p { margin: .2rem 0 0; }
 .timeline-receipt { color: var(--muted); }
 .zen-mode .collaboration-timeline { display: none; }
+
+.collaboration-health { flex: 0 0 auto; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
+.collaboration-health p, .collaboration-health ul { margin: 5px 0; }
+.collaboration-health ul { padding-left: 18px; }
+.collaboration-health details { margin-top: 5px; }
+.collaboration-health input { width: 85px; }
+#collaboration-health-links { display: flex; flex-wrap: wrap; gap: 12px; }
+.task-item-health { display: block; font-size: 11px; color: var(--muted); }
+.task-item-health[data-health="attention"], .task-item-health[data-health="session"], .task-item-health[data-health="reported-failure"] { color: #bd6717; }
+.collaboration-health[data-health="attention"], .collaboration-health[data-health="session"] { border-color: #bd6717; }
+
+body.zen-mode .collaboration-health { display: none; }

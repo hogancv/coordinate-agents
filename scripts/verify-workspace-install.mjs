@@ -97,7 +97,7 @@ async function action(name,params={},scoped=true) {
 async function read(sessionId) {return get(`/api/sessions/${sessionId}/read`);}
 try {
   await start();
-  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/collaboration-timeline.mjs','/custom-terminal-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
+  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/collaboration-timeline.mjs','/collaboration-health.mjs','/custom-terminal-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
   assert.ok((await get('/api/repository')).root);
   assert.equal((await get('/api/workspace-settings')).codex.command,executable);
   assert.deepEqual(await get('/api/workspace-tasks'),[]);

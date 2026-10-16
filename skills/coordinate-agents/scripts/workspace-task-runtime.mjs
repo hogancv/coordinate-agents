@@ -423,9 +423,12 @@ function sessionFactMap(root, sessionIds = null) {
   }
 }
 
-function sessionView(slot, facts) {
+function sessionView(slot, facts, taskId) {
   const fact = slot.sessionId ? facts.get(slot.sessionId) : null;
   return {
+    // Record availability includes ownership, not a liveness probe.
+    recordAvailable: Boolean(fact && fact.taskId === taskId && fact.agent === slot.agent
+      && (slot.role !== 'custom' || fact.subtaskId === slot.slot)),
     slot: slot.slot,
     agent: slot.agent,
     role: slot.role,
@@ -461,7 +464,7 @@ function statusFromFacts(record, sessions) {
 function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
-    sessionView(record.sessions[expected.slot], facts),
+    sessionView(record.sessions[expected.slot], facts, record.id),
   ]));
   return {
     id: record.id,
