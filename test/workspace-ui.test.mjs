@@ -566,7 +566,7 @@ test('review handoff rechecks selection after task lookup and cancels before wri
 
 function settingsTabContext() {
   const document = listDocument();
-  document.body.innerHTML = '<div id="settings-tabs"><button id="settings-tab-default" data-settings-tab="default"></button><button id="settings-tab-custom" data-settings-tab="custom"></button><button id="settings-tab-notifications" data-settings-tab="notifications"></button></div><div class="settings-panels"><section data-settings-panel="default"><input id="codex-command"/></section><section data-settings-panel="custom"><textarea id="custom-project-prompt"></textarea></section><section data-settings-panel="notifications"><input id="notifications-enabled"/></section></div>';
+  document.body.innerHTML = '<div id="settings-tabs"><button id="settings-tab-default" data-settings-tab="default"></button><button id="settings-tab-custom" data-settings-tab="custom"></button><button id="settings-tab-notifications" data-settings-tab="notifications"></button></div><div class="settings-panels"><section data-settings-panel="default"><input id="codex-command"/></section><section data-settings-panel="custom"><textarea id="custom-project-prompt"></textarea></section><section data-settings-panel="notifications"><input id="notifications-enabled"/></section></div><footer><button id="terminal-settings-save" data-settings-action="default"></button><button id="custom-settings-save" data-settings-action="custom"></button><button id="notifications-save" data-settings-action="notifications"></button></footer>';
   const state = { settingsTab: 'default', settingsBusy: false, actionBusy: false };
   const context = runFunctions('selectSettingsTab', 'renderModelChoices', { state, document, settingsError() {} });
   context.bindSettingsTabs();
@@ -627,4 +627,17 @@ test('saving the default settings keeps empty archive cleanup disabled in the op
   assert.equal(document.querySelector('#archive-clear-button').disabled, true);
   await context.saveSettings();
   assert.equal(document.querySelector('#archive-clear-button').disabled, true);
+});
+
+
+test('the fixed settings footer exposes only the active tab save action', () => {
+  const { document } = settingsTabContext();
+  const visible = () => document.querySelectorAll('[data-settings-action]').filter(button => !button.hidden).map(button => button.attributes.id);
+  assert.deepEqual(visible(), ['terminal-settings-save']);
+  document.querySelector('#settings-tab-custom').click();
+  assert.deepEqual(visible(), ['custom-settings-save']);
+  document.querySelector('#settings-tab-notifications').click();
+  assert.deepEqual(visible(), ['notifications-save']);
+  document.querySelector('#settings-tab-default').click();
+  assert.deepEqual(visible(), ['terminal-settings-save']);
 });

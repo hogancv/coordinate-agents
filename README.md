@@ -328,8 +328,8 @@ Contributor setup and required validation commands are defined in [AGENTS.md](./
 
 Workspace settings has three tabs: **Default Collaboration**, **Custom Terminals**,
 and **Desktop Notifications**. Each tab saves its own configuration and stays
-open after saving. Switching tabs keeps unsaved edits; the bottom **Close**
-button only closes the dialog. Archived conversation cleanup is collapsed
+open after saving. Switching tabs keeps unsaved edits. The fixed bottom bar
+always shows **Close** and the save button for the active tab; only page content scrolls. Archived conversation cleanup is collapsed
 under Default Collaboration.
 
 In **Workspace settings → Desktop Notifications**, enable system notifications

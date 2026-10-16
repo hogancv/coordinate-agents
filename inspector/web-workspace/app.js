@@ -278,6 +278,7 @@ function selectSettingsTab(tab, { focus = false } = {}) {
     button.tabIndex = active ? 0 : -1;
   }
   for (const panel of document.querySelectorAll('[data-settings-panel]')) panel.hidden = panel.dataset.settingsPanel !== tab;
+  for (const action of document.querySelectorAll('[data-settings-action]')) action.hidden = action.dataset.settingsAction !== tab;
   const content = document.querySelector('.settings-panels');
   if (content) content.scrollTop = 0;
   settingsError();

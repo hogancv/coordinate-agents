@@ -235,9 +235,6 @@
                 </label>
               </div>
               <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
-              <div class="settings-panel-actions">
-                <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save terminal settings</button>
-              </div>
             </form>
             <details class="archive-settings">
               <summary id="archive-settings-title" data-i18n="archive.title">Archived conversations</summary>
@@ -256,7 +253,6 @@
             <label class="settings-field"><span data-i18n="custom.projectPrompt">Project shared Prompt · 8KB</span><textarea id="custom-project-prompt" maxlength="8192" rows="4"></textarea></label>
             <label class="settings-field"><span data-i18n="custom.prompt1">Terminal 1 Prompt · 4KB</span><textarea id="custom-terminal1-prompt" maxlength="4096" rows="3"></textarea></label>
             <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
-            <button id="custom-settings-save" class="primary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
           </section>
           <section id="settings-panel-notifications" class="settings-panel notification-settings settings-fields" role="tabpanel" data-settings-panel="notifications" aria-labelledby="settings-tab-notifications" hidden>
             <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
@@ -270,7 +266,6 @@
             </fieldset>
             <div class="notification-actions">
               <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
-              <button id="notifications-save" class="primary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
             </div>
             <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
           </section>
@@ -278,6 +273,9 @@
         <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
         <footer class="settings-modal-actions settings-dialog-actions">
           <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.close">Close</button>
+          <button id="terminal-settings-save" class="primary-button" type="submit" form="terminal-settings-form" data-settings-action="default" data-i18n="settings.save">Save terminal settings</button>
+          <button id="custom-settings-save" class="primary-button" type="button" data-settings-action="custom" data-i18n="custom.save" hidden>Save custom configuration</button>
+          <button id="notifications-save" class="primary-button" type="button" data-settings-action="notifications" data-i18n="notifications.save" hidden>Save notification settings</button>
         </footer>
       </section>
     </div>

@@ -419,7 +419,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .notification-settings input[type="checkbox"] { width: auto; flex: 0 0 auto; }
 .notification-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 
-/* Keep navigation and Close visible; only the selected settings page scrolls. */
+/* Keep navigation and the current tab actions visible while content scrolls. */
 .settings-tabbed-modal { display: flex; flex-direction: column; width: min(38rem, 100%); height: min(90vh, 44rem); max-height: calc(100dvh - 2rem); padding: 0; gap: 0; overflow: hidden; }
 .settings-tabbed-modal .settings-modal-header { flex-shrink: 0; padding: 1.15rem 1.2rem 1rem; }
 .settings-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; padding: 0 .8rem; border-bottom: 1px solid var(--line); }
@@ -431,11 +431,12 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .settings-panel, .settings-default-form { display: grid; min-width: 0; gap: 1rem; align-content: start; }
 .settings-panel h3, .settings-panel p { margin: 0; }
 .settings-tabbed-modal .custom-settings, .settings-tabbed-modal .notification-settings { border: 0; padding-top: 0; }
-.settings-panel-actions { display: flex; justify-content: flex-end; }
 .settings-tabbed-modal .notification-actions { justify-content: flex-end; }
-#custom-settings-save { justify-self: end; }
 .settings-tabbed-modal .settings-dialog-actions { flex-shrink: 0; padding: .8rem 1.2rem; border-top: 1px solid var(--line); }
 .settings-tabbed-modal .settings-error { flex-shrink: 0; margin: 0 1.2rem .8rem; }
 .settings-panel details.archive-settings { display: block; }
 .settings-panel .archive-settings summary { cursor: pointer; color: var(--muted); font-size: .8rem; font-weight: 600; }
 .settings-panel .archive-settings p, .settings-panel .archive-settings-actions { margin-top: .75rem; }
+
+.settings-tabbed-modal .settings-dialog-actions { flex-direction: row; align-items: center; }
+.settings-tabbed-modal .settings-dialog-actions button { width: auto; }
