@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { isActiveTerminalSession } from '../inspector/web-workspace/terminal-model.mjs';
 import { listDocument } from './support/list-dom.mjs';
+import { collaborationHealth } from '../inspector/web-workspace/collaboration-health.mjs';
 
 const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
 function runFunctions(start, end, globals) {
@@ -251,7 +252,7 @@ function listContext() {
     tasks: [task('t1', 'First'), task('t2', 'Second')], projectTasks: new Map(), expandedProjects: new Set(['p1', 'p2']) };
   state.projectTasks.set('p1', state.tasks); state.projectTasks.set('p2', [task('t1', 'Other project')]);
   const calls = [];
-  const context = vm.createContext({ state, document, t: key => `${state.locale}:${key}`,
+  const context = vm.createContext({ state, document, collaborationHealth, collaborationHealthView: { getMinutes: () => 30, update: () => {} }, t: key => `${state.locale}:${key}`,
     selectTask: id => calls.push(['task', id]), selectProject: (...args) => calls.push(['project', ...args]),
     disposeTerminalViews: () => assert.fail('list refresh disposed terminals'),
   });

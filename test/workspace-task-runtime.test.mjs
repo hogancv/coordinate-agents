@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { collaborationHealth } from '../inspector/web-workspace/collaboration-health.mjs';
 import { createTask } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
 import {
@@ -389,12 +390,18 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const completed = await readWorkspaceTask(root, workspaceTaskId);
     assert.equal(completed.cooperation.status, 'APPROVED');
     assert.deepEqual(completed.collaborationEvents.map(event => event.status), ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED']);
-    const history = completed.collaborationEvents;
+    await dispatchWorkspaceTask(root, workspaceTaskId, 'round-health-restart', async () => {});
+    await reportWorkspaceTask(root, workspaceTaskId, 'WORKING', 'round-health-restart', 'Progress before close', { notify: () => {} });
+    const active = await readWorkspaceTask(root, workspaceTaskId);
+    assert.equal(collaborationHealth(active, { now: Date.parse(active.cooperation.updatedAt) + 3600000 }).state, 'attention');
+    assert.ok(Object.values(active.sessions).every(session => session.recordAvailable));
+    const history = active.collaborationEvents;
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     // Closed pairs must not receive additional input through the lightweight helper.
     await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
     assert.equal(closed.workspaceTask.status, 'CLOSED');
-    assert.equal(closed.workspaceTask.cooperation.status, 'APPROVED');
+    assert.equal(closed.workspaceTask.cooperation.status, 'WORKING');
+    assert.equal(collaborationHealth(closed.workspaceTask).signals.length, 0);
     assert.deepEqual(closed.workspaceTask.collaborationEvents, history);
     assert.ok(closed.closedSessions.every(session => !ACTIVE.has(session.state)));
     const closedAgain = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
@@ -405,6 +412,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.equal(restarted.workspaceTask.status, 'RUNNING');
     assert.equal(restarted.workspaceTask.cooperation.status, 'IDLE');
     assert.equal(restarted.workspaceTask.cooperation.roundId, null);
+    assert.equal(collaborationHealth(restarted.workspaceTask, { now: Date.now() + 3600000 }).signals.length, 0);
     assert.deepEqual(restarted.workspaceTask.collaborationEvents, history);
     assert.notEqual(restarted.workspaceTask.sessions.codex.sessionId, first.sessions.codex.sessionId);
     assert.notEqual(restarted.workspaceTask.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);

@@ -423,9 +423,12 @@ function sessionFactMap(root, sessionIds = null) {
   }
 }
 
-function sessionView(slot, facts) {
+function sessionView(slot, facts, taskId) {
   const fact = slot.sessionId ? facts.get(slot.sessionId) : null;
   return {
+    // Record availability includes ownership, not a liveness probe.
+    recordAvailable: Boolean(fact && fact.taskId === taskId && fact.agent === slot.agent
+      && (slot.role !== 'custom' || fact.subtaskId === slot.slot)),
     slot: slot.slot,
     agent: slot.agent,
     role: slot.role,
@@ -461,7 +464,7 @@ function statusFromFacts(record, sessions) {
 function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
-    sessionView(record.sessions[expected.slot], facts),
+    sessionView(record.sessions[expected.slot], facts, record.id),
   ]));
   return {
     id: record.id,
@@ -1081,15 +1084,21 @@ async function withCooperationLock(root, id, operation) {
       break;
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
-      assertSafePath(repository, lock);
-      if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
       try {
-        const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
-        try { process.kill(held.pid, 0); }
-        catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
-      } catch {
-        // Allow recovery if a process died between mkdir and writing its owner.
-        if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+        assertSafePath(repository, lock);
+        if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
+        try {
+          const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
+          try { process.kill(held.pid, 0); }
+          catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
+        } catch {
+          // Allow recovery if a process died between mkdir and writing its owner.
+          if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+        }
+      } catch (inspectionError) {
+        // The previous owner may release between EEXIST and any metadata read.
+        // Retry under the same deadline; unsafe paths and other IO errors fail.
+        if (inspectionError.code !== 'ENOENT') throw inspectionError;
       }
       if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
       await new Promise(done => setTimeout(done, 50));

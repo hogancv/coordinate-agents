@@ -96,7 +96,7 @@ test('payload verifier rejects omitted runtime files and added Legacy or secret 
       const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); writeFileSync(target, 'unexpected');
       assert.throws(() => verifyPayload(temporary), /Unexpected or Legacy payload file/); rmSync(target);
     }
-    for (const file of ['inspector/web-workspace/collaboration-timeline.mjs', 'skills/coordinate-agents/scripts/workspace-collaboration.mjs', 'inspector/web-workspace/i18n.mjs', 'inspector/server/workspace-health.mjs', 'skills/coordinate-agents/scripts/session-host.mjs', 'inspector/web-workspace/git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-notification-config.mjs', 'skills/coordinate-agents/scripts/workspace-notifications.mjs', 'skills/coordinate-agents/scripts/workspace-notifications-windows.ps1']) {
+    for (const file of ['inspector/web-workspace/collaboration-health.mjs', 'inspector/web-workspace/collaboration-timeline.mjs', 'skills/coordinate-agents/scripts/workspace-collaboration.mjs', 'inspector/web-workspace/i18n.mjs', 'inspector/server/workspace-health.mjs', 'skills/coordinate-agents/scripts/session-host.mjs', 'inspector/web-workspace/git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-git-changes.mjs', 'skills/coordinate-agents/scripts/workspace-notification-config.mjs', 'skills/coordinate-agents/scripts/workspace-notifications.mjs', 'skills/coordinate-agents/scripts/workspace-notifications-windows.ps1']) {
       rmSync(join(temporary, file));
       assert.throws(() => verifyPayload(temporary), new RegExp(`${file.split('/').at(-1).replaceAll('.', '\\.')} is missing`));
       cpSync(join(root, file), join(temporary, file));

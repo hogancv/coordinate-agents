@@ -133,6 +133,13 @@
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
+          <section id="collaboration-health" class="collaboration-health" aria-live="off" hidden>
+            <strong id="collaboration-health-heading"></strong>
+            <ul id="collaboration-health-signals"></ul>
+            <p id="collaboration-health-receipt"></p>
+            <div id="collaboration-health-links"></div>
+            <details><summary id="collaboration-health-config"></summary><label id="collaboration-health-label" for="collaboration-health-minutes"></label> <input id="collaboration-health-minutes" type="number" min="1" max="10080" step="1" value="30"></details>
+          </section>
           <details id="collaboration-timeline" class="collaboration-timeline" hidden>
             <summary id="timeline-heading">Collaboration timeline · 0</summary>
             <div class="timeline-content">
