@@ -7,7 +7,7 @@ import { readNotificationConfig, saveNotificationConfig, validateNotificationCon
 import { buildTaskNotification, sendNativeNotification, notifyWorkspaceReceipt, notificationCapability } from '../skills/coordinate-agents/scripts/workspace-notifications.mjs';
 
 function project(t) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'notify-')));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'notify-')));
   mkdirSync(join(root, '.agent-bus'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return root;
@@ -125,9 +125,11 @@ test('receipt hook sees committed state outside locks; duplicate summaries never
   const { reportWorkspaceTask } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
   const { existsSync } = await import('node:fs');
   const events = [];
+  const observations = [];
   const notify = (repository, snapshot) => {
-    assert.equal(repository, root); assert.equal(existsSync(`${file}.lock`), false);
-    assert.equal(JSON.parse(readFileSync(file)).cooperation.status, snapshot.cooperation.status);
+    // Assertions belong outside the deliberately failure-isolated callback.
+    observations.push({ repository, locked: existsSync(`${file}.lock`) || existsSync(join(root, '.agent-bus/locks/config')),
+      status: JSON.parse(readFileSync(file)).cooperation.status });
     events.push(snapshot); throw new Error('OS secret error');
   };
   for (const status of ['WORKING', 'DONE', 'REVIEWING', 'APPROVED']) {
@@ -135,6 +137,10 @@ test('receipt hook sees committed state outside locks; duplicate summaries never
     assert.deepEqual(Object.keys(result).sort(), ['revision', 'roundId', 'status', 'summary', 'updatedAt']);
   }
   assert.deepEqual(events.map(item => item.cooperation.status), ['DONE', 'APPROVED']);
+  assert.deepEqual(observations, [
+    { repository: root, locked: false, status: 'DONE' },
+    { repository: root, locked: false, status: 'APPROVED' },
+  ]);
   await reportWorkspaceTask(root, task.id, 'APPROVED', 'round-123', '', { notify });
   await reportWorkspaceTask(root, task.id, 'APPROVED', 'round-123', 'changed summary', { notify });
   assert.equal(events.length, 2);
