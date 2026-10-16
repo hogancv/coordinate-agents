@@ -18,6 +18,9 @@ export function collaborationSummary(value) {
     .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, '$1[REDACTED]@')
     .replace(/[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
     .replace(/\s+/g, ' ').trim();
+  // Performance optimization: fast-path short strings (length <= 240 code units cannot exceed 240 unicode characters)
+  // to avoid allocating character arrays via Array.from(text).
+  if (text.length <= 240) return text;
   const chars = Array.from(text);
   return chars.length > 240 ? `${chars.slice(0, 239).join('')}…` : text;
 }

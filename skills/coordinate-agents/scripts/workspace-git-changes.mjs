@@ -93,8 +93,10 @@ export async function readGitChanges(root, options = {}) {
     const limit = Math.min(MAX_FILES, Math.max(1, options.maxFiles || MAX_FILES));
     const files = []; let bytes = 1024;
     for (const file of result.files) {
-      bytes += Buffer.byteLength(JSON.stringify(file)) + 1;
-      if (files.length >= limit || bytes > MAX_JSON) break;
+      if (files.length >= limit) break;
+      const fileBytes = Buffer.byteLength(JSON.stringify(file)) + 1;
+      if (bytes + fileBytes > MAX_JSON) break;
+      bytes += fileBytes;
       files.push(file);
     }
     return { ok: true, scope: 'working-tree', base: result.base, summary, files, truncated: files.length < summary.files };
