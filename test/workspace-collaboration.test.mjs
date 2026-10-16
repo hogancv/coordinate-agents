@@ -160,3 +160,35 @@ test('complete Cookie headers are private, including quoted values, multiple coo
   assert.doesNotMatch(JSON.stringify(await history(f)), /alpha|bravo/);
 
 });
+
+test('a receipt retries if another owner releases the lock during inspection', async t => {
+  const f = fixture(t);
+  await dispatchWorkspaceTask(f.root, f.id, 'round-first', async () => {});
+  const lock = `${f.file}.lock`; mkdirSync(lock);
+  const code = `
+    import fs from 'node:fs';
+    import { syncBuiltinESMExports } from 'node:module';
+    const lock = process.argv[3], original = fs.lstatSync;
+    let released = false;
+    fs.lstatSync = (path, ...args) => {
+      if (String(path) === lock && !released) { released = true; fs.rmSync(lock, { recursive: true }); }
+      return original(path, ...args);
+    };
+    syncBuiltinESMExports();
+    const { reportWorkspaceTask } = await import(${JSON.stringify(new URL('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs', import.meta.url).href)});
+    await reportWorkspaceTask(process.argv[1], process.argv[2], 'WORKING', 'round-first', 'Progress', { notify: () => {} });
+    if (!released) throw Error('Race was not exercised');
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code, f.root, f.id, lock], { encoding: 'utf8', windowsHide: true });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual((await history(f)).map(event => event.status), ['SENT', 'WORKING']);
+});
+
+test('receipt retry still rejects a non-directory cooperation lock without changing records', async t => {
+  const f = fixture(t);
+  await dispatchWorkspaceTask(f.root, f.id, 'round-first', async () => {});
+  const before = readFileSync(f.file, 'utf8');
+  writeFileSync(`${f.file}.lock`, 'unsafe');
+  await assert.rejects(report(f, 'WORKING'), /Unsafe cooperation lock/);
+  assert.equal(readFileSync(f.file, 'utf8'), before);
+});

@@ -1084,15 +1084,21 @@ async function withCooperationLock(root, id, operation) {
       break;
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
-      assertSafePath(repository, lock);
-      if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
       try {
-        const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
-        try { process.kill(held.pid, 0); }
-        catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
-      } catch {
-        // Allow recovery if a process died between mkdir and writing its owner.
-        if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+        assertSafePath(repository, lock);
+        if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
+        try {
+          const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
+          try { process.kill(held.pid, 0); }
+          catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
+        } catch {
+          // Allow recovery if a process died between mkdir and writing its owner.
+          if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+        }
+      } catch (inspectionError) {
+        // The previous owner may release between EEXIST and any metadata read.
+        // Retry under the same deadline; unsafe paths and other IO errors fail.
+        if (inspectionError.code !== 'ENOENT') throw inspectionError;
       }
       if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
       await new Promise(done => setTimeout(done, 50));
