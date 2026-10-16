@@ -1,3 +1,4 @@
+import { mountCollaborationTimeline } from './collaboration-timeline.mjs';
 import { I18N } from './i18n.mjs';
 import { customTerminalDefaults, customTerminalPrompt, sameCustomPromptTarget } from './custom-terminal-model.mjs';
 import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
@@ -29,6 +30,7 @@ const state = {
   projectId: null,
   projectEpoch: 0,
   reviewTaskEpoch: 0,
+  selectedTaskRequest: 0,
   reviewWriteTarget: null,
   projectTasks: new Map(),
   projectSelections: new Map(),
@@ -75,6 +77,11 @@ const state = {
   contextTarget: null,
   contextTrigger: null,
 };
+
+const collaborationTimeline = mountCollaborationTimeline({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  onResize: () => updateTerminalLayout(),
+});
 
 const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
   getTaskContext: getReviewTaskContext, sendToCodex: sendReviewToCodex });
@@ -1204,6 +1211,7 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
 }
 
 function renderSelectedTask() {
+  collaborationTimeline.update();
   changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
@@ -1796,6 +1804,8 @@ async function loadTaskList({ selectFirst = true } = {}) {
 }
 
 async function loadSelectedTask() {
+  const request = ++state.selectedTaskRequest;
+  const taskEpoch = state.reviewTaskEpoch;
   if (state.healthTaskId !== (state.selectedId || null)) void checkWorkspaceHealth();
   if (!state.selectedId) {
     state.selectedTask = null;
@@ -1808,7 +1818,8 @@ async function loadSelectedTask() {
   const selectedId = state.selectedId;
   const epoch = state.projectEpoch;
   const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(selectedId)}`);
-  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId
+    || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
@@ -1862,6 +1873,7 @@ async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
   state.reviewTaskEpoch++;
+  collaborationTimeline.update();
   changesDrawer.updateContext();
   renderWorkspaceHealth();
   rememberSelection();

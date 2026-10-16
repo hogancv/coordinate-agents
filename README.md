@@ -219,6 +219,8 @@ Right-click a conversation or project heading to archive it. Archiving closes it
 enter requirements directly in the Codex terminal. Terminal settings accept
 custom executable commands such as `agy-proxy`, plus Codex model and reasoning
 choices. Refresh, close, restart, and close-all-terminal controls are available.
+**Collaboration timeline** is a collapsed panel above Default Collaboration terminals. Expand it to see persisted SENT, WORKING, DONE, REVIEWING, CHANGES_REQUESTED, APPROVED and FAILED events with time, source agent, round ID, transition and a redacted short receipt. Filter the current round, all rounds or a specific past round. History survives page refresh, Workspace restart and terminal-pair restart; unrecorded history from earlier versions cannot be reconstructed. SENT confirms input dispatch only; the other states are formal agent reports, not independent verification. The panel never dispatches, retries or reviews work, and is hidden in Custom Terminals and Zen mode. Clearing archived tasks also removes their stored timeline.
+
 Drag the divider to resize the terminals (25–75%); double-click to reset to 50:50. The ratio survives refresh. Each terminal's focus button expands it without restarting sessions; restore returns to the saved split, and the adjacent switch button focuses the other terminal. These controls also work in Zen mode. Small screens keep the stacked layout.
 The sidebar search filters task titles and project names across loaded/cached tasks, preserving project groups. Projects whose tasks have not loaded are explicitly noted. Clear the search or press Escape to restore the previous project expansion state.
 There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.

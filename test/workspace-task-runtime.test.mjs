@@ -49,6 +49,7 @@ test('Custom lifecycle keeps distinct generic slots, snapshots, explicit input a
     assert.equal(task.mode, 'custom');
     assert.equal(task.startup, null);
     assert.equal(task.cooperation, null);
+    assert.deepEqual(task.collaborationEvents, []);
     assert.notEqual(task.sessions.terminal1.sessionId, task.sessions.terminal2.sessionId);
     for (const session of listRecords(root)) {
       assert.equal(session.agent, 'workspace-custom');
@@ -385,12 +386,16 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
       assert.equal(latest.status, state.toUpperCase());
       assert.equal(latest.pending, false);
     }
-    assert.equal((await readWorkspaceTask(root, workspaceTaskId)).cooperation.status, 'APPROVED');
+    const completed = await readWorkspaceTask(root, workspaceTaskId);
+    assert.equal(completed.cooperation.status, 'APPROVED');
+    assert.deepEqual(completed.collaborationEvents.map(event => event.status), ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED']);
+    const history = completed.collaborationEvents;
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     // Closed pairs must not receive additional input through the lightweight helper.
     await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
     assert.equal(closed.workspaceTask.status, 'CLOSED');
     assert.equal(closed.workspaceTask.cooperation.status, 'APPROVED');
+    assert.deepEqual(closed.workspaceTask.collaborationEvents, history);
     assert.ok(closed.closedSessions.every(session => !ACTIVE.has(session.state)));
     const closedAgain = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     assert.equal(closedAgain.workspaceTask.status, 'CLOSED');
@@ -400,6 +405,7 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.equal(restarted.workspaceTask.status, 'RUNNING');
     assert.equal(restarted.workspaceTask.cooperation.status, 'IDLE');
     assert.equal(restarted.workspaceTask.cooperation.roundId, null);
+    assert.deepEqual(restarted.workspaceTask.collaborationEvents, history);
     assert.notEqual(restarted.workspaceTask.sessions.codex.sessionId, first.sessions.codex.sessionId);
     assert.notEqual(restarted.workspaceTask.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(restarted.workspaceTask.sessionHistory.length, 1);
