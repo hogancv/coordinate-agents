@@ -133,6 +133,15 @@
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
+          <details id="collaboration-timeline" class="collaboration-timeline" hidden>
+            <summary id="timeline-heading">Collaboration timeline · 0</summary>
+            <div class="timeline-content">
+              <div class="timeline-controls"><label id="timeline-filter-label" for="timeline-round">Round</label><select id="timeline-round"></select></div>
+              <p id="timeline-note" class="timeline-note"></p>
+              <ol id="timeline-events" class="timeline-events" aria-label="Collaboration events" tabindex="0"></ol>
+              <p id="timeline-empty" class="timeline-note"></p>
+            </div>
+          </details>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
 

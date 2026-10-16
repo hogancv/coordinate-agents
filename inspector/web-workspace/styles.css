@@ -440,3 +440,20 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 
 .settings-tabbed-modal .settings-dialog-actions { flex-direction: row; align-items: center; }
 .settings-tabbed-modal .settings-dialog-actions button { width: auto; }
+
+/* Optional facts panel: collapsed by default, bounded alongside live terminals. */
+.collaboration-timeline { flex: 0 1 auto; min-height: 0; border-bottom: 1px solid var(--line); background: var(--panel); font-size: .75rem; }
+.collaboration-timeline > summary { cursor: pointer; padding: .4rem .8rem; color: var(--muted); }
+.collaboration-timeline[open] { max-height: min(38vh, 330px); overflow: hidden; }
+.timeline-content { min-height: 0; max-height: min(30vh, 270px); overflow-y: auto; padding: 0 .8rem .5rem; }
+.timeline-controls { display: flex; align-items: center; gap: .5rem; }
+.timeline-controls select { min-width: 0; max-width: 100%; padding: .25rem; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.timeline-note { margin: .4rem 0; color: var(--muted); }
+.timeline-events { list-style: none; margin: .5rem 0 0; padding: 0; }
+.timeline-events li { border-left: 2px solid var(--line); padding: .2rem .6rem .6rem; overflow-wrap: anywhere; }
+.timeline-event-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .65rem; }
+.timeline-event-meta time, .timeline-events code { color: var(--muted); font-size: .68rem; }
+.timeline-transition { font-family: var(--font-mono, monospace); font-size: .68rem; }
+.timeline-events p { margin: .2rem 0 0; }
+.timeline-receipt { color: var(--muted); }
+.zen-mode .collaboration-timeline { display: none; }

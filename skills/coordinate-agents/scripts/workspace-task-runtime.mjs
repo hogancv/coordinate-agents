@@ -1,3 +1,4 @@
+import { collaborationTransition, validateCollaborationEvents } from './workspace-collaboration.mjs';
 import { notifyWorkspaceReceipt } from './workspace-notifications.mjs';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
@@ -251,7 +252,8 @@ function validateWorkspaceTaskRecord(value) {
   const mode = value.mode === undefined ? 'default' : value.mode;
   if (!['default', 'custom'].includes(mode)) throw new Error('Invalid Workspace task mode.');
   const custom = mode === 'custom' ? validateCustomWorkspaceConfig(value.custom) : null;
-  if (mode === 'custom' && (value.cooperation != null || value.startup != null)) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
+  if (mode === 'custom' && (value.cooperation != null || value.startup != null || (value.collaborationEvents != null && (!Array.isArray(value.collaborationEvents) || value.collaborationEvents.length)))) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
+  const cooperation = mode === 'custom' ? null : validateCooperation(value.cooperation);
   const slots = taskSlots({ mode });
   if (Object.keys(value.sessions).some(slot => !slots.some(expected => expected.slot === slot))) throw new Error('Unexpected Workspace task slot.');
   const sessions = Object.fromEntries(slots.map(expected => [
@@ -293,7 +295,8 @@ function validateWorkspaceTaskRecord(value) {
     updatedAt: value.updatedAt,
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
-    cooperation: mode === 'custom' ? null : validateCooperation(value.cooperation),
+    cooperation,
+    collaborationEvents: mode === 'custom' ? [] : validateCollaborationEvents(value.collaborationEvents, value.id, cooperation.revision),
     startup: mode === 'custom' ? null : validateStartup(value.startup),
     sessionHistory,
     error,
@@ -308,7 +311,7 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   return path;
 }
 
-function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false } = {}) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary } = {}) {
   const repository = repositoryRoot(root);
   const path = workspaceTaskFile(repository, record.id, { create: true });
   // Reuse the existing short file transaction lock for every task-file writer.
@@ -335,7 +338,14 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     }
     const cooperation = record.mode === 'custom' ? null : resetCooperation ? idleCooperation((current?.cooperation?.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
-    const validated = validateWorkspaceTaskRecord({ ...base, cooperation });
+    // One atomic record commits the receipt and its history together. Lifecycle
+    // writes always retain the latest history, even when their snapshot is stale.
+    const collaborationEvents = [...(current?.collaborationEvents || record.collaborationEvents || [])];
+    if (replaceCooperation && current) {
+      const event = collaborationTransition(record.id, current.cooperation, { ...cooperation, summary: eventSummary ?? cooperation.summary });
+      if (event) collaborationEvents.push(event);
+    }
+    const validated = validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents });
     atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
     Object.assign(record, validated); // Keep lifecycle responses consistent with persisted receipts.
     return validated;
@@ -448,7 +458,7 @@ function statusFromFacts(record, sessions) {
   return record.status;
 }
 
-function workspaceTaskView(record, facts = new Map()) {
+function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
     sessionView(record.sessions[expected.slot], facts),
@@ -465,6 +475,7 @@ function workspaceTaskView(record, facts = new Map()) {
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
     cooperation: record.cooperation,
+    ...(includeHistory ? { collaborationEvents: record.collaborationEvents } : {}),
     startup: record.startup,
     sessionIds: Object.fromEntries(taskSlots(record).map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
@@ -475,7 +486,7 @@ function workspaceTaskView(record, facts = new Map()) {
 export async function readWorkspaceTasks(root, { includeArchived = false } = {}) {
   const repository = repositoryRoot(root);
   const facts = sessionFactMap(repository);
-  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts));
+  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts, { includeHistory: false }));
 }
 
 export async function readWorkspaceTask(root, id) {
@@ -1132,7 +1143,7 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
     if (previous.status === status && previous.summary === cleaned) return previous;
     record.cooperation = { status, roundId, revision: previous.revision + 1, summary: cleaned, updatedAt: now() };
     record.updatedAt = now();
-    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true });
+    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true, eventSummary: summary });
     // Only new formal transitions, never summary edits, lifecycle or output.
     if (previous.status !== status && ['DONE', 'APPROVED', 'FAILED'].includes(status)) {
       committedEvent = { root: repository, task: { id: committed.id, mode: committed.mode, title: committed.title,
