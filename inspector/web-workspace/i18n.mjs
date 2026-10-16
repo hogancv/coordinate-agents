@@ -1,5 +1,9 @@
 export const I18N = {
   en: {
+    "health.brand": "Environment",
+    "collaborationHealth.closed": "Task closed · collaboration history",
+    "collaborationHealth.close": "Close collaboration health",
+    "collaborationHealth.selectTask": "Select a task to view collaboration health",
     "collaborationHealth.title": "Collaboration health",
     "collaborationHealth.normal": "Normal collaboration",
     "collaborationHealth.waiting": "Waiting for formal receipt",
@@ -279,6 +283,10 @@ export const I18N = {
     'action.retry': 'Retry',
   },
   zh: {
+    "health.brand": "环境",
+    "collaborationHealth.closed": "任务已关闭 · 查看协作历史",
+    "collaborationHealth.close": "关闭协作健康",
+    "collaborationHealth.selectTask": "选择任务后查看协作健康",
     "collaborationHealth.title": "协作健康",
     "collaborationHealth.normal": "正常协作",
     "collaborationHealth.waiting": "等待正式回执",

@@ -443,12 +443,12 @@ test('setup discovery and transactional Agent configuration work through the gua
       // available through the guarded backend contract while the page is the
       // focused dual-terminal workbench.
       const page = await (await fetch(`${base}/`)).text();
-      for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="terminal-settings-button"', 'id="terminal-settings-dialog"', 'id="restart-task-button"', 'id="close-task-button"']) {
+      for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="terminal-settings-button"', 'id="terminal-settings-dialog"', 'id="close-task-button"']) {
         assert.match(page, new RegExp(expected));
       }
       assert.doesNotMatch(page, /agents-panel|discover-agents|agent-configure|chat-feed|composer|graph-map|execution-panel/);
       const js = await (await fetch(`${base}/app.js`)).text();
-      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'workspace-settings', 'workspaceSettingsSave', 'sessionResize', 'onData', 'onBinary']) {
+      for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspace-settings', 'workspaceSettingsSave', 'sessionResize', 'onData', 'onBinary']) {
         assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
       }
       const css = await (await fetch(`${base}/styles.css`)).text();
@@ -575,12 +575,12 @@ test('Task and Task Graph authoring with preflight stays side-effect free until 
     // The Workspace intentionally exposes only the dual-terminal surface;
     // standard Task/Graph authoring remains a backend compatibility contract.
     const page = await (await fetch(`${base}/`)).text();
-    for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="restart-task-button"', 'id="close-task-button"']) {
+    for (const expected of ['id="workspace-task-list"', 'id="agent-terminal-grid"', 'id="new-task-button"', 'id="close-task-button"']) {
       assert.ok(page.includes(expected), `Workspace page must include dual-terminal surface: ${expected}`);
     }
     assert.doesNotMatch(page, /author-panel|graph-create-form|task-create-form|chat-feed|composer/);
     const js = await (await fetch(`${base}/app.js`)).text();
-    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionWrite', 'sessionResize']) {
+    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'sessionWrite', 'sessionResize']) {
       assert.ok(js.includes(expected), `Workspace app.js must expose dual-terminal support: ${expected}`);
     }
     assert.doesNotMatch(js, /taskGraphCreate|taskGraphPlan|renderGraphMap|\/api\/tasks/);
@@ -692,7 +692,7 @@ test('execution controls are explicit, bounded, and fail closed without auto-dis
     assert.match(page, /id="new-task-button"/);
     assert.doesNotMatch(page, /execution-panel|execution-confirm|chat-feed|composer|graph-map/);
     const js = await (await fetch(`${base}/app.js`)).text();
-    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'workspaceTaskRestart', 'sessionWrite', 'sessionResize']) {
+    for (const expected of ['workspaceTaskCreate', 'workspaceTaskClose', 'sessionWrite', 'sessionResize']) {
       assert.ok(js.includes(expected), `Workspace app.js must expose terminal task support: ${expected}`);
     }
     const css = await (await fetch(`${base}/styles.css`)).text();
@@ -790,7 +790,7 @@ test('Session console and recovery controls stay explicit, owned, and idempotent
       assert.match(page, /id="agent-terminal-grid"/);
       assert.doesNotMatch(page, /id="sessions"|session-input-form|recovery/);
       const js = await (await fetch(base + '/app.js')).text();
-      for (const expected of ['sessionWrite', 'sessionResize', 'enqueueRawInput', 'workspaceTaskClose', 'workspaceTaskRestart']) {
+      for (const expected of ['sessionWrite', 'sessionResize', 'enqueueRawInput', 'workspaceTaskClose']) {
         assert.ok(js.includes(expected), 'Workspace app.js must expose direct terminal support: ' + expected);
       }
       assert.doesNotMatch(js, /recoveryControls|submitSessionInput|taskGraphCleanup|taskResume|session-card/);

@@ -89,19 +89,29 @@ const collaborationHealthView = mountCollaborationHealth({ document, t,
   getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
   storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
   onChange: () => renderTaskList(),
-  onInspect: (kind, slot) => {
-    if (kind === 'terminal') setTerminalFocus(slot);
-    if (kind === 'timeline') {
-      const timeline = document.querySelector('#collaboration-timeline');
-      timeline.open = true; document.querySelector('#timeline-round').value = 'current'; collaborationTimeline.update();
-      timeline.scrollIntoView?.({ block: 'nearest' }); document.querySelector('#timeline-round').focus();
-    }
-    if (kind === 'changes') document.querySelector('#changes-button').click();
-  },
+  onOpen: () => changesDrawer.close({ restoreFocus: false }),
+  onInspect: inspectCollaborationHealth,
 });
 
 const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
+  onOpen: () => collaborationHealthView.close({ restoreFocus: false }),
   getTaskContext: getReviewTaskContext, sendToCodex: sendReviewToCodex });
+
+function inspectCollaborationHealth(kind, slot) {
+  if (kind === 'terminal') {
+    if (state.focusedTerminal !== slot) setTerminalFocus(slot);
+    state.terminalViews.get(slot)?.terminal?.focus();
+  }
+  if (kind === 'timeline') {
+    const timeline = document.querySelector('#collaboration-timeline');
+    document.querySelector('#timeline-round').value = 'current'; collaborationTimeline.update();
+    timeline.scrollIntoView?.({ block: 'nearest' }); document.querySelector('#timeline-round').focus();
+  }
+  if (kind === 'changes') {
+    const button = document.querySelector('#changes-button');
+    button.focus(); button.click();
+  }
+}
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
 
@@ -281,7 +291,7 @@ function setBusy(busy) {
     state.taskListRequest = (state.taskListRequest || 0) + 1;
     state.selectedTaskRequest = (state.selectedTaskRequest || 0) + 1;
   }
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'close-all-terminals-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -622,7 +632,9 @@ function renderWorkspaceHealth() {
   button.dataset.healthStatus = status;
   button.setAttribute('aria-expanded', String(state.healthOpen));
   button.title = t('health.open');
-  document.querySelector('#workspace-health-label').textContent = state.healthBusy ? t('health.loading') : t(labels[status]);
+  document.querySelector('#workspace-health-label').textContent = t('health.brand');
+  button.title = `${t('health.open')} · ${summary}`;
+  button.setAttribute('aria-label', button.title);
   document.querySelector('#workspace-health-indicator').textContent = symbols[status];
   panel.hidden = !state.healthOpen;
   panel.setAttribute('aria-busy', String(state.healthBusy));
@@ -631,7 +643,6 @@ function renderWorkspaceHealth() {
   document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
   const rows = document.querySelector('#workspace-health-checks');
   if (state.healthBusy || !state.health || (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null))) { rows.innerHTML = ''; return; }
-  const expanded = new Set([...rows.querySelectorAll('details[open]')].map(detail => detail.dataset.healthDetail));
   const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal1: t('custom.terminal1'), terminal2: t('custom.terminal2'), terminal: 'Terminal / PTY' };
   const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
   rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
@@ -646,11 +657,11 @@ function renderWorkspaceHealth() {
     const cliInstalled = check.authenticated === 'unknown' && ['ok', 'warning'].includes(check.status);
     const value = check.command || (check.backend === 'stdio-fallback' ? 'stdio fallback' : check.backend) || check.version || t('health.notStarted');
     return `<div class="health-row"><div class="health-row-heading"><span data-health-status="${check.status}" aria-hidden="true">${symbols[check.status]}</span><strong>${names[id]}</strong><span class="health-value">${escapeHtml(value)}${check.command && check.version ? ` · ${escapeHtml(check.version)}` : ''}</span><span class="health-status" data-health-status="${check.status}">${t(statusLabels[check.status])}</span></div>
-      <details data-health-detail="${id}"${expanded.has(id) ? ' open' : ''}><summary>${escapeHtml(hint)}</summary>
+      <div class="health-detail" data-health-detail="${id}">${hint !== t('health.details') ? `<p>${escapeHtml(hint)}</p>` : ''}
       ${check.command ? `<p>${t('health.command')}: <code>${escapeHtml(check.command)}</code></p>` : ''}
       ${check.reason ? `<p><code>${escapeHtml(check.reason)}</code></p>` : ''}
-      ${cliInstalled ? `<p>${t('health.authUnknown')}</p><p>${t('health.authHint')}</p>` : ''}
-      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</details></div>`;
+      ${cliInstalled ? `<p>${t('health.authHint')}</p>` : ''}
+      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</div></div>`;
   }).join('');
 }
 
@@ -1304,9 +1315,7 @@ function renderSelectedTask() {
     error.textContent = message ? `${t('task.error')}: ${bounded(message)}` : '';
   }
   const close = document.querySelector('#close-task-button');
-  const restart = document.querySelector('#restart-task-button');
   if (close) close.disabled = state.actionBusy || statusKey(task.status) === 'closed';
-  if (restart) restart.disabled = state.actionBusy;
 
   const panes = selectTerminalPanes({ workspaceTask: task });
   const grid = document.querySelector('#agent-terminal-grid');
@@ -2126,28 +2135,6 @@ async function closeAllTerminals() {
   }
 }
 
-async function restartTask() {
-  if (!state.selectedId || state.actionBusy) return;
-  disposeTerminalViews();
-  setBusy(true);
-  try {
-    const payload = await postAction('workspaceTaskRestart', {
-      workspaceTaskId: state.selectedId,
-      language: localeCode(),
-    });
-    state.selectedTask = payload.workspaceTask || null;
-    showToast(t('task.restarted'), 'success');
-    await refresh();
-  } catch (error) {
-    showToast(error.payload?.error?.message || t('action.restartError'), 'error');
-    await refresh();
-  } finally {
-    setBusy(false);
-    renderTaskList();
-    renderSelectedTask();
-  }
-}
-
 function setLocale(locale) {
   state.locale = locale === 'zh' ? 'zh' : 'en';
   try { localStorage.setItem('coordinate-agents-workspace-locale', state.locale); } catch { /* Optional. */ }
@@ -2337,6 +2324,11 @@ function bindEvents() {
     setHealthOpen(!state.healthOpen, { focus: true });
     if (state.healthOpen) void checkWorkspaceHealth();
   });
+  document.addEventListener('pointerdown', event => {
+    if (state.healthOpen
+      && !document.querySelector('#workspace-health-panel')?.contains(event.target)
+      && !document.querySelector('#workspace-health-button')?.contains(event.target)) setHealthOpen(false);
+  });
   for (const id of ['workspace-health-close', 'workspace-health-continue']) document.querySelector(`#${id}`)?.addEventListener('click', () => setHealthOpen(false, { focus: true }));
   document.querySelector('#workspace-health-recheck')?.addEventListener('click', () => void checkWorkspaceHealth());
   document.querySelector('#workspace-health-settings')?.addEventListener('click', () => { setHealthOpen(false); void openSettings(); });
@@ -2347,8 +2339,6 @@ function bindEvents() {
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
-  document.querySelector('#restart-task-button')?.addEventListener('click', restartTask);
-  document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));
   document.querySelector('#theme-button')?.addEventListener('click', () => setTheme(state.theme === 'light' ? 'dark' : 'light'));

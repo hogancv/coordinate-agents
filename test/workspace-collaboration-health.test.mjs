@@ -196,3 +196,52 @@ test('starting a lifecycle action invalidates in-flight task snapshots', async (
   assert.equal(health(state.tasks[0]).state, 'normal');
   assert.equal(health(state.selectedTask).state, 'normal');
 });
+
+test('health drawer opens only on demand, restores focus and closes on task/project changes', async () => {
+  const { mountCollaborationHealth } = await import('../inspector/web-workspace/collaboration-health.mjs');
+  const { listDocument } = await import('./support/list-dom.mjs');
+  const { I18N } = await import('../inspector/web-workspace/i18n.mjs');
+  const document = listDocument();
+  document.body.innerHTML = '<button id="collaboration-health-button"></button><div id="collaboration-health-mask" hidden></div><aside id="collaboration-health-drawer" hidden><header><h2 id="collaboration-health-title"></h2><button id="collaboration-health-close"></button></header><p id="collaboration-health-context"></p><section id="collaboration-health"><strong id="collaboration-health-heading"></strong><ul id="collaboration-health-signals"></ul><p id="collaboration-health-receipt"></p><div id="collaboration-health-links"></div><details><summary id="collaboration-health-config"></summary><label id="collaboration-health-label"></label><input id="collaboration-health-minutes"></details></section></aside>';
+  document.addEventListener = (name, listener) => document.body.addEventListener(name, listener);
+  let context = { projectId: 'p1', selectedId: 'task1', task: { ...task('DONE'), title: 'First Task' } };
+  let opens = 0;
+  const view = mountCollaborationHealth({ document, getContext: () => context, t: key => I18N.en[key] || key, now: () => now, onOpen: () => opens++ });
+  const button = document.querySelector('#collaboration-health-button'), drawer = document.querySelector('#collaboration-health-drawer');
+  const mask = document.querySelector('#collaboration-health-mask'), close = document.querySelector('#collaboration-health-close');
+  view.update(); assert.equal(drawer.hidden, true); assert.match(button.title, /May need attention/);
+  button.click(); assert.equal(drawer.hidden, false); assert.equal(mask.hidden, false); assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, close); assert.equal(opens, 1);
+  view.update(); assert.equal(drawer.hidden, false, 'polling must preserve the open drawer');
+  close.click(); assert.equal(drawer.hidden, true); assert.equal(document.activeElement, button);
+  button.click(); mask.click(); assert.equal(drawer.hidden, true);
+  button.click(); for (const listener of document.body.listeners.get('keydown')) listener({ key: 'Escape', preventDefault() {} });
+  assert.equal(drawer.hidden, true); assert.equal(document.activeElement, button);
+  button.click(); context = { ...context, selectedId: 'task2' }; view.update();
+  assert.equal(drawer.hidden, true); assert.equal(button.disabled, true);
+  context = { ...context, selectedId: 'task1', task: { ...task('WORKING'), title: 'Second Task' } }; view.update();
+  button.click(); context = { ...context, projectId: 'p2' }; view.update(); assert.equal(drawer.hidden, true);
+  assert.equal(document.querySelector('#collaboration-health-context').textContent, 'Second Task');
+  context.task = { ...context.task, mode: 'custom', status: 'CLOSED' }; view.update();
+  assert.equal(button.disabled, true); assert.equal(drawer.hidden, true);
+});
+
+test('health navigation hands keyboard focus to visible Changes and terminal controls', async () => {
+  const { readFileSync } = await import('node:fs'); const vm = await import('node:vm');
+  const app = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
+  const { listDocument } = await import('./support/list-dom.mjs'); const document = listDocument();
+  document.body.innerHTML = '<button id="changes-button"></button><button id="hidden-health-link"></button><div id="terminal"></div>';
+  const changes = document.querySelector('#changes-button'); let changesTrigger, terminalFocus = 0, layouts = 0;
+  changes.addEventListener('click', () => { changesTrigger = document.activeElement; });
+  const state = { focusedTerminal: 'codex', terminalViews: new Map([['codex', { terminal: { focus: () => { terminalFocus++; document.querySelector('#terminal').focus(); } } }]]) };
+  const context = vm.createContext({ state, document, setTerminalFocus: slot => { layouts++; state.focusedTerminal = slot; } });
+  const start = app.indexOf('function inspectCollaborationHealth('), end = app.indexOf('const capability =', start);
+  vm.runInContext(app.slice(start, end), context);
+  document.querySelector('#hidden-health-link').focus();
+  context.inspectCollaborationHealth('changes');
+  assert.equal(changesTrigger, changes, 'Changes must remember a visible toolbar trigger');
+  document.querySelector('#hidden-health-link').focus();
+  context.inspectCollaborationHealth('terminal', 'codex');
+  assert.equal(document.activeElement, document.querySelector('#terminal'));
+  assert.equal(terminalFocus, 1); assert.equal(layouts, 0, 'viewing an already focused terminal must not toggle its layout');
+});

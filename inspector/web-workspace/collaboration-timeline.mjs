@@ -1,6 +1,6 @@
 // Presentation of persisted receipts only. No terminal IO or collaboration actions.
-export function mountCollaborationTimeline({ document, getContext, t, onResize }) {
-  const details = document.querySelector('#collaboration-timeline');
+export function mountCollaborationTimeline({ document, getContext, t }) {
+  const panel = document.querySelector('#collaboration-timeline');
   const heading = document.querySelector('#timeline-heading');
   const filter = document.querySelector('#timeline-round');
   const list = document.querySelector('#timeline-events');
@@ -12,11 +12,11 @@ export function mountCollaborationTimeline({ document, getContext, t, onResize }
     const { projectId, selectedId, task } = getContext();
     const key = JSON.stringify([projectId, selectedId]);
     if (key !== identity) {
-      identity = key; signature = null; details.open = false; filter.value = 'current';
+      identity = key; signature = null; filter.value = 'current';
       list.textContent = '';
     }
-    details.hidden = !task || task.id !== selectedId || task.mode === 'custom';
-    if (details.hidden) return;
+    panel.hidden = !task || task.id !== selectedId || task.mode === 'custom';
+    if (panel.hidden) return;
     const events = task.collaborationEvents || [];
     const rounds = [...new Set(events.map(event => event.roundId))];
     let selected = filter.value || 'current';
@@ -59,6 +59,5 @@ export function mountCollaborationTimeline({ document, getContext, t, onResize }
     empty.textContent = t('timeline.empty'); empty.hidden = visible.length > 0;
   }
   filter.addEventListener('change', update);
-  details.addEventListener('toggle', () => onResize?.());
   return { update };
 }

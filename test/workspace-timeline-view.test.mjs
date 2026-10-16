@@ -8,12 +8,12 @@ import { I18N } from '../inspector/web-workspace/i18n.mjs';
 const moduleUrl = new URL('../inspector/web-workspace/collaboration-timeline.mjs', import.meta.url);
 function dom() {
   const document = listDocument();
-  document.body.innerHTML = '<details id="collaboration-timeline"><summary id="timeline-heading"></summary><div class="timeline-content"><label id="timeline-filter-label"></label><select id="timeline-round"></select><p id="timeline-note"></p><ol id="timeline-events"></ol><p id="timeline-empty"></p></div></details>';
+  document.body.innerHTML = '<section id="collaboration-timeline"><h3 id="timeline-heading"></h3><div class="timeline-content"><label id="timeline-filter-label"></label><select id="timeline-round"></select><p id="timeline-note"></p><ol id="timeline-events"></ol><p id="timeline-empty"></p></div></section>';
   return document;
 }
 const events = ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED'].map((status, i) => ({ taskId: 'task1', roundId: 'round-first', revision: i + 1, timestamp: '2026-10-16T01:00:00Z', agent: i === 1 || i === 2 ? 'antigravity' : 'codex', fromStatus: i ? ['SENT', 'WORKING', 'DONE', 'REVIEWING'][i - 1] : 'IDLE', status, summary: i ? '<script>receipt</script>' : '' }));
 
-test('timeline renders persisted facts as text, filters rounds, keeps focus/scroll and closes on task/project switches', async () => {
+test('timeline renders persisted facts as text, filters rounds, keeps focus/scroll and resets on task/project switches', async () => {
   const { mountCollaborationTimeline } = await import(moduleUrl);
   const document = dom();
   let context = { projectId: 'p1', selectedId: 'task1', task: { id: 'task1', mode: 'default', cooperation: { roundId: 'round-second' }, collaborationEvents: [...events, { ...events[0], revision: 6, roundId: 'round-second', fromStatus: 'APPROVED' }] } };
@@ -21,7 +21,7 @@ test('timeline renders persisted facts as text, filters rounds, keeps focus/scro
   const view = mountCollaborationTimeline({ document, getContext: () => context, t: key => I18N[locale][key] || key, onResize: () => {} });
   view.update();
   const details = document.querySelector('#collaboration-timeline'), list = document.querySelector('#timeline-events'), filter = document.querySelector('#timeline-round');
-  assert.equal(details.hidden, false); assert.equal(details.open, false);
+  assert.equal(details.hidden, false);
   assert.equal(list.children.length, 1);
   filter.value = 'all'; for (const listener of filter.listeners.get('change')) listener();
   assert.equal(list.children.length, 6);
@@ -29,11 +29,11 @@ test('timeline renders persisted facts as text, filters rounds, keeps focus/scro
   assert.match(list.textContent, /round-first/); assert.match(list.textContent, /round-second/);
   assert.equal(list.querySelectorAll('script').length, 0); assert.match(list.textContent, /<script>receipt<\/script>/);
   const content = document.querySelector('.timeline-content');
-  details.open = true; content.scrollTop = 90; filter.focus(); view.update();
-  assert.equal(details.open, true); assert.equal(content.scrollTop, 90); assert.equal(document.activeElement, filter);
+  content.scrollTop = 90; filter.focus(); view.update();
+  assert.equal(content.scrollTop, 90); assert.equal(document.activeElement, filter);
   filter.value = 'round-first'; for (const listener of filter.listeners.get('change')) listener(); assert.equal(list.children.length, 5);
   locale = 'zh'; view.update(); assert.match(document.querySelector('#timeline-heading').textContent, /协作时间线/);
-  context = { ...context, projectId: 'p2' }; view.update(); assert.equal(details.open, false); assert.equal(list.children.length, 1);
+  context = { ...context, projectId: 'p2' }; view.update(); assert.equal(list.children.length, 1);
   context = { ...context, selectedId: 'task2' }; view.update(); assert.equal(details.hidden, true, 'old task must disappear immediately');
   context.task = { id: 'task2', mode: 'custom', collaborationEvents: events }; view.update(); assert.equal(details.hidden, true);
   context.task = { id: 'task2', mode: 'default', cooperation: { roundId: null }, collaborationEvents: [] }; view.update();

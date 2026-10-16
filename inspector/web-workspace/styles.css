@@ -192,9 +192,8 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 [data-health-status="warning"] { color: var(--yellow); }
 [data-health-status="missing"] { color: var(--red); }
 [data-health-status="pending"] { color: var(--muted); }
-.health-row details { margin: .35rem 0 0 1.45rem; color: var(--muted); font-size: .75rem; line-height: 1.55; }
-.health-row summary { cursor: pointer; }
-.health-row details p { margin: .35rem 0; }
+.health-detail { margin: .35rem 0 0 1.45rem; color: var(--muted); font-size: .75rem; line-height: 1.55; }
+.health-detail p { margin: .35rem 0; }
 .health-row code { font-size: .72rem; overflow-wrap: anywhere; }
 .health-copy { margin-top: .25rem; }
 .health-panel-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
@@ -434,8 +433,8 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .settings-tabbed-modal .notification-actions { justify-content: flex-end; }
 .settings-tabbed-modal .settings-dialog-actions { flex-shrink: 0; padding: .8rem 1.2rem; border-top: 1px solid var(--line); }
 .settings-tabbed-modal .settings-error { flex-shrink: 0; margin: 0 1.2rem .8rem; }
-.settings-panel details.archive-settings { display: block; }
-.settings-panel .archive-settings summary { cursor: pointer; color: var(--muted); font-size: .8rem; font-weight: 600; }
+.settings-panel .archive-settings { display: block; }
+.settings-panel .archive-settings h3 { margin: 0; color: var(--muted); font-size: .8rem; font-weight: 600; }
 .settings-panel .archive-settings p, .settings-panel .archive-settings-actions { margin-top: .75rem; }
 
 .settings-tabbed-modal .settings-dialog-actions { flex-direction: row; align-items: center; }
@@ -443,8 +442,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 
 /* Optional facts panel: collapsed by default, bounded alongside live terminals. */
 .collaboration-timeline { flex: 0 1 auto; min-height: 0; border-bottom: 1px solid var(--line); background: var(--panel); font-size: .75rem; }
-.collaboration-timeline > summary { cursor: pointer; padding: .4rem .8rem; color: var(--muted); }
-.collaboration-timeline[open] { max-height: min(38vh, 330px); overflow: hidden; }
+.collaboration-timeline > h3 { margin: 0; font-size: inherit; font-weight: 600; padding: .4rem .8rem; color: var(--muted); }
 .timeline-content { min-height: 0; max-height: min(30vh, 270px); overflow-y: auto; padding: 0 .8rem .5rem; }
 .timeline-controls { display: flex; align-items: center; gap: .5rem; }
 .timeline-controls select { min-width: 0; max-width: 100%; padding: .25rem; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
@@ -461,7 +459,8 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .collaboration-health { flex: 0 0 auto; padding: 9px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
 .collaboration-health p, .collaboration-health ul { margin: 5px 0; }
 .collaboration-health ul { padding-left: 18px; }
-.collaboration-health details { margin-top: 5px; }
+.collaboration-health-config { margin-top: 12px; }
+.collaboration-health-config h3 { margin: 0 0 6px; font-size: inherit; font-weight: 600; }
 .collaboration-health input { width: 85px; }
 #collaboration-health-links { display: flex; flex-wrap: wrap; gap: 12px; }
 .task-item-health { display: block; font-size: 11px; color: var(--muted); }
@@ -469,3 +468,17 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .collaboration-health[data-health="attention"], .collaboration-health[data-health="session"] { border-color: #bd6717; }
 
 body.zen-mode .collaboration-health { display: none; }
+
+.brand-row > div:last-of-type { flex: 1; }
+.brand-health-button { flex: 0 0 auto; padding: .25rem .3rem; border-radius: 5px; white-space: nowrap; }
+.brand-health-button span { font-size: .58rem; color: inherit; }
+.brand-health-button #workspace-health-indicator { font-size: .7rem; }
+.health-panel { position: fixed; top: 64px; left: 12px; right: auto; max-height: calc(100vh - 80px); z-index: 26; }
+.collaboration-health-body { flex: 1; min-height: 0; overflow-y: auto; margin-top: 12px; }
+.collaboration-health-drawer .collaboration-health { max-height: none; overflow: visible; padding: 14px; }
+.collaboration-health-drawer #collaboration-health-heading { font-size: 13px; }
+.collaboration-health-drawer .collaboration-timeline { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.collaboration-health-drawer .timeline-content { max-height: none; overflow: visible; }
+.collaboration-health-button[data-health="attention"], .collaboration-health-button[data-health="session"] { color: var(--yellow); border-color: var(--yellow); }
+.collaboration-health-button[data-health="reported-failure"] { color: var(--red); border-color: var(--red); }
+.zen-mode #collaboration-health-drawer, .zen-mode #collaboration-health-mask { display: none; }

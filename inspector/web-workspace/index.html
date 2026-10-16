@@ -19,6 +19,7 @@
             <strong>Coordinate Agents</strong>
             <span>Web Workspace</span>
           </div>
+          <button id="workspace-health-button" class="secondary-button health-button brand-health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.brand">Environment</span></button>
           <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Close sidebar">×</button>
         </div>
 
@@ -95,10 +96,9 @@
             </div>
           </div>
           <div class="topbar-actions">
+            <button id="collaboration-health-button" class="secondary-button collaboration-health-button" type="button" aria-expanded="false" aria-controls="collaboration-health-drawer" disabled>Collaboration health</button>
             <button id="changes-button" class="secondary-button" type="button" aria-expanded="false" aria-controls="changes-drawer" disabled>Changes —</button>
-            <button id="workspace-health-button" class="secondary-button health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.open">Environment check</span></button>
             <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
-              <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
               <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
               <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
             </div>
@@ -111,7 +111,6 @@
               <button id="lang-zh" class="language-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
               <button id="lang-en" class="language-button active" type="button" lang="en-US" aria-pressed="true">English</button>
             </div>
-            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
           </div>
         </header>
 
@@ -133,24 +132,32 @@
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
-          <section id="collaboration-health" class="collaboration-health" aria-live="off" hidden>
-            <strong id="collaboration-health-heading"></strong>
-            <ul id="collaboration-health-signals"></ul>
-            <p id="collaboration-health-receipt"></p>
-            <div id="collaboration-health-links"></div>
-            <details><summary id="collaboration-health-config"></summary><label id="collaboration-health-label" for="collaboration-health-minutes"></label> <input id="collaboration-health-minutes" type="number" min="1" max="10080" step="1" value="30"></details>
-          </section>
-          <details id="collaboration-timeline" class="collaboration-timeline" hidden>
-            <summary id="timeline-heading">Collaboration timeline · 0</summary>
-            <div class="timeline-content">
-              <div class="timeline-controls"><label id="timeline-filter-label" for="timeline-round">Round</label><select id="timeline-round"></select></div>
-              <p id="timeline-note" class="timeline-note"></p>
-              <ol id="timeline-events" class="timeline-events" aria-label="Collaboration events" tabindex="0"></ol>
-              <p id="timeline-empty" class="timeline-note"></p>
-            </div>
-          </details>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
+
+        <div id="collaboration-health-mask" class="changes-mask" aria-hidden="true" hidden></div>
+        <aside id="collaboration-health-drawer" class="changes-drawer collaboration-health-drawer" aria-labelledby="collaboration-health-title" hidden>
+          <header class="changes-header"><h2 id="collaboration-health-title">Collaboration health</h2><button id="collaboration-health-close" class="icon-button" type="button" aria-label="Close collaboration health">×</button></header>
+          <p id="collaboration-health-context" class="changes-scope"></p>
+          <div class="collaboration-health-body">
+            <section id="collaboration-health" class="collaboration-health" aria-live="off" hidden>
+              <strong id="collaboration-health-heading"></strong>
+              <ul id="collaboration-health-signals"></ul>
+              <p id="collaboration-health-receipt"></p>
+              <div id="collaboration-health-links"></div>
+              <div class="collaboration-health-config"><h3 id="collaboration-health-config"></h3><label id="collaboration-health-label" for="collaboration-health-minutes"></label> <input id="collaboration-health-minutes" type="number" min="1" max="10080" step="1" value="30"></div>
+            </section>
+            <section id="collaboration-timeline" class="collaboration-timeline" hidden>
+              <h3 id="timeline-heading">Collaboration timeline · 0</h3>
+              <div class="timeline-content">
+                <div class="timeline-controls"><label id="timeline-filter-label" for="timeline-round">Round</label><select id="timeline-round"></select></div>
+                <p id="timeline-note" class="timeline-note"></p>
+                <ol id="timeline-events" class="timeline-events" aria-label="Collaboration events" tabindex="0"></ol>
+                <p id="timeline-empty" class="timeline-note"></p>
+              </div>
+            </section>
+          </div>
+        </aside>
 
         <div id="changes-mask" class="changes-mask" aria-hidden="true" hidden></div>
         <aside id="changes-drawer" class="changes-drawer" aria-labelledby="changes-title" hidden>
@@ -252,14 +259,14 @@
               </div>
               <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
             </form>
-            <details class="archive-settings">
-              <summary id="archive-settings-title" data-i18n="archive.title">Archived conversations</summary>
+            <section class="archive-settings">
+              <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
               <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
               <div class="archive-settings-actions">
                 <span id="archive-summary" aria-live="polite"></span>
                 <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
               </div>
-            </details>
+            </section>
           </section>
           <section id="settings-panel-custom" class="settings-panel settings-fields custom-settings" role="tabpanel" data-settings-panel="custom" aria-labelledby="settings-tab-custom" hidden>
             <h3 id="custom-settings-title" data-i18n="custom.defaults">Custom Terminal Defaults</h3>

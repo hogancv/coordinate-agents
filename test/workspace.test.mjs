@@ -636,7 +636,6 @@ test('Bilingual Workspace text describes both terminal modes and the default Cod
   assert.match(I18N.zh['empty.body'], /默认协作或自定义双终端/);
   assert.match(I18N.zh['empty.body'], /默认协作任务.*Codex/);
   assert.match(appJs, /workspaceTaskCreate/);
-  assert.match(appJs, /workspaceTaskRestart/);
   assert.equal(appJs.includes('Nothing runs automatically'), false);
 });
 
@@ -662,7 +661,7 @@ test('Workspace model selection preserves unrelated startup arguments and suppor
 
 test('Workspace closes every open pair even when one close fails', async () => {
   const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
-  const closeSource = source.slice(source.indexOf('async function closeAllTerminals()'), source.indexOf('async function restartTask()'));
+  const closeSource = source.slice(source.indexOf('async function closeAllTerminals()'), source.indexOf('function setLocale('));
   const calls = [];
   const busy = [];
   const toasts = [];
