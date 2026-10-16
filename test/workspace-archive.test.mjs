@@ -170,10 +170,10 @@ test('duplicate Session payload IDs cannot authorize deletion of a foreign activ
 test('settings can load global archive cleanup even when selected project settings fail',async()=>{
  const {default:vm}=await import('node:vm');
  const app=readFileSync(new URL('../inspector/web-workspace/app.js',import.meta.url),'utf8');
- const source=app.slice(app.indexOf('async function openSettings()'),app.indexOf('function readCodexModel('));
+ const source=app.slice(app.indexOf('async function openSettings('),app.indexOf('function readCodexModel('));
  const nodes=new Map();const node=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:true,setAttribute(){},removeAttribute(){},focus(){}});return nodes.get(selector);};
  const state={projectId:'missing',projectEpoch:0,projects:[{id:'missing',available:false}],settingsOpen:false,settingsBusy:false,archives:{tasks:0,projects:0,unavailableProjects:0}};
- const context=vm.createContext({state,document:{querySelector:node},WORKSPACE_SETTINGS_ENDPOINT:'/api/workspace-settings',DEFAULT_TERMINAL_COMMANDS:{codex:'codex',antigravity:'agy'},fetchJson:async()=>{throw new Error('Project directory unavailable');},postAction:async()=>({tasks:2,projects:0,unavailableProjects:1}),renderSettingsForm(){},renderCustomSettings(){},renderNotificationSettings(){},renderArchiveSummary(){},settingsError(){},closeContextMenu(){},setSettingsBusy(value){state.settingsBusy=value;},t:key=>key,readCodexEffort(){return '';},readCodexModel(){return '';}});
+ const context=vm.createContext({state,document:{querySelector:node},WORKSPACE_SETTINGS_ENDPOINT:'/api/workspace-settings',DEFAULT_TERMINAL_COMMANDS:{codex:'codex',antigravity:'agy'},fetchJson:async()=>{throw new Error('Project directory unavailable');},postAction:async()=>({tasks:2,projects:0,unavailableProjects:1}),renderSettingsForm(){},renderCustomSettings(){},renderNotificationSettings(){},selectSettingsTab(){},renderArchiveSummary(){},settingsError(){},closeContextMenu(){},setSettingsBusy(value){state.settingsBusy=value;},t:key=>key,readCodexEffort(){return '';},readCodexModel(){return '';}});
  vm.runInContext(source,context);await context.openSettings();assert.equal(state.archives.tasks,2);assert.equal(state.archives.unavailableProjects,1);assert.equal(state.settingsBusy,false);
 });
 

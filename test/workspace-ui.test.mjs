@@ -563,3 +563,68 @@ test('review handoff rechecks selection after task lookup and cancels before wri
   assert.equal(env.state.reviewWriteTarget, null);
   await env.controller.inputQueue;
 });
+
+function settingsTabContext() {
+  const document = listDocument();
+  document.body.innerHTML = '<div id="settings-tabs"><button id="settings-tab-default" data-settings-tab="default"></button><button id="settings-tab-custom" data-settings-tab="custom"></button><button id="settings-tab-notifications" data-settings-tab="notifications"></button></div><div class="settings-panels"><section data-settings-panel="default"><input id="codex-command"/></section><section data-settings-panel="custom"><textarea id="custom-project-prompt"></textarea></section><section data-settings-panel="notifications"><input id="notifications-enabled"/></section></div>';
+  const state = { settingsTab: 'default', settingsBusy: false, actionBusy: false };
+  const context = runFunctions('selectSettingsTab', 'renderModelChoices', { state, document, settingsError() {} });
+  context.bindSettingsTabs();
+  context.selectSettingsTab('default');
+  return { context, state, document };
+}
+
+test('settings tabs show only their own panel and keep unsaved fields across switches', () => {
+  const { state, document } = settingsTabContext();
+  document.querySelector('#codex-command').value = 'unsaved-codex';
+  document.querySelector('#custom-project-prompt').value = 'unsaved prompt';
+  document.querySelector('#notifications-enabled').checked = true;
+  document.querySelector('#settings-tab-notifications').click();
+  assert.equal(state.settingsTab, 'notifications');
+  const panels = document.querySelectorAll('[data-settings-panel]');
+  assert.deepEqual(panels.filter(panel => !panel.hidden).map(panel => panel.dataset.settingsPanel), ['notifications']);
+  assert.equal(document.querySelector('#settings-tab-notifications').getAttribute('aria-selected'), 'true');
+  assert.equal(document.querySelector('#settings-tab-default').tabIndex, -1);
+  document.querySelector('#settings-tab-custom').click();
+  assert.equal(document.querySelector('#custom-project-prompt').value, 'unsaved prompt');
+  document.querySelector('#settings-tab-default').click();
+  assert.equal(document.querySelector('#codex-command').value, 'unsaved-codex');
+  assert.equal(document.querySelector('#notifications-enabled').checked, true);
+});
+
+test('settings tab keyboard navigation wraps, supports Home/End and blocks switching during a save', () => {
+  const { context, state, document } = settingsTabContext();
+  const press = (tab, key) => {
+    let prevented = false;
+    context.settingsTabKeydown({ currentTarget: document.querySelector(`#settings-tab-${tab}`), key, preventDefault() { prevented = true; } });
+    return prevented;
+  };
+  assert.equal(press('default', 'ArrowLeft'), true);
+  assert.equal(state.settingsTab, 'notifications');
+  assert.equal(document.activeElement, document.querySelector('#settings-tab-notifications'));
+  press('notifications', 'ArrowRight'); assert.equal(state.settingsTab, 'default');
+  press('default', 'End'); assert.equal(state.settingsTab, 'notifications');
+  press('notifications', 'Home'); assert.equal(state.settingsTab, 'default');
+  state.settingsBusy = true;
+  document.querySelector('#settings-tab-custom').click();
+  assert.equal(state.settingsTab, 'default');
+  press('default', 'End'); assert.equal(state.settingsTab, 'default');
+  state.settingsBusy = false;
+  context.selectSettingsTab('unknown'); assert.equal(state.settingsTab, 'default');
+});
+
+test('saving the default settings keeps empty archive cleanup disabled in the open dialog', async () => {
+  const document = listDocument();
+  document.body.innerHTML = '<button id="archive-clear-button"></button><button id="terminal-settings-save"></button><input id="codex-command"/><input id="antigravity-command"/><select id="codex-model"></select><select id="codex-effort"></select>';
+  for (const id of ['codex-command', 'antigravity-command', 'codex-model', 'codex-effort']) document.querySelector(`#${id}`).value = 'codex';
+  const state = { projectId: 'p1', projectEpoch: 0, projects: [{ id: 'p1', available: true }], settings: {}, archives: { tasks: 0, projects: 0, unavailableProjects: 0 } };
+  const context = runFunctions('setBusy', 'settingsError', { state, document, t: key => key, settingsError() {}, setNotificationControlsBusy() {},
+    replaceCodexModel: () => [], replaceCodexEffort: () => [], postAction: async () => ({ ok: true }), showToast() {}, checkWorkspaceHealth() {} });
+  for (const [start, end] of [['function canEditProjectSettings(', 'function closeSettings('], ['function renderArchiveSummary(', 'function closeContextMenu('], ['async function saveSettings(', 'function renderNotificationSettings(']]) {
+    vm.runInContext(app.slice(app.indexOf(start), app.indexOf(end, app.indexOf(start))), context);
+  }
+  context.renderArchiveSummary();
+  assert.equal(document.querySelector('#archive-clear-button').disabled, true);
+  await context.saveSettings();
+  assert.equal(document.querySelector('#archive-clear-button').disabled, true);
+});

@@ -225,7 +225,7 @@ There is no Composer, chat timeline, or Graph/Agents/Sessions/Activity page.
 
 **Custom Terminals** opens two independent CLI sessions with stable Terminal 1/2 slots. Enter only executable names or absolute paths (spaces in paths are supported), never flags or shell syntax. Both commands may be identical. Generic CLI launch reuses the existing executable checks and PTY Host; known Codex Windows entrypoints and agy interactive transport are preserved without assigning collaboration roles.
 
-Terminal settings has a separate **Custom Terminal Defaults** section: two commands, an optional shared Project Prompt (8KB UTF-8), and two optional Terminal Prompts (4KB each). This project-local schema is atomically saved to `.agent-bus/workspace-custom.json`; it does not change default agent settings. New tasks snapshot these settings; project edits never alter old Custom tasks, even on restart. Commands can be overridden for one creation.
+Workspace settings has a separate **Custom Terminals** tab: two commands, an optional shared Project Prompt (8KB UTF-8), and two optional Terminal Prompts (4KB each). This project-local schema is atomically saved to `.agent-bus/workspace-custom.json`; it does not change default agent settings. New tasks snapshot these settings; project edits never alter old Custom tasks, even on restart. Commands can be overridden for one creation.
 
 Custom mode never injects built-in roles, starts a collaboration round, or enables Send to Codex review feedback. Git diff viewing/copying remains available. Each terminal's **Project Prompt** button previews its shared + terminal Prompt, separated by `---`. Copy it, or explicitly confirm that the CLI is ready and supports bracketed multiline paste before sending. Delivery reserves the keyboard queue and uses one raw Session write with one final Enter. Uncertain delivery is never retried or restarted automatically. Refresh, close, restart and archive remain task-and-slot bound; no global Session discovery fallback is used.
 
@@ -326,7 +326,13 @@ Contributor setup and required validation commands are defined in [AGENTS.md](./
 
 ### Desktop notifications (Windows 10/11 and macOS)
 
-In **Terminal settings → Desktop Notifications**, enable system notifications
+Workspace settings has three tabs: **Default Collaboration**, **Custom Terminals**,
+and **Desktop Notifications**. Each tab saves its own configuration and stays
+open after saving. Switching tabs keeps unsaved edits; the bottom **Close**
+button only closes the dialog. Archived conversation cleanup is collapsed
+under Default Collaboration.
+
+In **Workspace settings → Desktop Notifications**, enable system notifications
 for the current project and save. By default, APPROVED (review passed) and
 FAILED are selected; DONE (implementation ready, awaiting review) is optional.
 Notifications start disabled. **Send test notification** uses a fixed template

@@ -54,6 +54,7 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  settingsTab: 'default',
   notifications: null,
   notificationBusy: false,
   customSettings: customTerminalDefaults(),
@@ -265,6 +266,41 @@ function settingsError(message = '') {
   element.textContent = message;
 }
 
+function selectSettingsTab(tab, { focus = false } = {}) {
+  if (state.settingsBusy || state.actionBusy) return;
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const selected = tabs.find(button => button.dataset.settingsTab === tab);
+  if (!selected) return;
+  state.settingsTab = tab;
+  for (const button of tabs) {
+    const active = button === selected;
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) panel.hidden = panel.dataset.settingsPanel !== tab;
+  const content = document.querySelector('.settings-panels');
+  if (content) content.scrollTop = 0;
+  settingsError();
+  if (focus) selected.focus();
+}
+
+function settingsTabKeydown(event) {
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const index = tabs.indexOf(event.currentTarget);
+  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+    : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  selectSettingsTab(tabs[next].dataset.settingsTab, { focus: true });
+}
+
+function bindSettingsTabs() {
+  for (const button of document.querySelectorAll('[data-settings-tab]')) {
+    button.addEventListener('click', () => selectSettingsTab(button.dataset.settingsTab));
+    button.addEventListener('keydown', settingsTabKeydown);
+  }
+}
+
 function renderModelChoices() {
   const select = document.querySelector('#codex-model');
   const models = [...(state.settings.models || [])];
@@ -297,6 +333,7 @@ function canEditProjectSettings() { return Boolean(state.projectId) && state.pro
 
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
+  for (const tab of document.querySelectorAll('[data-settings-tab]')) tab.disabled = busy;
   for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
@@ -322,7 +359,7 @@ function closeSettings({ force = false } = {}) {
   document.querySelector('#terminal-settings-button')?.focus();
 }
 
-async function openSettings() {
+async function openSettings(tab = 'default') {
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   if (state.actionBusy || state.settingsBusy) return;
@@ -334,6 +371,7 @@ async function openSettings() {
   renderSettingsForm();
   renderCustomSettings();
   renderNotificationSettings();
+  selectSettingsTab(tab);
   dialog.hidden = false;
   setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
@@ -364,7 +402,7 @@ async function openSettings() {
     if (projectId === state.projectId && epoch === state.projectEpoch) {
       dialog.removeAttribute('aria-busy');
       setSettingsBusy(false);
-      if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+      if (state.settingsOpen) document.querySelector(`#settings-tab-${state.settingsTab || 'default'}`)?.focus();
     }
   }
 }
@@ -439,14 +477,13 @@ async function saveSettings(event) {
     await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     state.settings = { ...state.settings, ...commands, model, effort, args };
-    closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
     void checkWorkspaceHealth();
   } catch (error) {
     settingsError(error.payload?.error?.message || error.message || t('settings.saveError'));
   } finally {
-    setSettingsBusy(false);
     setBusy(false);
+    setSettingsBusy(false);
   }
 }
 
@@ -2162,6 +2199,7 @@ async function clearArchivedConversations() {
 }
 
 function bindEvents() {
+  bindSettingsTabs();
   document.querySelector('#project-switcher')?.addEventListener('change', event => {
     const id = event.target.value;
     if (id && id !== state.projectId) void selectProject(id);
@@ -2221,7 +2259,7 @@ function bindEvents() {
     document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });
   }
   for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
-  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings());
+  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings('custom'));
   document.querySelector('#notifications-save')?.addEventListener('click', () => void saveNotificationSettings());
   document.querySelector('#notifications-test')?.addEventListener('click', () => void sendNotificationTest());
   document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());

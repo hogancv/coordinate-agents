@@ -418,3 +418,24 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .notification-settings label { display: flex; align-items: baseline; gap: .4rem; font-size: .8rem; }
 .notification-settings input[type="checkbox"] { width: auto; flex: 0 0 auto; }
 .notification-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+/* Keep navigation and Close visible; only the selected settings page scrolls. */
+.settings-tabbed-modal { display: flex; flex-direction: column; width: min(38rem, 100%); height: min(90vh, 44rem); max-height: calc(100dvh - 2rem); padding: 0; gap: 0; overflow: hidden; }
+.settings-tabbed-modal .settings-modal-header { flex-shrink: 0; padding: 1.15rem 1.2rem 1rem; }
+.settings-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); flex-shrink: 0; padding: 0 .8rem; border-bottom: 1px solid var(--line); }
+.settings-tabs button { min-width: 0; padding: .8rem .4rem; border: 0; border-bottom: 2px solid transparent; border-radius: .4rem .4rem 0 0; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; cursor: pointer; }
+.settings-tabs button:hover { color: var(--text); background: var(--sidebar-hover); }
+.settings-tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--panel-strong); font-weight: 700; }
+.settings-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.settings-panels { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.2rem; }
+.settings-panel, .settings-default-form { display: grid; min-width: 0; gap: 1rem; align-content: start; }
+.settings-panel h3, .settings-panel p { margin: 0; }
+.settings-tabbed-modal .custom-settings, .settings-tabbed-modal .notification-settings { border: 0; padding-top: 0; }
+.settings-panel-actions { display: flex; justify-content: flex-end; }
+.settings-tabbed-modal .notification-actions { justify-content: flex-end; }
+#custom-settings-save { justify-self: end; }
+.settings-tabbed-modal .settings-dialog-actions { flex-shrink: 0; padding: .8rem 1.2rem; border-top: 1px solid var(--line); }
+.settings-tabbed-modal .settings-error { flex-shrink: 0; margin: 0 1.2rem .8rem; }
+.settings-panel details.archive-settings { display: block; }
+.settings-panel .archive-settings summary { cursor: pointer; color: var(--muted); font-size: .8rem; font-weight: 600; }
+.settings-panel .archive-settings p, .settings-panel .archive-settings-actions { margin-top: .75rem; }

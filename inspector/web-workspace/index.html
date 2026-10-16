@@ -198,77 +198,90 @@
     </div>
 
     <div id="terminal-settings-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title" hidden>
-      <form id="terminal-settings-form" class="settings-modal">
+      <section class="settings-modal settings-tabbed-modal">
         <header class="settings-modal-header">
           <div>
-            <span class="eyebrow" data-i18n="settings.eyebrow">TERMINAL SETTINGS</span>
-            <h2 id="terminal-settings-title" data-i18n="settings.title">Terminal startup commands</h2>
+            <span class="eyebrow" data-i18n="settings.eyebrow">PREFERENCES</span>
+            <h2 id="terminal-settings-title" data-i18n="settings.title">Workspace settings</h2>
           </div>
           <button id="terminal-settings-close" class="icon-button" type="button" aria-label="Close settings">×</button>
         </header>
-        <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
-        <div class="settings-fields">
-          <label class="settings-field" for="codex-command">
-            <span data-i18n="settings.codex">Codex</span>
-            <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
-          </label>
-          <label class="settings-field">
-            <span data-i18n="settings.model">Codex model (optional)</span>
-            <select id="codex-model" aria-describedby="codex-model-hint"></select>
-            <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
-          </label>
-          <label class="settings-field" for="codex-effort">
-            <span data-i18n="settings.effort">Reasoning effort</span>
-            <select id="codex-effort"></select>
-          </label>
-          <label class="settings-field" for="antigravity-command">
-            <span data-i18n="settings.antigravity">Antigravity</span>
-            <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
-          </label>
+        <div id="settings-tabs" class="settings-tabs" role="tablist" aria-labelledby="terminal-settings-title">
+          <button id="settings-tab-default" type="button" role="tab" data-settings-tab="default" aria-controls="settings-panel-default" aria-selected="true" data-i18n="settings.tabDefault">Default Collaboration</button>
+          <button id="settings-tab-custom" type="button" role="tab" data-settings-tab="custom" aria-controls="settings-panel-custom" aria-selected="false" tabindex="-1" data-i18n="settings.tabCustom">Custom Terminals</button>
+          <button id="settings-tab-notifications" type="button" role="tab" data-settings-tab="notifications" aria-controls="settings-panel-notifications" aria-selected="false" tabindex="-1" data-i18n="settings.tabNotifications">Desktop Notifications</button>
         </div>
-        <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
-        <section class="settings-fields custom-settings" aria-labelledby="custom-settings-title">
-          <h3 id="custom-settings-title" data-i18n="custom.defaults">Custom Terminal Defaults</h3>
-          <p class="settings-hint" data-i18n="custom.snapshotHint">Only new Custom tasks use these defaults. Existing tasks keep their command and Prompt snapshots.</p>
-          <label class="settings-field"><span data-i18n="custom.command1">Terminal 1 · Startup command</span><input id="custom-command1" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
-          <label class="settings-field"><span data-i18n="custom.command2">Terminal 2 · Startup command</span><input id="custom-command2" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
-          <label class="settings-field"><span data-i18n="custom.projectPrompt">Project shared Prompt · 8KB</span><textarea id="custom-project-prompt" maxlength="8192" rows="4"></textarea></label>
-          <label class="settings-field"><span data-i18n="custom.prompt1">Terminal 1 Prompt · 4KB</span><textarea id="custom-terminal1-prompt" maxlength="4096" rows="3"></textarea></label>
-          <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
-          <button id="custom-settings-save" class="secondary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
-        </section>
-        <section class="notification-settings settings-fields" aria-labelledby="notifications-title" aria-describedby="notifications-save-hint">
-          <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
-          <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
-          <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
-          <fieldset id="notification-events">
-            <legend data-i18n="notifications.events">Notification events</legend>
-            <label><input id="notifications-done" type="checkbox"> <span data-i18n="notifications.done">Implementation ready for review (DONE)</span></label>
-            <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
-            <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
-          </fieldset>
-          <p id="notifications-save-hint" class="settings-hint" data-i18n="notifications.saveHint">Notification changes must be saved separately with “Save notification settings”. The bottom “Save terminal settings” button only saves terminal startup settings.</p>
-          <div class="notification-actions">
-            <button id="notifications-save" class="secondary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
-            <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
-          </div>
-          <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
-        </section>
-        <section class="archive-settings" aria-labelledby="archive-settings-title">
-          <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
-          <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
-          <div class="archive-settings-actions">
-            <span id="archive-summary" aria-live="polite"></span>
-            <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
-          </div>
-        </section>
+        <div class="settings-panels">
+          <section id="settings-panel-default" class="settings-panel" role="tabpanel" data-settings-panel="default" aria-labelledby="settings-tab-default">
+            <form id="terminal-settings-form" class="settings-default-form">
+              <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
+              <div class="settings-fields">
+                <label class="settings-field" for="codex-command">
+                  <span data-i18n="settings.codex">Codex</span>
+                  <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+                </label>
+                <label class="settings-field">
+                  <span data-i18n="settings.model">Codex model (optional)</span>
+                  <select id="codex-model" aria-describedby="codex-model-hint"></select>
+                  <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
+                </label>
+                <label class="settings-field" for="codex-effort">
+                  <span data-i18n="settings.effort">Reasoning effort</span>
+                  <select id="codex-effort"></select>
+                </label>
+                <label class="settings-field" for="antigravity-command">
+                  <span data-i18n="settings.antigravity">Antigravity</span>
+                  <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+                </label>
+              </div>
+              <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+              <div class="settings-panel-actions">
+                <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save terminal settings</button>
+              </div>
+            </form>
+            <details class="archive-settings">
+              <summary id="archive-settings-title" data-i18n="archive.title">Archived conversations</summary>
+              <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
+              <div class="archive-settings-actions">
+                <span id="archive-summary" aria-live="polite"></span>
+                <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
+              </div>
+            </details>
+          </section>
+          <section id="settings-panel-custom" class="settings-panel settings-fields custom-settings" role="tabpanel" data-settings-panel="custom" aria-labelledby="settings-tab-custom" hidden>
+            <h3 id="custom-settings-title" data-i18n="custom.defaults">Custom Terminal Defaults</h3>
+            <p class="settings-hint" data-i18n="custom.snapshotHint">Only new Custom tasks use these defaults. Existing tasks keep their command and Prompt snapshots.</p>
+            <label class="settings-field"><span data-i18n="custom.command1">Terminal 1 · Startup command</span><input id="custom-command1" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
+            <label class="settings-field"><span data-i18n="custom.command2">Terminal 2 · Startup command</span><input id="custom-command2" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
+            <label class="settings-field"><span data-i18n="custom.projectPrompt">Project shared Prompt · 8KB</span><textarea id="custom-project-prompt" maxlength="8192" rows="4"></textarea></label>
+            <label class="settings-field"><span data-i18n="custom.prompt1">Terminal 1 Prompt · 4KB</span><textarea id="custom-terminal1-prompt" maxlength="4096" rows="3"></textarea></label>
+            <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
+            <button id="custom-settings-save" class="primary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
+          </section>
+          <section id="settings-panel-notifications" class="settings-panel notification-settings settings-fields" role="tabpanel" data-settings-panel="notifications" aria-labelledby="settings-tab-notifications" hidden>
+            <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
+            <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
+            <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
+            <fieldset id="notification-events">
+              <legend data-i18n="notifications.events">Notification events</legend>
+              <label><input id="notifications-done" type="checkbox"> <span data-i18n="notifications.done">Implementation ready for review (DONE)</span></label>
+              <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
+              <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
+            </fieldset>
+            <div class="notification-actions">
+              <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
+              <button id="notifications-save" class="primary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
+            </div>
+            <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
+          </section>
+        </div>
         <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
-        <footer class="settings-modal-actions">
-          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>
-          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save terminal settings</button>
+        <footer class="settings-modal-actions settings-dialog-actions">
+          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.close">Close</button>
         </footer>
-      </form>
+      </section>
     </div>
+
 
     <script src="/vendor/xterm.js"></script>
     <script type="module" src="/app.js"></script>
