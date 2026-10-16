@@ -142,3 +142,21 @@ test('history sanitizer redacts before Unicode truncation, including load-time u
   const preview = collaborationSummary('safe '.repeat(42) + 'TOKEN=' + 'a'.repeat(700));
   assert.ok(Array.from(preview).length <= 240); assert.doesNotMatch(preview, /a{10}/);
 });
+
+
+test('complete Cookie headers are private, including quoted values, multiple cookies and following text', async t => {
+  const { collaborationSummary } = await import('../skills/coordinate-agents/scripts/workspace-collaboration.mjs');
+  for (const value of ['Cookie: session=alpha; sid=bravo', 'Set-Cookie: session=alpha; Secure; HttpOnly', 'cookie="sid=alpha; auth=bravo"', 'COOKIE: session=alpha;\nTests passed']) {
+    assert.doesNotMatch(collaborationSummary(value), /alpha|bravo|HttpOnly/);
+  }
+  assert.match(collaborationSummary('Cookie: session=alpha; sid=bravo\nTests passed'), /Tests passed/);
+  const f = fixture(t);
+  await dispatchWorkspaceTask(f.root, f.id, 'round-first', async () => {});
+  await report(f, 'WORKING', 'round-first', 'Cookie: session=alpha; sid=bravo');
+  const stored = JSON.parse(readFileSync(f.file));
+  assert.doesNotMatch(JSON.stringify(stored.collaborationEvents), /alpha|bravo/);
+  stored.collaborationEvents[1].summary = 'Cookie: session=alpha; sid=bravo';
+  writeFileSync(f.file, JSON.stringify(stored));
+  assert.doesNotMatch(JSON.stringify(await history(f)), /alpha|bravo/);
+
+});

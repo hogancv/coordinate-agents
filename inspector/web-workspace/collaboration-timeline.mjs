@@ -5,6 +5,7 @@ export function mountCollaborationTimeline({ document, getContext, t, onResize }
   const filter = document.querySelector('#timeline-round');
   const list = document.querySelector('#timeline-events');
   const empty = document.querySelector('#timeline-empty');
+  const content = document.querySelector('.timeline-content');
   let identity = null, signature = null;
 
   function update() {
@@ -33,7 +34,7 @@ export function mountCollaborationTimeline({ document, getContext, t, onResize }
     }
     filter.value = selected;
     const visible = events.filter(event => selected === 'all' || event.roundId === (selected === 'current' ? task.cooperation?.roundId : selected));
-    const scroll = list.scrollTop;
+    const scroll = content.scrollTop;
     list.textContent = '';
     for (const event of visible) {
       const row = document.createElement('li');
@@ -54,7 +55,7 @@ export function mountCollaborationTimeline({ document, getContext, t, onResize }
       }
       list.append(row);
     }
-    list.scrollTop = scroll;
+    content.scrollTop = scroll;
     empty.textContent = t('timeline.empty'); empty.hidden = visible.length > 0;
   }
   filter.addEventListener('change', update);

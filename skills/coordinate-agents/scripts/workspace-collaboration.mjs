@@ -10,6 +10,7 @@ export function collaborationSummary(value) {
   const text = stripVTControlCharacters(String(value || ''))
     .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/gi, '[REDACTED]')
     .replace(/\b(?:gh[pousr]_[a-z0-9_]{16,}|github_pat_[a-z0-9_]{16,}|sk-(?:proj-)?[a-z0-9_-]{16,}|AKIA[A-Z0-9]{16})\b/gi, '[REDACTED]')
+    .replace(/\b((?:set-)?cookie["']?\s*[:=]\s*)[^\r\n]*/gi, '$1[REDACTED]')
     .replace(/\b(authorization\s*[:=]\s*)(?:(?:bearer|basic)\s+)?[^\r\n,;]+/gi, '$1[REDACTED]')
     .replace(/\beyJ[a-z0-9_-]+\.[a-z0-9_-]+\.[a-z0-9_-]+\b/gi, '[REDACTED]')
     .replace(/\b(bearer\s+)[^\s,;]+/gi, '$1[REDACTED]')

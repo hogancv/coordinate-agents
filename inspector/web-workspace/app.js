@@ -1828,13 +1828,16 @@ async function loadSelectedTask() {
 }
 
 async function continueTaskStartup(task, projectId, epoch) {
+  const taskEpoch = state.reviewTaskEpoch;
+  const request = state.selectedTaskRequest;
   if (state.actionBusy || !task.startup || !['STARTING', 'AWAITING_INPUT'].includes(task.status)) return;
   const key = `${projectId}:${task.id}`;
   if (state.startupContinuing.has(key)) return;
   state.startupContinuing.add(key);
   try {
     const payload = await postAction('workspaceTaskContinue', { workspaceTaskId: task.id }, projectId);
-    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId) return;
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId
+      || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
     state.selectedTask = payload.workspaceTask;
     state.tasks = state.tasks.map(item => item.id === task.id ? payload.workspaceTask : item);
     state.projectTasks.set(projectId, state.tasks);
