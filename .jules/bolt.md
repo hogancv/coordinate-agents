@@ -64,3 +64,7 @@
 ## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents
 **Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
 **Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.
+
+## 2026-09-21 - Single-pass maximum filename search in currentState
+**Learning:** `currentState` in `agent-observer.mjs` used `readdirSync(directory).filter(name => name.endsWith('.json')).sort().reverse()[0]`, which created 3 intermediate arrays (`.filter`, `.sort`, `.reverse`) and performed an $O(N \log N)$ sorting pass to find a single maximum filename.
+**Action:** Use a single-pass `for...of` loop over `readdirSync` to find the lexicographically maximum file string in $O(N)$ time with zero extra array allocations.
