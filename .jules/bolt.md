@@ -64,3 +64,7 @@
 ## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents
 **Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
 **Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.
+
+## 2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration
+**Learning:** `validateCollaborationEvents` spread `STATUSES` into a new `['IDLE', ...STATUSES]` array on every event iteration in `.map()`, causing $O(N)$ allocations and linear scans. `collaborationSummary` allocated `Array.from(text)` character arrays for every string even when `text.length <= 240`.
+**Action:** Precompute static state transition Sets at module scope and fast-path scalar string length checks (`length <= threshold`) before allocating unicode character arrays.
