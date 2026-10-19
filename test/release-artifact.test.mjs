@@ -92,6 +92,10 @@ test('payload verifier rejects omitted runtime files and added Legacy or secret 
       const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); cpSync(join(root, file), target);
     }
     assert.equal(verifyPayload(temporary).legacyAbsent, true);
+    const identityModule = 'skills/coordinate-agents/scripts/workspace-native-identity.mjs';
+    rmSync(join(temporary, identityModule));
+    assert.throws(() => verifyPayload(temporary), /workspace-native-identity\.mjs is missing/);
+    cpSync(join(root, identityModule), join(temporary, identityModule));
     for (const file of ['.mcp.json', '.env', 'test/fixture.test.mjs', 'skills/coordinate-agents/SKILL.md']) {
       const target = join(temporary, file); mkdirSync(resolve(target, '..'), { recursive: true }); writeFileSync(target, 'unexpected');
       assert.throws(() => verifyPayload(temporary), /Unexpected or Legacy payload file/); rmSync(target);
