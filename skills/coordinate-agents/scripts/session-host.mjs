@@ -116,6 +116,8 @@ function metadataFromRuntime() {
   return {
     schemaVersion: 1,
     id: session.id,
+    runtimeGeneration: session.runtimeGeneration || null,
+    adapter: session.adapter || null,
     agent: session.agent,
     command: session.command,
     resolvedCommand: session.resolvedCommand || null,
@@ -405,6 +407,8 @@ try {
       const failed = {
         schemaVersion: 1,
         id: session.id,
+        runtimeGeneration: session.runtimeGeneration || null,
+        adapter: session.adapter || null,
         agent: session.agent,
         command: session.command,
         resolvedCommand: session.resolvedCommand || null,

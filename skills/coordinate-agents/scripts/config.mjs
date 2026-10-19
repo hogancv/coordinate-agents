@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync,
-  lstatSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync,
+  lstatSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { hostname } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
@@ -192,7 +192,41 @@ export function writeConfig(bus, config) {
   atomicWrite(destination, `${JSON.stringify(config, null, 2)}\n`, join(bus, 'tmp'));
 }
 
-export function acquireConfigLock(bus, { timeoutMs = 10_000, staleMs = 30_000 } = {}) {
+function reapDeadConfigOwner(lock) {
+  let marker, reaper;
+  try {
+    const before = lstatSync(lock);
+    if (!before.isDirectory() || before.isSymbolicLink()) return false;
+    const ownerPath = join(lock, 'owner.json');
+    // A missing/partially published owner is not evidence of death. In
+    // particular, another process may be between mkdir and writeFileSync.
+    const raw = readInternalFile(lock, ownerPath);
+    const info = JSON.parse(raw);
+    if (info.host !== hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || typeof info.owner !== 'string') return false;
+    try { process.kill(info.pid, 0); return false; }
+    catch (error) { if (error.code !== 'ESRCH') return false; }
+    // Only one waiter may reap this dead owner's directory. Without this
+    // election two waiters can remove each other's newly acquired lock.
+    marker = join(lock, '.reaper');
+    mkdirSync(marker);
+    reaper = randomUUID();
+    writeFileSync(join(marker, 'owner'), reaper, { flag: 'wx' });
+    const current = lstatSync(lock);
+    if (current.dev !== before.dev || current.ino !== before.ino || readInternalFile(lock, ownerPath) !== raw) return false;
+    rmSync(lock, { recursive: true, force: true });
+    return true;
+  } catch { return false; }
+  finally {
+    // If the old directory was released/replaced, never remove another
+    // reaper's marker in the replacement lock.
+    if (reaper) {
+      try { if (readFileSync(join(marker, 'owner'), 'utf8') === reaper) rmSync(marker, { recursive: true, force: true }); }
+      catch { /* The dead lock may already have been removed. */ }
+    }
+  }
+}
+
+export function acquireConfigLock(bus, { timeoutMs = 10_000 } = {}) {
   const locksDir = join(bus, 'locks');
   mkdirSync(locksDir, { recursive: true });
   const lock = join(locksDir, 'config');
@@ -213,24 +247,9 @@ export function acquireConfigLock(bus, { timeoutMs = 10_000, staleMs = 30_000 } 
       };
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
-      try {
-        const stats = statSync(lock);
-        const ownerPath = join(lock, 'owner.json');
-        let isAlive = false;
-        if (existsSync(ownerPath)) {
-          const ownerInfo = JSON.parse(readFileSync(ownerPath, 'utf8'));
-          if (ownerInfo.host === hostname() && Number.isInteger(ownerInfo.pid)) {
-            try {
-              process.kill(ownerInfo.pid, 0);
-              isAlive = true;
-            } catch { isAlive = false; }
-          }
-        }
-        if (!isAlive || (Date.now() - stats.mtimeMs > staleMs)) {
-          rmSync(lock, { recursive: true, force: true });
-          continue;
-        }
-      } catch { /* ignore */ }
+      // Age never revokes a live writer. Unknown/foreign/unpublished owners
+      // time out closed; explicit recovery can inspect an abandoned lock.
+      if (reapDeadConfigOwner(lock)) continue;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
     }
   }
