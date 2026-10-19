@@ -614,6 +614,7 @@ test('Web onboarding retains both terminals and resumes each role once after use
     interrupted.status = 'STARTING';
     interrupted.startup.slots = { codex: 'WAITING', antigravity: 'WAITING' };
     interrupted.sessions.antigravity.sessionId = null;
+    delete interrupted.sessions.antigravity.runtimeGeneration;
     writeFileSync(file, JSON.stringify(interrupted));
     const recovered = (await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id })).workspaceTask;
     assert.equal(recovered.status, 'ERROR');

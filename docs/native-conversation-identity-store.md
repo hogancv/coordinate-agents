@@ -78,8 +78,9 @@ instances; they never change production registration or imply native CLI support
 
 The receiver rejects nil/invalid UUIDs, extra fields, malformed source metadata,
 noncanonical/mismatched roots, samples older than 15 seconds or over 1 second in
-the future. Sequence must increase within the same Session/generation; timestamp
-must not go backwards. Verification runs before the transaction; ownership and
+the future. Within the same Session/generation, sequence must increase and timestamp
+must not go backwards. A new generation resets that runtime's ordering watermark.
+Verification runs before the transaction; ownership and
 freshness are checked again after acquiring the existing config lock. The Task
 must be active and unarchived; Task slot, Session owner, adapter, cwd, generation
 and expected identity revision must all agree. Closed/exited Sessions and late
