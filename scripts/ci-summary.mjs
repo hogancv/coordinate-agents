@@ -1,93 +1,95 @@
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 
+function scalar(value = '') {
+  if (value.startsWith("'") && value.endsWith("'")) return value.slice(1, -1).replaceAll("''", "'");
+  if (value.startsWith('"')) { try { return JSON.parse(value); } catch { /* Keep unrecognized diagnostics as text. */ } }
+  return value;
+}
+
 export function parseTap(tapContent) {
-  const lines = tapContent.split('\n');
-  const tests = [];
-  const failures = [];
-  let currentTest = null;
+  const lines = tapContent.split(/\r?\n/);
+  const tests = [], failures = [], footer = {};
+  const observed = { total: 0, pass: 0, fail: 0, skipped: 0, todo: 0, cancelled: 0 };
   let totalDuration = 0;
-  let passCount = 0;
-  let failCount = 0;
-  let skipCount = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    // Only the unindented runner footer is authoritative, not a nested scope
+    // or output captured inside a test's YAML diagnostic block.
+    const count = line.match(/^#\s+(tests|pass|fail|skipped|todo|cancelled)\s+(\d+)\s*$/);
+    if (count) footer[count[1]] = Number(count[2]);
+    const duration = line.match(/^# duration_ms\s+(\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*$/i);
+    if (duration) totalDuration = Number(duration[1]);
 
-    // Total duration line: # duration_ms 12345.67
-    const durSummaryMatch = line.match(/^# duration_ms\s+([\d\.]+)/);
-    if (durSummaryMatch) {
-      totalDuration = parseFloat(durSummaryMatch[1]);
-    }
-
-    const testMatch = line.match(/^(ok|not ok)\s+\d+\s+-\s+(.+?)(?:\s+#\s+(SKIP|TODO))?$/);
-    if (testMatch) {
-      const isOk = testMatch[1] === 'ok';
-      const name = testMatch[2].trim();
-      const skipOrTodo = testMatch[3];
-
-      let durationMs = 0;
-      let failureDetails = null;
-
-      // Look ahead for YAML diagnostics block
-      if (i + 1 < lines.length && lines[i + 1].trim() === '---') {
-        const diagLines = [];
-        let j = i + 2;
-        while (j < lines.length && lines[j].trim() !== '...') {
-          diagLines.push(lines[j]);
-          j++;
+    const match = line.match(/^([ \t]*)(ok|not ok)\s+\d+\s+-\s+(.+?)(?:\s+#\s+(SKIP|TODO)\b(?:\s+(.*?))?)?\s*$/i);
+    if (!match) continue;
+    const [, indent, outcome, name, directive, directiveReason] = match;
+    const isOk = outcome.toLowerCase() === 'ok';
+    const skipped = directive?.toUpperCase() === 'SKIP', todo = directive?.toUpperCase() === 'TODO';
+    const fields = {};
+    if (lines[i + 1]?.trim() === '---') {
+      const prefix = lines[i + 1].match(/^[ \t]*/)[0];
+      if (prefix.length > indent.length) {
+        let end = i + 2;
+        while (end < lines.length && lines[end] !== `${prefix}...`) end++;
+        for (let j = i + 2; j < end; j++) {
+          if (!lines[j].startsWith(prefix)) continue;
+          const field = lines[j].slice(prefix.length).match(/^([a-zA-Z_]\w*):\s*(.*)$/);
+          if (!field) continue;
+          let value = field[2];
+          if (/^[|>][-+]?\s*$/.test(value)) {
+            const block = [];
+            while (j + 1 < end && (lines[j + 1].startsWith(`${prefix} `) || !lines[j + 1].trim())) {
+              block.push(lines[++j].slice(prefix.length + 2));
+            }
+            value = block.join('\n');
+          }
+          fields[field[1]] = scalar(value);
         }
-
-        const diagText = diagLines.join('\n');
-        const durMatch = diagText.match(/duration_ms:\s*([\d\.]+)/);
-        if (durMatch) durationMs = parseFloat(durMatch[1]);
-
-        if (!isOk) {
-          const failTypeMatch = diagText.match(/failureType:\s*'?([^'\n]+)'?/);
-          const errorMatch = diagText.match(/error:\s*'?([^'\n]+)'?/);
-          const codeMatch = diagText.match(/code:\s*'?([^'\n]+)'?/);
-          failureDetails = {
-            failureType: failTypeMatch ? failTypeMatch[1] : 'unknown',
-            code: codeMatch ? codeMatch[1] : null,
-            message: errorMatch ? errorMatch[1] : diagText.slice(0, 300),
-          };
-        }
-      }
-
-      const testEntry = {
-        name,
-        isOk,
-        skipped: Boolean(skipOrTodo),
-        durationMs,
-        failureDetails,
-      };
-
-      tests.push(testEntry);
-      if (skipOrTodo) {
-        skipCount++;
-      } else if (isOk) {
-        passCount++;
-      } else {
-        failCount++;
-        failures.push(testEntry);
+        // Do not interpret TAP-looking text inside an error/stdout block as
+        // actual test records. Sibling/parent result records follow this block.
+        i = end;
       }
     }
+    const type = fields.type || 'test';
+    const failureDetails = !isOk && !skipped && !todo ? {
+      failureType: fields.failureType || 'unknown', code: fields.code || null,
+      message: String(fields.error || 'No diagnostic message').slice(0, 300),
+    } : null;
+    const entry = { name: name.trim(), isOk, skipped, todo, directiveReason: directiveReason || '',
+      type, durationMs: Number(fields.duration_ms) || 0, failureDetails };
+    tests.push(entry);
+    if (failureDetails) failures.push(entry);
+    // Suites have result records and inclusive durations but are not tests in
+    // Node's footer. Preserve their diagnostics without inflating fallback totals.
+    if (type === 'suite') continue;
+    observed.total++;
+    if (skipped) observed.skipped++;
+    else if (todo) observed.todo++;
+    else if (isOk) observed.pass++;
+    else if (fields.failureType === 'cancelledByParent') observed.cancelled++;
+    else observed.fail++;
   }
 
-  return { tests, failures, passCount, failCount, skipCount, totalDuration };
+  return { tests, failures, totalCount: footer.tests ?? observed.total,
+    passCount: footer.pass ?? observed.pass, failCount: footer.fail ?? observed.fail,
+    skipCount: footer.skipped ?? observed.skipped, todoCount: footer.todo ?? observed.todo,
+    cancelledCount: footer.cancelled ?? observed.cancelled, totalDuration };
 }
 
 export function generateMarkdownSummary(title, result) {
-  const { tests, failures, passCount, failCount, skipCount, totalDuration } = result;
-  const statusBadge = failCount === 0 ? '✅ Passed' : '❌ Failed';
+  const { tests, failures, passCount, failCount, skipCount, totalDuration,
+    totalCount = tests.length, todoCount = 0, cancelledCount = 0 } = result;
+  const statusBadge = failCount === 0 && cancelledCount === 0 ? '✅ Passed' : '❌ Failed';
   const durationSec = (totalDuration / 1000).toFixed(2);
 
   let md = `### ${title}: ${statusBadge}\n\n`;
-  md += `| Total | Passed | Failed | Skipped | Duration |\n`;
-  md += `| :---: | :---: | :---: | :---: | :---: |\n`;
-  md += `| **${tests.length}** | ${passCount} | ${failCount} | ${skipCount} | ${durationSec}s |\n\n`;
+  md += `| Total | Passed | Failed | Skipped | TODO | Cancelled | Duration |\n`;
+  md += `| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n`;
+  md += `| **${totalCount}** | ${passCount} | ${failCount} | ${skipCount} | ${todoCount} | ${cancelledCount} | ${durationSec}s |\n\n`;
 
   if (failures.length > 0) {
-    md += `#### ❌ Failures (${failures.length})\n\n`;
+    md += `#### ❌ Failure diagnostics (${failures.length})\n\n`;
     md += `| Test | Type | Code / Details |\n`;
     md += `| :--- | :--- | :--- |\n`;
     for (const f of failures) {
@@ -99,14 +101,14 @@ export function generateMarkdownSummary(title, result) {
   }
 
   // Top 10 slowest tests
-  const sortedSlowest = [...tests].filter(t => t.durationMs > 0).sort((a, b) => b.durationMs - a.durationMs).slice(0, 10);
+  const sortedSlowest = [...tests].filter(t => t.durationMs > 0 && t.type !== 'suite').sort((a, b) => b.durationMs - a.durationMs).slice(0, 10);
   if (sortedSlowest.length > 0) {
     md += `#### ⏱ Top 10 Slowest Tests\n\n`;
     md += `| Duration | Status | Test Name |\n`;
     md += `| :---: | :---: | :--- |\n`;
     for (const t of sortedSlowest) {
       const dur = (t.durationMs / 1000).toFixed(2) + 's';
-      const icon = t.isOk ? '✔' : '✖';
+      const icon = t.skipped ? '↷' : t.todo ? '○' : t.isOk ? '✔' : '✖';
       md += `| ${dur} | ${icon} | ${t.name.replace(/\|/g, '\\|')} |\n`;
     }
     md += '\n';

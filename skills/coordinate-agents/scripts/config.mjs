@@ -198,26 +198,14 @@ export function reapDeadConfigOwner(lock) {
     const before = lstatSync(lock);
     if (!before.isDirectory() || before.isSymbolicLink()) return false;
     const ownerPath = join(lock, 'owner.json');
-    // A missing/partially published owner is not evidence of death for a fresh
-    // directory (another process may be between mkdir and writeFileSync).
-    // An ownerless directory persisting beyond 500ms is considered abandoned.
-    let raw;
-    try {
-      raw = readInternalFile(lock, ownerPath);
-    } catch (readErr) {
-      if (readErr.code === 'ENOENT') {
-        const ageMs = Date.now() - (before.mtimeMs || 0);
-        if (ageMs < 500) return false;
-      } else {
-        return false;
-      }
-    }
-    if (raw) {
-      const info = JSON.parse(raw);
-      if (info.host !== hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || typeof info.owner !== 'string') return false;
-      try { process.kill(info.pid, 0); return false; }
-      catch (error) { if (error.code !== 'ESRCH') return false; }
-    }
+    // Missing, empty or partially published metadata cannot prove death.
+    // A creator may be suspended between mkdir and owner publication for any
+    // duration; unknown claims must time out closed, regardless of their age.
+    const raw = readInternalFile(lock, ownerPath);
+    const info = JSON.parse(raw);
+    if (info.host !== hostname() || !Number.isInteger(info.pid) || info.pid <= 0 || typeof info.owner !== 'string') return false;
+    try { process.kill(info.pid, 0); return false; }
+    catch (error) { if (error.code !== 'ESRCH') return false; }
     // Only one waiter may reap this dead owner's directory. Without this
     // election two waiters can remove each other's newly acquired lock.
     marker = join(lock, '.reaper');
@@ -225,7 +213,7 @@ export function reapDeadConfigOwner(lock) {
     reaper = randomUUID();
     writeFileSync(join(marker, 'owner'), reaper, { flag: 'wx' });
     const current = lstatSync(lock);
-    if (current.dev !== before.dev || current.ino !== before.ino || (raw && readInternalFile(lock, ownerPath) !== raw)) return false;
+    if (current.dev !== before.dev || current.ino !== before.ino || readInternalFile(lock, ownerPath) !== raw) return false;
     rmSync(lock, { recursive: true, force: true });
     return true;
   } catch { return false; }
