@@ -114,7 +114,9 @@ test('resumed collaboration rejects stale runtimes and replacement executor rece
  await runtime.reportWorkspaceTask(f.root,f.taskId,'WORKING','round-old','before close',{notify:()=>{},caller:oldExecutor});
  const previous=await runtime.readWorkspaceTask(f.root,f.taskId);
  await runtime.runtimeWorkspaceTaskClose(input);
- task=await confirm(f,(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
+ task=(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask;
+ await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-old','replacement before confirmation',{notify:()=>{},caller:caller(task,'antigravity')}),/round.*runtime|executor/i);
+ task=await confirm(f,task);
  assert.deepEqual(task.cooperation,previous.cooperation);assert.deepEqual(task.collaborationEvents,previous.collaborationEvents);
  assert.equal(task.resume.interruption.roundId,'round-old');
  await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-old','late',{notify:()=>{},caller:oldExecutor}),/runtime|caller/i);
@@ -187,4 +189,70 @@ for(const slot of ['antigravity','codex']) test(`Resume continues ${slot} login 
  assert.equal(task.status,'RUNNING');assert.equal(task.startup.slots[slot],'READY');assert.equal(task.resume.state,'AWAITING_CONFIRMATION');
  const persisted=JSON.parse(readFileSync(f.taskFile));assert.equal(persisted.resume.state,'AWAITING_CONFIRMATION');
  const inputs=readFileSync(join(f.root,'input.log'),'utf8');assert.doesNotMatch(inputs,/codex:(?!79)/);
+});
+
+test('read-only resume views downgrade exited runtimes without rewriting persisted history', {timeout:30000},async t=>{
+ const f=fixture(t),input={root:f.root,workspaceTaskId:f.taskId,conversationId:f.id};
+ const task=await confirm(f,(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
+ await getExecutionSessionManager().close(f.root,task.sessions.codex.sessionId,{graceful:false,timeoutMs:300});
+ const saved=readFileSync(f.taskFile,'utf8');assert.equal(JSON.parse(saved).resume.state,'READY');
+ const detail=await runtime.readWorkspaceTask(f.root,f.taskId),listed=(await runtime.readWorkspaceTasks(f.root))[0];
+ assert.equal(detail.status,'DEGRADED');assert.equal(detail.sessions.codex.state,'exited');
+ assert.equal(detail.resume.state,'FAILED');assert.equal(listed.resume.state,'FAILED');
+ assert.equal(detail.sessions.codex.nativeIdentity.verification.state,'UNAVAILABLE');
+ assert.deepEqual(detail.resume.verification,task.resume.verification);
+ assert.equal(readFileSync(f.taskFile,'utf8'),saved);
+ await getExecutionSessionManager().close(f.root,task.sessions.antigravity.sessionId,{graceful:false,timeoutMs:300});
+ const exited=await runtime.readWorkspaceTask(f.root,f.taskId);assert.equal(exited.status,'EXITED');assert.equal(exited.resume.state,'FAILED');
+ assert.equal(readFileSync(f.taskFile,'utf8'),saved);
+});
+
+test('read-only resume views show partial recovery when only the executor exits', {timeout:30000},async t=>{
+ const f=fixture(t),input={root:f.root,workspaceTaskId:f.taskId,conversationId:f.id};
+ const task=await confirm(f,(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
+ await getExecutionSessionManager().close(f.root,task.sessions.antigravity.sessionId,{graceful:false,timeoutMs:300});
+ const saved=readFileSync(f.taskFile,'utf8'),view=await runtime.readWorkspaceTask(f.root,f.taskId);
+ assert.equal(view.status,'DEGRADED');assert.equal(view.resume.state,'PARTIAL');
+ assert.equal(view.sessions.codex.nativeIdentity.verification.state,'MANUAL_CONFIRMED');
+ assert.equal(readFileSync(f.taskFile,'utf8'),saved);
+});
+
+for(const login of [false,true]) test(`original executor receipts survive Codex recovery before confirmation (login=${login})`,{timeout:45000},async t=>{
+ const f=fixture(t),input={root:f.root,workspaceTaskId:f.taskId,conversationId:f.id};
+ const original=await confirm(f,(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
+ const executor=caller(original,'antigravity');let notifications=0;
+ const report=(status,roundId='round-inflight',summary='')=>runtime.reportWorkspaceTask(f.root,f.taskId,status,roundId,summary,{caller:executor,notify:()=>notifications++});
+ await runtime.dispatchWorkspaceTask(f.root,f.taskId,'round-inflight',async()=>{},{caller:caller(original,'codex')});
+ await report('WORKING');
+ await getExecutionSessionManager().close(f.root,original.sessions.codex.sessionId,{graceful:false,timeoutMs:300});
+ if(login)requireLogin(f,'codex');
+ let task=(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask;
+ assert.equal(task.sessions.antigravity.sessionId,original.sessions.antigravity.sessionId);
+ assert.equal(task.resume.verification,null);
+ assert.equal(task.status,login?'AWAITING_INPUT':'RUNNING');
+ const before=await runtime.readWorkspaceTask(f.root,f.taskId);
+ const savedResume=JSON.parse(readFileSync(f.taskFile)).resume;
+ await assert.rejects(runtime.dispatchWorkspaceTask(f.root,f.taskId,'round-not-confirmed',()=>assert.fail('must not dispatch'),{caller:caller(task,'codex')}),/confirm|ready/i);
+ const done=await report('DONE','round-inflight','original executor completed');
+ assert.equal(done.status,'DONE');assert.equal(done.revision,before.cooperation.revision+1);
+ await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-inflight','missing caller',{notify:()=>{}}),/caller|runtime/i);
+ await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-inflight','wrong generation',{caller:{...executor,runtimeGeneration:randomUUID()},notify:()=>{}}),/runtime|caller/i);
+ await assert.rejects(report('DONE','round-wrong'),/round/i);
+ assert.deepEqual((await runtime.readWorkspaceTask(f.root,f.taskId)).cooperation,done);
+ let current=await runtime.readWorkspaceTask(f.root,f.taskId);
+ assert.equal(current.collaborationEvents.length,before.collaborationEvents.length+1);assert.equal(current.collaborationEvents.at(-1).status,'DONE');
+ assert.equal(notifications,1);
+ assert.deepEqual(JSON.parse(readFileSync(f.taskFile)).resume,savedResume);
+ const duplicate=await report('DONE','round-inflight','original executor completed');assert.equal(duplicate.revision,done.revision);assert.equal(notifications,1);
+ await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-inflight','',{caller:caller(task,'codex'),notify:()=>{}}),/confirm|ready/i);
+ if(login){await getExecutionSessionManager().write(f.root,task.sessions.codex.sessionId,'y',{submit:false});await runtime.runtimeWorkspaceTaskContinue(input)}
+ task=await confirm(f,await runtime.readWorkspaceTask(f.root,f.taskId));
+ await runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-inflight','',{caller:caller(task,'codex'),notify:()=>{}});
+ await runtime.reportWorkspaceTask(f.root,f.taskId,'APPROVED','round-inflight','reviewed after confirmation',{caller:caller(task,'codex'),notify:()=>{}});
+ current=await runtime.readWorkspaceTask(f.root,f.taskId);assert.equal(current.cooperation.status,'APPROVED');
+ assert.equal(current.cooperation.revision,done.revision+2);
+ await runtime.runtimeWorkspaceTaskClose(input);
+ await assert.rejects(report('DONE','round-inflight','after close'),/ready|runtime/i);
+ await runtime.runtimeWorkspaceTaskArchive(input);
+ await assert.rejects(report('DONE','round-inflight','after archive'),/ready|runtime/i);
 });
