@@ -90,7 +90,8 @@
     "test:shared": "node --test --test-concurrency=4 test/runtime-contract.test.mjs test/runtime-events.test.mjs test/session-runtime.test.mjs test/pty-backend.test.mjs test/terminal-resize.test.mjs test/user-config.test.mjs test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/ci-summary.test.mjs",
     "test:adapters": "node --test --test-concurrency=4 test/adapter-contract.test.mjs test/adapters.test.mjs test/adapter-conformance.test.mjs test/builtin-adapter-conformance.test.mjs test/adapter-acceptance-gate.test.mjs test/external-adapter-example.test.mjs test/trusted-local-adapter.test.mjs",
     "test:legacy": "node --test --test-concurrency=4 test/web-acceptance-gate.test.mjs test/action-gateway.test.mjs test/inspector.test.mjs test/cli-modules.test.mjs test/cli.test.mjs test/agent-bus.test.mjs test/config-command.test.mjs test/intent-map-v1.test.mjs test/task-graph-contract.test.mjs test/task-graph-scheduler.test.mjs test/task-graph-persistence.test.mjs test/task-graph-intent-scheduler.test.mjs test/task-graph-acceptance-gate.test.mjs test/role-prompts.test.mjs",
-    "check:web": "node bin/coordinate-agents.mjs --help && npm run test:web && npm run test:shared"
+    "check:web": "node bin/coordinate-agents.mjs --help && npm run test:web && npm run test:shared",
+    "sync:llms": "node scripts/sync-llms.mjs"
   },
   "engines": {
     "node": ">=18"

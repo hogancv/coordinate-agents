@@ -1,6 +1,10 @@
 export const I18N = {
   en: {
     "resume.title": "Resume Conversation",
+    "resume.reopen": "Reopen task",
+    "resume.pending": "Awaiting confirmation",
+    "resume.close": "Close",
+    "resume.backToTerminal": "Back to terminals",
     "resume.id": "Codex Conversation ID",
     "resume.manualNote": "Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.",
     "resume.identityLimit": "Confirmation is a one-time check. /new or conversation switches inside this TUI are not detected. If you switch, stop collaboration and Close/Resume the bound conversation, then confirm again.",
@@ -298,6 +302,10 @@ export const I18N = {
   },
   zh: {
     "resume.title": "继续对话",
+    "resume.reopen": "重新开启任务",
+    "resume.pending": "待确认",
+    "resume.close": "关闭",
+    "resume.backToTerminal": "回到终端",
     "resume.id": "Codex 原生对话 ID",
     "resume.manualNote": "人工确认：请在 Codex 中运行 /status，核对 Session UUID 与 Directory。原生记录检查不代表当前会话已获自动验证。",
     "resume.identityLimit": "人工确认仅代表确认时的核对。同一 TUI 内的 /new 或对话切换不会被自动检测；若已切换，请停止协作，关闭并恢复原绑定对话后重新确认。",

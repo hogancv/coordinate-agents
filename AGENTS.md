@@ -24,7 +24,8 @@ fixtures, logs, documentation, or release artifacts.
 - `docs/install-with-ai.md`: canonical installation procedure and AI request examples.
 - `README.md` and `README.zh-CN.md`: user-facing English and Simplified Chinese documentation.
 - `docs/`: GitHub Pages source for stable, evidence-focused task and FAQ pages. `docs/llms.txt`
-  is the sole machine index; `npm run check:llms` validates its local documentation routes.
+  is the canonical machine index; `npm run sync:llms` generates the root discovery copy,
+  and `npm run check:llms` validates both copies and local documentation routes.
 - `test/`: Node.js tests, including cross-platform CLI, protocol, docs, and release checks.
 - `.github/workflows/`: pinned CI and trusted npm publishing workflows.
 
@@ -70,7 +71,7 @@ from a single local run; report the environments actually verified.
    `references/` and link it directly from `SKILL.md`.
 8. Update documentation that directly describes the changed behavior. Keep corresponding
    English and Simplified Chinese pages semantically synchronized when affected.
-   Update `docs/llms.txt` only when its index changes; do not generate a duplicate root index.
+   Update `docs/llms.txt` only when its index changes; regenerate the root discovery copy with `npm run sync:llms`.
 9. If installation payload contents change, update `package.json` `files`, package tests, and the
    package version as appropriate. Keep `package-lock.json` synchronized.
 10. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens

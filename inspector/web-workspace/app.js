@@ -1253,32 +1253,80 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
 function renderConversationResume() {
   const panel = document.querySelector('#conversation-resume');
   if (!panel) return;
+  const reopen = document.querySelector('#conversation-resume-open');
+  const confirmEntry = document.querySelector('#conversation-confirm-open');
   const task = state.selectedTask;
-  panel.hidden = !task || task.mode === 'custom' || Boolean(task.archivedAt);
-  if (panel.hidden) return;
-  const session = task.sessions?.codex;
+  const available = Boolean(state.projectId && task && task.id === state.selectedId && task.mode !== 'custom' && !task.archivedAt);
+  const session = task?.sessions?.codex;
+  const taskKey = available ? `${state.projectId}:${state.projectEpoch}:${task.id}` : '';
+  if (panel.dataset.task !== taskKey) {
+    closeConversationResume({ restoreFocus: false });
+    panel.dataset.task = taskKey;
+  }
+  reopen.hidden = !available || task.status !== 'CLOSED';
+  const pending = available && task.status !== 'CLOSED' && isActiveTerminalSession(session)
+    && ['AWAITING_CONFIRMATION', 'PARTIAL'].includes(task.resume?.state);
+  confirmEntry.hidden = !pending;
+  for (const button of [reopen, confirmEntry]) {
+    button.disabled = state.actionBusy;
+    button.setAttribute('aria-expanded', String(panel.open));
+  }
+  document.querySelector('#conversation-resume-close')?.setAttribute('aria-label', t('resume.close'));
+  reopen.title = t('resume.reopen');
+  reopen.setAttribute('aria-label', t('resume.reopen'));
+  confirmEntry.textContent = t('resume.pending');
+  if (!available || (reopen.hidden && confirmEntry.hidden && !state.actionBusy)) {
+    closeConversationResume({ restoreFocus: false });
+    return;
+  }
   const field = document.querySelector('#conversation-id');
   const check = document.querySelector('#conversation-manual-check');
-  const key = `${state.projectId}:${task.id}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
+  const key = `${taskKey}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
   const target = task.resume?.conversationId || session?.nativeIdentity?.binding?.conversationId || '';
   if (panel.dataset.target !== key) { field.value = target; check.checked = false; panel.dataset.target = key; }
   if (target) field.value = target;
   field.readOnly = Boolean(target);
   field.disabled = state.actionBusy;
   check.disabled = state.actionBusy || task.status === 'CLOSED' || !isActiveTerminalSession(session);
+  const controls = document.querySelector('#conversation-confirm-controls');
+  if (controls) controls.hidden = !pending;
   const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
-  document.querySelector('#conversation-resume-button').disabled = state.actionBusy || !valid
-    || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  const resumeButton = document.querySelector('#conversation-resume-button');
+  resumeButton.disabled = state.actionBusy || !valid || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  resumeButton.hidden = !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
   document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || check.disabled || !check.checked;
   const summary = document.querySelector('#conversation-resume-status');
   const status = state.conversationActionTarget === key ? 'STARTING' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
   summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
 }
 
+function openConversationResume() {
+  renderConversationResume();
+  const reopen = document.querySelector('#conversation-resume-open');
+  const confirmEntry = document.querySelector('#conversation-confirm-open');
+  if (state.actionBusy || (reopen.hidden && confirmEntry.hidden)) return;
+  const panel = document.querySelector('#conversation-resume');
+  if (!panel.open) panel.showModal();
+  for (const button of [reopen, confirmEntry]) button.setAttribute('aria-expanded', 'true');
+  const field = document.querySelector('#conversation-id');
+  (field.readOnly && !confirmEntry.hidden ? document.querySelector('#conversation-manual-check') : field).focus();
+}
+
+function closeConversationResume({ restoreFocus = true } = {}) {
+  const panel = document.querySelector('#conversation-resume');
+  if (panel?.open) panel.close();
+  document.querySelector('#conversation-manual-check').checked = false;
+  const reopen = document.querySelector('#conversation-resume-open');
+  const confirmEntry = document.querySelector('#conversation-confirm-open');
+  for (const button of [reopen, confirmEntry]) button?.setAttribute('aria-expanded', 'false');
+  const trigger = !confirmEntry?.hidden ? confirmEntry : reopen;
+  if (restoreFocus && trigger && !trigger.hidden && !trigger.disabled) trigger.focus();
+}
+
 async function conversationTaskAction(operation) {
   renderConversationResume();
   const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
-  if (!button || button.disabled || state.actionBusy) return;
+  if (!document.querySelector('#conversation-resume').open || !button || button.disabled || state.actionBusy) return;
   const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
   const session = task.sessions.codex;
   const key = document.querySelector('#conversation-resume').dataset.target;
@@ -2387,6 +2435,10 @@ function bindEvents() {
     catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  for (const id of ['conversation-resume-open', 'conversation-confirm-open']) document.querySelector(`#${id}`)?.addEventListener('click', openConversationResume);
+  for (const id of ['conversation-resume-close', 'conversation-resume-dismiss']) document.querySelector(`#${id}`)?.addEventListener('click', () => closeConversationResume());
+  document.querySelector('#conversation-resume')?.addEventListener('cancel', event => { event.preventDefault(); closeConversationResume(); });
+  document.querySelector('#conversation-resume')?.addEventListener('click', event => { if (event.target.id === 'conversation-resume') closeConversationResume(); });
   document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction('resume'));
   document.querySelector('#conversation-confirm-button')?.addEventListener('click', () => conversationTaskAction('confirm'));
   document.querySelector('#conversation-id')?.addEventListener('input', renderConversationResume);

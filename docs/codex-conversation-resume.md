@@ -7,17 +7,23 @@ fresh pair restart; it is not Resume.** Custom Terminals keep their separate flo
 
 ## First binding and continuing later
 
-1. In the Task's Codex terminal, finish normal trust/login/startup and run `/status`.
-2. Copy the exact **Session** UUID to **Codex Conversation ID**. Check **Directory**
-   is this project's canonical path. Check the manual confirmation box and choose
-   **Confirm conversation**. This binds the original native ID to this Task.
-3. Close the Task. Later select the same closed/exited Task and choose
-   **Resume Conversation / 继续对话**. If the Task has no previous binding, supply
-   its exact native UUID explicitly. The native record must exist locally and
-   belong to this project and a primary Codex CLI conversation.
-4. Complete the CLI's normal startup screens, run `/status` again in the new
-   Codex terminal, and check UUID **and** Directory before confirming the live
-   conversation. Resume does not send the old role prompt or any history.
+1. While the original Codex terminal is running, use `/status` and save the exact
+   **Session** UUID and **Directory** for this Task.
+2. Close the Task. The **Reopen task** icon appears immediately after its **Closed**
+   status in the header. Click it to open the recovery dialog; the form no longer
+   occupies space above the terminals. Supply the original native UUID if the Task
+   has no binding, then choose **Resume Conversation / 继续对话**. The native record
+   must exist locally and belong to this project and a primary Codex CLI conversation.
+3. Choose **Back to terminals**, complete the CLI's normal startup screens, and
+   run `/status` in the resumed Codex terminal. Check both UUID and Directory.
+4. The header temporarily shows **Awaiting confirmation / 待确认**. Click it to reopen
+   the dialog, check the manual confirmation box, and choose **Confirm conversation**.
+   This entry disappears after confirmation. Resume does not send old role prompts
+   or replay history. Custom and archived Tasks have neither entry.
+
+The dialog supports Escape, its close button, and clicking the backdrop. Switching
+projects or Tasks dismisses it and clears the manual check. Opening or dismissing
+it does not resume a CLI; explicit action buttons still own that operation.
 
 This v1 path uses **manual live confirmation**. Exact local metadata, launch
 arguments, a running process and historical bindings do not automatically verify

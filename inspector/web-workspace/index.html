@@ -87,6 +87,10 @@
             <div class="task-heading-title-row">
               <h2 id="selected-task-title">—</h2>
               <span id="selected-task-status" class="status-pill">—</span>
+              <button id="conversation-resume-open" class="icon-button task-reopen-button" type="button" aria-label="Reopen task" title="Reopen task" aria-haspopup="dialog" aria-controls="conversation-resume" aria-expanded="false" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7"/><path d="M3 4v7h7"/></svg>
+              </button>
+              <button id="conversation-confirm-open" class="status-pill conversation-confirm-entry" type="button" aria-haspopup="dialog" aria-controls="conversation-resume" aria-expanded="false" data-i18n="resume.pending" hidden>Awaiting confirmation</button>
               <span id="selected-task-mode" class="status-pill"></span>
               <span id="selected-task-cooperation" class="status-pill cooperation-pill" role="status" aria-live="polite" hidden></span>
             </div>
@@ -130,17 +134,6 @@
         </section>
 
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
-          <section id="conversation-resume" class="conversation-resume" aria-labelledby="conversation-resume-title" hidden>
-            <div><strong id="conversation-resume-title" data-i18n="resume.title">Resume Conversation</strong><span id="conversation-resume-status" role="status" aria-live="polite"></span></div>
-            <p data-i18n="resume.manualNote">Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.</p>
-            <p data-i18n="resume.identityLimit">Confirmation is a one-time check. /new or conversation switches inside this TUI are not detected. If you switch, stop collaboration and Close/Resume the bound conversation, then confirm again.</p>
-            <div class="conversation-resume-actions">
-              <label><span data-i18n="resume.id">Codex Conversation ID</span><input id="conversation-id" type="text" maxlength="36" placeholder="UUID" autocomplete="off" spellcheck="false" /></label>
-              <button id="conversation-resume-button" class="primary-button" type="button" data-i18n="resume.title">Resume Conversation</button>
-              <label><input id="conversation-manual-check" type="checkbox" /><span data-i18n="resume.checked">I checked the live UUID and project in /status.</span></label>
-              <button id="conversation-confirm-button" class="secondary-button" type="button" data-i18n="resume.confirm">Confirm conversation</button>
-            </div>
-          </section>
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
@@ -193,6 +186,28 @@
         <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
       </main>
     </div>
+
+    <dialog id="conversation-resume" class="conversation-resume-dialog" aria-labelledby="conversation-resume-title">
+      <section class="conversation-resume">
+        <header class="settings-modal-header">
+          <h2 id="conversation-resume-title" data-i18n="resume.title">Resume Conversation</h2>
+          <button id="conversation-resume-close" class="icon-button" type="button" aria-label="Close">×</button>
+        </header>
+        <p id="conversation-resume-status" class="conversation-resume-status" role="status" aria-live="polite"></p>
+        <p data-i18n="resume.manualNote">Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.</p>
+        <p data-i18n="resume.identityLimit">Confirmation is a one-time check. /new or conversation switches inside this TUI are not detected. If you switch, stop collaboration and Close/Resume the bound conversation, then confirm again.</p>
+        <div class="conversation-resume-actions">
+          <label for="conversation-id" data-i18n="resume.id">Codex Conversation ID</label>
+          <input id="conversation-id" type="text" maxlength="36" placeholder="UUID" autocomplete="off" spellcheck="false" />
+          <button id="conversation-resume-button" class="primary-button" type="button" data-i18n="resume.title">Resume Conversation</button>
+          <div id="conversation-confirm-controls" class="conversation-confirm-controls" hidden>
+            <label><input id="conversation-manual-check" type="checkbox" /><span data-i18n="resume.checked">I checked the live UUID and project in /status.</span></label>
+            <button id="conversation-confirm-button" class="secondary-button" type="button" data-i18n="resume.confirm">Confirm conversation</button>
+          </div>
+        </div>
+        <footer class="settings-modal-actions"><button id="conversation-resume-dismiss" class="secondary-button" type="button" data-i18n="resume.backToTerminal">Back to terminals</button></footer>
+      </section>
+    </dialog>
 
     <div id="workspace-context-menu" class="workspace-context-menu" role="menu" aria-label="Archive" hidden>
       <span id="archive-context-label" class="context-menu-label"></span>

@@ -68,6 +68,15 @@ Web task records are separate from structured Tasks and Task Graphs.
 Web groups share the bound repository; creating a group does not
 create an isolated Git worktree. Avoid conflicting concurrent modifications.
 
+### Reopen a closed conversation
+
+A closed Default task shows a reopen icon immediately after its Closed status.
+Click it to open the native Conversation ID dialog. The form overlays the Workspace
+and does not reduce terminal space. After resuming, return to the terminals to run
+`/status`; use the temporary Awaiting confirmation entry in the header to reopen
+the identity confirmation step. That entry disappears after confirmation.
+See [Codex conversation resume](./codex-conversation-resume.html).
+
 ## Custom Terminals
 
 Choose **New task → Custom Terminals** to launch two independent Generic CLI
