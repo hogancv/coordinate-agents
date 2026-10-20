@@ -33,6 +33,8 @@ import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen, ru
 import { resolveCustomTaskConfig, validateCustomWorkspaceConfig, composeCustomPrompt, customPromptInput } from './workspace-custom-config.mjs';
 import { listRecords, readRecord } from './session-manager.mjs';
 import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './workspace-role-prompts.mjs';
+import { applyNativeIdentityObservation, createNativeIdentityReceiver, nativeIdentityView,
+  validateNativeConversations, validateRuntimeGeneration } from './workspace-native-identity.mjs';
 
 export const WORKSPACE_TASK_PROMPT_VERSION = WORKSPACE_ROLE_PROMPT_VERSION;
 export const WORKSPACE_TASK_SLOTS = Object.freeze([
@@ -213,15 +215,19 @@ function validateSessionSlot(slot, expected) {
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', `Workspace Task ${expected.slot} session slot is not the fixed ${expected.agent} role.`, { recoverable: false });
   }
   validateSessionId(slot.sessionId);
+  if (slot.runtimeGeneration !== undefined && !slot.sessionId) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Runtime generation requires a Session association.', { recoverable: false });
+  }
   return {
     slot: expected.slot,
     agent: expected.agent,
     role: expected.role,
     sessionId: slot.sessionId || null,
+    ...(slot.runtimeGeneration !== undefined ? { runtimeGeneration: validateRuntimeGeneration(slot.runtimeGeneration) } : {}),
   };
 }
 
-function validateWorkspaceTaskRecord(value) {
+function validateWorkspaceTaskRecord(value, { root } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Workspace Task record must be a JSON object.', { recoverable: false });
   }
@@ -295,6 +301,8 @@ function validateWorkspaceTaskRecord(value) {
     updatedAt: value.updatedAt,
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
+    ...(value.nativeConversations !== undefined ? { nativeConversations: validateNativeConversations(value.nativeConversations,
+      { projectRoot: root, taskId: value.id, mode }) } : {}),
     cooperation,
     collaborationEvents: mode === 'custom' ? [] : validateCollaborationEvents(value.collaborationEvents, value.id, cooperation.revision),
     startup: mode === 'custom' ? null : validateStartup(value.startup),
@@ -345,7 +353,11 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
       const event = collaborationTransition(record.id, current.cooperation, { ...cooperation, summary: eventSummary ?? cooperation.summary });
       if (event) collaborationEvents.push(event);
     }
-    const validated = validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents });
+    // Identity facts have a separate authenticated writer. Lifecycle/startup/
+    // receipt snapshots must never erase or replace newer durable bindings.
+    const nativeConversations = current?.nativeConversations ?? record.nativeConversations;
+    const validated = validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents,
+      ...(nativeConversations !== undefined ? { nativeConversations } : {}) }, { root: repository });
     atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
     Object.assign(record, validated); // Keep lifecycle responses consistent with persisted receipts.
     return validated;
@@ -365,7 +377,7 @@ function readWorkspaceTaskRecord(root, id) {
   try {
     const directory = workspaceTaskDirectory(repository).directory;
     safeInternalStat(directory, path);
-    return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(join(repository, '.agent-bus'), path)));
+    return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(join(repository, '.agent-bus'), path)), { root: repository });
   } catch (error) {
     if (error?.code === 'WORKSPACE_TASK_NOT_FOUND' || error?.code === 'WORKSPACE_TASK_STATE_CONFLICT') throw error;
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', `Failed to load Workspace Task ${id}: ${error.message || String(error)}`, {
@@ -377,7 +389,7 @@ function readWorkspaceTaskRecord(root, id) {
 }
 
 export function listWorkspaceTaskRecords(root) {
-  const { directory } = workspaceTaskDirectory(root);
+  const { directory, repository } = workspaceTaskDirectory(root);
   if (!existsSync(directory)) return [];
   return readdirSync(directory)
     .filter(name => name.endsWith('.json'))
@@ -386,7 +398,7 @@ export function listWorkspaceTaskRecords(root) {
       const path = join(directory, name);
       try {
         safeInternalStat(directory, path);
-        return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(directory, path)));
+        return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(directory, path)), { root: repository });
       } catch (error) {
         throw normalizeRuntimeError(error, 'WORKSPACE_TASK_STATE_CONFLICT');
       }
@@ -423,7 +435,7 @@ function sessionFactMap(root, sessionIds = null) {
   }
 }
 
-function sessionView(slot, facts, taskId) {
+function sessionView(slot, facts, taskId, nativeConversation) {
   const fact = slot.sessionId ? facts.get(slot.sessionId) : null;
   return {
     // Record availability includes ownership, not a liveness probe.
@@ -433,6 +445,8 @@ function sessionView(slot, facts, taskId) {
     agent: slot.agent,
     role: slot.role,
     sessionId: slot.sessionId,
+    ...(slot.runtimeGeneration ? { runtimeGeneration: slot.runtimeGeneration } : {}),
+    ...(slot.role !== 'custom' ? { nativeIdentity: nativeIdentityView(nativeConversation) } : {}),
     state: fact?.state || null,
     status: fact?.state || null,
     createdAt: fact?.createdAt || null,
@@ -464,7 +478,7 @@ function statusFromFacts(record, sessions) {
 function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
-    sessionView(record.sessions[expected.slot], facts, record.id),
+    sessionView(record.sessions[expected.slot], facts, record.id, record.nativeConversations?.[expected.slot]),
   ]));
   return {
     id: record.id,
@@ -498,6 +512,31 @@ export async function readWorkspaceTask(root, id) {
   // Pass targeted session IDs to sessionFactMap to avoid scanning all workspace session files
   const sessionIds = sessionIdsFor(record);
   return workspaceTaskView(record, sessionFactMap(repository, sessionIds));
+}
+
+// Internal Host/Adapter composition point. Deliberately not registered as a
+// Runtime operation, HTTP action or workspace-message command. The default
+// receiver has no trusted source. A verifier is trusted executable code, never
+// a user-supplied source name/flag in an observation or project configuration.
+export function createWorkspaceNativeIdentityStore({ root, verifyAttestation } = {}) {
+  const repository = repositoryRoot(root);
+  return createNativeIdentityReceiver({ projectRoot: repository, verifyAttestation,
+    commit(observation) {
+      const bus = join(repository, '.agent-bus');
+      assertSafePath(repository, join(bus, 'locks', 'config'));
+      assertSafePath(repository, join(bus, 'tmp'));
+      const release = acquireConfigLock(bus);
+      try {
+        const task = readWorkspaceTaskRecord(repository, observation.taskId);
+        const session = readRecord(repository, observation.sessionId);
+        const updated = applyNativeIdentityObservation(task, session, observation, listWorkspaceTaskRecords(repository));
+        const validated = validateWorkspaceTaskRecord(updated, { root: repository });
+        const path = workspaceTaskFile(repository, task.id);
+        atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(bus, 'tmp'));
+        return nativeIdentityView(validated.nativeConversations[observation.slot]);
+      } finally { release(); }
+    },
+  });
 }
 
 async function closeSessionIds(root, sessionIds) {
@@ -738,6 +777,7 @@ async function openWorkspaceSlot(root, record, slot, language) {
     throw new Error('Task was closed while its terminal was opening.');
   }
   record.sessions[slot].sessionId = opened.session.id;
+  if (record.mode !== 'custom' && opened.session.runtimeGeneration) record.sessions[slot].runtimeGeneration = opened.session.runtimeGeneration;
   writeWorkspaceTask(root, record);
   return opened.session;
 }
