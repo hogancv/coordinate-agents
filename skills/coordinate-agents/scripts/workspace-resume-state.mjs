@@ -44,8 +44,8 @@ export function workspaceResumeView(record, codex, executor) {
   let state;
   if (record.status === 'CLOSED' || record.archivedAt) state = 'CLOSED';
   else if (record.resume.state === 'STARTING' && record.status === 'STARTING'
-    && (!codex || currentActiveSlot(record, 'codex', codex))
-    && (!executor || currentActiveSlot(record, 'antigravity', executor))) state = 'STARTING';
+    && (record.sessions.codex.sessionId ? currentActiveSlot(record, 'codex', codex) : !codex)
+    && (record.sessions.antigravity.sessionId ? currentActiveSlot(record, 'antigravity', executor) : !executor)) state = 'STARTING';
   else state = resumeStateFromSessions(record, codex, executor);
   return { ...record.resume, state };
 }

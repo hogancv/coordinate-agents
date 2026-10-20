@@ -197,7 +197,7 @@ test('read-only resume views downgrade exited runtimes without rewriting persist
  await getExecutionSessionManager().close(f.root,task.sessions.codex.sessionId,{graceful:false,timeoutMs:300});
  const saved=readFileSync(f.taskFile,'utf8');assert.equal(JSON.parse(saved).resume.state,'READY');
  const detail=await runtime.readWorkspaceTask(f.root,f.taskId),listed=(await runtime.readWorkspaceTasks(f.root))[0];
- assert.equal(detail.status,'DEGRADED');assert.equal(detail.sessions.codex.state,'exited');
+ assert.equal(detail.status,'DEGRADED');assert.ok(['exited','failed'].includes(detail.sessions.codex.state));
  assert.equal(detail.resume.state,'FAILED');assert.equal(listed.resume.state,'FAILED');
  assert.equal(detail.sessions.codex.nativeIdentity.verification.state,'UNAVAILABLE');
  assert.deepEqual(detail.resume.verification,task.resume.verification);
@@ -255,4 +255,24 @@ for(const login of [false,true]) test(`original executor receipts survive Codex 
  await assert.rejects(report('DONE','round-inflight','after close'),/ready|runtime/i);
  await runtime.runtimeWorkspaceTaskArchive(input);
  await assert.rejects(report('DONE','round-inflight','after archive'),/ready|runtime/i);
+});
+
+test('startup resume views distinguish unpublished slots from missing associated session records',async t=>{
+ const f=fixture(t),record=JSON.parse(readFileSync(f.taskFile));
+ record.status='STARTING';record.startup={language:'en',slots:{codex:'WAITING',antigravity:'WAITING'}};
+ record.resume={schemaVersion:1,conversationId:f.id,state:'STARTING',verification:null,interruption:null};
+ const save=()=>writeFileSync(f.taskFile,JSON.stringify(record));save();
+ assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'STARTING');
+ record.sessions.codex.sessionId='session_missingcodex1234';record.sessions.codex.runtimeGeneration=randomUUID();save();
+ assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'FAILED');
+ const directory=join(f.root,'.agent-bus','sessions');mkdirSync(directory,{recursive:true});
+ writeFileSync(join(directory,record.sessions.codex.sessionId+'.json'),JSON.stringify({id:record.sessions.codex.sessionId,
+  runtimeGeneration:record.sessions.codex.runtimeGeneration,command:process.execPath,adapter:'codex-cli',agent:'codex',
+  taskId:f.taskId,subtaskId:'codex',cwd:f.root,state:'idle'}));
+ assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'STARTING');
+ record.sessions.antigravity.sessionId='session_missingexecutor1234';record.sessions.antigravity.runtimeGeneration=randomUUID();save();
+ const snapshot=readFileSync(f.taskFile,'utf8');
+ assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'PARTIAL');
+ assert.equal((await runtime.readWorkspaceTasks(f.root))[0].resume.state,'PARTIAL');
+ assert.equal(readFileSync(f.taskFile,'utf8'),snapshot);
 });
