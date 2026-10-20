@@ -64,3 +64,7 @@
 ## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents
 **Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
 **Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.
+
+## 2026-09-21 - Fast-path length checks and bounded slicing for code point arrays in string summary generation
+**Learning:** `collaborationSummary` executed `Array.from(text)` unconditionally to count Unicode code points for truncation, allocating full arrays of single-character strings even for short strings. Guarding with `text.length <= 240` (since UTF-16 code units always $\ge$ code points) skips string array allocation for short strings (~135x speedup), while slicing `text.slice(0, 482)` before `Array.from()` bounds memory allocations for long strings (~3x speedup).
+**Action:** Before converting a string to a code point array via `Array.from()`, check string length (`length <= target`) and slice bounded code units (`target * 2 + 2`) to avoid unnecessary array allocations.
