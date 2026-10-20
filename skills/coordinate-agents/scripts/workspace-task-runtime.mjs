@@ -523,8 +523,11 @@ function workspaceTaskView(record, facts = new Map(), { includeHistory = true } 
 
 export async function readWorkspaceTasks(root, { includeArchived = false } = {}) {
   const repository = repositoryRoot(root);
-  const facts = sessionFactMap(repository);
-  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts, { includeHistory: false }));
+  const records = listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt);
+  // Pass targeted session IDs for all matching tasks to sessionFactMap to avoid scanning all workspace session files
+  const sessionIds = [...new Set(records.flatMap(record => sessionIdsFor(record)))];
+  const facts = sessionFactMap(repository, sessionIds);
+  return records.map(record => workspaceTaskView(record, facts, { includeHistory: false }));
 }
 
 export async function readWorkspaceTask(root, id) {
