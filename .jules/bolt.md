@@ -68,3 +68,7 @@
 ## 2026-09-21 - Fast-path length checks and bounded slicing for code point arrays in string summary generation
 **Learning:** `collaborationSummary` executed `Array.from(text)` unconditionally to count Unicode code points for truncation, allocating full arrays of single-character strings even for short strings. Guarding with `text.length <= 240` (since UTF-16 code units always $\ge$ code points) skips string array allocation for short strings (~135x speedup), while slicing `text.slice(0, 482)` before `Array.from()` bounds memory allocations for long strings (~3x speedup).
 **Action:** Before converting a string to a code point array via `Array.from()`, check string length (`length <= target`) and slice bounded code units (`target * 2 + 2`) to avoid unnecessary array allocations.
+
+## 2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration
+**Learning:** `validateCollaborationEvents` spread `STATUSES` into a new `['IDLE', ...STATUSES]` array on every event iteration in `.map()`, causing $O(N)$ allocations and linear scans. `collaborationSummary` allocated `Array.from(text)` character arrays for every string even when `text.length <= 240`.
+**Action:** Precompute static state transition Sets at module scope and fast-path scalar string length checks (`length <= threshold`) before allocating unicode character arrays.

@@ -143,7 +143,7 @@ async function removeTree(path) {
   }
   // Process exit is confirmed first. These bounded Windows retries cover only
   // delayed handle release; they cannot turn a leaked process into a pass.
-  rmSync(path, { recursive: true, force: true, maxRetries: process.platform === 'win32' ? 10 : 0, retryDelay: 100 });
+  rmSync(path, { recursive: true, force: true, maxRetries: process.platform === 'win32' ? 30 : 0, retryDelay: 150 });
   assert.equal(existsSync(path), false);
 }
 

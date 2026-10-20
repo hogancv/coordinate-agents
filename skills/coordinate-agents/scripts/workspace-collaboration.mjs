@@ -2,6 +2,9 @@ import { stripVTControlCharacters } from 'node:util';
 
 const STATUSES = new Set(['SENT', 'WORKING', 'DONE', 'REVIEWING', 'CHANGES_REQUESTED', 'APPROVED', 'FAILED']);
 const CODEX_STATUSES = new Set(['SENT', 'REVIEWING', 'CHANGES_REQUESTED', 'APPROVED']);
+// Precompute valid status transitions Set to avoid O(N) array allocation + spreading per event loop
+const VALID_FROM_STATUSES = new Set(['IDLE', ...STATUSES]);
+
 export const collaborationAgent = status => CODEX_STATUSES.has(status) ? 'codex' : 'antigravity';
 
 // Pre-compiled regular expressions for redaction and formatting in collaboration summaries.
@@ -43,7 +46,7 @@ export function validateCollaborationEvents(value, taskId, revision) {
   let previousRevision = 0;
   return value.map(event => {
     if (!event || event.taskId !== taskId || !STATUSES.has(event.status)
-      || !['IDLE', ...STATUSES].includes(event.fromStatus)
+      || !VALID_FROM_STATUSES.has(event.fromStatus)
       || !/^round-[a-zA-Z0-9_-]{1,128}$/.test(event.roundId || '')
       || !Number.isSafeInteger(event.revision) || event.revision <= previousRevision || event.revision > revision
       || event.agent !== collaborationAgent(event.status)
