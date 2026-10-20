@@ -846,11 +846,14 @@ export async function runtimeWorkspaceTaskContinue(input = {}) {
       try {
         if (WORKSPACE_TASK_SLOTS.some(({ slot }) => !record.sessions[slot].sessionId)) throw runtimeError('WORKSPACE_TASK_START_FAILED', 'Startup was interrupted before both terminals opened. Restart the pair to continue.', { recoverable: true, taskId: record.id });
         for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(repository, record, slot, 1500);
-        if (record.resume) { updateResumeState(repository, record); writeWorkspaceTask(repository, record, { replaceStartup: true }); }
+        // prepareWorkspaceSlot may already have committed RUNNING. We still
+        // own the lifecycle lock; commit the resume summary without a second
+        // startup-only CAS that would reject that completed transition.
+        if (record.resume) { updateResumeState(repository, record); writeWorkspaceTask(repository, record); }
       } catch (error) {
         record = failureRecord(record, error);
         if (record.resume) updateResumeState(repository, record);
-        writeWorkspaceTask(repository, record, { replaceStartup: true });
+        writeWorkspaceTask(repository, record);
       }
     }
     return jsonSuccess('workspace.task.continue', { workspaceTask: workspaceTaskView(record, sessionFactMap(repository, sessionIdsFor(record))) });
@@ -1005,10 +1008,14 @@ function updateResumeState(root, record) {
   const codex = record.sessions.codex.sessionId ? readRecord(root, record.sessions.codex.sessionId) : null;
   const executor = record.sessions.antigravity.sessionId ? readRecord(root, record.sessions.antigravity.sessionId) : null;
   const codexActive = ACTIVE_SESSION_STATES.has(codex?.state);
-  const executorReady = ACTIVE_SESSION_STATES.has(executor?.state) && record.startup?.slots.antigravity === 'READY';
+  const executorActive = ACTIVE_SESSION_STATES.has(executor?.state);
+  const executorReady = executorActive && record.startup?.slots.antigravity === 'READY';
   record.resume.state = !codexActive ? 'FAILED' : !executorReady ? 'PARTIAL'
     : manualConfirmationCurrent(record, codex) ? 'READY' : 'AWAITING_CONFIRMATION';
-  if (!codexActive || !executorReady) record.status = 'DEGRADED';
+  // Normal live login/trust/readiness retains the existing onboarding flow.
+  // Failed/missing processes and uncertain role writes require explicit Resume.
+  record.status = codexActive && executorActive && record.startup && !Object.values(record.startup.slots).includes('INJECTING')
+    ? startupStatus(record) : 'DEGRADED';
 }
 
 export async function runtimeWorkspaceTaskResume(input = {}) {

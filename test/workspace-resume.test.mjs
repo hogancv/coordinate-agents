@@ -171,3 +171,20 @@ test('native Resume refuses generic adapters instead of silently opening a new C
  const task=(await runtime.runtimeWorkspaceTaskResume({root:f.root,workspaceTaskId:f.taskId,conversationId:f.id})).workspaceTask;
  assert.equal(task.resume.state,'FAILED');assert.equal(task.sessions.codex.sessionId,null);assert.equal(listRecords(f.root).length,0);
 });
+
+function requireLogin(f,slot){
+ let source=readFileSync(f.script,'utf8');
+ const marker="console.log(slot==='codex'?'Ask Codex to do anything':'? for shortcuts');";
+ source=source.replace(marker,`if(slot===${JSON.stringify(slot)}){console.log(slot==='codex'?'Sign in with ChatGPT':'Select login method:');process.stdin.on('data',()=>console.log('\\x1b[2J'+(slot==='codex'?'Ask Codex to do anything':'? for shortcuts')))}else{${marker}}`);
+ writeFileSync(f.script,source);
+}
+for(const slot of ['antigravity','codex']) test(`Resume continues ${slot} login and commits final startup plus resume state`,{timeout:30000},async t=>{
+ const f=fixture(t);requireLogin(f,slot);
+ let task=(await runtime.runtimeWorkspaceTaskResume({root:f.root,workspaceTaskId:f.taskId,conversationId:f.id})).workspaceTask;
+ assert.equal(task.status,'AWAITING_INPUT');assert.equal(task.startup.slots[slot],'AUTH_REQUIRED');
+ await getExecutionSessionManager().write(f.root,task.sessions[slot].sessionId,'y',{submit:false});
+ task=(await runtime.runtimeWorkspaceTaskContinue({root:f.root,workspaceTaskId:f.taskId})).workspaceTask;
+ assert.equal(task.status,'RUNNING');assert.equal(task.startup.slots[slot],'READY');assert.equal(task.resume.state,'AWAITING_CONFIRMATION');
+ const persisted=JSON.parse(readFileSync(f.taskFile));assert.equal(persisted.resume.state,'AWAITING_CONFIRMATION');
+ const inputs=readFileSync(join(f.root,'input.log'),'utf8');assert.doesNotMatch(inputs,/codex:(?!79)/);
+});
