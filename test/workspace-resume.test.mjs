@@ -36,7 +36,7 @@ process.stdin.on('data',x=>fs.appendFileSync(${JSON.stringify(join(root,'input.l
   const path=join(root,'.agent-bus','workspace-tasks');mkdirSync(path,{recursive:true});
   writeFileSync(join(path,`${taskId}.json`),JSON.stringify({schemaVersion:1,id:taskId,title:'Resume',status:'CLOSED',promptVersion:'test',createdAt:stamp,updatedAt:stamp,
     sessions:{codex:{slot:'codex',agent:'codex',role:'planner-reviewer',sessionId:null},antigravity:{slot:'antigravity',agent:'antigravity',role:'implementer',sessionId:null}},sessionHistory:[],error:null}));
-  t.after(async()=>{for(const s of listRecords(root))try{await getExecutionSessionManager().close(root,s.id,{graceful:false,timeoutMs:300})}catch{}rmSync(root,{recursive:true,force:true})});
+  t.after(async()=>{for(const s of listRecords(root))try{await getExecutionSessionManager().close(root,s.id,{graceful:false,timeoutMs:300})}catch{}rmSync(root,{recursive:true,force:true,maxRetries:process.platform==='win32'?30:0,retryDelay:100})});
   return {root,id,taskId,taskFile:join(path,`${taskId}.json`),script};
 }
 
