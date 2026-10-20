@@ -77,27 +77,43 @@ jobs:
         run: node bin/coordinate-agents.mjs --help
       - name: Web behavior regressions
         shell: bash
-        run: npm run test:web -- --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination="$RUNNER_TEMP/web.tap"
+        env:
+          NODE_OPTIONS: --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=.test-results/web.tap
+        run: |
+          mkdir -p .test-results
+          npm run test:web
       - name: Shared runtime regressions
         if: always()
         shell: bash
-        run: npm run test:shared -- --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination="$RUNNER_TEMP/shared.tap"
+        env:
+          NODE_OPTIONS: --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=.test-results/shared.tap
+        run: |
+          mkdir -p .test-results
+          npm run test:shared
       - name: Windows native ConPTY regression (no fallback substitution)
         if: always() && runner.os == 'Windows'
         shell: bash
-        run: npm run test:native-pty -- --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination="$RUNNER_TEMP/native-pty.tap"
+        env:
+          NODE_OPTIONS: --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=.test-results/native-pty.tap
+        run: |
+          mkdir -p .test-results
+          npm run test:native-pty
       - name: Windows Inspector regression
         if: always() && inputs.windows_regression == true
         shell: bash
-        run: node --test test/inspector.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination="$RUNNER_TEMP/inspector.tap"
+        env:
+          NODE_OPTIONS: --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=.test-results/inspector.tap
+        run: |
+          mkdir -p .test-results
+          node --test test/inspector.test.mjs
       - name: Publish Test Summary
         if: always()
         shell: bash
         run: |
-          node scripts/ci-summary.mjs "$RUNNER_TEMP/web.tap" "Web Behavior"
-          node scripts/ci-summary.mjs "$RUNNER_TEMP/shared.tap" "Shared Runtime"
-          node scripts/ci-summary.mjs "$RUNNER_TEMP/native-pty.tap" "Windows Native ConPTY"
-          node scripts/ci-summary.mjs "$RUNNER_TEMP/inspector.tap" "Windows Inspector"
+          node scripts/ci-summary.mjs .test-results/web.tap "Web Behavior"
+          node scripts/ci-summary.mjs .test-results/shared.tap "Shared Runtime"
+          node scripts/ci-summary.mjs .test-results/native-pty.tap "Windows Native ConPTY"
+          node scripts/ci-summary.mjs .test-results/inspector.tap "Windows Inspector"
   native-pty:
     if: github.event_name == 'workflow_dispatch' && inputs.native_pty_regression == true
     name: PTY / ${{ matrix.os }} / Node ${{ matrix.node }}
