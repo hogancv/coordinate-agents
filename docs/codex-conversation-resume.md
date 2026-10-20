@@ -63,6 +63,6 @@ ambiguous orphan requires inspection. No automatic dispatch retries run.
 
 Automated tests use deterministic native-record and CLI fixtures through the real
 Session Host. They establish argument, ownership, lifecycle, concurrency, HTTP/UI
-and package behavior; they do not establish model memory. Separate macOS native
-CLI evidence is recorded after live acceptance. Windows CI storage/PTY checks do
+and package behavior; they do not establish model memory. Separate [macOS native CLI evidence](diagnostics/codex-conversation-resume-macos.md)
+records live conversation memory, executor completion and WORKING interruption. Windows CI storage/PTY checks do
 not claim Windows 10 native CLI Resume acceptance.
