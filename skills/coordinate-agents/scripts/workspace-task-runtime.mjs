@@ -1303,25 +1303,36 @@ async function withCooperationLock(root, id, operation) {
   const ownerPath = join(lock, 'owner.json');
   const deadline = Date.now() + 10_000;
   while (true) {
+    let created = false;
     try {
-      mkdirSync(lock);
+      try {
+        mkdirSync(lock);
+        created = true;
+      } catch (lockError) {
+        if (lockError.code !== 'EEXIST') throw lockError;
+        try {
+          assertSafePath(repository, lock);
+          if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
+          // Use the same elected dead-owner reaping as the identity store.
+          // An old/unpublished/foreign owner is never guessed dead from age.
+          if (reapDeadConfigOwner(lock)) continue;
+        } catch (inspectionError) {
+          // The previous owner may release between EEXIST and any metadata read.
+          // Retry under the same deadline; unsafe paths and other IO errors fail.
+          if (inspectionError.code !== 'ENOENT') throw inspectionError;
+        }
+        if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
+        const jitter = Math.floor(Math.random() * 25);
+        await new Promise(done => setTimeout(done, 25 + jitter));
+        continue;
+      }
       atomicWrite(ownerPath, JSON.stringify({ owner, pid: process.pid, host: hostname() }), join(repository, '.agent-bus', 'tmp'));
       break;
     } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      try {
-        assertSafePath(repository, lock);
-        if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
-        // Use the same elected dead-owner reaping as the identity store.
-        // An old/unpublished/foreign owner is never guessed dead from age.
-        if (reapDeadConfigOwner(lock)) continue;
-      } catch (inspectionError) {
-        // The previous owner may release between EEXIST and any metadata read.
-        // Retry under the same deadline; unsafe paths and other IO errors fail.
-        if (inspectionError.code !== 'ENOENT') throw inspectionError;
+      if (created) {
+        try { rmSync(lock, { recursive: true, force: true }); } catch { /* Ignore cleanup failure */ }
       }
-      if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
-      await new Promise(done => setTimeout(done, 50));
+      throw error;
     }
   }
   try { return await operation(repository); }
