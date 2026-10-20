@@ -19,6 +19,7 @@
             <strong>Coordinate Agents</strong>
             <span>Web Workspace</span>
           </div>
+          <button id="workspace-health-button" class="secondary-button health-button brand-health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.brand">Environment</span></button>
           <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Close sidebar">×</button>
         </div>
 
@@ -95,10 +96,9 @@
             </div>
           </div>
           <div class="topbar-actions">
+            <button id="collaboration-health-button" class="secondary-button collaboration-health-button" type="button" aria-expanded="false" aria-controls="collaboration-health-drawer" disabled>Collaboration health</button>
             <button id="changes-button" class="secondary-button" type="button" aria-expanded="false" aria-controls="changes-drawer" disabled>Changes —</button>
-            <button id="workspace-health-button" class="secondary-button health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.open">Environment check</span></button>
             <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
-              <button id="restart-task-button" class="secondary-button" type="button" data-i18n="task.restart">Restart pair</button>
               <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
               <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
             </div>
@@ -111,7 +111,6 @@
               <button id="lang-zh" class="language-button" type="button" lang="zh-CN" aria-pressed="false">中文</button>
               <button id="lang-en" class="language-button active" type="button" lang="en-US" aria-pressed="true">English</button>
             </div>
-            <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh" title="Refresh">⟳</button>
           </div>
         </header>
 
@@ -131,10 +130,44 @@
         </section>
 
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
+          <section id="conversation-resume" class="conversation-resume" aria-labelledby="conversation-resume-title" hidden>
+            <div><strong id="conversation-resume-title" data-i18n="resume.title">Resume Conversation</strong><span id="conversation-resume-status" role="status" aria-live="polite"></span></div>
+            <p data-i18n="resume.manualNote">Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.</p>
+            <div class="conversation-resume-actions">
+              <label><span data-i18n="resume.id">Codex Conversation ID</span><input id="conversation-id" type="text" maxlength="36" placeholder="UUID" autocomplete="off" spellcheck="false" /></label>
+              <button id="conversation-resume-button" class="primary-button" type="button" data-i18n="resume.title">Resume Conversation</button>
+              <label><input id="conversation-manual-check" type="checkbox" /><span data-i18n="resume.checked">I checked the live UUID and project in /status.</span></label>
+              <button id="conversation-confirm-button" class="secondary-button" type="button" data-i18n="resume.confirm">Confirm conversation</button>
+            </div>
+          </section>
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
         </section>
+
+        <div id="collaboration-health-mask" class="changes-mask" aria-hidden="true" hidden></div>
+        <aside id="collaboration-health-drawer" class="changes-drawer collaboration-health-drawer" aria-labelledby="collaboration-health-title" hidden>
+          <header class="changes-header"><h2 id="collaboration-health-title">Collaboration health</h2><button id="collaboration-health-close" class="icon-button" type="button" aria-label="Close collaboration health">×</button></header>
+          <p id="collaboration-health-context" class="changes-scope"></p>
+          <div class="collaboration-health-body">
+            <section id="collaboration-health" class="collaboration-health" aria-live="off" hidden>
+              <strong id="collaboration-health-heading"></strong>
+              <ul id="collaboration-health-signals"></ul>
+              <p id="collaboration-health-receipt"></p>
+              <div id="collaboration-health-links"></div>
+              <div class="collaboration-health-config"><h3 id="collaboration-health-config"></h3><label id="collaboration-health-label" for="collaboration-health-minutes"></label> <input id="collaboration-health-minutes" type="number" min="1" max="10080" step="1" value="30"></div>
+            </section>
+            <section id="collaboration-timeline" class="collaboration-timeline" hidden>
+              <h3 id="timeline-heading">Collaboration timeline · 0</h3>
+              <div class="timeline-content">
+                <div class="timeline-controls"><label id="timeline-filter-label" for="timeline-round">Round</label><select id="timeline-round"></select></div>
+                <p id="timeline-note" class="timeline-note"></p>
+                <ol id="timeline-events" class="timeline-events" aria-label="Collaboration events" tabindex="0"></ol>
+                <p id="timeline-empty" class="timeline-note"></p>
+              </div>
+            </section>
+          </div>
+        </aside>
 
         <div id="changes-mask" class="changes-mask" aria-hidden="true" hidden></div>
         <aside id="changes-drawer" class="changes-drawer" aria-labelledby="changes-title" hidden>
@@ -198,77 +231,88 @@
     </div>
 
     <div id="terminal-settings-dialog" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="terminal-settings-title" hidden>
-      <form id="terminal-settings-form" class="settings-modal">
+      <section class="settings-modal settings-tabbed-modal">
         <header class="settings-modal-header">
           <div>
-            <span class="eyebrow" data-i18n="settings.eyebrow">TERMINAL SETTINGS</span>
-            <h2 id="terminal-settings-title" data-i18n="settings.title">Terminal startup commands</h2>
+            <span class="eyebrow" data-i18n="settings.eyebrow">PREFERENCES</span>
+            <h2 id="terminal-settings-title" data-i18n="settings.title">Workspace settings</h2>
           </div>
           <button id="terminal-settings-close" class="icon-button" type="button" aria-label="Close settings">×</button>
         </header>
-        <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
-        <div class="settings-fields">
-          <label class="settings-field" for="codex-command">
-            <span data-i18n="settings.codex">Codex</span>
-            <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
-          </label>
-          <label class="settings-field">
-            <span data-i18n="settings.model">Codex model (optional)</span>
-            <select id="codex-model" aria-describedby="codex-model-hint"></select>
-            <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
-          </label>
-          <label class="settings-field" for="codex-effort">
-            <span data-i18n="settings.effort">Reasoning effort</span>
-            <select id="codex-effort"></select>
-          </label>
-          <label class="settings-field" for="antigravity-command">
-            <span data-i18n="settings.antigravity">Antigravity</span>
-            <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
-          </label>
+        <div id="settings-tabs" class="settings-tabs" role="tablist" aria-labelledby="terminal-settings-title">
+          <button id="settings-tab-default" type="button" role="tab" data-settings-tab="default" aria-controls="settings-panel-default" aria-selected="true" data-i18n="settings.tabDefault">Default Collaboration</button>
+          <button id="settings-tab-custom" type="button" role="tab" data-settings-tab="custom" aria-controls="settings-panel-custom" aria-selected="false" tabindex="-1" data-i18n="settings.tabCustom">Custom Terminals</button>
+          <button id="settings-tab-notifications" type="button" role="tab" data-settings-tab="notifications" aria-controls="settings-panel-notifications" aria-selected="false" tabindex="-1" data-i18n="settings.tabNotifications">Desktop Notifications</button>
         </div>
-        <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
-        <section class="settings-fields custom-settings" aria-labelledby="custom-settings-title">
-          <h3 id="custom-settings-title" data-i18n="custom.defaults">Custom Terminal Defaults</h3>
-          <p class="settings-hint" data-i18n="custom.snapshotHint">Only new Custom tasks use these defaults. Existing tasks keep their command and Prompt snapshots.</p>
-          <label class="settings-field"><span data-i18n="custom.command1">Terminal 1 · Startup command</span><input id="custom-command1" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
-          <label class="settings-field"><span data-i18n="custom.command2">Terminal 2 · Startup command</span><input id="custom-command2" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
-          <label class="settings-field"><span data-i18n="custom.projectPrompt">Project shared Prompt · 8KB</span><textarea id="custom-project-prompt" maxlength="8192" rows="4"></textarea></label>
-          <label class="settings-field"><span data-i18n="custom.prompt1">Terminal 1 Prompt · 4KB</span><textarea id="custom-terminal1-prompt" maxlength="4096" rows="3"></textarea></label>
-          <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
-          <button id="custom-settings-save" class="secondary-button" type="button" data-i18n="custom.save">Save custom configuration</button>
-        </section>
-        <section class="notification-settings settings-fields" aria-labelledby="notifications-title" aria-describedby="notifications-save-hint">
-          <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
-          <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
-          <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
-          <fieldset id="notification-events">
-            <legend data-i18n="notifications.events">Notification events</legend>
-            <label><input id="notifications-done" type="checkbox"> <span data-i18n="notifications.done">Implementation ready for review (DONE)</span></label>
-            <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
-            <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
-          </fieldset>
-          <p id="notifications-save-hint" class="settings-hint" data-i18n="notifications.saveHint">Notification changes must be saved separately with “Save notification settings”. The bottom “Save terminal settings” button only saves terminal startup settings.</p>
-          <div class="notification-actions">
-            <button id="notifications-save" class="secondary-button" type="button" data-i18n="notifications.save">Save notification settings</button>
-            <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
-          </div>
-          <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
-        </section>
-        <section class="archive-settings" aria-labelledby="archive-settings-title">
-          <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
-          <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
-          <div class="archive-settings-actions">
-            <span id="archive-summary" aria-live="polite"></span>
-            <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
-          </div>
-        </section>
+        <div class="settings-panels">
+          <section id="settings-panel-default" class="settings-panel" role="tabpanel" data-settings-panel="default" aria-labelledby="settings-tab-default">
+            <form id="terminal-settings-form" class="settings-default-form">
+              <p class="settings-description" data-i18n="settings.body">New tasks and restarts use these saved commands.</p>
+              <div class="settings-fields">
+                <label class="settings-field" for="codex-command">
+                  <span data-i18n="settings.codex">Codex</span>
+                  <input id="codex-command" name="codexCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+                </label>
+                <label class="settings-field">
+                  <span data-i18n="settings.model">Codex model (optional)</span>
+                  <select id="codex-model" aria-describedby="codex-model-hint"></select>
+                  <span id="codex-model-hint" class="settings-hint" data-i18n="settings.modelHint">Leave blank to use the default model. Applies to new tasks and restarts.</span>
+                </label>
+                <label class="settings-field" for="codex-effort">
+                  <span data-i18n="settings.effort">Reasoning effort</span>
+                  <select id="codex-effort"></select>
+                </label>
+                <label class="settings-field" for="antigravity-command">
+                  <span data-i18n="settings.antigravity">Antigravity</span>
+                  <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
+                </label>
+              </div>
+              <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+            </form>
+            <section class="archive-settings">
+              <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>
+              <p data-i18n="archive.hint">Clear archived conversation records across all projects. Project source files are preserved.</p>
+              <div class="archive-settings-actions">
+                <span id="archive-summary" aria-live="polite"></span>
+                <button id="archive-clear-button" class="danger-button" type="button" disabled data-i18n="archive.clear">Clear archived conversations</button>
+              </div>
+            </section>
+          </section>
+          <section id="settings-panel-custom" class="settings-panel settings-fields custom-settings" role="tabpanel" data-settings-panel="custom" aria-labelledby="settings-tab-custom" hidden>
+            <h3 id="custom-settings-title" data-i18n="custom.defaults">Custom Terminal Defaults</h3>
+            <p class="settings-hint" data-i18n="custom.snapshotHint">Only new Custom tasks use these defaults. Existing tasks keep their command and Prompt snapshots.</p>
+            <label class="settings-field"><span data-i18n="custom.command1">Terminal 1 · Startup command</span><input id="custom-command1" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
+            <label class="settings-field"><span data-i18n="custom.command2">Terminal 2 · Startup command</span><input id="custom-command2" type="text" maxlength="512" autocomplete="off" spellcheck="false"></label>
+            <label class="settings-field"><span data-i18n="custom.projectPrompt">Project shared Prompt · 8KB</span><textarea id="custom-project-prompt" maxlength="8192" rows="4"></textarea></label>
+            <label class="settings-field"><span data-i18n="custom.prompt1">Terminal 1 Prompt · 4KB</span><textarea id="custom-terminal1-prompt" maxlength="4096" rows="3"></textarea></label>
+            <label class="settings-field"><span data-i18n="custom.prompt2">Terminal 2 Prompt · 4KB</span><textarea id="custom-terminal2-prompt" maxlength="4096" rows="3"></textarea></label>
+          </section>
+          <section id="settings-panel-notifications" class="settings-panel notification-settings settings-fields" role="tabpanel" data-settings-panel="notifications" aria-labelledby="settings-tab-notifications" hidden>
+            <h3 id="notifications-title" data-i18n="notifications.title">Desktop Notifications</h3>
+            <p class="settings-hint" data-i18n="notifications.hint">Project preference. Works with the browser closed while Agents continue running. System permissions and Focus mode may hide notifications.</p>
+            <label><input id="notifications-enabled" type="checkbox"> <span data-i18n="notifications.enabled">Enable system notifications</span></label>
+            <fieldset id="notification-events">
+              <legend data-i18n="notifications.events">Notification events</legend>
+              <label><input id="notifications-done" type="checkbox"> <span data-i18n="notifications.done">Implementation ready for review (DONE)</span></label>
+              <label><input id="notifications-approved" type="checkbox" checked> <span data-i18n="notifications.approved">Review approved (APPROVED)</span></label>
+              <label><input id="notifications-failed" type="checkbox" checked> <span data-i18n="notifications.failed">Execution failed (FAILED)</span></label>
+            </fieldset>
+            <div class="notification-actions">
+              <button id="notifications-test" class="secondary-button" type="button" data-i18n="notifications.test">Send test notification</button>
+            </div>
+            <p id="notifications-status" class="settings-hint" role="status" aria-live="polite"></p>
+          </section>
+        </div>
         <div id="terminal-settings-error" class="settings-error" role="alert" hidden></div>
-        <footer class="settings-modal-actions">
-          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.cancel">Cancel</button>
-          <button id="terminal-settings-save" class="primary-button" type="submit" data-i18n="settings.save">Save terminal settings</button>
+        <footer class="settings-modal-actions settings-dialog-actions">
+          <button id="terminal-settings-cancel" class="secondary-button" type="button" data-i18n="settings.close">Close</button>
+          <button id="terminal-settings-save" class="primary-button" type="submit" form="terminal-settings-form" data-settings-action="default" data-i18n="settings.save">Save terminal settings</button>
+          <button id="custom-settings-save" class="primary-button" type="button" data-settings-action="custom" data-i18n="custom.save" hidden>Save custom configuration</button>
+          <button id="notifications-save" class="primary-button" type="button" data-settings-action="notifications" data-i18n="notifications.save" hidden>Save notification settings</button>
         </footer>
-      </form>
+      </section>
     </div>
+
 
     <script src="/vendor/xterm.js"></script>
     <script type="module" src="/app.js"></script>

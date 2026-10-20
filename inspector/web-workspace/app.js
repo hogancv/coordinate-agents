@@ -1,3 +1,5 @@
+import { collaborationHealth, mountCollaborationHealth } from './collaboration-health.mjs';
+import { mountCollaborationTimeline } from './collaboration-timeline.mjs';
 import { I18N } from './i18n.mjs';
 import { customTerminalDefaults, customTerminalPrompt, sameCustomPromptTarget } from './custom-terminal-model.mjs';
 import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
@@ -29,6 +31,8 @@ const state = {
   projectId: null,
   projectEpoch: 0,
   reviewTaskEpoch: 0,
+  selectedTaskRequest: 0,
+  taskListRequest: 0,
   reviewWriteTarget: null,
   projectTasks: new Map(),
   projectSelections: new Map(),
@@ -54,6 +58,7 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  settingsTab: 'default',
   notifications: null,
   notificationBusy: false,
   customSettings: customTerminalDefaults(),
@@ -75,8 +80,38 @@ const state = {
   contextTrigger: null,
 };
 
+const collaborationTimeline = mountCollaborationTimeline({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  onResize: () => updateTerminalLayout(),
+});
+
+const collaborationHealthView = mountCollaborationHealth({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+  onChange: () => renderTaskList(),
+  onOpen: () => changesDrawer.close({ restoreFocus: false }),
+  onInspect: inspectCollaborationHealth,
+});
+
 const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
+  onOpen: () => collaborationHealthView.close({ restoreFocus: false }),
   getTaskContext: getReviewTaskContext, sendToCodex: sendReviewToCodex });
+
+function inspectCollaborationHealth(kind, slot) {
+  if (kind === 'terminal') {
+    if (state.focusedTerminal !== slot) setTerminalFocus(slot);
+    state.terminalViews.get(slot)?.terminal?.focus();
+  }
+  if (kind === 'timeline') {
+    const timeline = document.querySelector('#collaboration-timeline');
+    document.querySelector('#timeline-round').value = 'current'; collaborationTimeline.update();
+    timeline.scrollIntoView?.({ block: 'nearest' }); document.querySelector('#timeline-round').focus();
+  }
+  if (kind === 'changes') {
+    const button = document.querySelector('#changes-button');
+    button.focus(); button.click();
+  }
+}
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
 
@@ -252,7 +287,11 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
+  if (busy) {
+    state.taskListRequest = (state.taskListRequest || 0) + 1;
+    state.selectedTaskRequest = (state.selectedTaskRequest || 0) + 1;
+  }
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'close-all-terminals-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -263,6 +302,42 @@ function settingsError(message = '') {
   if (!element) return;
   element.hidden = !message;
   element.textContent = message;
+}
+
+function selectSettingsTab(tab, { focus = false } = {}) {
+  if (state.settingsBusy || state.actionBusy) return;
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const selected = tabs.find(button => button.dataset.settingsTab === tab);
+  if (!selected) return;
+  state.settingsTab = tab;
+  for (const button of tabs) {
+    const active = button === selected;
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) panel.hidden = panel.dataset.settingsPanel !== tab;
+  for (const action of document.querySelectorAll('[data-settings-action]')) action.hidden = action.dataset.settingsAction !== tab;
+  const content = document.querySelector('.settings-panels');
+  if (content) content.scrollTop = 0;
+  settingsError();
+  if (focus) selected.focus();
+}
+
+function settingsTabKeydown(event) {
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const index = tabs.indexOf(event.currentTarget);
+  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+    : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  selectSettingsTab(tabs[next].dataset.settingsTab, { focus: true });
+}
+
+function bindSettingsTabs() {
+  for (const button of document.querySelectorAll('[data-settings-tab]')) {
+    button.addEventListener('click', () => selectSettingsTab(button.dataset.settingsTab));
+    button.addEventListener('keydown', settingsTabKeydown);
+  }
 }
 
 function renderModelChoices() {
@@ -297,6 +372,7 @@ function canEditProjectSettings() { return Boolean(state.projectId) && state.pro
 
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
+  for (const tab of document.querySelectorAll('[data-settings-tab]')) tab.disabled = busy;
   for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
@@ -322,7 +398,7 @@ function closeSettings({ force = false } = {}) {
   document.querySelector('#terminal-settings-button')?.focus();
 }
 
-async function openSettings() {
+async function openSettings(tab = 'default') {
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   if (state.actionBusy || state.settingsBusy) return;
@@ -334,6 +410,7 @@ async function openSettings() {
   renderSettingsForm();
   renderCustomSettings();
   renderNotificationSettings();
+  selectSettingsTab(tab);
   dialog.hidden = false;
   setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
@@ -364,7 +441,7 @@ async function openSettings() {
     if (projectId === state.projectId && epoch === state.projectEpoch) {
       dialog.removeAttribute('aria-busy');
       setSettingsBusy(false);
-      if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+      if (state.settingsOpen) document.querySelector(`#settings-tab-${state.settingsTab || 'default'}`)?.focus();
     }
   }
 }
@@ -439,14 +516,13 @@ async function saveSettings(event) {
     await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     state.settings = { ...state.settings, ...commands, model, effort, args };
-    closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
     void checkWorkspaceHealth();
   } catch (error) {
     settingsError(error.payload?.error?.message || error.message || t('settings.saveError'));
   } finally {
-    setSettingsBusy(false);
     setBusy(false);
+    setSettingsBusy(false);
   }
 }
 
@@ -556,7 +632,9 @@ function renderWorkspaceHealth() {
   button.dataset.healthStatus = status;
   button.setAttribute('aria-expanded', String(state.healthOpen));
   button.title = t('health.open');
-  document.querySelector('#workspace-health-label').textContent = state.healthBusy ? t('health.loading') : t(labels[status]);
+  document.querySelector('#workspace-health-label').textContent = t('health.brand');
+  button.title = `${t('health.open')} · ${summary}`;
+  button.setAttribute('aria-label', button.title);
   document.querySelector('#workspace-health-indicator').textContent = symbols[status];
   panel.hidden = !state.healthOpen;
   panel.setAttribute('aria-busy', String(state.healthBusy));
@@ -565,7 +643,6 @@ function renderWorkspaceHealth() {
   document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
   const rows = document.querySelector('#workspace-health-checks');
   if (state.healthBusy || !state.health || (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null))) { rows.innerHTML = ''; return; }
-  const expanded = new Set([...rows.querySelectorAll('details[open]')].map(detail => detail.dataset.healthDetail));
   const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal1: t('custom.terminal1'), terminal2: t('custom.terminal2'), terminal: 'Terminal / PTY' };
   const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
   rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
@@ -580,11 +657,11 @@ function renderWorkspaceHealth() {
     const cliInstalled = check.authenticated === 'unknown' && ['ok', 'warning'].includes(check.status);
     const value = check.command || (check.backend === 'stdio-fallback' ? 'stdio fallback' : check.backend) || check.version || t('health.notStarted');
     return `<div class="health-row"><div class="health-row-heading"><span data-health-status="${check.status}" aria-hidden="true">${symbols[check.status]}</span><strong>${names[id]}</strong><span class="health-value">${escapeHtml(value)}${check.command && check.version ? ` · ${escapeHtml(check.version)}` : ''}</span><span class="health-status" data-health-status="${check.status}">${t(statusLabels[check.status])}</span></div>
-      <details data-health-detail="${id}"${expanded.has(id) ? ' open' : ''}><summary>${escapeHtml(hint)}</summary>
+      <div class="health-detail" data-health-detail="${id}">${hint !== t('health.details') ? `<p>${escapeHtml(hint)}</p>` : ''}
       ${check.command ? `<p>${t('health.command')}: <code>${escapeHtml(check.command)}</code></p>` : ''}
       ${check.reason ? `<p><code>${escapeHtml(check.reason)}</code></p>` : ''}
-      ${cliInstalled ? `<p>${t('health.authUnknown')}</p><p>${t('health.authHint')}</p>` : ''}
-      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</details></div>`;
+      ${cliInstalled ? `<p>${t('health.authHint')}</p>` : ''}
+      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</div></div>`;
   }).join('');
 }
 
@@ -1120,6 +1197,7 @@ function createTaskItem(task, projectId) {
   element.dataset.workspaceTaskId = task.id;
   element.dataset.projectId = projectId || '';
   element.innerHTML = `<span class="task-item-top"><strong></strong><span class="status-dot" aria-hidden="true"></span></span>
+    <span class="task-item-health"></span>
     <span class="task-item-meta"><span class="task-item-status"></span><span class="task-item-agents"><span class="mini-agent">Codex</span><span class="mini-agent">Antigravity</span></span><time></time></span>`;
   element.onclick = () => {
     const id = element.dataset.workspaceTaskId;
@@ -1148,6 +1226,13 @@ function updateTaskItem(element, task, projectId) {
     if (agents[index].className !== className) agents[index].className = className;
     setListText(agents[index], task.mode === 'custom' ? t(`custom.${slotId}`) : slotId === 'codex' ? 'Codex' : 'Antigravity');
   }
+  const health = collaborationHealth(task, { minutes: collaborationHealthView.getMinutes() });
+  const healthLabel = element.querySelector('.task-item-health');
+  if (healthLabel) {
+    healthLabel.hidden = health.state === 'normal';
+    setListText(healthLabel, t(`collaborationHealth.${health.state}`));
+    setListAttribute(healthLabel, 'data-health', health.state);
+  }
   setListText(element.querySelector('time'), formatTime(task.updatedAt));
 }
 
@@ -1165,7 +1250,58 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
   reconcileListChildren(container, children);
 }
 
+function renderConversationResume() {
+  const panel = document.querySelector('#conversation-resume');
+  if (!panel) return;
+  const task = state.selectedTask;
+  panel.hidden = !task || task.mode === 'custom' || Boolean(task.archivedAt);
+  if (panel.hidden) return;
+  const session = task.sessions?.codex;
+  const field = document.querySelector('#conversation-id');
+  const check = document.querySelector('#conversation-manual-check');
+  const key = `${state.projectId}:${task.id}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
+  const target = task.resume?.conversationId || session?.nativeIdentity?.binding?.conversationId || '';
+  if (panel.dataset.target !== key) { field.value = target; check.checked = false; panel.dataset.target = key; }
+  if (target) field.value = target;
+  field.readOnly = Boolean(target);
+  field.disabled = state.actionBusy;
+  check.disabled = state.actionBusy || task.status === 'CLOSED' || !isActiveTerminalSession(session);
+  const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
+  document.querySelector('#conversation-resume-button').disabled = state.actionBusy || !valid
+    || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || check.disabled || !check.checked;
+  const summary = document.querySelector('#conversation-resume-status');
+  const status = state.conversationActionTarget === key ? 'STARTING' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
+  summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
+}
+
+async function conversationTaskAction(operation) {
+  renderConversationResume();
+  const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
+  if (!button || button.disabled || state.actionBusy) return;
+  const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
+  const session = task.sessions.codex;
+  const key = document.querySelector('#conversation-resume').dataset.target;
+  const params = { workspaceTaskId: task.id, conversationId: document.querySelector('#conversation-id').value.trim() };
+  if (operation === 'confirm') Object.assign(params, { confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
+  else params.language = localeCode();
+  const current = () => projectId === state.projectId && epoch === state.projectEpoch && task.id === state.selectedId;
+  setBusy(true); state.conversationActionTarget = key; renderConversationResume();
+  try {
+    await postAction(operation === 'confirm' ? 'workspaceTaskConfirmConversation' : 'workspaceTaskResume', params, projectId);
+    if (current()) await refresh();
+  } catch (error) {
+    if (current()) showToast(error.payload?.error?.message || error.message, 'error');
+  } finally {
+    state.conversationActionTarget = null;
+    if (current()) { setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask(); }
+  }
+}
+
 function renderSelectedTask() {
+  renderConversationResume();
+  collaborationTimeline.update();
+  collaborationHealthView.update();
   changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
@@ -1228,9 +1364,7 @@ function renderSelectedTask() {
     error.textContent = message ? `${t('task.error')}: ${bounded(message)}` : '';
   }
   const close = document.querySelector('#close-task-button');
-  const restart = document.querySelector('#restart-task-button');
   if (close) close.disabled = state.actionBusy || statusKey(task.status) === 'closed';
-  if (restart) restart.disabled = state.actionBusy;
 
   const panes = selectTerminalPanes({ workspaceTask: task });
   const grid = document.querySelector('#agent-terminal-grid');
@@ -1746,10 +1880,11 @@ async function loadRepository() {
 }
 
 async function loadTaskList({ selectFirst = true } = {}) {
+  const request = state.taskListRequest = (state.taskListRequest || 0) + 1;
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   const tasks = await fetchJson('/api/workspace-tasks');
-  if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || request !== state.taskListRequest) return;
   state.tasks = Array.isArray(tasks) ? tasks : [];
   state.projectTasks.set(projectId, state.tasks);
   if (state.selectedId && !state.tasks.some(task => task.id === state.selectedId)) state.selectedId = null;
@@ -1758,6 +1893,8 @@ async function loadTaskList({ selectFirst = true } = {}) {
 }
 
 async function loadSelectedTask() {
+  const request = ++state.selectedTaskRequest;
+  const taskEpoch = state.reviewTaskEpoch;
   if (state.healthTaskId !== (state.selectedId || null)) void checkWorkspaceHealth();
   if (!state.selectedId) {
     state.selectedTask = null;
@@ -1770,7 +1907,8 @@ async function loadSelectedTask() {
   const selectedId = state.selectedId;
   const epoch = state.projectEpoch;
   const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(selectedId)}`);
-  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId
+    || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
@@ -1779,13 +1917,16 @@ async function loadSelectedTask() {
 }
 
 async function continueTaskStartup(task, projectId, epoch) {
+  const taskEpoch = state.reviewTaskEpoch;
+  const request = state.selectedTaskRequest;
   if (state.actionBusy || !task.startup || !['STARTING', 'AWAITING_INPUT'].includes(task.status)) return;
   const key = `${projectId}:${task.id}`;
   if (state.startupContinuing.has(key)) return;
   state.startupContinuing.add(key);
   try {
     const payload = await postAction('workspaceTaskContinue', { workspaceTaskId: task.id }, projectId);
-    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId) return;
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId
+      || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
     state.selectedTask = payload.workspaceTask;
     state.tasks = state.tasks.map(item => item.id === task.id ? payload.workspaceTask : item);
     state.projectTasks.set(projectId, state.tasks);
@@ -1824,6 +1965,8 @@ async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
   state.reviewTaskEpoch++;
+  collaborationTimeline.update();
+  collaborationHealthView.update();
   changesDrawer.updateContext();
   renderWorkspaceHealth();
   rememberSelection();
@@ -2041,28 +2184,6 @@ async function closeAllTerminals() {
   }
 }
 
-async function restartTask() {
-  if (!state.selectedId || state.actionBusy) return;
-  disposeTerminalViews();
-  setBusy(true);
-  try {
-    const payload = await postAction('workspaceTaskRestart', {
-      workspaceTaskId: state.selectedId,
-      language: localeCode(),
-    });
-    state.selectedTask = payload.workspaceTask || null;
-    showToast(t('task.restarted'), 'success');
-    await refresh();
-  } catch (error) {
-    showToast(error.payload?.error?.message || t('action.restartError'), 'error');
-    await refresh();
-  } finally {
-    setBusy(false);
-    renderTaskList();
-    renderSelectedTask();
-  }
-}
-
 function setLocale(locale) {
   state.locale = locale === 'zh' ? 'zh' : 'en';
   try { localStorage.setItem('coordinate-agents-workspace-locale', state.locale); } catch { /* Optional. */ }
@@ -2162,6 +2283,7 @@ async function clearArchivedConversations() {
 }
 
 function bindEvents() {
+  bindSettingsTabs();
   document.querySelector('#project-switcher')?.addEventListener('change', event => {
     const id = event.target.value;
     if (id && id !== state.projectId) void selectProject(id);
@@ -2221,7 +2343,7 @@ function bindEvents() {
     document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });
   }
   for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
-  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings());
+  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings('custom'));
   document.querySelector('#notifications-save')?.addEventListener('click', () => void saveNotificationSettings());
   document.querySelector('#notifications-test')?.addEventListener('click', () => void sendNotificationTest());
   document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());
@@ -2251,6 +2373,11 @@ function bindEvents() {
     setHealthOpen(!state.healthOpen, { focus: true });
     if (state.healthOpen) void checkWorkspaceHealth();
   });
+  document.addEventListener('pointerdown', event => {
+    if (state.healthOpen
+      && !document.querySelector('#workspace-health-panel')?.contains(event.target)
+      && !document.querySelector('#workspace-health-button')?.contains(event.target)) setHealthOpen(false);
+  });
   for (const id of ['workspace-health-close', 'workspace-health-continue']) document.querySelector(`#${id}`)?.addEventListener('click', () => setHealthOpen(false, { focus: true }));
   document.querySelector('#workspace-health-recheck')?.addEventListener('click', () => void checkWorkspaceHealth());
   document.querySelector('#workspace-health-settings')?.addEventListener('click', () => { setHealthOpen(false); void openSettings(); });
@@ -2260,9 +2387,11 @@ function bindEvents() {
     catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction('resume'));
+  document.querySelector('#conversation-confirm-button')?.addEventListener('click', () => conversationTaskAction('confirm'));
+  document.querySelector('#conversation-id')?.addEventListener('input', renderConversationResume);
+  document.querySelector('#conversation-manual-check')?.addEventListener('change', renderConversationResume);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
-  document.querySelector('#restart-task-button')?.addEventListener('click', restartTask);
-  document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));
   document.querySelector('#theme-button')?.addEventListener('click', () => setTheme(state.theme === 'light' ? 'dark' : 'light'));

@@ -110,7 +110,7 @@ test('the main settings save binds its terminal write to the original project an
 });
 
 
-test('the main settings save only saves terminal settings and does not touch notification preferences', async () => {
+test('the default tab save only saves terminal settings and keeps other tab drafts open', async () => {
   const { context, state, error } = settingsContext();
   context.document = { querySelector: () => ({ value: 'codex' }) };
   context.replaceCodexModel = () => []; context.replaceCodexEffort = () => [];
@@ -129,7 +129,7 @@ test('the main settings save only saves terminal settings and does not touch not
   };
   await context.saveSettings();
   assert.deepEqual(actions, ['workspaceSettingsSave']);
-  assert.equal(closed, true);
+  assert.equal(closed, false);
   assert.equal(error(), undefined);
   assert.equal(state.notifications, preferences);
   assert.equal(state.settings.codex, 'codex');

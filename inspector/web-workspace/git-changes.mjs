@@ -83,7 +83,7 @@ const WORDS = {
     binaryLabel: '二进制', modified: '已修改', added: '已新增', deleted: '已删除', renamed: '已重命名', conflicted: '冲突' },
 };
 
-export function mountChangesDrawer({ request, locale, toast, getTaskContext = () => ({}), sendToCodex }) {
+export function mountChangesDrawer({ request, locale, toast, getTaskContext = () => ({}), sendToCodex, onOpen }) {
   const $ = id => document.getElementById(id);
   const text = key => I18N[locale()]?.[`changes.${key}`] || WORDS[locale()]?.[key] || WORDS.en[key] || key;
   const model = createChangesModel({ request, onChange: render });
@@ -263,10 +263,10 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
       view.append(fragment);
     }
   }
-  function close() { clearReview(); model.close(); (trigger?.isConnected ? trigger : $('changes-button'))?.focus(); }
+  function close({ restoreFocus = true } = {}) { clearReview(); model.close(); if (restoreFocus) (trigger?.isConnected ? trigger : $('changes-button'))?.focus(); }
   $('changes-button').addEventListener('click', () => {
     if (state.open) { close(); return; }
-    trigger = document.activeElement; state.open = true; void model.refresh(); $('changes-close').focus();
+    onOpen?.(); trigger = document.activeElement; state.open = true; void model.refresh(); $('changes-close').focus();
   });
   $('changes-close').addEventListener('click', close);
   $('changes-mask').addEventListener('click', close);
@@ -295,5 +295,5 @@ export function mountChangesDrawer({ request, locale, toast, getTaskContext = ()
   });
   $('review-send').addEventListener('click', () => void sendFeedback());
   render();
-  return { reset(projectId) { clearReview(); model.reset(projectId); void model.refresh(); }, render, updateContext: renderFeedback };
+  return { close, reset(projectId) { clearReview(); model.reset(projectId); void model.refresh(); }, render, updateContext: renderFeedback };
 }

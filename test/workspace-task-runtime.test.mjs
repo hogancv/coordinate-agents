@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
+import { collaborationHealth } from '../inspector/web-workspace/collaboration-health.mjs';
 import { createTask } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
 import {
@@ -26,7 +27,9 @@ import {
   dispatchWorkspaceTask,
   reportWorkspaceTask,
   workspaceTerminalReady,
+  createWorkspaceNativeIdentityStore,
 } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
+import { fixtureIdentityAuthority } from './support/native-identity-authority.mjs';
 import { listRecords } from '../skills/coordinate-agents/scripts/session-manager.mjs';
 import { startWorkspace } from './support/workspace-server.mjs';
 import { ACTION_ENDPOINT } from '../inspector/server/action-gateway.mjs';
@@ -49,7 +52,10 @@ test('Custom lifecycle keeps distinct generic slots, snapshots, explicit input a
     assert.equal(task.mode, 'custom');
     assert.equal(task.startup, null);
     assert.equal(task.cooperation, null);
+    assert.deepEqual(task.collaborationEvents, []);
     assert.notEqual(task.sessions.terminal1.sessionId, task.sessions.terminal2.sessionId);
+    assert.equal(task.sessions.terminal1.nativeIdentity, undefined);
+    assert.equal(task.sessions.terminal2.nativeIdentity, undefined);
     for (const session of listRecords(root)) {
       assert.equal(session.agent, 'workspace-custom');
       assert.equal(session.taskId, task.id);
@@ -356,6 +362,10 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.ok(first.sessions.codex.sessionId);
     assert.ok(first.sessions.antigravity.sessionId);
     assert.notEqual(first.sessions.codex.sessionId, first.sessions.antigravity.sessionId);
+    assert.match(first.sessions.codex.runtimeGeneration, /^[0-9a-f-]{36}$/);
+    assert.notEqual(first.sessions.codex.runtimeGeneration, first.sessions.antigravity.runtimeGeneration);
+    assert.equal(first.sessions.codex.nativeIdentity.binding, null);
+    assert.equal(first.sessions.codex.nativeIdentity.verification.state, 'UNAVAILABLE');
     assert.equal(readFileSync(codex.termLog, 'utf8'), 'xterm-256color');
     assert.equal(readFileSync(antigravity.termLog, 'utf8'), 'xterm-256color');
     await waitForCliInput(codex.log, workspaceRolePrompt('codex', 'en'));
@@ -364,6 +374,16 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     const bound = listRecords(root).filter(session => session.taskId === first.id);
     assert.deepEqual(new Set(bound.map(session => session.agent)), new Set(['codex', 'antigravity']));
     assert.ok(bound.every(session => session.subtaskId === 'codex' || session.subtaskId === 'antigravity'));
+    assert.equal(bound.find(session => session.agent === 'codex').runtimeGeneration, first.sessions.codex.runtimeGeneration);
+    // Storage fixtures authenticate only their own opaque test attestations;
+    // they do not claim real native CLI capture or register a production source.
+    const identityAuthority = fixtureIdentityAuthority();
+    const identityStore = createWorkspaceNativeIdentityStore({ root, verifyAttestation: identityAuthority.verifyAttestation });
+    const originalIdentity = { schemaVersion: 1, projectRoot: root, taskId: first.id, slot: 'codex', adapter: 'codex-cli',
+      conversationId: '11111111-1111-4111-8111-111111111111', sessionId: first.sessions.codex.sessionId,
+      runtimeGeneration: first.sessions.codex.runtimeGeneration, sequence: 1, expectedRevision: 0,
+      source: { id: 'fixture-authority', version: '1' }, observedAt: new Date().toISOString() };
+    await identityStore.observe(identityAuthority.issue(originalIdentity));
 
     const helper = join(process.cwd(), 'skills', 'coordinate-agents', 'scripts', 'workspace-message.mjs');
     const messageCli = (...args) => {
@@ -385,12 +405,24 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
       assert.equal(latest.status, state.toUpperCase());
       assert.equal(latest.pending, false);
     }
-    assert.equal((await readWorkspaceTask(root, workspaceTaskId)).cooperation.status, 'APPROVED');
+    const completed = await readWorkspaceTask(root, workspaceTaskId);
+    assert.equal(completed.cooperation.status, 'APPROVED');
+    assert.deepEqual(completed.collaborationEvents.map(event => event.status), ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED']);
+    await dispatchWorkspaceTask(root, workspaceTaskId, 'round-health-restart', async () => {});
+    await reportWorkspaceTask(root, workspaceTaskId, 'WORKING', 'round-health-restart', 'Progress before close', { notify: () => {} });
+    const active = await readWorkspaceTask(root, workspaceTaskId);
+    assert.equal(collaborationHealth(active, { now: Date.parse(active.cooperation.updatedAt) + 3600000 }).state, 'attention');
+    assert.ok(Object.values(active.sessions).every(session => session.recordAvailable));
+    const history = active.collaborationEvents;
     const closed = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     // Closed pairs must not receive additional input through the lightweight helper.
     await assert.rejects(workspaceMessage(root, workspaceTaskId, 'send', 'hello'), /not ready/);
     assert.equal(closed.workspaceTask.status, 'CLOSED');
-    assert.equal(closed.workspaceTask.cooperation.status, 'APPROVED');
+    assert.equal(closed.workspaceTask.cooperation.status, 'WORKING');
+    assert.equal(collaborationHealth(closed.workspaceTask).signals.length, 0);
+    assert.deepEqual(closed.workspaceTask.collaborationEvents, history);
+    assert.equal(closed.workspaceTask.sessions.codex.nativeIdentity.binding.conversationId, originalIdentity.conversationId);
+    assert.equal(closed.workspaceTask.sessions.codex.nativeIdentity.verification.state, 'UNAVAILABLE');
     assert.ok(closed.closedSessions.every(session => !ACTIVE.has(session.state)));
     const closedAgain = await runtimeWorkspaceTaskClose({ root, workspaceTaskId });
     assert.equal(closedAgain.workspaceTask.status, 'CLOSED');
@@ -400,8 +432,14 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.equal(restarted.workspaceTask.status, 'RUNNING');
     assert.equal(restarted.workspaceTask.cooperation.status, 'IDLE');
     assert.equal(restarted.workspaceTask.cooperation.roundId, null);
+    assert.equal(collaborationHealth(restarted.workspaceTask, { now: Date.now() + 3600000 }).signals.length, 0);
+    assert.deepEqual(restarted.workspaceTask.collaborationEvents, history);
     assert.notEqual(restarted.workspaceTask.sessions.codex.sessionId, first.sessions.codex.sessionId);
     assert.notEqual(restarted.workspaceTask.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
+    assert.notEqual(restarted.workspaceTask.sessions.codex.runtimeGeneration, first.sessions.codex.runtimeGeneration);
+    assert.equal(restarted.workspaceTask.sessions.codex.nativeIdentity.binding.conversationId, originalIdentity.conversationId);
+    await assert.rejects(identityStore.observe(identityAuthority.issue({ ...originalIdentity, observedAt: new Date().toISOString(),
+      sequence: 2, expectedRevision: 1 })), error => error.details?.reason === 'RUNTIME_MISMATCH');
     assert.equal(restarted.workspaceTask.sessionHistory.length, 1);
     assert.equal(restarted.workspaceTask.sessionHistory[0].codexSessionId, first.sessions.codex.sessionId);
     assert.equal(restarted.workspaceTask.sessionHistory[0].antigravitySessionId, first.sessions.antigravity.sessionId);
@@ -576,6 +614,7 @@ test('Web onboarding retains both terminals and resumes each role once after use
     interrupted.status = 'STARTING';
     interrupted.startup.slots = { codex: 'WAITING', antigravity: 'WAITING' };
     interrupted.sessions.antigravity.sessionId = null;
+    delete interrupted.sessions.antigravity.runtimeGeneration;
     writeFileSync(file, JSON.stringify(interrupted));
     const recovered = (await runtimeWorkspaceTaskContinue({ root, workspaceTaskId: created.id })).workspaceTask;
     assert.equal(recovered.status, 'ERROR');

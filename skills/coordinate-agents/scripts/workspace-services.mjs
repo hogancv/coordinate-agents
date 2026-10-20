@@ -4,6 +4,7 @@ import { testWorkspaceNotification } from './workspace-notifications.mjs';
 import * as sessions from './session-service.mjs';
 import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive, runtimeWorkspaceTaskPromptSend } from './workspace-task-runtime.mjs';
 import { saveCustomWorkspaceConfig } from './workspace-custom-config.mjs';
+import { runtimeWorkspaceTaskResume, runtimeWorkspaceTaskConfirmConversation } from './workspace-task-runtime.mjs';
 import { resolve } from 'node:path';
 import { runtimeError } from './runtime-contract.mjs';
 export async function assertWorkspaceSession(input) {
@@ -20,6 +21,8 @@ export const WORKSPACE_OPERATIONS = Object.freeze({
   workspaceNotificationsTest: async input => ({ ok: true, notification: await testWorkspaceNotification(input.root) }),
   workspaceTaskCreate: runtimeWorkspaceTaskCreate,
   workspaceTaskContinue: runtimeWorkspaceTaskContinue,
+  workspaceTaskResume: runtimeWorkspaceTaskResume,
+  workspaceTaskConfirmConversation: runtimeWorkspaceTaskConfirmConversation,
   workspaceTaskClose: runtimeWorkspaceTaskClose,
   workspaceTaskRestart: runtimeWorkspaceTaskRestart,
   workspaceTaskArchive: runtimeWorkspaceTaskArchive,

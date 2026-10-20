@@ -1,3 +1,4 @@
+import { collaborationTransition, validateCollaborationEvents } from './workspace-collaboration.mjs';
 import { notifyWorkspaceReceipt } from './workspace-notifications.mjs';
 import { randomUUID } from 'node:crypto';
 import vm from 'node:vm';
@@ -13,12 +14,14 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { hostname } from 'node:os';
 import {
   acquireConfigLock,
   assertContained,
   assertSafePath,
   atomicWrite,
   readInternalFile,
+  reapDeadConfigOwner,
   safeInternalStat,
 } from './config.mjs';
 import {
@@ -32,6 +35,10 @@ import { getExecutionSessionManager, runtimeSessionClose, runtimeSessionOpen, ru
 import { resolveCustomTaskConfig, validateCustomWorkspaceConfig, composeCustomPrompt, customPromptInput } from './workspace-custom-config.mjs';
 import { listRecords, readRecord } from './session-manager.mjs';
 import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './workspace-role-prompts.mjs';
+import { codexConversationId, readCodexConversation } from './codex-conversation.mjs';
+import { manualConfirmationCurrent, validateRoundRuntime, validateWorkspaceResume } from './workspace-resume-state.mjs';
+import { applyNativeIdentityObservation, createNativeIdentityReceiver, nativeIdentityView,
+  validateNativeConversations, validateRuntimeGeneration } from './workspace-native-identity.mjs';
 
 export const WORKSPACE_TASK_PROMPT_VERSION = WORKSPACE_ROLE_PROMPT_VERSION;
 export const WORKSPACE_TASK_SLOTS = Object.freeze([
@@ -212,15 +219,19 @@ function validateSessionSlot(slot, expected) {
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', `Workspace Task ${expected.slot} session slot is not the fixed ${expected.agent} role.`, { recoverable: false });
   }
   validateSessionId(slot.sessionId);
+  if (slot.runtimeGeneration !== undefined && !slot.sessionId) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Runtime generation requires a Session association.', { recoverable: false });
+  }
   return {
     slot: expected.slot,
     agent: expected.agent,
     role: expected.role,
     sessionId: slot.sessionId || null,
+    ...(slot.runtimeGeneration !== undefined ? { runtimeGeneration: validateRuntimeGeneration(slot.runtimeGeneration) } : {}),
   };
 }
 
-function validateWorkspaceTaskRecord(value) {
+function validateWorkspaceTaskRecord(value, { root } = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Workspace Task record must be a JSON object.', { recoverable: false });
   }
@@ -251,7 +262,8 @@ function validateWorkspaceTaskRecord(value) {
   const mode = value.mode === undefined ? 'default' : value.mode;
   if (!['default', 'custom'].includes(mode)) throw new Error('Invalid Workspace task mode.');
   const custom = mode === 'custom' ? validateCustomWorkspaceConfig(value.custom) : null;
-  if (mode === 'custom' && (value.cooperation != null || value.startup != null)) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
+  if (mode === 'custom' && (value.cooperation != null || value.startup != null || (value.collaborationEvents != null && (!Array.isArray(value.collaborationEvents) || value.collaborationEvents.length)))) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
+  const cooperation = mode === 'custom' ? null : validateCooperation(value.cooperation);
   const slots = taskSlots({ mode });
   if (Object.keys(value.sessions).some(slot => !slots.some(expected => expected.slot === slot))) throw new Error('Unexpected Workspace task slot.');
   const sessions = Object.fromEntries(slots.map(expected => [
@@ -293,7 +305,13 @@ function validateWorkspaceTaskRecord(value) {
     updatedAt: value.updatedAt,
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
-    cooperation: mode === 'custom' ? null : validateCooperation(value.cooperation),
+    ...(mode !== 'custom' ? { resume: validateWorkspaceResume(value.resume) } : {}),
+    ...(value.runtimeFencing === true ? { runtimeFencing: true } : {}),
+    ...(value.nativeConversations !== undefined ? { nativeConversations: validateNativeConversations(value.nativeConversations,
+      { projectRoot: root, taskId: value.id, mode }) } : {}),
+    cooperation,
+    ...(mode !== 'custom' ? { roundRuntime: validateRoundRuntime(value.roundRuntime) } : {}),
+    collaborationEvents: mode === 'custom' ? [] : validateCollaborationEvents(value.collaborationEvents, value.id, cooperation.revision),
     startup: mode === 'custom' ? null : validateStartup(value.startup),
     sessionHistory,
     error,
@@ -308,7 +326,7 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   return path;
 }
 
-function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false } = {}) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary } = {}) {
   const repository = repositoryRoot(root);
   const path = workspaceTaskFile(repository, record.id, { create: true });
   // Reuse the existing short file transaction lock for every task-file writer.
@@ -324,7 +342,7 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
         throw new Error('Task pair changed during cooperation update; dispatch input may have been sent. Do not resend automatically.');
       }
       // A receipt may only change cooperation fields, never restore stale Sessions or lifecycle state.
-      base = { ...current, updatedAt: record.updatedAt };
+      base = { ...current, roundRuntime: record.roundRuntime, resume: record.resume, updatedAt: record.updatedAt };
     }
     if (replaceStartup && current) {
       if (!['STARTING', 'AWAITING_INPUT'].includes(current.status) || current.archivedAt
@@ -335,7 +353,25 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     }
     const cooperation = record.mode === 'custom' ? null : resetCooperation ? idleCooperation((current?.cooperation?.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
-    const validated = validateWorkspaceTaskRecord({ ...base, cooperation });
+    // One atomic record commits the receipt and its history together. Lifecycle
+    // writes always retain the latest history, even when their snapshot is stale.
+    const collaborationEvents = [...(current?.collaborationEvents || record.collaborationEvents || [])];
+    if (replaceCooperation && current) {
+      const event = collaborationTransition(record.id, current.cooperation, { ...cooperation, summary: eventSummary ?? cooperation.summary });
+      if (event) collaborationEvents.push(event);
+    }
+    // Identity facts have a separate authenticated writer. Lifecycle/startup/
+    // receipt snapshots must never erase or replace newer durable bindings.
+    const nativeConversations = current?.nativeConversations ?? record.nativeConversations;
+    if (record.resume) {
+      const target = record.resume.conversationId;
+      if (listWorkspaceTaskRecords(repository).some(other => other.id !== record.id
+        && (other.resume?.conversationId === target || other.nativeConversations?.codex?.binding.conversationId === target))) {
+        throw new Error('Codex conversation is already bound to another Workspace Task.');
+      }
+    }
+    const validated = validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents,
+      ...(nativeConversations !== undefined ? { nativeConversations } : {}) }, { root: repository });
     atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
     Object.assign(record, validated); // Keep lifecycle responses consistent with persisted receipts.
     return validated;
@@ -355,7 +391,7 @@ function readWorkspaceTaskRecord(root, id) {
   try {
     const directory = workspaceTaskDirectory(repository).directory;
     safeInternalStat(directory, path);
-    return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(join(repository, '.agent-bus'), path)));
+    return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(join(repository, '.agent-bus'), path)), { root: repository });
   } catch (error) {
     if (error?.code === 'WORKSPACE_TASK_NOT_FOUND' || error?.code === 'WORKSPACE_TASK_STATE_CONFLICT') throw error;
     throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', `Failed to load Workspace Task ${id}: ${error.message || String(error)}`, {
@@ -367,7 +403,7 @@ function readWorkspaceTaskRecord(root, id) {
 }
 
 export function listWorkspaceTaskRecords(root) {
-  const { directory } = workspaceTaskDirectory(root);
+  const { directory, repository } = workspaceTaskDirectory(root);
   if (!existsSync(directory)) return [];
   return readdirSync(directory)
     .filter(name => name.endsWith('.json'))
@@ -376,7 +412,7 @@ export function listWorkspaceTaskRecords(root) {
       const path = join(directory, name);
       try {
         safeInternalStat(directory, path);
-        return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(directory, path)));
+        return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(directory, path)), { root: repository });
       } catch (error) {
         throw normalizeRuntimeError(error, 'WORKSPACE_TASK_STATE_CONFLICT');
       }
@@ -413,13 +449,18 @@ function sessionFactMap(root, sessionIds = null) {
   }
 }
 
-function sessionView(slot, facts) {
+function sessionView(slot, facts, taskId, nativeConversation) {
   const fact = slot.sessionId ? facts.get(slot.sessionId) : null;
   return {
+    // Record availability includes ownership, not a liveness probe.
+    recordAvailable: Boolean(fact && fact.taskId === taskId && fact.agent === slot.agent
+      && (slot.role !== 'custom' || fact.subtaskId === slot.slot)),
     slot: slot.slot,
     agent: slot.agent,
     role: slot.role,
     sessionId: slot.sessionId,
+    ...(slot.runtimeGeneration ? { runtimeGeneration: slot.runtimeGeneration } : {}),
+    ...(slot.role !== 'custom' ? { nativeIdentity: nativeIdentityView(nativeConversation) } : {}),
     state: fact?.state || null,
     status: fact?.state || null,
     createdAt: fact?.createdAt || null,
@@ -448,14 +489,20 @@ function statusFromFacts(record, sessions) {
   return record.status;
 }
 
-function workspaceTaskView(record, facts = new Map()) {
+function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
-    sessionView(record.sessions[expected.slot], facts),
+    sessionView(record.sessions[expected.slot], facts, record.id, record.nativeConversations?.[expected.slot]),
   ]));
+  if (record.mode !== 'custom' && manualConfirmationCurrent(record, facts.get(record.sessions.codex.sessionId))) {
+    sessions.codex.nativeIdentity.verification = { state: 'MANUAL_CONFIRMED', reason: 'USER_CONFIRMED_STATUS',
+      confirmedAt: record.resume.verification.confirmedAt };
+  }
   return {
     id: record.id,
     mode: record.mode,
+    ...(record.mode !== 'custom' ? { resume: record.resume || null } : {}),
+    ...(record.runtimeFencing ? { runtimeFencing: true } : {}),
     ...(record.custom ? { custom: record.custom } : {}),
     title: record.title,
     status: statusFromFacts(record, Object.values(sessions)),
@@ -465,6 +512,8 @@ function workspaceTaskView(record, facts = new Map()) {
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
     cooperation: record.cooperation,
+    ...(record.mode !== 'custom' ? { roundRuntime: record.roundRuntime || null } : {}),
+    ...(includeHistory ? { collaborationEvents: record.collaborationEvents } : {}),
     startup: record.startup,
     sessionIds: Object.fromEntries(taskSlots(record).map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
@@ -475,7 +524,7 @@ function workspaceTaskView(record, facts = new Map()) {
 export async function readWorkspaceTasks(root, { includeArchived = false } = {}) {
   const repository = repositoryRoot(root);
   const facts = sessionFactMap(repository);
-  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts));
+  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts, { includeHistory: false }));
 }
 
 export async function readWorkspaceTask(root, id) {
@@ -484,6 +533,31 @@ export async function readWorkspaceTask(root, id) {
   // Pass targeted session IDs to sessionFactMap to avoid scanning all workspace session files
   const sessionIds = sessionIdsFor(record);
   return workspaceTaskView(record, sessionFactMap(repository, sessionIds));
+}
+
+// Internal Host/Adapter composition point. Deliberately not registered as a
+// Runtime operation, HTTP action or workspace-message command. The default
+// receiver has no trusted source. A verifier is trusted executable code, never
+// a user-supplied source name/flag in an observation or project configuration.
+export function createWorkspaceNativeIdentityStore({ root, verifyAttestation } = {}) {
+  const repository = repositoryRoot(root);
+  return createNativeIdentityReceiver({ projectRoot: repository, verifyAttestation,
+    commit(observation) {
+      const bus = join(repository, '.agent-bus');
+      assertSafePath(repository, join(bus, 'locks', 'config'));
+      assertSafePath(repository, join(bus, 'tmp'));
+      const release = acquireConfigLock(bus);
+      try {
+        const task = readWorkspaceTaskRecord(repository, observation.taskId);
+        const session = readRecord(repository, observation.sessionId);
+        const updated = applyNativeIdentityObservation(task, session, observation, listWorkspaceTaskRecords(repository));
+        const validated = validateWorkspaceTaskRecord(updated, { root: repository });
+        const path = workspaceTaskFile(repository, task.id);
+        atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(bus, 'tmp'));
+        return nativeIdentityView(validated.nativeConversations[observation.slot]);
+      } finally { release(); }
+    },
+  });
 }
 
 async function closeSessionIds(root, sessionIds) {
@@ -687,10 +761,11 @@ function workspaceSlotPrompt(record, slot, language) {
   const commands = slot === 'codex'
     ? `send '<instruction>'; read <cursor>; changes; wait <cursor> [revision] [timeout-ms]; report reviewing|approved|changes-requested <roundId> ['summary']`
     : `report working|done|failed <roundId> ['summary']`;
-  return `${workspaceRolePrompt(expected.agent, language)}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
+  const replacement = slot === 'antigravity' && record.resume ? '\nYou are a replacement executor. You have no previous executor conversation. Do not recover or replay old instructions. Wait for a new explicit Codex dispatch after it inspects the workspace and collaboration history.' : '';
+  return `${workspaceRolePrompt(expected.agent, language)}${replacement}\nWorkspace: ${record.id}\nHelper (run from repository root): node ${helper} ${record.id} <command>\nCommands: ${commands}\nQuote instructions and summaries safely for your shell. wait defaults to 60 seconds maximum. If the pair is still starting, retry only when no input was sent; never create another Session.`;
 }
 
-async function openWorkspaceSlot(root, record, slot, language) {
+async function openWorkspaceSlot(root, record, slot, language, conversationId) {
   const expected = taskSlots(record).find(item => item.slot === slot);
   const opened = record.mode === 'custom'
     ? await runtimeWorkspaceCustomSessionOpen({ root, taskId: record.id, slot, language })
@@ -706,6 +781,7 @@ async function openWorkspaceSlot(root, record, slot, language) {
     subtaskId: slot,
     workspace: true,
     reuseExisting: false,
+    ...(conversationId !== undefined ? { conversationId } : {}),
   });
   const sessionState = `${opened?.session?.state || ''}`;
   if (!opened?.session?.id || opened.reused || !ACTIVE_SESSION_STATES.has(sessionState)) {
@@ -724,6 +800,7 @@ async function openWorkspaceSlot(root, record, slot, language) {
     throw new Error('Task was closed while its terminal was opening.');
   }
   record.sessions[slot].sessionId = opened.session.id;
+  if (record.mode !== 'custom' && opened.session.runtimeGeneration) record.sessions[slot].runtimeGeneration = opened.session.runtimeGeneration;
   writeWorkspaceTask(root, record);
   return opened.session;
 }
@@ -739,6 +816,11 @@ async function prepareWorkspaceSlot(root, record, slot, timeoutMs = WORKSPACE_ST
   record.status = startupStatus(record);
   record.updatedAt = now();
   if (result.state !== 'READY') {
+    writeWorkspaceTask(root, record, { replaceStartup: true });
+    return;
+  }
+  if (slot === 'codex' && record.resume) {
+    // Native resume already owns its context. No old role or history injection.
     writeWorkspaceTask(root, record, { replaceStartup: true });
     return;
   }
@@ -764,9 +846,14 @@ export async function runtimeWorkspaceTaskContinue(input = {}) {
       try {
         if (WORKSPACE_TASK_SLOTS.some(({ slot }) => !record.sessions[slot].sessionId)) throw runtimeError('WORKSPACE_TASK_START_FAILED', 'Startup was interrupted before both terminals opened. Restart the pair to continue.', { recoverable: true, taskId: record.id });
         for (const { slot } of WORKSPACE_TASK_SLOTS) await prepareWorkspaceSlot(repository, record, slot, 1500);
+        // prepareWorkspaceSlot may already have committed RUNNING. We still
+        // own the lifecycle lock; commit the resume summary without a second
+        // startup-only CAS that would reject that completed transition.
+        if (record.resume) { updateResumeState(repository, record); writeWorkspaceTask(repository, record); }
       } catch (error) {
         record = failureRecord(record, error);
-        writeWorkspaceTask(repository, record, { replaceStartup: true });
+        if (record.resume) updateResumeState(repository, record);
+        writeWorkspaceTask(repository, record);
       }
     }
     return jsonSuccess('workspace.task.continue', { workspaceTask: workspaceTaskView(record, sessionFactMap(repository, sessionIdsFor(record))) });
@@ -885,14 +972,156 @@ export async function runtimeWorkspaceTaskCreate(input = {}) {
 export async function runtimeWorkspaceTaskClose(input = {}) {
   const root = repositoryRoot(input.root);
   const task = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
-  if (task.mode === 'custom') return withCooperationLock(root, task.id, () => closeWorkspaceTask(root, task.id));
-  return closeWorkspaceTask(root, task.id);
+  return withCooperationLock(root, task.id, () => closeWorkspaceTask(root, task.id));
+}
+
+async function resumableSession(root, record, slot) {
+  const association = record.sessions[slot];
+  if (!association.sessionId) return null;
+  const stored = readRecord(root, association.sessionId);
+  const expected = WORKSPACE_TASK_SLOTS.find(item => item.slot === slot);
+  if (stored.id !== association.sessionId || !sessionBelongsToTask(root, record, stored, expected)) throw new Error('Session runtime ownership changed; resume was refused.');
+  const live = await getExecutionSessionManager().status(root, association.sessionId);
+  if (!ACTIVE_SESSION_STATES.has(live.state)) return null;
+  if (stored.subtaskId !== slot || !association.runtimeGeneration || stored.runtimeGeneration !== association.runtimeGeneration
+    || stored.adapter !== `${slot}-cli`) throw new Error('Session runtime ownership changed; resume was refused.');
+  return live;
+}
+
+async function recoverInterruptedResumeSlots(root, record, target) {
+  for (const candidate of await discoverTaskSessions(root, record)) {
+    if (Object.values(record.sessions).some(slot => slot.sessionId === candidate.id)) continue;
+    const live = await getExecutionSessionManager().status(root, candidate.id);
+    if (!ACTIVE_SESSION_STATES.has(live.state)) continue;
+    const slot = candidate.subtaskId;
+    if (!record.resume || record.resume.state !== 'STARTING' || !['codex', 'antigravity'].includes(slot)
+      || record.sessions[slot].sessionId || candidate.adapter !== `${slot}-cli` || !candidate.runtimeGeneration
+      || record.sessionHistory.some(entry => entry[`${slot}SessionId`] === candidate.id)
+      || (slot === 'codex' && (candidate.args.at(-2) !== 'resume' || candidate.args.at(-1) !== target))) {
+      throw new Error('An unassociated live Task runtime needs inspection; no duplicate Session was opened.');
+    }
+    record.sessions[slot] = { ...record.sessions[slot], sessionId: candidate.id, runtimeGeneration: candidate.runtimeGeneration };
+  }
+}
+
+function updateResumeState(root, record) {
+  const codex = record.sessions.codex.sessionId ? readRecord(root, record.sessions.codex.sessionId) : null;
+  const executor = record.sessions.antigravity.sessionId ? readRecord(root, record.sessions.antigravity.sessionId) : null;
+  const codexActive = ACTIVE_SESSION_STATES.has(codex?.state);
+  const executorActive = ACTIVE_SESSION_STATES.has(executor?.state);
+  const executorReady = executorActive && record.startup?.slots.antigravity === 'READY';
+  record.resume.state = !codexActive ? 'FAILED' : !executorReady ? 'PARTIAL'
+    : manualConfirmationCurrent(record, codex) ? 'READY' : 'AWAITING_CONFIRMATION';
+  // Normal live login/trust/readiness retains the existing onboarding flow.
+  // Failed/missing processes and uncertain role writes require explicit Resume.
+  record.status = codexActive && executorActive && record.startup && !Object.values(record.startup.slots).includes('INJECTING')
+    ? startupStatus(record) : 'DEGRADED';
+}
+
+export async function runtimeWorkspaceTaskResume(input = {}) {
+  const root = repositoryRoot(input.root);
+  const id = input.workspaceTaskId || input.id;
+  return withCooperationLock(root, id, async () => {
+    let record = readWorkspaceTaskRecord(root, id);
+    if (record.archivedAt) throw new Error('Cannot resume an archived Workspace Task.');
+    if (record.mode === 'custom') throw new Error('Custom Terminals do not use Codex conversation resume.');
+    const identity = record.nativeConversations?.codex;
+    if (identity?.firstConflict) throw new Error('Codex native identity changed. Resume requires inspection of the original binding.');
+    const target = codexConversationId(input.conversationId ?? identity?.binding.conversationId ?? record.resume?.conversationId);
+    if ((identity && identity.binding.conversationId !== target) || (record.resume && record.resume.conversationId !== target)) throw new Error('Codex native conversation identity does not match this Task.');
+    readCodexConversation({ root, conversationId: target });
+    await recoverInterruptedResumeSlots(root, record, target);
+    const codex = await resumableSession(root, record, 'codex');
+    const executor = await resumableSession(root, record, 'antigravity');
+    if (codex && !record.resume) throw new Error('Close the current Codex runtime before resuming its original conversation.');
+    if (codex && executor && record.resume && record.startup?.slots.antigravity === 'READY') {
+      record.status = startupStatus(record); record.error = null;
+      updateResumeState(root, record);
+      writeWorkspaceTask(root, record);
+      return jsonSuccess('workspace.task.resume', { workspaceTask: workspaceTaskView(record, sessionFactMap(root, sessionIdsFor(record))) });
+    }
+    const oldSessions = { ...record.sessions };
+    const language = normalizeLanguage(input.language || record.startup?.language);
+    record.resume = { schemaVersion: 1, conversationId: target, state: 'STARTING',
+      verification: codex ? record.resume?.verification || null : null,
+      interruption: record.resume?.interruption || (record.cooperation.roundId && !['IDLE', 'APPROVED', 'FAILED'].includes(record.cooperation.status)
+        ? { roundId: record.cooperation.roundId, revision: record.cooperation.revision, status: record.cooperation.status } : null) };
+    record.runtimeFencing = true;
+    record.startup ||= initialStartup(language);
+    // Legacy rounds acquire their original executor owner before replacement.
+    if (!record.roundRuntime && record.cooperation.roundId && record.sessions.antigravity.runtimeGeneration) {
+      record.roundRuntime = { roundId: record.cooperation.roundId, sessionId: record.sessions.antigravity.sessionId,
+        runtimeGeneration: record.sessions.antigravity.runtimeGeneration };
+    }
+    for (const slot of ['codex', 'antigravity']) {
+      if ((slot === 'codex' ? codex : executor)) continue;
+      record.sessions[slot] = defaultSessions(record)[slot];
+      record.startup.slots[slot] = 'WAITING';
+    }
+    if (Object.values(oldSessions).some(session => session.sessionId && record.sessions[session.slot].sessionId !== session.sessionId)) {
+      record.sessionHistory = [...record.sessionHistory, { codexSessionId: oldSessions.codex.sessionId,
+        antigravitySessionId: oldSessions.antigravity.sessionId, closedAt: now() }].slice(-MAX_HISTORY);
+    }
+    record.status = 'STARTING'; record.error = null; record.updatedAt = now();
+    // Persist intent before launch. Pending target occupancy is checked under
+    // the same short transaction as all identity/lifecycle writes.
+    writeWorkspaceTask(root, record);
+    try {
+      if (!codex) await openWorkspaceSlot(root, record, 'codex', language, target);
+      await prepareWorkspaceSlot(root, record, 'codex');
+      if (!executor) await openWorkspaceSlot(root, record, 'antigravity', language);
+      await prepareWorkspaceSlot(root, record, 'antigravity');
+      record.status = startupStatus(record);
+    } catch (error) {
+      // Keep any successfully recovered Codex. A failed executor never rolls
+      // back the valid native conversation or automatically replays work.
+      record.error = serializeRuntimeError(normalizeRuntimeError(error), { includeLegacy: true });
+    }
+    updateResumeState(root, record); record.updatedAt = now();
+    writeWorkspaceTask(root, record);
+    return jsonSuccess('workspace.task.resume', { workspaceTask: workspaceTaskView(record, sessionFactMap(root, sessionIdsFor(record))) });
+  });
+}
+
+export async function runtimeWorkspaceTaskConfirmConversation(input = {}) {
+  const root = repositoryRoot(input.root);
+  const id = input.workspaceTaskId || input.id;
+  return withCooperationLock(root, id, async () => {
+    let record = readWorkspaceTaskRecord(root, id);
+    if (record.mode === 'custom' || record.archivedAt || record.status === 'CLOSED') throw new Error('This Task cannot confirm a live Codex conversation.');
+    if (record.startup && record.startup.slots.codex !== 'READY') throw new Error('Finish Codex terminal startup before confirming its native conversation.');
+    const association = record.sessions.codex;
+    if (input.confirmed !== true) throw new Error('Explicit manual confirmation of the live Codex /status identity and project is required.');
+    if (!association.sessionId || input.sessionId !== association.sessionId || input.runtimeGeneration !== association.runtimeGeneration) throw new Error('Codex runtime changed before manual confirmation.');
+    if (!await resumableSession(root, record, 'codex')) throw new Error('Codex runtime is no longer live.');
+    const target = codexConversationId(input.conversationId);
+    if ((record.resume && record.resume.conversationId !== target)
+      || (record.nativeConversations?.codex && (record.nativeConversations.codex.firstConflict || record.nativeConversations.codex.binding.conversationId !== target))) throw new Error('Manual identity differs from this Task native conversation.');
+    readCodexConversation({ root, conversationId: target });
+    // Human assertion is the source of live identity here, explicitly labeled.
+    // Metadata validates availability/project; it never becomes automatic proof.
+    const observation = { schemaVersion: 1, projectRoot: root, taskId: id, slot: 'codex', adapter: 'codex-cli',
+      sessionId: association.sessionId, runtimeGeneration: association.runtimeGeneration, conversationId: target,
+      source: { id: 'manual-confirmation', version: '1' }, observedAt: now(),
+      sequence: (record.nativeConversations?.codex?.lastObservation.sequence || 0) + 1,
+      expectedRevision: record.nativeConversations?.codex?.revision || 0 };
+    const token = Symbol('human-confirmation');
+    await createWorkspaceNativeIdentityStore({ root, verifyAttestation: value => value === token ? observation : null }).observe(token);
+    record = readWorkspaceTaskRecord(root, id);
+    record.resume ||= { schemaVersion: 1, conversationId: target, state: 'STARTING', interruption: null, verification: null };
+    record.resume.verification = { mode: 'MANUAL', sessionId: association.sessionId, runtimeGeneration: association.runtimeGeneration, confirmedAt: now() };
+    record.runtimeFencing = true;
+    updateResumeState(root, record); record.updatedAt = now();
+    writeWorkspaceTask(root, record);
+    return jsonSuccess('workspace.task.conversation.confirm', { workspaceTask: workspaceTaskView(record, sessionFactMap(root, sessionIdsFor(record))) });
+  });
 }
 
 async function closeWorkspaceTask(root, id) {
   let record = readWorkspaceTaskRecord(root, id);
   const closed = await rollbackTaskSessions(root, record);
   record.status = 'CLOSED';
+  if (record.resume) record.resume = { ...record.resume, state: 'CLOSED', verification: null };
   record.error = closed.errors.length > 0
     ? serializeRuntimeError(closed.errors[0], { includeLegacy: true })
     : null;
@@ -936,6 +1165,7 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
       ].slice(-MAX_HISTORY);
     }
     record.sessions = defaultSessions(record);
+    if (record.mode !== 'custom') record.resume = null;
     record.promptVersion = record.mode === 'custom' ? 'custom-terminal-v1' : WORKSPACE_TASK_PROMPT_VERSION;
     record.startup = record.mode === 'custom' ? null : initialStartup(language);
     record.status = 'STARTING';
@@ -994,8 +1224,7 @@ function ownedTaskSessionFiles(root, record, sessionRecords = null) {
 export async function runtimeWorkspaceTaskArchive(input = {}) {
   const root = repositoryRoot(input.root);
   const task = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
-  if (task.mode === 'custom') return withCooperationLock(root, task.id, () => archiveWorkspaceTask(root, task.id));
-  return archiveWorkspaceTask(root, task.id);
+  return withCooperationLock(root, task.id, () => archiveWorkspaceTask(root, task.id));
 }
 
 async function archiveWorkspaceTask(root, id) {
@@ -1066,19 +1295,20 @@ async function withCooperationLock(root, id, operation) {
   while (true) {
     try {
       mkdirSync(lock);
-      atomicWrite(ownerPath, JSON.stringify({ owner, pid: process.pid }), join(repository, '.agent-bus', 'tmp'));
+      atomicWrite(ownerPath, JSON.stringify({ owner, pid: process.pid, host: hostname() }), join(repository, '.agent-bus', 'tmp'));
       break;
     } catch (error) {
       if (error.code !== 'EEXIST') throw error;
-      assertSafePath(repository, lock);
-      if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
       try {
-        const held = JSON.parse(readInternalFile(join(repository, '.agent-bus'), ownerPath));
-        try { process.kill(held.pid, 0); }
-        catch (failure) { if (failure.code === 'ESRCH') { rmSync(lock, { recursive: true }); continue; } }
-      } catch {
-        // Allow recovery if a process died between mkdir and writing its owner.
-        if (Date.now() - lstatSync(lock).mtimeMs > 120_000) { rmSync(lock, { recursive: true }); continue; }
+        assertSafePath(repository, lock);
+        if (!lstatSync(lock).isDirectory()) throw new Error('Unsafe cooperation lock.');
+        // Use the same elected dead-owner reaping as the identity store.
+        // An old/unpublished/foreign owner is never guessed dead from age.
+        if (reapDeadConfigOwner(lock)) continue;
+      } catch (inspectionError) {
+        // The previous owner may release between EEXIST and any metadata read.
+        // Retry under the same deadline; unsafe paths and other IO errors fail.
+        if (inspectionError.code !== 'ENOENT') throw inspectionError;
       }
       if (Date.now() >= deadline) throw new Error('Workspace cooperation update is busy; no new input was sent.');
       await new Promise(done => setTimeout(done, 50));
@@ -1102,21 +1332,41 @@ function assertCooperationSession(root, record, slot) {
   }
 }
 
-export async function dispatchWorkspaceTask(root, id, roundId, deliver) {
+function assertRuntimeCaller(root, record, slot, caller) {
+  if (!caller && !record.resume && !record.runtimeFencing) return; // Legacy pre-resume helper compatibility.
+  const expected = record.sessions[slot];
+  if (!caller || caller.taskId !== record.id || caller.slot !== slot || caller.sessionId !== expected.sessionId
+    || caller.runtimeGeneration !== expected.runtimeGeneration) throw new Error('Stale or missing Workspace runtime caller. No collaboration change was made.');
+  const session = readRecord(root, expected.sessionId);
+  if (session.runtimeGeneration !== caller.runtimeGeneration || session.subtaskId !== slot
+    || !ACTIVE_SESSION_STATES.has(session.state)) throw new Error('Workspace runtime caller is no longer current.');
+  if (record.resume && !manualConfirmationCurrent(record, readRecord(root, record.sessions.codex.sessionId))) throw new Error('Codex conversation requires current manual runtime confirmation before collaboration.');
+}
+
+export async function dispatchWorkspaceTask(root, id, roundId, deliver, { caller } = {}) {
   if (!ROUND_ID_PATTERN.test(roundId || '')) throw new Error('Invalid roundId.');
   return withCooperationLock(root, id, async repository => {
     const before = readWorkspaceTaskRecord(repository, id);
     assertCooperationSession(repository, before, 'antigravity');
+    assertRuntimeCaller(repository, before, 'codex', caller);
+    if (before.resume) {
+      before.resume.interruption = { roundId, revision: before.cooperation.revision, status: 'DISPATCH_UNCERTAIN' };
+      before.updatedAt = now();
+      writeWorkspaceTask(repository, before);
+    }
     await deliver();
     const current = readWorkspaceTaskRecord(repository, id);
     if (current.status !== 'RUNNING' || current.archivedAt || current.sessions.antigravity.sessionId !== before.sessions.antigravity.sessionId) throw new Error('Task pair changed during dispatch; input may have been sent. Do not resend automatically.');
     current.cooperation = { status: 'SENT', roundId, revision: current.cooperation.revision + 1, summary: '', updatedAt: now() };
+    if (current.sessions.antigravity.runtimeGeneration) current.roundRuntime = { roundId, sessionId: current.sessions.antigravity.sessionId,
+      runtimeGeneration: current.sessions.antigravity.runtimeGeneration };
+    if (current.resume) current.resume.interruption = null;
     current.updatedAt = now();
     return writeWorkspaceTask(repository, current, { replaceCooperation: true }).cooperation;
   });
 }
 
-export async function reportWorkspaceTask(root, id, status, roundId, summary = '', { notify = notifyWorkspaceReceipt } = {}) {
+export async function reportWorkspaceTask(root, id, status, roundId, summary = '', { notify = notifyWorkspaceReceipt, caller } = {}) {
   if (!['WORKING', 'DONE', 'REVIEWING', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED'].includes(status)) throw new Error('Invalid report status. Use working, done, reviewing, approved, changes-requested, or failed.');
   if (!ROUND_ID_PATTERN.test(roundId || '')) throw new Error('A valid roundId is required.');
   if (typeof summary !== 'string' || Buffer.byteLength(summary) > 2048) throw new Error('Summary must be at most 2048 bytes.');
@@ -1125,6 +1375,10 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
     const record = readWorkspaceTaskRecord(repository, id);
     const slot = ['REVIEWING', 'APPROVED', 'CHANGES_REQUESTED'].includes(status) ? 'codex' : 'antigravity';
     assertCooperationSession(repository, record, slot);
+    assertRuntimeCaller(repository, record, slot, caller);
+    if (record.resume && slot === 'antigravity' && (!record.roundRuntime || record.roundRuntime.roundId !== roundId
+      || record.roundRuntime.sessionId !== record.sessions.antigravity.sessionId
+      || record.roundRuntime.runtimeGeneration !== record.sessions.antigravity.runtimeGeneration)) throw new Error('This round belongs to a previous executor runtime; inspect the workspace and ask Codex for a new instruction.');
     const previous = record.cooperation;
     if (previous.roundId !== roundId) throw new Error('Stale roundId: this receipt does not belong to the current round.');
     if (previous.status !== status && !REPORT_TRANSITIONS[previous.status]?.includes(status)) throw new Error(`Invalid cooperation transition: ${previous.status} -> ${status}.`);
@@ -1132,7 +1386,7 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
     if (previous.status === status && previous.summary === cleaned) return previous;
     record.cooperation = { status, roundId, revision: previous.revision + 1, summary: cleaned, updatedAt: now() };
     record.updatedAt = now();
-    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true });
+    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true, eventSummary: summary });
     // Only new formal transitions, never summary edits, lifecycle or output.
     if (previous.status !== status && ['DONE', 'APPROVED', 'FAILED'].includes(status)) {
       committedEvent = { root: repository, task: { id: committed.id, mode: committed.mode, title: committed.title,
