@@ -32,6 +32,7 @@ import { redactOutput } from '../adapters/executable.mjs';
 import { loadConfiguredTrustedAdapters } from '../adapters/trusted-local.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
 import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
+import { validateRuntimeGeneration } from './workspace-native-identity.mjs';
 
 export const EXECUTION_SESSION_STATES = Object.freeze([
   'starting',
@@ -194,6 +195,7 @@ function publicRecord(record) {
   if (!record) return null;
   return {
     id: record.id,
+    runtimeGeneration: record.runtimeGeneration || null,
     agent: record.agent,
     command: record.command,
     resolvedCommand: record.resolvedCommand || null,
@@ -221,6 +223,8 @@ function writeRecord(root, record) {
   atomicWrite(path, `${JSON.stringify({
     schemaVersion: 1,
     id: record.id,
+    runtimeGeneration: record.runtimeGeneration || null,
+    adapter: record.adapter || null,
     agent: record.agent,
     command: record.command,
     resolvedCommand: record.resolvedCommand || null,
@@ -301,6 +305,7 @@ function parseRecord(root, path) {
   const record = JSON.parse(readInternalFile(bus, path));
   if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error(`Invalid execution session record: ${path}`);
   validateSessionId(record.id);
+  if (record.runtimeGeneration != null) validateRuntimeGeneration(record.runtimeGeneration);
   if (typeof record.agent !== 'string' || typeof record.command !== 'string' || typeof record.cwd !== 'string') throw new Error(`Incomplete execution session record: ${path}`);
   if (!EXECUTION_SESSION_STATES.includes(record.state)) throw new Error(`Invalid execution session state: ${record.state}`);
   return record;
@@ -530,7 +535,7 @@ async function syncHostRecord(root, record) {
   }
 }
 
-function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false }) {
+function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false, conversationId }) {
   const contract = getAdapterContract(adapter);
   if (contract) {
     if (!contract.capabilities.persistentSession) {
@@ -542,7 +547,7 @@ function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'e
       });
     }
     return validateLaunchResult(
-      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace }),
+      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace, ...(conversationId !== undefined ? { conversationId } : {}) }),
       { kind: 'persistent-session' },
     );
   }
@@ -673,8 +678,9 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false, conversationId } = {}) {
     const repository = sessionRoot(root);
+    if (conversationId !== undefined && (agent !== 'codex' || resolved.adapter !== 'codex-cli' || initialPrompt || reuseExisting)) throw new Error('Native resume requires a fresh owned Codex runtime without an initial prompt.');
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
         recoverable: false,
@@ -711,7 +717,7 @@ export class ExecutionSessionManager {
       appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
       return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
-    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace });
+    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace, conversationId });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
     // starting the owned host. This preserves adapter-specific Windows
@@ -732,6 +738,8 @@ export class ExecutionSessionManager {
     const createdAt = now();
     const record = {
       id,
+      runtimeGeneration: randomUUID(),
+      adapter: resolved.adapter || contract?.id || null,
       agent,
       command: resolved.command,
       resolvedCommand: checked.resolvedCommand || launch.resolvedCommand || launch.command,
@@ -792,6 +800,8 @@ export class ExecutionSessionManager {
           type: 'init',
           session: {
             id,
+            runtimeGeneration: record.runtimeGeneration,
+            adapter: record.adapter,
             agent,
             command: resolved.command,
             resolvedCommand: record.resolvedCommand,

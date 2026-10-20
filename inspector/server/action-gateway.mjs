@@ -46,6 +46,17 @@ const ACTION_DEFINITIONS = Object.freeze({
     operation: 'workspaceTaskContinue', command: 'workspace.task.continue',
     params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
   },
+  workspaceTaskResume: {
+    operation: 'workspaceTaskResume', command: 'workspace.task.resume',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 },
+      conversationId: { type: 'string', max: 36 }, language: { type: 'string', max: 16, enum: ['en', 'zh-CN'] } },
+  },
+  workspaceTaskConfirmConversation: {
+    operation: 'workspaceTaskConfirmConversation', command: 'workspace.task.conversation.confirm',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 },
+      conversationId: { type: 'string', required: true, max: 36 }, confirmed: { type: 'boolean', required: true },
+      sessionId: { type: 'string', required: true, max: 128 }, runtimeGeneration: { type: 'string', required: true, max: 36 } },
+  },
   workspaceCustomSettingsSave: {
     operation: 'workspaceCustomSettingsSave', command: 'workspace.custom.settings.save',
     params: { custom: { type: 'object', required: true, max: 64 * 1024 } },

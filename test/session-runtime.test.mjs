@@ -212,6 +212,8 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.equal(opened.session.command, command);
     assert.equal(opened.session.cwd, realpathSync.native(root));
     assert.ok(opened.session.pid);
+    assert.match(opened.session.runtimeGeneration, /^[0-9a-f-]{36}$/);
+    assert.equal(readRecord(root, opened.session.id).runtimeGeneration, opened.session.runtimeGeneration);
 
     const status = await runtimeSessionStatus({ root, sessionId: opened.session.id });
     assert.ok(['running', 'idle', 'busy'].includes(status.session.state));
@@ -227,6 +229,9 @@ test('Execution Session supports open, write, bounded read, inspect, status, and
     assert.match(read.output, /persistent-fixture/);
     const closed = await runtimeSessionClose({ root, sessionId: opened.session.id, timeoutMs: 500 });
     assert.ok(['exited', 'failed'].includes(closed.session.state));
+    assert.equal(closed.session.runtimeGeneration, opened.session.runtimeGeneration);
+    assert.equal(readRecord(root, opened.session.id).runtimeGeneration, opened.session.runtimeGeneration);
+    assert.equal(readRecord(root, opened.session.id).adapter, 'antigravity-cli');
     const eventTypes = readRuntimeEvents(root, { sessionId: opened.session.id, limit: 50 }).map(event => event.type);
     assert.ok(eventTypes.includes('SESSION_STARTING'));
     assert.ok(eventTypes.includes('SESSION_STARTED'));
