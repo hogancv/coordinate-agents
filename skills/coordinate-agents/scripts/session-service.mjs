@@ -43,6 +43,7 @@ export async function runtimeSessionOpen(input = {}) {
     taskId: input.taskId || null,
     subtaskId: input.subtaskId || null,
     workspace: input.workspace === true,
+    ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
     reuseExisting: input.reuseExisting !== false,
   });
   let session = opened.session;
