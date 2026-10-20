@@ -350,3 +350,61 @@ function runChild(code) {
     child.once('error', reject); child.once('close', code => resolve({ code, stdout, stderr, pid: child.pid }));
   });
 }
+
+test('a suspended creator retains its unpublished claim beyond 500ms without overlapping critical sections', {timeout:12000}, async t => {
+  const f = fixture(t), bus = join(f.root, '.agent-bus');
+  const config = pathToFileURL(join(process.cwd(), 'skills/coordinate-agents/scripts/config.mjs')).href;
+  const publish = join(f.root, 'publish-owner'), release = join(f.root, 'release-workers');
+  const common = `import fs from 'node:fs'; import {join} from 'node:path';
+    import {acquireConfigLock} from ${JSON.stringify(config)};
+    const bus=${JSON.stringify(bus)}, release=${JSON.stringify(release)};
+    const wait=path=>{while(!fs.existsSync(path))Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10)};
+    const say=text=>fs.writeSync(1,text+'\\n');`;
+  const workers = [];
+  function launch(code) {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', code], {stdio:['ignore','pipe','pipe'],windowsHide:true});
+    const worker = {child, output:'', error:'', done:null};
+    child.stdout.on('data', data => {worker.output+=data}); child.stderr.on('data',data=>{worker.error+=data});
+    worker.done = new Promise((resolve,reject)=>{child.once('error',reject);child.once('close',code=>resolve(code))});
+    workers.push(worker); return worker;
+  }
+  async function until(worker, pattern) {
+    const deadline=Date.now()+5000;
+    while(Date.now()<deadline){if(pattern.test(worker.output))return; if(worker.child.exitCode!==null)break; await new Promise(done=>setTimeout(done,10))}
+    assert.fail(JSON.stringify({output:worker.output,error:worker.error}));
+  }
+  try {
+    const creator=launch(common+`
+      import {syncBuiltinESMExports} from 'node:module';
+      const mkdir=fs.mkdirSync, lock=join(bus,'locks','config');
+      fs.mkdirSync=(path,...args)=>{const result=mkdir(path,...args);if(path===lock){say('unpublished');wait(${JSON.stringify(publish)})}return result};
+      syncBuiltinESMExports();
+      const unlock=acquireConfigLock(bus);say('entered');wait(release);unlock();`);
+    await until(creator,/unpublished/);
+    await new Promise(done=>setTimeout(done,650));
+    process.kill(creator.child.pid,0); // The creator is alive, only publication is suspended.
+    const contender=launch(common+`
+      try{const unlock=acquireConfigLock(bus,{timeoutMs:180});say('entered');wait(release);unlock()}
+      catch(error){if(!error.message.includes('timeout'))throw error;say('blocked')}`);
+    await until(contender,/entered|blocked/);
+    writeFileSync(publish,'continue'); await until(creator,/entered/);
+    assert.match(contender.output,/blocked/,'both processes entered the critical section: '+JSON.stringify(workers.map(worker=>worker.output)));
+    writeFileSync(release,'release');
+    assert.deepEqual(await Promise.all(workers.map(worker=>worker.done)),[0,0]);
+  } finally {
+    for(const worker of workers)if(worker.child.exitCode===null)worker.child.kill();
+    await Promise.allSettled(workers.map(worker=>worker.done));
+  }
+});
+
+test('old ownerless, empty and malformed lock claims remain unavailable without proof of death', async t => {
+  const f=fixture(t),lock=join(f.root,'.agent-bus','locks','config');
+  const {reapDeadConfigOwner}=await import('../skills/coordinate-agents/scripts/config.mjs');
+  for(const owner of [null,'','{',JSON.stringify({owner:'unknown',pid:1,host:'foreign-host'})]){
+    mkdirSync(lock); if(owner!==null)writeFileSync(join(lock,'owner.json'),owner);
+    const old=new Date(Date.now()-60_000);utimesSync(lock,old,old);
+    assert.equal(reapDeadConfigOwner(lock),false,'unproved owner must not be reclaimed');
+    if(owner!==null)assert.equal(readFileSync(join(lock,'owner.json'),'utf8'),owner);
+    rmSync(lock,{recursive:true});
+  }
+});
