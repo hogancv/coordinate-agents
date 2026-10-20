@@ -44,3 +44,14 @@ test('native resume preserves configured options and appends only exact UUID wit
     assert.throws(() => new CodexCliAdapter({ command: process.execPath, args }).resolveSessionLaunch({ root: process.cwd(), conversationId: id }), /resume|argument|target/i);
   }
 });
+
+test('native metadata compares canonical project paths when JS realpath retains a Windows alias',async t=>{
+ const fs=(await import('node:fs')).default;const {syncBuiltinESMExports}=await import('node:module');
+ const native=fs.realpathSync.native,ordinary=fs.realpathSync;
+ const root=native(mkdtempSync(join(tmpdir(),'codex-native-path-'))),cwd=join(root,'project');mkdirSync(cwd);
+ const alias=cwd+'/.';const home=join(root,'home'),directory=join(home,'sessions');mkdirSync(directory,{recursive:true});
+ writeFileSync(join(directory,`rollout-test-${id}.jsonl`),JSON.stringify({type:'session_meta',payload:{id,cwd:alias,source:'cli'}})+'\n');
+ const preserving=value=>value===alias?alias:ordinary(value);preserving.native=native;t.mock.method(fs,'realpathSync',preserving);syncBuiltinESMExports();
+ try{assert.equal(conversations.readCodexConversation({root:cwd,codexHome:home,conversationId:id}).projectRoot,native(cwd));}
+ finally{t.mock.restoreAll();syncBuiltinESMExports();rmSync(root,{recursive:true,force:true});}
+});

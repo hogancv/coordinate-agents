@@ -12,8 +12,8 @@ export function codexConversationId(value) {
 // conversation a live TUI has actually loaded. Never use mtime or a "latest" ID.
 export function readCodexConversation({ root, conversationId, codexHome = process.env.CODEX_HOME || join(homedir(), '.codex') }) {
   const id = codexConversationId(conversationId);
-  const home = realpathSync(resolve(codexHome));
-  const projectRoot = realpathSync(root);
+  const home = realpathSync.native(resolve(codexHome));
+  const projectRoot = realpathSync.native(root);
   let visited = 0;
   const matches = [];
   function visit(directory, depth = 0) {
@@ -44,7 +44,7 @@ export function readCodexConversation({ root, conversationId, codexHome = proces
   } finally { closeSync(fd); }
   if (metadata.type !== 'session_meta' || metadata.payload?.id !== id) throw new Error('Codex native identity metadata does not match the exact UUID.');
   if (metadata.payload.source !== 'cli') throw new Error('Only a primary Codex CLI conversation can be resumed here.');
-  if (typeof metadata.payload.cwd !== 'string' || realpathSync(metadata.payload.cwd) !== projectRoot) throw new Error('Codex conversation belongs to a different project.');
+  if (typeof metadata.payload.cwd !== 'string' || realpathSync.native(metadata.payload.cwd) !== projectRoot) throw new Error('Codex conversation belongs to a different project.');
   return { conversationId: id, projectRoot, source: 'cli' };
 }
 
