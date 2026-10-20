@@ -33,6 +33,9 @@ export async function runtimeSessionOpen(input = {}) {
   const root = sessionInputRoot(input);
   const agent = `${input.agent || ''}`.trim().toLowerCase();
   const resolution = await resolveConfiguredSessionAgent(root, agent);
+  if (input.conversationId !== undefined && (agent !== 'codex' || resolution.resolved.adapter !== 'codex-cli')) {
+    throw new Error('Native conversation resume requires the built-in Codex CLI adapter.');
+  }
   const opened = await getExecutionSessionManager().open({
     root,
     agent,

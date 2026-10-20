@@ -24,6 +24,10 @@ function receipt(cooperation) {
 // Resolve only the recorded pair; never fall back to another task's Session.
 // The fifth argument remains the injectable API used by existing callers.
 export async function workspaceMessage(root, taskId, operation, value, api = DEFAULT_API, options = {}) {
+  const caller = options.caller || (process.env.COORDINATE_AGENTS_SESSION_ID ? {
+    taskId: process.env.COORDINATE_AGENTS_TASK_ID, slot: process.env.COORDINATE_AGENTS_SLOT,
+    sessionId: process.env.COORDINATE_AGENTS_SESSION_ID, runtimeGeneration: process.env.COORDINATE_AGENTS_RUNTIME_GENERATION,
+  } : undefined);
   if (!['send', 'read', 'wait', 'report', 'changes'].includes(operation)) throw new Error(USAGE);
   if (operation === 'changes') {
     await api.readWorkspaceTask(root, taskId); // Validate the task in this root; no Session or cooperation writes.
@@ -31,7 +35,7 @@ export async function workspaceMessage(root, taskId, operation, value, api = DEF
   }
   if (operation === 'report') {
     const status = `${value || ''}`.toUpperCase().replaceAll('-', '_');
-    const cooperation = await api.reportWorkspaceTask(root, taskId, status, options.roundId, options.summary ?? '');
+    const cooperation = await api.reportWorkspaceTask(root, taskId, status, options.roundId, options.summary ?? '', { caller });
     return { ok: true, reported: true, ...cooperation };
   }
   if (operation === 'send' && (typeof value !== 'string' || !value.trim() || Buffer.byteLength(value) > 64 * 1024)) throw new Error('Instruction must contain 1–65536 bytes.');
@@ -76,7 +80,7 @@ export async function workspaceMessage(root, taskId, operation, value, api = DEF
       } catch (error) {
         throw new Error(`Dispatch write failed; input may have been partially sent. Do not resend automatically. ${error.message}`);
       }
-    });
+    }, { caller });
     // Sending starts a new response window at the stream head. A normal read
     // cursor only acknowledges the history page that was actually returned.
     return { ok: true, sent: true, sessionId,

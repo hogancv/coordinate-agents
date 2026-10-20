@@ -51,7 +51,9 @@ export class CodexCliAdapter extends AgentAdapter {
     if (conversationId !== undefined) {
       codexConversationId(conversationId);
       if (initialPrompt) throw new Error('Native Codex resume cannot replay an initial prompt.');
-      assertCodexResumeArguments(configuredArgs);
+      // A configured Node entry script is a wrapper prefix, not a CLI prompt.
+      const nodePrefix = /(?:^|[\\/])node(?:\.exe)?$/i.test(command) && /\.[cm]?js$/i.test(configuredArgs[0] || '') ? 1 : 0;
+      assertCodexResumeArguments(configuredArgs.slice(nodePrefix));
     }
     const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
     const args = configuredArgs
