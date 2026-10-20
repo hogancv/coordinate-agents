@@ -1,14 +1,18 @@
+import { readNotificationSettings } from '../../skills/coordinate-agents/scripts/workspace-notifications.mjs';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, lstatSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, join, resolve } from 'node:path';
 import { assertSafePath, readConfig } from '../../skills/coordinate-agents/scripts/config.mjs';
 import { readUserConfig, resolveAgentConfig } from '../../skills/coordinate-agents/scripts/user-config.mjs';
-import { runtimeSessionRead } from '../../skills/coordinate-agents/scripts/session-service.mjs';
+import { runtimeSessionRead, runtimeSessionSubscribe } from '../../skills/coordinate-agents/scripts/session-service.mjs';
 import { readWorkspaceTask, readWorkspaceTasks } from '../../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { assertWorkspaceSession } from '../../skills/coordinate-agents/scripts/workspace-services.mjs';
 import { redactOutput } from '../../skills/coordinate-agents/adapters/executable.mjs';
 import { readRuntimeEvents } from '../../skills/coordinate-agents/scripts/runtime-events.mjs';
+import { readGitChanges, readGitDiff } from '../../skills/coordinate-agents/scripts/workspace-git-changes.mjs';
+import { readWorkspaceHealth } from './workspace-health.mjs';
+import { readCustomWorkspaceConfig } from '../../skills/coordinate-agents/scripts/workspace-custom-config.mjs';
 const MAX_EVENT_DETAILS = 4 * 1024;
 const MAX_TERMINAL_READ_BYTES = 32 * 1024;
 const MAX_TERMINAL_READ_LINES = 200;
@@ -64,7 +68,7 @@ function readCodexModels() {
 }
 
 
-function readWorkspaceSettings(root) {
+function readWorkspaceSettings(root, { forDetection = false } = {}) {
   const bus = busFor(root);
   let projectAgents = [];
   try {
@@ -84,11 +88,11 @@ function readWorkspaceSettings(root) {
     try {
       const resolved = resolveAgentConfig(projectAgent, userConfig);
       return [id, {
-        command: safeWorkspaceCommand(resolved.command, fallback),
+        command: forDetection ? resolved.command || fallback : safeWorkspaceCommand(resolved.command, fallback),
         adapter: resolved.adapter || adapter,
         source: resolved.commandSource || 'adapter-default',
         args: resolved.args || [],
-        ...(id === 'codex' ? { models: readCodexModels() } : {}),
+        ...(id === 'codex' && !forDetection ? { models: readCodexModels() } : {}),
         argsSource: resolved.argsSource,
       }];
     } catch {
@@ -163,9 +167,10 @@ async function readSessionOutput(root, sessionId, {
   return {
     session,
     output: {
-      output: redactOutput(output, MAX_TERMINAL_READ_BYTES),
+      output,
       nextCursor: Number.isInteger(result.nextCursor) ? result.nextCursor : null,
       truncated: result.truncated === true,
+      hasMore: result.hasMore === true,
     },
   };
 }
@@ -175,13 +180,25 @@ export function createWorkspaceData(root) {
   const repository = canonicalRoot(root);
   return {
     root: repository,
+    readGitChanges: () => readGitChanges(repository),
+    readGitDiff: path => readGitDiff(repository, path),
     readRepository: () => repositoryFacts(repository),
-    readWorkspaceSettings: () => readWorkspaceSettings(repository),
+    readWorkspaceSettings: () => ({ ...readWorkspaceSettings(repository), custom: readCustomWorkspaceConfig(repository), notifications: readNotificationSettings(repository) }),
+    async readWorkspaceHealth(workspaceTaskId = null) {
+      const tasks = workspaceTaskId ? [await readWorkspaceTask(repository, workspaceTaskId)] : await readWorkspaceTasks(repository);
+      return readWorkspaceHealth({ root: repository, settings: readWorkspaceSettings(repository, { forDetection: true }),
+        workspaceTask: workspaceTaskId ? tasks[0] : null,
+        sessions: tasks.filter(task => !task.archivedAt && task.status !== 'CLOSED').flatMap(task => Object.values(task.sessions)) });
+    },
     readWorkspaceTasks: () => readWorkspaceTasks(repository),
     readWorkspaceTask: id => readWorkspaceTask(repository, id),
     async readSessionOutput(sessionId, options) {
       await assertWorkspaceSession({ root: repository, sessionId });
       return readSessionOutput(repository, sessionId, options);
+    },
+    async subscribeSessionOutput(sessionId, options) {
+      await assertWorkspaceSession({ root: repository, sessionId });
+      return runtimeSessionSubscribe({ root: repository, sessionId, ...options });
     },
     async readSessions() {
       const tasks = await readWorkspaceTasks(repository);

@@ -17,9 +17,16 @@ import { redactOutput } from '../../skills/coordinate-agents/adapters/executable
 const workspaceWebRoot = resolve(fileURLToPath(new URL('../web-workspace', import.meta.url)));
 const WORKSPACE_STATIC_FILES = new Map([
   ['/index.html', { file: 'index.html', type: 'text/html; charset=utf-8' }],
+  ['/review-feedback.mjs', { file: 'review-feedback.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/git-changes.mjs', { file: 'git-changes.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/i18n.mjs', { file: 'i18n.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/app.js', { file: 'app.js', type: 'text/javascript; charset=utf-8' }],
+  ['/collaboration-health.mjs', { file: 'collaboration-health.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/collaboration-timeline.mjs', { file: 'collaboration-timeline.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/composer-model.mjs', { file: 'composer-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/custom-terminal-model.mjs', { file: 'custom-terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/terminal-model.mjs', { file: 'terminal-model.mjs', type: 'text/javascript; charset=utf-8' }],
+  ['/terminal-stream.mjs', { file: 'terminal-stream.mjs', type: 'text/javascript; charset=utf-8' }],
   ['/styles.css', { file: 'styles.css', type: 'text/css; charset=utf-8' }],
   ['/vendor/xterm.js', { file: 'vendor/xterm.js', type: 'text/javascript; charset=utf-8' }],
   ['/vendor/xterm.css', { file: 'vendor/xterm.css', type: 'text/css; charset=utf-8' }],
@@ -72,7 +79,7 @@ function parseByteLimit(value, fallback = 32 * 1024) {
 function parseSequence(value, fallback = null) {
   if (value === null || value === undefined || value === '') return fallback;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function eventOptions(url, request = null) {
@@ -144,6 +151,70 @@ function apiError(response, error) {
   });
 }
 
+async function streamTerminal(request, response, data, sessionId, cursor) {
+  const abort = new AbortController();
+  let subscription = null;
+  let closed = false;
+  let heartbeat = null;
+  let blockedTimer = null;
+  const finish = () => {
+    if (closed) return;
+    closed = true;
+    abort.abort();
+    subscription?.();
+    clearInterval(heartbeat);
+    clearTimeout(blockedTimer);
+  };
+  response.once('close', finish);
+  const start = () => {
+    if (response.headersSent) return;
+    response.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+    response.flushHeaders();
+    // Heartbeats keep intermediaries alive; output is only pushed by Host events.
+    heartbeat = setInterval(() => {
+      if (!closed && response.writableLength === 0) response.write(': keepalive\n\n');
+    }, 15_000);
+    heartbeat.unref();
+  };
+  try {
+    subscription = await data.subscribeSessionOutput(sessionId, {
+      cursor, signal: abort.signal,
+      onEvent(message) {
+        if (closed) return false;
+        start();
+        const output = message.output;
+        const id = Number.isSafeInteger(output?.nextCursor) ? `id: ${output.nextCursor}\n` : '';
+        // Encode PTY bytes only inside JSON, never as SSE protocol fields.
+        let frame = '';
+        if (output?.truncated) frame += `event: terminal-gap\ndata: ${JSON.stringify({ truncated: true })}\n\n`;
+        frame += `${id}event: ${message.event}\ndata: ${JSON.stringify(message)}\n\n`;
+        const writable = response.write(frame);
+        if (message.event === 'terminal-state' && ['exited', 'failed'].includes(message.session?.state)) {
+          response.end(); finish(); return false;
+        }
+        if (!writable) {
+          // Pause IPC as well as HTTP. Neither layer queues unbounded output.
+          blockedTimer ||= setTimeout(() => { response.destroy(); finish(); }, 5_000);
+          blockedTimer.unref();
+          response.once('drain', () => {
+            clearTimeout(blockedTimer); blockedTimer = null;
+            subscription?.resume?.();
+          });
+        }
+        return writable;
+      },
+      onError() { response.destroy(); finish(); },
+    });
+    if (closed) subscription(); else start();
+  } catch (error) {
+    if (!closed) {
+      if (response.headersSent) response.destroy(); else apiError(response, error);
+      finish();
+    }
+  }
+}
+
 export function createLocalServer({
   root,
   dataFactory = createWorkspaceData,
@@ -210,12 +281,25 @@ export function createLocalServer({
     }
 
     try {
+      if (ui === 'workspace' && (pathname === '/api/git-changes' || pathname === '/api/git-changes/diff')) {
+        if (!workspaceRequestAuthorized(request, capability)) {
+          json(response, 403, { error: 'Git changes require an authorized local request.' }); return;
+        }
+        const result = pathname.endsWith('/diff')
+          ? await data.readGitDiff(url.searchParams.get('path')) : await data.readGitChanges();
+        json(response, result.ok ? 200 : result.code === 'GIT_INVALID_PATH' || result.code === 'GIT_FILE_NOT_CHANGED' ? 400 : 503, result);
+        return;
+      }
       if (pathname === '/api/repository' && typeof data.readRepository === 'function') {
         json(response, 200, data.readRepository());
         return;
       }
       if (ui === 'workspace' && pathname === '/api/workspace-settings' && typeof data.readWorkspaceSettings === 'function') {
         json(response, 200, await data.readWorkspaceSettings());
+        return;
+      }
+      if (ui === 'workspace' && pathname === '/api/workspace-health' && typeof data.readWorkspaceHealth === 'function') {
+        json(response, 200, await data.readWorkspaceHealth(url.searchParams.get('workspaceTaskId')));
         return;
       }
       if (ui === 'workspace' && pathname === '/api/workspace-tasks' && typeof data.readWorkspaceTasks === 'function') {
@@ -255,16 +339,27 @@ export function createLocalServer({
       }
       if (ui === 'workspace' && pathname.startsWith('/api/sessions/')) {
         const suffix = pathname.slice('/api/sessions/'.length);
-        const match = /^([^/]+)\/read$/.exec(suffix);
+        const match = /^([^/]+)\/(read|stream)$/.exec(suffix);
         if (!match) {
           json(response, 404, { error: 'Workspace Session endpoint not found.' });
           return;
+        }
+        if (!workspaceRequestAuthorized(request, capability)) {
+          json(response, 403, { error: 'Terminal access requires an authorized local request.' }); return;
         }
         let sessionId;
         try {
           sessionId = decodeURIComponent(match[1]);
         } catch {
           json(response, 400, { error: 'Invalid Session id.' });
+          return;
+        }
+        if (match[2] === 'stream') {
+          if (typeof data.subscribeSessionOutput !== 'function') {
+            json(response, 404, { error: 'Workspace Session streaming is unavailable.' }); return;
+          }
+          await streamTerminal(request, response, data, sessionId,
+            parseSequence(url.searchParams.get('cursor'), parseSequence(request.headers['last-event-id'], null)));
           return;
         }
         if (typeof data.readSessionOutput !== 'function') {

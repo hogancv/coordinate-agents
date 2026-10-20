@@ -8,6 +8,32 @@ import { pathToFileURL } from 'node:url';
 import { startWorkspace } from './support/workspace-server.mjs';
 
 const repo = resolve('.');
+test('custom terminal modules ship in the precise package whitelist and UI helper is served', async () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  for (const file of ['inspector/web-workspace/custom-terminal-model.mjs', 'skills/coordinate-agents/scripts/workspace-custom-config.mjs']) assert.ok(manifest.files.includes(file), file);
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'custom-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try { assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/custom-terminal-model.mjs`)).status, 200); }
+  finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
+test('the Web server serves the dictionary imported by app.js as a JavaScript module', async () => {
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'dictionary-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try {
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const app = await (await fetch(`${base}/app.js`)).text();
+    const specifier = app.match(/import \{ I18N \} from ['"]([^'"]+)['"]/)[1];
+    const response = await fetch(new URL(specifier, `${base}/app.js`));
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /javascript/);
+    const { I18N } = await import(`data:text/javascript;base64,${Buffer.from(await response.text()).toString('base64')}`);
+    assert.equal(I18N.en['terminal.live'], '● Live');
+    assert.equal(I18N.zh['terminal.live'], '● 实时');
+  } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
+
 test('npm CLI help loads no Legacy runtime', () => {
   const temporary = mkdtempSync(join(tmpdir(), 'web-imports-'));
   try {
@@ -63,11 +89,34 @@ test('artifact loader runs from a temporary directory containing spaces', async 
 
 test('HTTP read defaults preserve bounded terminal output without query parameters', async () => {
   const { createLocalServer } = await import('../inspector/server/http-server.mjs');
-  const server = createLocalServer({ ui: 'workspace', data: { readSessionOutput: async (_id, options) => options } });
+  const server = createLocalServer({ ui: 'workspace', capability: 'read-test', data: { readSessionOutput: async (_id, options) => options } });
   await new Promise(done => server.listen(0, '127.0.0.1', done));
   try {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/sessions/session-fixture/read`);
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/sessions/session-fixture/read`, { headers: { 'x-coordinate-agents-capability': 'read-test' } });
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { cursor: null, maxLines: 200, maxBytes: 32768 });
   } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
+
+test('review helper ships in the explicit whitelist and is served as JavaScript', async () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  assert.ok(manifest.files.includes('inspector/web-workspace/review-feedback.mjs'));
+  const { createLocalServer } = await import('../inspector/server/http-server.mjs');
+  const server = createLocalServer({ ui: 'workspace', capability: 'review-test', data: {} });
+  await new Promise(done => server.listen(0, '127.0.0.1', done));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/review-feedback.mjs`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), /javascript/);
+    const helpers = await import(`data:text/javascript;base64,${Buffer.from(await response.text()).toString('base64')}`);
+    assert.equal(helpers.REVIEW_MAX_LINES, 40);
+    assert.equal(helpers.REVIEW_MAX_BYTES, 8192);
+  } finally { await new Promise(done => { server.close(done); server.closeAllConnections?.(); }); }
+});
+
+test('native notification core and trusted Windows script ship in the precise npm whitelist', () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  for (const name of ['workspace-notification-config.mjs', 'workspace-notifications.mjs', 'workspace-notifications-windows.ps1']) {
+    assert.ok(manifest.files.includes(`skills/coordinate-agents/scripts/${name}`), name);
+  }
 });

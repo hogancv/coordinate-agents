@@ -1,3 +1,10 @@
+import { collaborationHealth, mountCollaborationHealth } from './collaboration-health.mjs';
+import { mountCollaborationTimeline } from './collaboration-timeline.mjs';
+import { I18N } from './i18n.mjs';
+import { customTerminalDefaults, customTerminalPrompt, sameCustomPromptTarget } from './custom-terminal-model.mjs';
+import { consumeTerminalStream, deliverTerminalOutput } from './terminal-stream.mjs';
+import { mountChangesDrawer } from './git-changes.mjs';
+import { reviewTarget, sameReviewTarget, reviewTargetError, reviewError, reviewSessionInput } from './review-feedback.mjs';
 import {
   isActiveTerminalSession,
   selectTerminalPanes,
@@ -17,206 +24,16 @@ const REFRESH_MS = 5_000;
 const UTF8_ENCODER = new TextEncoder();
 const WORKSPACE_SETTINGS_ENDPOINT = '/api/workspace-settings';
 const DEFAULT_TERMINAL_COMMANDS = Object.freeze({ codex: 'codex', antigravity: 'agy' });
-
-const I18N = {
-  en: {
-    'archive.task': 'Archive conversation',
-    'archive.project': 'Archive project and conversations',
-    'archive.title': 'Archived conversations',
-    'archive.hint': 'Permanently clear archived conversation records across all projects. Project source files are preserved.',
-    'archive.clear': 'Clear archived conversations',
-    'archive.summary': '{tasks} conversations · {projects} projects archived',
-    'archive.unavailable': '{count} project directories unavailable',
-    'archive.done': 'Archived.',
-    'archive.cleared': 'Cleared {count} archived conversations.',
-    'archive.partial': 'Some project directories could not be cleared.',
-    'archive.failed': 'Archive operation failed.',
-    'project.none': 'No active project',
-    'empty.archivedTitle': 'All projects are archived',
-    'empty.archivedBody': 'Add a project to continue, or open settings to clear archived conversations.',
-    'zen.enter': 'Zen mode',
-    'zen.exit': 'Exit Zen mode',
-    'theme.toDark': 'Switch to dark mode',
-    'theme.toLight': 'Switch to light mode',
-    'repo.label': 'CURRENT PROJECT',
-    'project.switch': 'Switch project',
-    'project.new': 'New project',
-    'repo.loading': 'Loading repository…',
-    'repo.details': 'Show repository details',
-    'repo.hideDetails': 'Hide repository details',
-    'repo.branch': 'Branch',
-    'repo.commit': 'Commit',
-    'repo.root': 'Root',
-    'workspace.eyebrow': 'DUAL-TERMINAL WORKSPACE',
-    'workspace.title': 'Workspace',
-    'task.new': 'New task',
-    'task.list': 'Workspace tasks',
-    'task.none': 'No workspace tasks yet.',
-    'task.search': 'Search tasks or projects',
-    'task.searchClear': 'Clear search',
-    'task.searchNone': 'No matching tasks found',
-    'task.searchUnloaded': 'Tasks in {count} projects are not loaded; only loaded/cached tasks are searched.',
-    'task.notLoaded': 'Tasks not loaded',
-    'task.restart': 'Restart pair',
-    'task.closeAll': 'Close all terminals',
-    'task.allClosed': 'All workspace terminals closed.',
-    'settings.model': 'Codex model',
-    'settings.effort': 'Reasoning effort',
-    'settings.default': 'Use default',
-    'settings.modelHint': 'Choose a model and reasoning effort. Applies to new tasks and restarts.',
-    'task.close': 'Close task',
-    'task.closed': 'Task closed',
-    'task.created': 'New dual-terminal task created.',
-    'task.restarted': 'The terminal pair was restarted.',
-    'task.error': 'Task error',
-    'settings.open': 'Terminal settings',
-    'settings.eyebrow': 'TERMINAL SETTINGS',
-    'settings.title': 'Terminal startup commands',
-    'settings.body': 'New tasks and restarts use these saved commands.',
-    'settings.codex': 'Codex',
-    'settings.antigravity': 'Antigravity',
-    'settings.hint': 'Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.',
-    'settings.cancel': 'Cancel',
-    'settings.save': 'Save settings',
-    'settings.saving': 'Saving…',
-    'settings.saved': 'Terminal startup commands saved.',
-    'settings.loadError': 'Could not load terminal settings.',
-    'settings.saveError': 'Could not save terminal settings.',
-    'settings.invalid': 'Both startup commands are required and must be single-line executable names or paths.',
-    'empty.title': 'Start a dual-terminal task',
-    'empty.body': 'Create a task to open fresh Codex and Antigravity terminals. Enter the requirement directly in the Codex terminal.',
-    'empty.failed': 'This task did not start both terminals. Review the error, then restart the pair.',
-    'status.live': 'localhost · live',
-    'status.starting': 'Starting',
-    'status.running': 'Running',
-    'status.degraded': 'One terminal unavailable',
-    'status.exited': 'Exited',
-    'status.closed': 'Closed',
-    'status.error': 'Failed',
-    'terminal.codex': 'Codex',
-    'terminal.antigravity': 'Antigravity',
-    'terminal.planner': 'planner · reviewer',
-    'terminal.implementer': 'implementer',
-    'terminal.connecting': 'Connecting…',
-    'terminal.unavailable': 'No Session is bound to this task.',
-    'terminal.closed': 'Terminal is closed.',
-    'terminal.inputError': 'Terminal input could not be sent.',
-    'terminal.resizeError': 'Terminal resize could not be applied.',
-    'terminal.split': 'Resize terminals (double-click to reset)',
-    'terminal.focus': 'Focus terminal',
-    'terminal.restore': 'Restore split view',
-    'terminal.switchFocus': 'Focus {terminal}',
-    'terminal.nativeBackend': 'Native PTY',
-    'terminal.fallbackBackend': 'stdio fallback',
-    'terminal.unknownBackend': 'Backend unknown',
-    'action.refreshError': 'Workspace refresh failed.',
-    'action.createError': 'Could not create the dual-terminal task.',
-    'action.closeError': 'Could not close the task pair.',
-    'action.restartError': 'Could not restart the task pair.',
-    'action.retry': 'Retry',
-  },
-  zh: {
-    'archive.task': '归档对话',
-    'archive.project': '归档项目及其对话',
-    'archive.title': '已归档对话',
-    'archive.hint': '永久清除所有项目的已归档对话记录。项目源码文件会保留。',
-    'archive.clear': '一键清除归档对话',
-    'archive.summary': '已归档 {tasks} 个对话 · {projects} 个项目',
-    'archive.unavailable': '有 {count} 个项目目录不可用',
-    'archive.done': '已归档。',
-    'archive.cleared': '已清除 {count} 个归档对话。',
-    'archive.partial': '部分项目目录无法访问，未完成全部清除。',
-    'archive.failed': '归档操作失败。',
-    'project.none': '暂无活动项目',
-    'empty.archivedTitle': '所有项目均已归档',
-    'empty.archivedBody': '新增项目继续工作，或进入设置清除已归档对话。',
-    'zen.enter': '禅模式',
-    'zen.exit': '退出禅模式',
-    'theme.toDark': '切换为深色模式',
-    'theme.toLight': '切换为浅色模式',
-    'repo.label': '当前项目',
-    'project.switch': '切换项目',
-    'project.new': '新增项目',
-    'repo.loading': '正在读取仓库…',
-    'repo.details': '显示仓库详情',
-    'repo.hideDetails': '隐藏仓库详情',
-    'repo.branch': '分支',
-    'repo.commit': '提交',
-    'repo.root': '路径',
-    'workspace.eyebrow': '双终端工作台',
-    'workspace.title': '工作台',
-    'task.new': '新建任务',
-    'task.list': '工作台任务',
-    'task.none': '还没有工作台任务。',
-    'task.search': '搜索任务或项目',
-    'task.searchClear': '清空搜索',
-    'task.searchNone': '没有找到匹配的任务',
-    'task.searchUnloaded': '有 {count} 个项目的任务尚未加载；仅搜索已加载或缓存的任务。',
-    'task.notLoaded': '任务尚未加载',
-    'task.restart': '重启终端组',
-    'task.close': '关闭任务',
-    'task.closed': '任务已关闭',
-    'task.created': '新的双终端任务已创建。',
-    'task.restarted': '终端组已重启。',
-    'task.error': '任务错误',
-    'settings.open': '终端设置',
-    'settings.eyebrow': '终端设置',
-    'task.closeAll': '关闭所有终端',
-    'task.allClosed': '所有工作台终端已关闭。',
-    'settings.model': 'Codex 模型',
-    'settings.effort': '推理强度',
-    'settings.default': '使用默认设置',
-    'settings.modelHint': '选择模型和推理强度，新建任务或重启终端组后生效。',
-    'settings.title': '两个终端的启动命令',
-    'settings.body': '新建任务和重启终端组都会使用这里保存的命令。',
-    'settings.codex': 'Codex',
-    'settings.antigravity': 'Antigravity',
-    'settings.hint': '填写可执行文件名或绝对路径，例如 agy-proxy；不要填写 shell 参数。',
-    'settings.cancel': '取消',
-    'settings.save': '保存设置',
-    'settings.saving': '保存中…',
-    'settings.saved': '两个终端的启动命令已保存。',
-    'settings.loadError': '无法读取终端设置。',
-    'settings.saveError': '无法保存终端设置。',
-    'settings.invalid': '两个启动命令都不能为空，并且必须是单行的可执行文件名或路径。',
-    'empty.title': '开始一个双终端任务',
-    'empty.body': '新建任务会打开全新的 Codex 与 Antigravity 终端，请直接在 Codex 终端中输入需求。',
-    'empty.failed': '这项任务没有成功启动两个终端，请检查错误后重启终端组。',
-    'status.live': 'localhost · 已连接',
-    'status.starting': '启动中',
-    'status.running': '运行中',
-    'status.degraded': '有一个终端不可用',
-    'status.exited': '已退出',
-    'status.closed': '已关闭',
-    'status.error': '失败',
-    'terminal.codex': 'Codex',
-    'terminal.antigravity': 'Antigravity',
-    'terminal.planner': '规划 · 审查',
-    'terminal.implementer': '实现者',
-    'terminal.connecting': '连接中…',
-    'terminal.unavailable': '此任务没有绑定可用的 Session。',
-    'terminal.closed': '终端已关闭。',
-    'terminal.inputError': '终端输入发送失败。',
-    'terminal.resizeError': '终端尺寸调整失败。',
-    'terminal.split': '调整终端宽度（双击恢复均分）',
-    'terminal.focus': '聚焦终端',
-    'terminal.restore': '恢复分屏',
-    'terminal.switchFocus': '聚焦 {terminal}',
-    'terminal.nativeBackend': '原生 PTY',
-    'terminal.fallbackBackend': '已降级到 stdio',
-    'terminal.unknownBackend': '后端未知',
-    'action.refreshError': '工作台刷新失败。',
-    'action.createError': '无法创建双终端任务。',
-    'action.closeError': '无法关闭终端组。',
-    'action.restartError': '无法重启终端组。',
-    'action.retry': '重试',
-  },
-};
+const HEALTH_SEEN_KEY = 'coordinate-agents-workspace-onboarding-seen';
 
 const state = {
   projects: [],
   projectId: null,
   projectEpoch: 0,
+  reviewTaskEpoch: 0,
+  selectedTaskRequest: 0,
+  taskListRequest: 0,
+  reviewWriteTarget: null,
   projectTasks: new Map(),
   projectSelections: new Map(),
   expandedProjects: new Set(),
@@ -233,6 +50,7 @@ const state = {
   focusedTerminal: null,
   layoutFrame: null,
   actionBusy: false,
+  startupContinuing: new Set(),
   refreshTimer: null,
   taskTimer: null,
   pollTimer: null,
@@ -240,10 +58,60 @@ const state = {
   settings: { ...DEFAULT_TERMINAL_COMMANDS },
   settingsBusy: false,
   settingsOpen: false,
+  settingsTab: 'default',
+  notifications: null,
+  notificationBusy: false,
+  customSettings: customTerminalDefaults(),
+  customDrafts: new Map(),
+  createOpen: false,
+  createLoading: false,
+  createCommandEdited: { terminal1: false, terminal2: false },
+  promptTarget: null,
+  promptBusy: false,
+  health: null,
+  healthBusy: false,
+  healthError: false,
+  healthRequest: 0,
+  healthTaskId: null,
+  healthController: null,
+  healthOpen: false,
   archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
   contextTarget: null,
   contextTrigger: null,
 };
+
+const collaborationTimeline = mountCollaborationTimeline({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  onResize: () => updateTerminalLayout(),
+});
+
+const collaborationHealthView = mountCollaborationHealth({ document, t,
+  getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+  onChange: () => renderTaskList(),
+  onOpen: () => changesDrawer.close({ restoreFocus: false }),
+  onInspect: inspectCollaborationHealth,
+});
+
+const changesDrawer = mountChangesDrawer({ request: fetchJson, locale: () => state.locale, toast: showToast,
+  onOpen: () => collaborationHealthView.close({ restoreFocus: false }),
+  getTaskContext: getReviewTaskContext, sendToCodex: sendReviewToCodex });
+
+function inspectCollaborationHealth(kind, slot) {
+  if (kind === 'terminal') {
+    if (state.focusedTerminal !== slot) setTerminalFocus(slot);
+    state.terminalViews.get(slot)?.terminal?.focus();
+  }
+  if (kind === 'timeline') {
+    const timeline = document.querySelector('#collaboration-timeline');
+    document.querySelector('#timeline-round').value = 'current'; collaborationTimeline.update();
+    timeline.scrollIntoView?.({ block: 'nearest' }); document.querySelector('#timeline-round').focus();
+  }
+  if (kind === 'changes') {
+    const button = document.querySelector('#changes-button');
+    button.focus(); button.click();
+  }
+}
 
 const capability = document.querySelector('meta[name="coordinate-agents-capability"]')?.content || '';
 
@@ -419,7 +287,11 @@ function showToast(message, kind = 'info') {
 
 function setBusy(busy) {
   state.actionBusy = busy;
-  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'restart-task-button', 'close-all-terminals-button', 'refresh-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
+  if (busy) {
+    state.taskListRequest = (state.taskListRequest || 0) + 1;
+    state.selectedTaskRequest = (state.selectedTaskRequest || 0) + 1;
+  }
+  for (const id of ['new-task-button', 'empty-new-task', 'close-task-button', 'close-all-terminals-button', 'terminal-settings-button', 'archive-clear-button', 'project-switcher']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
@@ -430,6 +302,42 @@ function settingsError(message = '') {
   if (!element) return;
   element.hidden = !message;
   element.textContent = message;
+}
+
+function selectSettingsTab(tab, { focus = false } = {}) {
+  if (state.settingsBusy || state.actionBusy) return;
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const selected = tabs.find(button => button.dataset.settingsTab === tab);
+  if (!selected) return;
+  state.settingsTab = tab;
+  for (const button of tabs) {
+    const active = button === selected;
+    button.setAttribute('aria-selected', String(active));
+    button.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) panel.hidden = panel.dataset.settingsPanel !== tab;
+  for (const action of document.querySelectorAll('[data-settings-action]')) action.hidden = action.dataset.settingsAction !== tab;
+  const content = document.querySelector('.settings-panels');
+  if (content) content.scrollTop = 0;
+  settingsError();
+  if (focus) selected.focus();
+}
+
+function settingsTabKeydown(event) {
+  const tabs = [...document.querySelectorAll('[data-settings-tab]')];
+  const index = tabs.indexOf(event.currentTarget);
+  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+    : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  selectSettingsTab(tabs[next].dataset.settingsTab, { focus: true });
+}
+
+function bindSettingsTabs() {
+  for (const button of document.querySelectorAll('[data-settings-tab]')) {
+    button.addEventListener('click', () => selectSettingsTab(button.dataset.settingsTab));
+    button.addEventListener('keydown', settingsTabKeydown);
+  }
 }
 
 function renderModelChoices() {
@@ -464,6 +372,7 @@ function canEditProjectSettings() { return Boolean(state.projectId) && state.pro
 
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
+  for (const tab of document.querySelectorAll('[data-settings-tab]')) tab.disabled = busy;
   for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
@@ -474,6 +383,10 @@ function setSettingsBusy(busy) {
     const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
   }
   renderArchiveSummary();
+  setNotificationControlsBusy();
+  for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt', 'custom-settings-save']) {
+    const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
+  }
 }
 
 function closeSettings({ force = false } = {}) {
@@ -485,7 +398,7 @@ function closeSettings({ force = false } = {}) {
   document.querySelector('#terminal-settings-button')?.focus();
 }
 
-async function openSettings() {
+async function openSettings(tab = 'default') {
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   if (state.actionBusy || state.settingsBusy) return;
@@ -495,6 +408,9 @@ async function openSettings() {
   state.settingsOpen = true;
   settingsError();
   renderSettingsForm();
+  renderCustomSettings();
+  renderNotificationSettings();
+  selectSettingsTab(tab);
   dialog.hidden = false;
   setSettingsBusy(true);
   dialog.setAttribute('aria-busy', 'true');
@@ -505,6 +421,10 @@ async function openSettings() {
     else settingsError(archiveResult.reason?.message || t('settings.loadError'));
     if (settingsResult.status !== 'fulfilled') { settingsError(settingsResult.reason?.message || t('settings.loadError')); return; }
     const payload = settingsResult.value;
+    state.notifications = payload.notifications || null;
+    renderNotificationSettings();
+    state.customSettings = customTerminalDefaults(payload);
+    renderCustomSettings();
     state.settings = {
       models: payload?.codex?.models || [],
       effort: readCodexEffort(payload?.codex?.args || []),
@@ -521,7 +441,7 @@ async function openSettings() {
     if (projectId === state.projectId && epoch === state.projectEpoch) {
       dialog.removeAttribute('aria-busy');
       setSettingsBusy(false);
-      if (state.settingsOpen) document.querySelector('#codex-command')?.focus();
+      if (state.settingsOpen) document.querySelector(`#settings-tab-${state.settingsTab || 'default'}`)?.focus();
     }
   }
 }
@@ -573,6 +493,7 @@ function replaceCodexEffort(args, effort) {
 async function saveSettings(event) {
   event?.preventDefault();
   if (state.actionBusy || state.settingsBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
   const commands = {
     codex: `${document.querySelector('#codex-command')?.value || ''}`.trim(),
     antigravity: `${document.querySelector('#antigravity-command')?.value || ''}`.trim(),
@@ -592,19 +513,209 @@ async function saveSettings(event) {
   setSettingsBusy(true);
   settingsError();
   try {
-    await postAction('workspaceSettingsSave', { ...commands, args });
+    await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     state.settings = { ...state.settings, ...commands, model, effort, args };
-    closeSettings({ force: true });
     showToast(t('settings.saved'), 'success');
+    void checkWorkspaceHealth();
   } catch (error) {
     settingsError(error.payload?.error?.message || error.message || t('settings.saveError'));
   } finally {
-    setSettingsBusy(false);
     setBusy(false);
+    setSettingsBusy(false);
   }
 }
 
+function renderNotificationSettings() {
+  const config = state.notifications?.config || { enabled: false, events: { done: false, approved: true, failed: true } };
+  for (const key of ['enabled', 'done', 'approved', 'failed']) {
+    const field = document.querySelector(`#notifications-${key}`);
+    if (field) field.checked = key === 'enabled' ? config.enabled : config.events[key];
+  }
+  renderNotificationStatus();
+  setNotificationControlsBusy();
+}
+
+function renderNotificationStatus() {
+  const element = document.querySelector('#notifications-status');
+  if (!element) return;
+  const settings = state.notifications;
+  if (state.notificationBusy) element.textContent = t('notifications.testing');
+  else if (settings?.configError) element.textContent = t('notifications.configError');
+  else if (!settings?.capability?.supported) element.textContent = t('notifications.unsupported');
+  else if (settings?.lastResult?.status === 'accepted') element.textContent = t('notifications.accepted');
+  else if (settings?.lastResult?.reason) {
+    const reason = settings.lastResult.reason;
+    const key = reason === 'NOTIFICATIONS_DISABLED' ? 'disabledBySystem' : reason === 'COMMAND_TIMEOUT' ? 'timeout'
+      : reason === 'DEDUP_CAPACITY_REACHED' ? 'capacity' : 'unavailable';
+    element.textContent = t(`notifications.${key}`);
+  } else element.textContent = t('notifications.untested');
+}
+
+function setNotificationControlsBusy() {
+  const busy = state.settingsBusy || state.notificationBusy || !canEditProjectSettings();
+  for (const key of ['enabled', 'done', 'approved', 'failed', 'save', 'test']) {
+    const element = document.querySelector(`#notifications-${key}`);
+    if (element) element.disabled = busy || (key === 'test' && !state.notifications?.capability?.supported);
+  }
+}
+
+function notificationFormConfig() {
+  return { enabled: Boolean(document.querySelector('#notifications-enabled')?.checked),
+    events: Object.fromEntries(['done', 'approved', 'failed'].map(key => [key, Boolean(document.querySelector(`#notifications-${key}`)?.checked)])) };
+}
+
+async function saveNotificationSettings() {
+  if (state.actionBusy || state.settingsBusy || state.notificationBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  const notifications = notificationFormConfig();
+  setSettingsBusy(true); setNotificationControlsBusy(); settingsError();
+  try {
+    await postAction('workspaceNotificationsSave', { notifications }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.notifications = { ...state.notifications, config: notifications, configError: null };
+    renderNotificationStatus();
+    showToast(t('notifications.saved'), 'success');
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch) settingsError(error.payload?.error?.message || error.message || t('notifications.saveError'));
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) { setSettingsBusy(false); setNotificationControlsBusy(); }
+  }
+}
+
+async function sendNotificationTest() {
+  if (state.actionBusy || state.settingsBusy || state.notificationBusy || !canEditProjectSettings() || !state.notifications?.capability?.supported) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  state.notificationBusy = true;
+  setSettingsBusy(true); setNotificationControlsBusy(); renderNotificationStatus(); settingsError();
+  try {
+    const result = await postAction('workspaceNotificationsTest', {}, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.notifications = { ...state.notifications, lastResult: result.notification };
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch) settingsError(error.payload?.error?.message || error.message || t('notifications.unavailable'));
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) {
+      state.notificationBusy = false;
+      setSettingsBusy(false); setNotificationControlsBusy(); renderNotificationStatus();
+    }
+  }
+}
+
+function healthTerminal() {
+  const task = state.selectedTask?.id === state.selectedId ? state.selectedTask : null;
+  const sessions = (!task?.archivedAt && task?.status !== 'CLOSED' ? Object.values(task?.sessions || {}) : [])
+    .filter(session => (session.sessionId || session.id) && isActiveTerminalSession(session));
+  if (sessions.some(session => session.backend === 'stdio-fallback')) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
+  if (sessions.some(session => session.backend === 'node-pty')) return { status: 'ok', backend: 'node-pty' };
+  return { status: 'pending', backend: null,
+    ...(state.health?.checks?.node?.version?.startsWith('v18.') ? { reason: 'NODE18_STDIO_COMPATIBILITY' } : {}) };
+}
+
+function healthSummaryStatus() {
+  if (state.healthBusy || state.healthError || !state.health) return 'pending';
+  if (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null)) return 'pending';
+  const checks = { ...state.health.checks, terminal: healthTerminal() };
+  if (Object.values(checks).some(check => check.status === 'missing')) return 'missing';
+  if ((state.health.requiredChecks || ['node', 'git', 'codex', 'antigravity']).some(id => !checks[id] || checks[id].status === 'pending')) return 'pending';
+  return Object.values(checks).some(check => check.status === 'warning') ? 'warning' : 'ok';
+}
+
+function renderWorkspaceHealth() {
+  const button = document.querySelector('#workspace-health-button');
+  const panel = document.querySelector('#workspace-health-panel');
+  if (!button || !panel) return;
+  const status = healthSummaryStatus();
+  const symbols = { ok: '✓', warning: '!', missing: '×', pending: '○' };
+  const labels = { ok: 'health.ready', warning: 'health.warning', missing: 'health.missing', pending: 'health.pending' };
+  const summary = state.healthBusy ? t('health.loading') : state.healthError ? t('health.error') : t(labels[status]);
+  button.dataset.healthStatus = status;
+  button.setAttribute('aria-expanded', String(state.healthOpen));
+  button.title = t('health.open');
+  document.querySelector('#workspace-health-label').textContent = t('health.brand');
+  button.title = `${t('health.open')} · ${summary}`;
+  button.setAttribute('aria-label', button.title);
+  document.querySelector('#workspace-health-indicator').textContent = symbols[status];
+  panel.hidden = !state.healthOpen;
+  panel.setAttribute('aria-busy', String(state.healthBusy));
+  document.querySelector('#workspace-health-summary').textContent = summary;
+  document.querySelector('#workspace-health-close').setAttribute('aria-label', t('health.close'));
+  document.querySelector('#workspace-health-recheck').disabled = state.healthBusy || !state.projectId;
+  const rows = document.querySelector('#workspace-health-checks');
+  if (state.healthBusy || !state.health || (state.health.workspaceTaskId !== undefined && state.health.workspaceTaskId !== (state.selectedId || null))) { rows.innerHTML = ''; return; }
+  const names = { node: 'Node.js', git: 'Git', codex: 'Codex CLI', antigravity: 'Antigravity CLI', terminal1: t('custom.terminal1'), terminal2: t('custom.terminal2'), terminal: 'Terminal / PTY' };
+  const statusLabels = { ok: 'health.ok', warning: 'health.statusWarning', missing: 'health.statusMissing', pending: 'health.statusPending' };
+  rows.innerHTML = Object.entries({ ...state.health.checks, terminal: healthTerminal() }).map(([id, check]) => {
+    let hint = t('health.details');
+    if (check.status === 'missing') hint = t(id === 'node' ? 'health.nodeHint' : id === 'git' ? 'health.gitHint' : id === 'codex' ? 'health.codexMissing' : id === 'antigravity' ? 'health.antigravityMissing' : 'health.customMissing');
+    else if (check.reason?.includes('TIMEOUT') || check.reason === 'DETECTION_FAILED') hint = t('health.timeout');
+    else if (check.reason === 'STDIO_FALLBACK') hint = t('health.fallback');
+    else if (check.reason === 'NODE18_STDIO_COMPATIBILITY') hint = t('health.node18');
+    else if (id === 'terminal' && check.status === 'pending') hint = t('health.terminalPending');
+    else if (check.status === 'warning') hint = t('health.versionUnknown');
+    else if (check.authenticated === 'unknown') hint = t('health.authUnknown');
+    const cliInstalled = check.authenticated === 'unknown' && ['ok', 'warning'].includes(check.status);
+    const value = check.command || (check.backend === 'stdio-fallback' ? 'stdio fallback' : check.backend) || check.version || t('health.notStarted');
+    return `<div class="health-row"><div class="health-row-heading"><span data-health-status="${check.status}" aria-hidden="true">${symbols[check.status]}</span><strong>${names[id]}</strong><span class="health-value">${escapeHtml(value)}${check.command && check.version ? ` · ${escapeHtml(check.version)}` : ''}</span><span class="health-status" data-health-status="${check.status}">${t(statusLabels[check.status])}</span></div>
+      <div class="health-detail" data-health-detail="${id}">${hint !== t('health.details') ? `<p>${escapeHtml(hint)}</p>` : ''}
+      ${check.command ? `<p>${t('health.command')}: <code>${escapeHtml(check.command)}</code></p>` : ''}
+      ${check.reason ? `<p><code>${escapeHtml(check.reason)}</code></p>` : ''}
+      ${cliInstalled ? `<p>${t('health.authHint')}</p>` : ''}
+      ${id === 'codex' && check.status === 'missing' ? `<code>npm install -g @openai/codex</code><br><button class="secondary-button health-copy" type="button" data-health-copy>${t('health.copy')}</button>` : ''}</div></div>`;
+  }).join('');
+}
+
+async function checkWorkspaceHealth() {
+  state.healthController?.abort();
+  const request = ++state.healthRequest;
+  const epoch = state.projectEpoch;
+  const projectId = state.projectId;
+  const taskId = state.selectedId || null;
+  state.healthTaskId = taskId;
+  state.health = null;
+  state.healthError = false;
+  state.healthBusy = Boolean(projectId);
+  renderWorkspaceHealth();
+  if (!projectId) return;
+  const controller = new AbortController();
+  state.healthController = controller;
+  const timer = window.setTimeout(() => controller.abort(), 10000);
+  try {
+    const taskQuery = taskId ? `?workspaceTaskId=${encodeURIComponent(taskId)}` : '';
+    const health = await fetchJson(`/api/workspace-health${taskQuery}`, { projectId, signal: controller.signal });
+    if (request !== state.healthRequest || epoch !== state.projectEpoch || projectId !== state.projectId || taskId !== (state.selectedId || null)) return;
+    state.health = health;
+  } catch {
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId && taskId === (state.selectedId || null)) state.healthError = true;
+  } finally {
+    window.clearTimeout(timer);
+    if (request === state.healthRequest && epoch === state.projectEpoch && projectId === state.projectId) {
+      state.healthBusy = false;
+      renderWorkspaceHealth();
+    }
+  }
+}
+
+function setHealthOpen(open, { focus = false } = {}) {
+  state.healthOpen = open;
+  if (!open) {
+    try { localStorage.setItem(HEALTH_SEEN_KEY, 'true'); } catch { /* Optional storage. */ }
+  }
+  renderWorkspaceHealth();
+  if (focus) document.querySelector(open ? '#workspace-health-recheck' : '#workspace-health-button')?.focus();
+}
+
+function showHealthOnboarding() {
+  try { if (localStorage.getItem(HEALTH_SEEN_KEY) === 'true') return; } catch { /* Optional storage. */ }
+  if (!state.projectTasks.has(state.projectId)) return;
+  const active = [...state.projectTasks.values()].flat().some(task =>
+    ['STARTING', 'AWAITING_INPUT', 'RUNNING', 'DEGRADED'].includes(task.status)
+    || Object.values(task.sessions || {}).some(isActiveTerminalSession));
+  if (!active) setHealthOpen(true);
+}
+
 function renderLocale() {
+  changesDrawer.render();
   renderTheme();
   document.documentElement.lang = state.locale === 'zh' ? 'zh-CN' : 'en';
   document.body.dataset.locale = state.locale === 'zh' ? 'zh-CN' : 'en';
@@ -618,6 +729,8 @@ function renderLocale() {
   renderSelectedTask();
   updateTerminalLayout();
   renderArchiveSummary();
+  renderNotificationStatus();
+  renderWorkspaceHealth();
 }
 
 function setZenMode(enabled) {
@@ -657,7 +770,8 @@ function updateTerminalLayout() {
     const switchButton = controller.card.querySelector('[data-terminal-focus-other]');
     if (switchButton) {
       switchButton.hidden = !focused;
-      switchButton.title = t('terminal.switchFocus').replace('{terminal}', slotId === 'codex' ? 'Antigravity' : 'Codex');
+      const other = switchButton.dataset.terminalFocusOther;
+      switchButton.title = t('terminal.switchFocus').replace('{terminal}', state.selectedTask?.mode === 'custom' ? t(`custom.${other}`) : other === 'codex' ? 'Codex' : 'Antigravity');
       switchButton.setAttribute('aria-label', switchButton.title);
     }
   }
@@ -799,60 +913,142 @@ function renderProjects() {
   if (!host || !list) return;
   const searching = Boolean(state.taskSearch.trim());
   const { groups, unloaded } = searchTaskGroups();
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, groups, [...state.expandedProjects]]);
-  if (host.dataset.renderKey === renderKey) return;
-  host.dataset.renderKey = renderKey;
-  list.remove();
-  list.hidden = false;
-  host.innerHTML = groups.map(({ project }) => `<section class="project-group">
-    <button type="button" class="project-heading${project.id === state.projectId ? ' selected' : ''}" data-project="${escapeHtml(project.id)}" aria-current="${project.id === state.projectId}" aria-expanded="${searching || state.expandedProjects.has(project.id)}" title="${escapeHtml(project.root)}">
-      <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
-      <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
-      <strong>${escapeHtml(project.name)}</strong>
-      ${project.available ? '' : `<small class="project-unavailable">${projectText('不可用', 'Unavailable')}</small>`}
-    </button><div class="project-tasks" data-project-tasks="${escapeHtml(project.id)}" ${searching || state.expandedProjects.has(project.id) ? '' : 'hidden'}></div></section>`).join('');
-  for (const { project, tasks, loaded } of groups) {
-    const container = host.querySelector(`[data-project-tasks="${project.id}"]`);
-    if (searching && !loaded) {
-      const notice = document.createElement('p');
-      notice.className = 'task-list-empty';
-      notice.textContent = t('task.notLoaded');
-      container.append(notice);
-    }
-    if (project.id === state.projectId) container.append(list);
-    else {
-      container.insertAdjacentHTML('beforeend', tasks.map(task => taskItemMarkup(task, project.id)).join(''));
-      container.querySelectorAll('[data-workspace-task-id]').forEach(button => {
-        button.onclick = () => void selectProject(project.id, button.dataset.workspaceTaskId);
-      });
-    }
-  }
-  if (!list.isConnected) { list.hidden = searching; host.append(list); }
-  if (searching) {
-    const messages = [];
-    if (!groups.some(group => group.tasks.length)) messages.push(t('task.searchNone'));
-    if (unloaded) messages.push(t('task.searchUnloaded').replace('{count}', unloaded));
-    for (const message of messages) {
-      const notice = document.createElement('p');
-      notice.className = 'task-search-notice';
-      notice.setAttribute('role', 'status');
-      notice.textContent = message;
-      host.append(notice);
-    }
-  }
-  host.querySelectorAll('[data-project]').forEach(button => {
-    button.onclick = async () => {
-      const id = button.dataset.project;
-      if (searching) {
-        if (id !== state.projectId) await selectProject(id);
-        return;
-      }
-      if (id === state.projectId) {
-        if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
-        renderProjects();
-      } else await selectProject(id);
-    };
+  const existing = new Map([...host.children].filter(element => element.classList.contains('project-group'))
+    .map(element => [element.dataset.projectGroup, element]));
+  const elements = groups.map(({ project }) => {
+    const element = existing.get(project.id) || createProjectGroup(project);
+    existing.set(project.id, element);
+    updateProjectGroup(element, project, searching);
+    return element;
   });
+  const currentGroup = elements.find(element => element.dataset.projectGroup === state.projectId);
+  const target = currentGroup?.querySelector('.project-tasks') || host;
+  const movingList = list.parentElement !== target;
+  const focused = movingList ? document.activeElement : null;
+  const focusedInList = movingList && host.contains(focused);
+  const scrollTop = movingList ? host.scrollTop : null;
+  if (movingList) {
+    const previous = list.parentElement;
+    // On a project switch, keep cached buttons with their project and reuse the
+    // target project's buttons inside the singleton current-task list.
+    if (previous?.dataset.projectTasks && previous.dataset.projectTasks !== state.projectId) {
+      for (const child of [...list.children]) {
+        if (child.dataset.projectId === previous.dataset.projectTasks) previous.append(child);
+      }
+    }
+    if (target !== host) {
+      for (const child of [...target.children]) {
+        if (child.dataset.workspaceTaskId !== undefined) list.append(child);
+      }
+    }
+    target.append(list);
+  }
+  list.hidden = searching && !currentGroup;
+  for (const { project, tasks, loaded } of groups) {
+    const container = existing.get(project.id).querySelector('.project-tasks');
+    const notice = searching && !loaded ? listNotice(container, 'task-list-empty', t('task.notLoaded')) : null;
+    if (project.id === state.projectId) reconcileListChildren(container, [...(notice ? [notice] : []), list]);
+    else reconcileTaskItems(container, tasks, project.id, notice);
+  }
+  const children = [...elements];
+  if (!currentGroup) children.push(list);
+  if (searching) {
+    if (!groups.some(group => group.tasks.length)) children.push(listNotice(host, 'task-search-notice', t('task.searchNone'), 'empty'));
+    if (unloaded) children.push(listNotice(host, 'task-search-notice', t('task.searchUnloaded').replace('{count}', unloaded), 'unloaded'));
+  }
+  reconcileListChildren(host, children);
+  if (movingList) {
+    if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    else if (focusedInList && !focused.isConnected && document.activeElement === document.body) {
+      (currentGroup?.querySelector('.project-heading') || host.querySelector('button')
+        || document.querySelector('#task-search-input'))?.focus({ preventScroll: true });
+    }
+    if (host.scrollTop !== scrollTop) host.scrollTop = scrollTop;
+  }
+}
+
+function setListText(element, value) {
+  const text = `${value ?? ''}`;
+  if (element.textContent !== text) element.textContent = text;
+}
+
+function setListAttribute(element, name, value) {
+  const text = `${value ?? ''}`;
+  if (element.getAttribute(name) !== text) element.setAttribute(name, text);
+}
+
+function listNotice(container, className, text, key = className) {
+  const element = [...container.children].find(child => child.dataset.listNotice === key) || document.createElement('p');
+  element.className = className;
+  element.dataset.listNotice = key;
+  if (className === 'task-search-notice') setListAttribute(element, 'role', 'status');
+  setListText(element, text);
+  return element;
+}
+
+function reconcileListChildren(container, children) {
+  const previous = [...container.children];
+  if (previous.length === children.length && previous.every((child, index) => child === children[index])) return;
+  // Only structural changes need scroll/focus restoration. Status updates do
+  // not detach nodes, write scrollTop, or call focus.
+  const sidebar = container.closest('.project-list');
+  const scrollTop = sidebar?.scrollTop;
+  const ownScrollTop = container.scrollTop;
+  const focused = document.activeElement;
+  const focusIndex = previous.findIndex(child => child.contains(focused));
+  const wanted = new Set(children);
+  for (const child of previous) if (!wanted.has(child)) child.remove();
+  let next = container.firstElementChild;
+  for (const child of children) {
+    if (child !== next) container.insertBefore(child, next);
+    next = child.nextElementSibling;
+  }
+  if (focusIndex !== -1 && document.activeElement !== focused) {
+    const neighbor = children[Math.min(focusIndex, children.length - 1)];
+    const fallback = neighbor?.matches('button') ? neighbor : neighbor?.querySelector('button');
+    (focused.isConnected ? focused : fallback || container.parentElement?.querySelector('.project-heading')
+      || document.querySelector('#task-search-input'))?.focus({ preventScroll: true });
+  }
+  if (sidebar && sidebar.scrollTop !== scrollTop) sidebar.scrollTop = scrollTop;
+  if (container.scrollTop !== ownScrollTop) container.scrollTop = ownScrollTop;
+}
+
+function createProjectGroup(project) {
+  const element = document.createElement('section');
+  element.className = 'project-group';
+  element.dataset.projectGroup = project.id;
+  element.innerHTML = `<button type="button" class="project-heading">
+    <svg class="project-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4"/></svg>
+    <svg class="project-folder-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/></svg>
+    <strong></strong><small class="project-unavailable"></small>
+  </button><div class="project-tasks"></div>`;
+  const button = element.querySelector('.project-heading');
+  button.dataset.project = project.id;
+  element.querySelector('.project-tasks').dataset.projectTasks = project.id;
+  button.onclick = async () => {
+    const id = button.dataset.project;
+    if (state.taskSearch.trim()) {
+      if (id !== state.projectId) await selectProject(id);
+    } else if (id === state.projectId) {
+      if (state.expandedProjects.has(id)) state.expandedProjects.delete(id); else state.expandedProjects.add(id);
+      renderProjects();
+    } else await selectProject(id);
+  };
+  return element;
+}
+
+function updateProjectGroup(element, project, searching) {
+  const button = element.querySelector('.project-heading');
+  const expanded = searching || state.expandedProjects.has(project.id);
+  button.classList.toggle('selected', project.id === state.projectId);
+  setListAttribute(button, 'aria-current', project.id === state.projectId);
+  setListAttribute(button, 'aria-expanded', expanded);
+  setListAttribute(button, 'title', project.root);
+  setListText(button.querySelector('strong'), project.name);
+  const unavailable = button.querySelector('.project-unavailable');
+  unavailable.hidden = Boolean(project.available);
+  setListText(unavailable, projectText('不可用', 'Unavailable'));
+  element.querySelector('.project-tasks').hidden = !expanded;
 }
 
 async function selectProject(id, taskId) {
@@ -861,17 +1057,22 @@ async function selectProject(id, taskId) {
   if (!project) return;
   if (state.projectId) state.projectSelections.set(state.projectId, state.selectedId);
   closeSettings();
+  closeCreateTask();
+  closeCustomPrompt();
   closeContextMenu();
   disposeTerminalViews();
   state.projectEpoch++;
   state.projectId = id;
+  state.notifications = null;
+  changesDrawer.reset(id);
   if (!state.taskSearch.trim()) state.expandedProjects.add(id);
   let stored = null;
   try { stored = localStorage.getItem(`workspace-selection-${id}`); } catch { /* Optional. */ }
   state.selectedId = taskId === undefined ? state.projectSelections.get(id) || stored || null : taskId;
   state.selectedTask = null;
-  state.tasks = [];
+  state.tasks = state.projectTasks.get(id) || [];
   state.repository = { name: project.name, root: project.root };
+  void checkWorkspaceHealth();
   renderRepository(); renderTaskList(); renderSelectedTask(); rememberSelection();
   if (!project.available) { showToast(projectText('项目目录不可用', 'Project directory unavailable'), 'error'); return; }
   await refresh({ showError: true });
@@ -977,38 +1178,131 @@ function renderTaskList() {
   const list = document.querySelector('#workspace-task-list');
   const count = document.querySelector('#task-count');
   const input = document.querySelector('#task-search-input');
-  if (input) { input.placeholder = t('task.search'); input.setAttribute('aria-label', t('task.search')); }
+  if (input) { if (input.placeholder !== t('task.search')) input.placeholder = t('task.search'); setListAttribute(input, 'aria-label', t('task.search')); }
   const clear = document.querySelector('#task-search-clear');
-  if (clear) { clear.hidden = !state.taskSearch; clear.title = t('task.searchClear'); clear.setAttribute('aria-label', clear.title); }
+  if (clear) { clear.hidden = !state.taskSearch; setListAttribute(clear, 'title', t('task.searchClear')); setListAttribute(clear, 'aria-label', clear.title); }
   if (!list) return;
   const searching = Boolean(state.taskSearch.trim());
   const groups = searchTaskGroups().groups;
   const tasks = searching ? groups.find(group => group.project.id === state.projectId)?.tasks || [] : state.tasks;
-  if (count) count.textContent = `${searching ? groups.reduce((sum, group) => sum + group.tasks.length, 0) : state.tasks.length}`;
-  const renderKey = JSON.stringify([state.locale, state.projectId, state.selectedId, state.taskSearch, tasks]);
-  if (list.dataset.renderKey === renderKey) return;
-  list.dataset.renderKey = renderKey;
-  if (tasks.length === 0) {
-    list.innerHTML = searching ? '' : `<p class="task-list-empty">${escapeHtml(t('task.none'))}</p>`;
-    return;
-  }
-  list.innerHTML = tasks.map(task => taskItemMarkup(task, state.projectId)).join('');
-  for (const item of list.querySelectorAll('[data-workspace-task-id]')) {
-    item.addEventListener('click', () => selectTask(item.dataset.workspaceTaskId));
-  }
+  if (count) setListText(count, searching ? groups.reduce((sum, group) => sum + group.tasks.length, 0) : state.tasks.length);
+  const notice = !searching && !tasks.length ? listNotice(list, 'task-list-empty', t('task.none')) : null;
+  reconcileTaskItems(list, tasks, state.projectId, notice);
 }
 
-function taskItemMarkup(task, projectId) {
-  const selected = projectId === state.projectId && task.id === state.selectedId ? ' selected' : '';
-  const codexState = statusKey(sessionState(task.sessions?.codex));
-  const agyState = statusKey(sessionState(task.sessions?.antigravity));
-  return `<button class="workspace-task-item${selected}" type="button" aria-current="${Boolean(selected)}" title="${escapeHtml(task.title)}" data-workspace-task-id="${escapeHtml(task.id)}" data-project-id="${escapeHtml(projectId || '')}">
-      <span class="task-item-top"><strong>${escapeHtml(task.title)}</strong><span class="status-dot ${escapeHtml(statusKey(task.status))}" aria-hidden="true"></span></span>
-      <span class="task-item-meta"><span class="task-item-status" title="${escapeHtml(statusLabel(task.status))}">${escapeHtml(statusLabel(task.status))}</span><span class="task-item-agents"><span class="mini-agent ${escapeHtml(codexState)}">Codex</span><span class="mini-agent ${escapeHtml(agyState)}">Antigravity</span></span><time>${escapeHtml(formatTime(task.updatedAt))}</time></span>
-    </button>`;
+function createTaskItem(task, projectId) {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.className = 'workspace-task-item';
+  element.dataset.workspaceTaskId = task.id;
+  element.dataset.projectId = projectId || '';
+  element.innerHTML = `<span class="task-item-top"><strong></strong><span class="status-dot" aria-hidden="true"></span></span>
+    <span class="task-item-health"></span>
+    <span class="task-item-meta"><span class="task-item-status"></span><span class="task-item-agents"><span class="mini-agent">Codex</span><span class="mini-agent">Antigravity</span></span><time></time></span>`;
+  element.onclick = () => {
+    const id = element.dataset.workspaceTaskId;
+    if (element.dataset.projectId === state.projectId) void selectTask(id);
+    else void selectProject(element.dataset.projectId, id);
+  };
+  return element;
+}
+
+function updateTaskItem(element, task, projectId) {
+  const selected = projectId === state.projectId && task.id === state.selectedId;
+  element.classList.toggle('selected', selected);
+  setListAttribute(element, 'aria-current', selected);
+  setListAttribute(element, 'title', task.title);
+  setListText(element.querySelector('strong'), task.title);
+  const status = element.querySelector('.task-item-status');
+  const label = statusLabel(task.status);
+  setListText(status, label);
+  setListAttribute(status, 'title', label);
+  const dot = element.querySelector('.status-dot');
+  const dotClass = `status-dot ${statusKey(task.status)}`;
+  if (dot.className !== dotClass) dot.className = dotClass;
+  const agents = element.querySelectorAll('.mini-agent');
+  for (const [index, slotId] of (task.mode === 'custom' ? ['terminal1', 'terminal2'] : ['codex', 'antigravity']).entries()) {
+    const className = `mini-agent ${statusKey(sessionState(task.sessions?.[slotId]))}`;
+    if (agents[index].className !== className) agents[index].className = className;
+    setListText(agents[index], task.mode === 'custom' ? t(`custom.${slotId}`) : slotId === 'codex' ? 'Codex' : 'Antigravity');
+  }
+  const health = collaborationHealth(task, { minutes: collaborationHealthView.getMinutes() });
+  const healthLabel = element.querySelector('.task-item-health');
+  if (healthLabel) {
+    healthLabel.hidden = health.state === 'normal';
+    setListText(healthLabel, t(`collaborationHealth.${health.state}`));
+    setListAttribute(healthLabel, 'data-health', health.state);
+  }
+  setListText(element.querySelector('time'), formatTime(task.updatedAt));
+}
+
+function reconcileTaskItems(container, tasks, projectId, notice = null) {
+  // Match both IDs; the current list can move between projects with equal task IDs.
+  const existing = new Map([...container.children]
+    .filter(element => element.dataset.workspaceTaskId !== undefined && element.dataset.projectId === (projectId || ''))
+    .map(element => [element.dataset.workspaceTaskId, element]));
+  const children = notice ? [notice] : [];
+  for (const task of tasks) {
+    const element = existing.get(task.id) || createTaskItem(task, projectId);
+    updateTaskItem(element, task, projectId);
+    children.push(element);
+  }
+  reconcileListChildren(container, children);
+}
+
+function renderConversationResume() {
+  const panel = document.querySelector('#conversation-resume');
+  if (!panel) return;
+  const task = state.selectedTask;
+  panel.hidden = !task || task.mode === 'custom' || Boolean(task.archivedAt);
+  if (panel.hidden) return;
+  const session = task.sessions?.codex;
+  const field = document.querySelector('#conversation-id');
+  const check = document.querySelector('#conversation-manual-check');
+  const key = `${state.projectId}:${task.id}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
+  const target = task.resume?.conversationId || session?.nativeIdentity?.binding?.conversationId || '';
+  if (panel.dataset.target !== key) { field.value = target; check.checked = false; panel.dataset.target = key; }
+  if (target) field.value = target;
+  field.readOnly = Boolean(target);
+  field.disabled = state.actionBusy;
+  check.disabled = state.actionBusy || task.status === 'CLOSED' || !isActiveTerminalSession(session);
+  const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
+  document.querySelector('#conversation-resume-button').disabled = state.actionBusy || !valid
+    || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || check.disabled || !check.checked;
+  const summary = document.querySelector('#conversation-resume-status');
+  const status = state.conversationActionTarget === key ? 'STARTING' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
+  summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
+}
+
+async function conversationTaskAction(operation) {
+  renderConversationResume();
+  const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
+  if (!button || button.disabled || state.actionBusy) return;
+  const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
+  const session = task.sessions.codex;
+  const key = document.querySelector('#conversation-resume').dataset.target;
+  const params = { workspaceTaskId: task.id, conversationId: document.querySelector('#conversation-id').value.trim() };
+  if (operation === 'confirm') Object.assign(params, { confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
+  else params.language = localeCode();
+  const current = () => projectId === state.projectId && epoch === state.projectEpoch && task.id === state.selectedId;
+  setBusy(true); state.conversationActionTarget = key; renderConversationResume();
+  try {
+    await postAction(operation === 'confirm' ? 'workspaceTaskConfirmConversation' : 'workspaceTaskResume', params, projectId);
+    if (current()) await refresh();
+  } catch (error) {
+    if (current()) showToast(error.payload?.error?.message || error.message, 'error');
+  } finally {
+    state.conversationActionTarget = null;
+    if (current()) { setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask(); }
+  }
 }
 
 function renderSelectedTask() {
+  renderConversationResume();
+  collaborationTimeline.update();
+  collaborationHealthView.update();
+  changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
   const taskActions = document.querySelector('#task-toolbar-actions');
@@ -1033,8 +1327,18 @@ function renderSelectedTask() {
   if (empty) empty.hidden = true;
   if (panel) panel.hidden = false;
   const task = state.selectedTask;
+  const modeBadge = document.querySelector('#selected-task-mode');
+  if (modeBadge) modeBadge.textContent = t(task.mode === 'custom' ? 'custom.customBadge' : 'custom.defaultBadge');
   const title = document.querySelector('#selected-task-title');
   const status = document.querySelector('#selected-task-status');
+  const collaboration = document.querySelector('#selected-task-cooperation');
+  if (collaboration) {
+    const label = cooperationLabel(task.cooperation);
+    collaboration.hidden = !label;
+    collaboration.textContent = label;
+    collaboration.className = `status-pill cooperation-pill ${statusKey(task.cooperation?.status || 'IDLE')}`;
+    collaboration.title = [t('cooperation.reported'), task.cooperation?.summary, task.cooperation?.roundId].filter(Boolean).join('\n');
+  }
   const id = document.querySelector('#selected-task-id');
   const version = document.querySelector('#selected-task-prompt-version');
   if (title) {
@@ -1047,18 +1351,24 @@ function renderSelectedTask() {
   }
   if (id) id.textContent = task.id || '—';
   if (version) version.textContent = `v${task.promptVersion || '2.3.0'}`;
+  const startupNotice = document.querySelector('#task-startup');
+  if (startupNotice) {
+    const hint = ['STARTING', 'AWAITING_INPUT'].includes(task.status) ? startupHint(task.startup) : '';
+    startupNotice.hidden = !hint;
+    startupNotice.textContent = hint;
+  }
   const error = document.querySelector('#task-error');
   if (error) {
-    const message = task.error?.message || task.error?.details || '';
+    const message = taskErrorMessage(task);
     error.hidden = !message;
     error.textContent = message ? `${t('task.error')}: ${bounded(message)}` : '';
   }
   const close = document.querySelector('#close-task-button');
-  const restart = document.querySelector('#restart-task-button');
   if (close) close.disabled = state.actionBusy || statusKey(task.status) === 'closed';
-  if (restart) restart.disabled = state.actionBusy || statusKey(task.status) === 'starting';
 
   const panes = selectTerminalPanes({ workspaceTask: task });
+  const grid = document.querySelector('#agent-terminal-grid');
+  if (grid) grid.setAttribute('aria-label', t(task.mode === 'custom' ? 'custom.customBadge' : 'custom.defaultBadge'));
   const pairKey = panes.map(terminalSessionKey).join('|');
   if (pairKey !== state.terminalPairKey) {
     disposeTerminalViews();
@@ -1073,21 +1383,68 @@ function renderSelectedTask() {
   }
 }
 
+function cooperationLabel(cooperation) {
+  const status = cooperation?.status;
+  return ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED', 'CHANGES_REQUESTED', 'FAILED'].includes(status)
+    ? t(`cooperation.${status}`) : '';
+}
+
+function terminalRoleLabel(slot, cooperation, startup, custom = null) {
+  if (custom) return custom[slot]?.command || '';
+  const startupState = startup?.slots?.[slot];
+  if (startupState === 'TRUST_REQUIRED') return t('startup.roleTrust');
+  if (startupState === 'AUTH_REQUIRED') return t('startup.roleAuth');
+  if (['WAITING', 'INJECTING'].includes(startupState)) return t('startup.roleWaiting');
+  const status = cooperation?.status;
+  if (slot === 'codex') {
+    if (status === 'DONE') return t('cooperation.awaitingReview');
+    if (status === 'REVIEWING') return t('cooperation.agentReviewing');
+    if (status === 'APPROVED') return t('cooperation.agentApproved');
+  } else {
+    if (status === 'WORKING') return t('cooperation.agentWorking');
+    if (['DONE', 'REVIEWING', 'APPROVED'].includes(status)) return t('cooperation.agentDone');
+    if (status === 'CHANGES_REQUESTED') return t('cooperation.agentChanges');
+  }
+  return t(slot === 'codex' ? 'terminal.planner' : 'terminal.implementer');
+}
+
+function startupHint(startup) {
+  const states = Object.values(startup?.slots || {});
+  if (states.includes('TRUST_REQUIRED')) return t('startup.trust');
+  if (states.includes('AUTH_REQUIRED')) return t('startup.auth');
+  if (states.some(value => value !== 'READY')) return t('startup.waiting');
+  return '';
+}
+
+function taskErrorMessage(task) {
+  if (task.error?.message || task.error?.details) return task.error.message || task.error.details;
+  for (const [slot, session] of Object.entries(task.sessions || {})) {
+    const agent = task.mode === 'custom' ? t(`custom.${slot}`) : slot === 'codex' ? 'Codex' : 'Antigravity';
+    if (session.startupFailure === 'account-init-timeout') return `${agent}: ${t('terminal.accountInitTimeout')}`;
+    if (session.error) return `${agent}: ${session.error}`;
+  }
+  return '';
+}
+
 function terminalCardMarkup(pane) {
-  const roleKey = pane.slotId === 'codex' ? 'terminal.planner' : 'terminal.implementer';
+  const custom = state.selectedTask?.mode === 'custom';
+  const label = custom ? t(`custom.${pane.slotId}`) : t(`terminal.${pane.slotId}`);
+  const otherSlot = selectTerminalPanes({ workspaceTask: state.selectedTask }).find(item => item.slotId !== pane.slotId)?.slotId || '';
   return `<article class="terminal-card" data-terminal-slot="${escapeHtml(pane.slotId)}">
     <header class="terminal-card-header">
-      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong>${escapeHtml(t(`terminal.${pane.slotId}`))}</strong><span>${escapeHtml(t(roleKey))}</span></div></div>
+      <div class="terminal-card-title"><span class="terminal-agent-mark ${escapeHtml(pane.slotId)}">${custom ? pane.slot + 1 : pane.slotId === 'codex' ? 'C' : 'A'}</span><div><strong data-terminal-label>${escapeHtml(label)}</strong><span data-terminal-role>${escapeHtml(terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup, state.selectedTask?.custom))}</span></div></div>
       <div class="terminal-card-actions">
+        ${custom ? `<button class="secondary-button terminal-prompt-button" type="button" data-custom-prompt="${escapeHtml(pane.slotId)}">${escapeHtml(t('custom.prompt'))}</button>` : ''}
+        <span class="terminal-status" data-terminal-transport></span>
         <span class="terminal-status" data-terminal-status>${escapeHtml(pane.sessionId ? t('terminal.connecting') : t('terminal.unavailable'))}</span>
-        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${pane.slotId === 'codex' ? 'antigravity' : 'codex'}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
+        <button class="icon-button terminal-focus-button" type="button" data-terminal-focus-other="${escapeHtml(otherSlot)}" hidden><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7h13m-3-3 3 3-3 3M17 13H4m3-3-3 3 3 3"/></svg></button>
         <button class="icon-button terminal-focus-button" type="button" data-terminal-focus="${escapeHtml(pane.slotId)}" aria-pressed="false" title="${escapeHtml(t('terminal.focus'))}" aria-label="${escapeHtml(t('terminal.focus'))}">
           <svg data-focus-expand viewBox="0 0 20 20" aria-hidden="true"><path d="M7 3H3v4m10-4h4v4M3 13v4h4m10-4v4h-4"/></svg>
           <svg data-focus-restore viewBox="0 0 20 20" aria-hidden="true" hidden><path d="M7 3v4H3m14 0h-4V3M3 13h4v4m6 0v-4h4"/></svg>
         </button>
       </div>
     </header>
-    <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(t(`terminal.${pane.slotId}`))}"></div>
+    <div class="terminal-screen" data-terminal-screen tabindex="0" aria-label="${escapeHtml(label)}"></div>
     <footer class="terminal-card-footer"><code data-terminal-session>${escapeHtml(pane.sessionId || '—')}</code><span data-terminal-backend></span><span data-terminal-updated>—</span></footer>
   </article>`;
 }
@@ -1114,6 +1471,11 @@ function renderTerminalViews(panes) {
       resizeSending: false,
       pendingResize: null,
       lastSize: null,
+      transport: null,
+      streamAbort: null,
+      readAbort: null,
+      retryTimer: null,
+      retryDelay: 5_000,
       polling: false,
       pollTimer: null,
       readAgain: false,
@@ -1123,6 +1485,7 @@ function renderTerminalViews(panes) {
       resizeObserver: null,
     };
     state.terminalViews.set(pane.slotId, controller);
+    card.querySelector('[data-custom-prompt]')?.addEventListener('click', () => openCustomPrompt(pane.slotId));
     updateTerminalHeader(pane);
     if (!pane.sessionId || typeof window.Terminal !== 'function') {
       continue;
@@ -1155,10 +1518,23 @@ function renderTerminalViews(panes) {
 function updateTerminalHeader(pane) {
   const controller = state.terminalViews.get(pane.slotId);
   const card = controller?.card || document.querySelector(`[data-terminal-slot="${CSS.escape(pane.slotId)}"]`);
+  const label = state.selectedTask?.mode === 'custom' ? t(`custom.${pane.slotId}`) : t(`terminal.${pane.slotId}`);
+  if (card) {
+    const heading = card.querySelector('[data-terminal-label]'); if (heading) heading.textContent = label;
+    card.querySelector('[data-terminal-screen]')?.setAttribute('aria-label', label);
+    const promptButton = card.querySelector('[data-custom-prompt]'); if (promptButton) promptButton.textContent = t('custom.prompt');
+  }
   if (!card) return;
+  const role = card.querySelector('[data-terminal-role]');
+  if (role) role.textContent = terminalRoleLabel(pane.slotId, state.selectedTask?.cooperation, state.selectedTask?.startup, state.selectedTask?.custom);
   const taskSession = state.selectedTask?.sessions?.[pane.slotId] || null;
   const session = controller?.session || pane.session || taskSession;
   const status = sessionState(session);
+  const transportElement = card.querySelector('[data-terminal-transport]');
+  if (transportElement) {
+    transportElement.textContent = controller?.transport && !controller.finished ? t(`terminal.${controller.transport}`) : '';
+    transportElement.classList.toggle('active', controller?.transport === 'live');
+  }
   const statusElement = card.querySelector('[data-terminal-status]');
   if (statusElement) statusElement.textContent = pane.sessionId
     ? (status ? statusLabel(status) : t('terminal.connecting'))
@@ -1180,10 +1556,15 @@ function updateTerminalHeader(pane) {
 }
 
 function disposeTerminalViews() {
+  closeCustomPrompt();
   window.clearTimeout(state.pollTimer);
   state.pollTimer = null;
   for (const controller of state.terminalViews.values()) {
     controller.disposed = true;
+    controller.streamAbort?.abort();
+    controller.readAbort?.abort();
+    controller.pendingWriteResolve?.();
+    window.clearTimeout(controller.retryTimer);
     window.clearTimeout(controller.pollTimer);
     window.clearTimeout(controller.resizeTimer);
     controller.resizeObserver?.disconnect();
@@ -1197,8 +1578,59 @@ function disposeTerminalViews() {
   document.body.classList.remove('terminal-split-dragging');
 }
 
+function getReviewTaskContext(task = state.selectedTask) {
+  return { projectId: state.projectId, projectEpoch: state.projectEpoch, taskEpoch: state.reviewTaskEpoch,
+    taskId: state.selectedId, task, actionBusy: state.actionBusy, inputRevision: state.terminalViews.get('codex')?.inputRevision || 0 };
+}
+
+async function sendReviewToCodex({ target, prompt, validateSelection, assertSelection }) {
+  const controller = state.terminalViews.get('codex');
+  function assertCurrent() {
+    if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext())) || controller?.disposed
+      || controller?.projectId !== target.projectId || controller?.pane.sessionId !== target.sessionId
+      || state.terminalViews.get('codex') !== controller) throw reviewError('reviewTargetChanged');
+    const error = reviewTargetError(getReviewTaskContext());
+    if (error) throw reviewError(error);
+    if (controller.finished || !['running', 'idle'].includes(controller.session?.state || controller.session?.status)) throw reviewError('reviewSessionUnavailable');
+  }
+  assertCurrent();
+  if (state.reviewWriteTarget || controller.reviewWriting || controller.queuedInputBytes) throw reviewError('reviewInputBusy');
+  const input = reviewSessionInput(prompt, state.locale);
+  if (UTF8_ENCODER.encode(input).byteLength > MAX_INPUT_BYTES) throw reviewError('reviewByteLimit');
+  // Reserve the existing input queue throughout preflight and the single write.
+  // Raw xterm input is refused while reserved, never interleaved or replayed.
+  controller.reviewWriting = true;
+  state.reviewWriteTarget = target;
+  const previous = controller.inputQueue;
+  const operation = (async () => {
+    await previous;
+    assertCurrent();
+    await validateSelection();
+    assertCurrent();
+    const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(target.taskId)}`, { projectId: target.projectId });
+    assertCurrent();
+    if (!sameReviewTarget(target, reviewTarget(getReviewTaskContext(task)))) throw reviewError('reviewTargetChanged');
+    const error = reviewTargetError(getReviewTaskContext(task));
+    if (error) throw reviewError(error);
+    // No await between this selection check and dispatching the PTY write.
+    assertSelection();
+    try {
+      await postAction('sessionWrite', { sessionId: target.sessionId, input, submit: true }, target.projectId);
+    } catch {
+      // An HTTP failure cannot establish that no PTY bytes were written.
+      throw reviewError('reviewUncertain');
+    }
+    if (!controller.disposed) scheduleTerminalRead(controller, 0);
+  })();
+  controller.inputQueue = operation.catch(() => {});
+  try { await operation; }
+  finally { controller.reviewWriting = false; state.reviewWriteTarget = null; }
+}
+
 function enqueueRawInput(controller, input) {
   if (controller.disposed) return;
+  if (controller.promptWriting) { showToast(t('custom.inputReserved'), 'error'); return; }
+  if (controller.reviewWriting || (state.reviewWriteTarget?.projectId === controller.projectId && state.reviewWriteTarget?.sessionId === controller.pane.sessionId)) { showToast(state.locale === 'zh' ? '正在发送审查反馈，请稍后输入。' : 'Sending review feedback. Wait before typing.', 'error'); return; }
   controller.activeUntil = Date.now() + 1500;
   if (!controller.pane.sessionId || typeof input !== 'string' || input.length === 0) return;
   const knownSession = controller.session || state.selectedTask?.sessions?.[controller.pane.slotId];
@@ -1223,6 +1655,8 @@ function enqueueRawInput(controller, input) {
     showToast(t('terminal.inputError'), 'error');
     return;
   }
+  controller.inputRevision = (controller.inputRevision || 0) + 1;
+  changesDrawer.updateContext();
   controller.queuedInputBytes += bytes;
   controller.inputQueue = controller.inputQueue.then(async () => {
     for (const chunk of chunks) {
@@ -1315,11 +1749,54 @@ async function flushTerminalResize(controller) {
 
 async function pollTerminalViews() {
   const controllers = [...state.terminalViews.values()].filter(controller => controller.pane.sessionId && !controller.polling && !controller.finished);
-  for (const controller of controllers) scheduleTerminalRead(controller, 0);
+  for (const controller of controllers) void connectTerminalStream(controller);
+}
+
+async function connectTerminalStream(controller) {
+  if (controller.disposed || controller.finished) return;
+  controller.transport = 'reconnecting';
+  window.clearTimeout(controller.pollTimer);
+  updateTerminalHeader(controller.pane);
+  // An in-flight fallback read owns the cursor until it finishes rendering.
+  // Wait for it before opening SSE, so the transports never overlap.
+  if (controller.polling) await new Promise(resolve => { controller.readIdle = resolve; });
+  if (controller.disposed || controller.finished) return;
+  const abort = new AbortController();
+  controller.streamAbort = abort;
+  const params = new URLSearchParams();
+  if (Number.isSafeInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
+  const path = `/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/stream?${params}`;
+  const endpoint = controller.projectId ? `/api/projects/${encodeURIComponent(controller.projectId)}${path}` : path;
+  const timeout = window.setTimeout(() => abort.abort(), 3_000);
+  try {
+    const response = await fetch(endpoint, { cache: 'no-store', signal: abort.signal,
+      headers: { [CAPABILITY_HEADER]: capability } });
+    window.clearTimeout(timeout);
+    await consumeTerminalStream(response, { signal: abort.signal, async onEvent(event, payload) {
+      if (controller.disposed || controller.streamAbort !== abort) return;
+      controller.transport = 'live';
+      if (event === 'terminal-gap') controller.pendingGap = true;
+      else if (event === 'terminal-output') await applyTerminalPayload(controller, payload, false);
+      else if (event === 'terminal-state') await applyTerminalPayload(controller, { session: payload.session }, true);
+      updateTerminalHeader(controller.pane);
+    } });
+    if (!controller.finished) throw new Error('Terminal stream disconnected.');
+  } catch {
+    if (controller.disposed || controller.finished) return;
+    controller.transport = 'polling';
+    updateTerminalHeader(controller.pane);
+    scheduleTerminalRead(controller, 0);
+    controller.retryTimer = window.setTimeout(() => void connectTerminalStream(controller), controller.retryDelay);
+    controller.retryDelay = Math.min(30_000, controller.retryDelay * 2);
+  } finally {
+    window.clearTimeout(timeout);
+    abort.abort();
+    if (controller.streamAbort === abort) controller.streamAbort = null;
+  }
 }
 
 function scheduleTerminalRead(controller, delay) {
-  if (controller.disposed || controller.finished) return;
+  if (controller.disposed || controller.finished || (controller.transport && controller.transport !== 'polling')) return;
   window.clearTimeout(controller.pollTimer);
   if (controller.polling) {
     controller.readAgain = true;
@@ -1328,32 +1805,55 @@ function scheduleTerminalRead(controller, delay) {
   controller.pollTimer = window.setTimeout(() => void readTerminal(controller), delay);
 }
 
-async function readTerminal(controller) {
-  if (controller.disposed || controller.polling || controller.finished) return;
-  controller.polling = true;
-  try {
-    const params = new URLSearchParams({
-      maxLines: `${TERMINAL_MAX_LINES}`,
-      maxBytes: `${TERMINAL_MAX_BYTES}`,
-    });
-    if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
-    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`, { projectId: controller.projectId });
-    if (controller.disposed) return;
-    controller.session = payload.session || controller.session;
-    const output = payload.output?.output || '';
-    if (output) controller.activeUntil = Date.now() + 1500;
-    if (controller.terminal && output) controller.terminal.write(output);
-    controller.cursor = Number.isInteger(payload.output?.nextCursor) ? payload.output.nextCursor : null;
-    if (payload.session && !sessionIsActive(payload.session)) controller.finished = true;
-    updateTerminalHeader(controller.pane);
-    if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
-      state.selectedTask.sessions[controller.pane.slotId] = {
-        ...state.selectedTask.sessions[controller.pane.slotId],
-        ...payload.session,
-        state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
-        status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
-      };
+async function applyTerminalPayload(controller, payload, finishOnState = true) {
+  if (controller.disposed) return;
+  if (payload.output) {
+    if (payload.output.truncated || controller.pendingGap) {
+      showToast(t('terminal.outputGap'), 'error');
+      controller.pendingGap = false;
     }
+    const output = payload.output.output || '';
+    if (output) controller.activeUntil = Date.now() + 1500;
+    await deliverTerminalOutput(controller, payload.output, text => new Promise(resolve => {
+      if (controller.disposed || !controller.terminal) { resolve(); return; }
+      controller.pendingWriteResolve = resolve;
+      controller.terminal.write(text, () => { controller.pendingWriteResolve = null; resolve(); });
+    }));
+  }
+  if (controller.disposed) return;
+  controller.session = payload.session || controller.session;
+  if (finishOnState && payload.session && !sessionIsActive(payload.session) && !payload.output?.hasMore) {
+    controller.finished = true;
+    window.clearTimeout(controller.retryTimer);
+  }
+  updateTerminalHeader(controller.pane);
+  if (state.selectedTask?.sessions?.[controller.pane.slotId]) {
+    const previousTerminalHealth = healthTerminal();
+    state.selectedTask.sessions[controller.pane.slotId] = {
+      ...state.selectedTask.sessions[controller.pane.slotId],
+      ...payload.session,
+      state: payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].state,
+      status: payload.session?.status || payload.session?.state || state.selectedTask.sessions[controller.pane.slotId].status,
+    };
+    const currentTerminalHealth = healthTerminal();
+    if (previousTerminalHealth.status !== currentTerminalHealth.status || previousTerminalHealth.backend !== currentTerminalHealth.backend) renderWorkspaceHealth();
+  }
+}
+
+async function readTerminal(controller) {
+  if (controller.disposed || controller.polling || controller.finished || (controller.transport && controller.transport !== 'polling')) return;
+  controller.polling = true;
+  const abort = new AbortController();
+  controller.readAbort = abort;
+  try {
+    const params = new URLSearchParams({ maxLines: `${TERMINAL_MAX_LINES}`, maxBytes: `${TERMINAL_MAX_BYTES}` });
+    if (Number.isInteger(controller.cursor)) params.set('cursor', `${controller.cursor}`);
+    const payload = await fetchJson(`/api/sessions/${encodeURIComponent(controller.pane.sessionId)}/read?${params}`, {
+      projectId: controller.projectId, signal: abort.signal,
+    });
+    if (controller.disposed) return;
+    await applyTerminalPayload(controller, payload);
+    if (payload.output?.hasMore) controller.readAgain = true;
   } catch (error) {
     if (controller.disposed) return;
     controller.activeUntil = 0;
@@ -1361,9 +1861,12 @@ async function readTerminal(controller) {
     else updateTerminalHeader({ ...controller.pane, session: { state: 'failed' } });
   } finally {
     controller.polling = false;
+    controller.readAbort = null;
     const delay = controller.readAgain ? 0 : Date.now() < controller.activeUntil ? 50 : TERMINAL_POLL_MS;
     controller.readAgain = false;
     scheduleTerminalRead(controller, delay);
+    controller.readIdle?.();
+    controller.readIdle = null;
   }
 }
 
@@ -1377,10 +1880,11 @@ async function loadRepository() {
 }
 
 async function loadTaskList({ selectFirst = true } = {}) {
+  const request = state.taskListRequest = (state.taskListRequest || 0) + 1;
   const projectId = state.projectId;
   const epoch = state.projectEpoch;
   const tasks = await fetchJson('/api/workspace-tasks');
-  if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || request !== state.taskListRequest) return;
   state.tasks = Array.isArray(tasks) ? tasks : [];
   state.projectTasks.set(projectId, state.tasks);
   if (state.selectedId && !state.tasks.some(task => task.id === state.selectedId)) state.selectedId = null;
@@ -1389,20 +1893,48 @@ async function loadTaskList({ selectFirst = true } = {}) {
 }
 
 async function loadSelectedTask() {
+  const request = ++state.selectedTaskRequest;
+  const taskEpoch = state.reviewTaskEpoch;
+  if (state.healthTaskId !== (state.selectedId || null)) void checkWorkspaceHealth();
   if (!state.selectedId) {
     state.selectedTask = null;
     disposeTerminalViews();
     renderSelectedTask();
+    renderWorkspaceHealth();
     return;
   }
   const projectId = state.projectId;
   const selectedId = state.selectedId;
   const epoch = state.projectEpoch;
   const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(selectedId)}`);
-  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId) return;
+  if (projectId !== state.projectId || epoch !== state.projectEpoch || selectedId !== state.selectedId
+    || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
   state.selectedTask = task;
   rememberSelection();
   renderSelectedTask();
+  renderWorkspaceHealth();
+  void continueTaskStartup(task, projectId, epoch);
+}
+
+async function continueTaskStartup(task, projectId, epoch) {
+  const taskEpoch = state.reviewTaskEpoch;
+  const request = state.selectedTaskRequest;
+  if (state.actionBusy || !task.startup || !['STARTING', 'AWAITING_INPUT'].includes(task.status)) return;
+  const key = `${projectId}:${task.id}`;
+  if (state.startupContinuing.has(key)) return;
+  state.startupContinuing.add(key);
+  try {
+    const payload = await postAction('workspaceTaskContinue', { workspaceTaskId: task.id }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || task.id !== state.selectedId
+      || taskEpoch !== state.reviewTaskEpoch || request !== state.selectedTaskRequest) return;
+    state.selectedTask = payload.workspaceTask;
+    state.tasks = state.tasks.map(item => item.id === task.id ? payload.workspaceTask : item);
+    state.projectTasks.set(projectId, state.tasks);
+    renderTaskList();
+    renderSelectedTask();
+    renderWorkspaceHealth();
+  } catch { /* Retry through the existing refresh; terminal input stays usable. */ }
+  finally { state.startupContinuing.delete(key); }
 }
 
 async function refresh({ showError = false } = {}) {
@@ -1423,6 +1955,7 @@ async function refresh({ showError = false } = {}) {
     await Promise.all([loadRepository(), loadTaskList({ selectFirst: !state.selectedId })]);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
     await loadSelectedTask();
+    renderWorkspaceHealth();
   } catch (error) {
     if (showError && projectId === state.projectId && epoch === state.projectEpoch) showToast(error.message || t('action.refreshError'), 'error');
   }
@@ -1431,25 +1964,182 @@ async function refresh({ showError = false } = {}) {
 async function selectTask(id) {
   if (!id || state.actionBusy) return;
   state.selectedId = id;
+  state.reviewTaskEpoch++;
+  collaborationTimeline.update();
+  collaborationHealthView.update();
+  changesDrawer.updateContext();
+  renderWorkspaceHealth();
   rememberSelection();
   renderTaskList();
   await loadSelectedTask();
 }
 
-async function createTask() {
+function renderCustomSettings() {
+  const custom = state.customDrafts.get(state.projectId) || state.customSettings;
+  for (const [id, value] of Object.entries({ 'custom-command1': custom.terminal1.command, 'custom-command2': custom.terminal2.command,
+    'custom-project-prompt': custom.prompts.project, 'custom-terminal1-prompt': custom.prompts.terminal1, 'custom-terminal2-prompt': custom.prompts.terminal2 })) {
+    const field = document.querySelector(`#${id}`); if (field) field.value = value;
+  }
+}
+
+function customSettingsForm() {
+  return { terminal1: { command: document.querySelector('#custom-command1').value.trim() },
+    terminal2: { command: document.querySelector('#custom-command2').value.trim() }, prompts: {
+      project: document.querySelector('#custom-project-prompt').value,
+      terminal1: document.querySelector('#custom-terminal1-prompt').value,
+      terminal2: document.querySelector('#custom-terminal2-prompt').value } };
+}
+
+async function saveCustomSettings() {
+  if (state.settingsBusy || state.actionBusy || !canEditProjectSettings()) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  const custom = customSettingsForm();
+  state.customDrafts.set(projectId, custom);
+  setSettingsBusy(true); settingsError();
+  try {
+    const result = await postAction('workspaceCustomSettingsSave', { custom }, projectId);
+    if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
+    state.customSettings = result.custom;
+    state.customDrafts.delete(projectId);
+    syncCreateCommands();
+    showToast(t('custom.saved'), 'success');
+    renderCreateMode();
+  } catch (error) { settingsError(error.payload?.error?.message || error.message); }
+  finally { if (projectId === state.projectId && epoch === state.projectEpoch) setSettingsBusy(false); }
+}
+
+function syncCreateCommands() {
+  if (!state.createOpen) return;
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    if (!state.createCommandEdited[slot]) document.querySelector(`#${id}`).value = state.customSettings[slot].command;
+  }
+}
+
+function creationMode() { return document.querySelector('input[name="workspaceMode"]:checked')?.value || 'default'; }
+function renderCreateMode() {
+  const custom = creationMode() === 'custom';
+  document.querySelector('#workspace-create-custom').hidden = !custom;
+  document.querySelector('#workspace-create-default').hidden = custom;
+  for (const id of ['workspace-create-command1', 'workspace-create-command2']) document.querySelector(`#${id}`).required = custom;
+  document.querySelector('#workspace-create-prompt-status').textContent = t(Object.values(state.customSettings.prompts).some(Boolean) ? 'custom.configured' : 'custom.empty');
+}
+
+function setCreateBusy(busy) {
+  for (const field of document.querySelectorAll('#workspace-create-form input, #workspace-create-form button')) field.disabled = busy;
+  document.querySelector('#workspace-create-submit-label').textContent = t(state.actionBusy ? 'custom.creating' : 'custom.create');
+}
+
+function closeCreateTask() {
   if (state.actionBusy) return;
+  state.createOpen = false;
+  document.querySelector('#workspace-create-dialog').hidden = true;
+  document.querySelector('#new-task-button')?.focus();
+}
+
+async function openCreateTask() {
+  if (state.actionBusy || state.settingsBusy || !canEditProjectSettings() || state.createOpen) return;
+  const projectId = state.projectId, epoch = state.projectEpoch;
+  state.createOpen = true; state.createLoading = true;
+  state.createCommandEdited = { terminal1: false, terminal2: false };
+  document.querySelector('#workspace-create-dialog').hidden = false;
+  document.querySelector('input[name="workspaceMode"][value="default"]').checked = true;
+  document.querySelector('#workspace-create-error').hidden = true;
+  setCreateBusy(true); renderCreateMode();
+  try {
+    const settings = await fetchJson(WORKSPACE_SETTINGS_ENDPOINT, { projectId });
+    if (projectId !== state.projectId || epoch !== state.projectEpoch || !state.createOpen) return;
+    state.customSettings = customTerminalDefaults(settings);
+    syncCreateCommands();
+    renderCreateMode();
+  } catch (error) {
+    if (projectId === state.projectId && epoch === state.projectEpoch && state.createOpen) {
+      const notice = document.querySelector('#workspace-create-error'); notice.textContent = error.message; notice.hidden = false;
+    }
+  } finally {
+    if (projectId === state.projectId && epoch === state.projectEpoch) { state.createLoading = false; setCreateBusy(false); document.querySelector('input[name="workspaceMode"]')?.focus(); }
+  }
+}
+
+function currentPromptTarget(slot) {
+  return { projectId: state.projectId, projectEpoch: state.projectEpoch, taskId: state.selectedId, slot, sessionId: state.selectedTask?.sessions?.[slot]?.sessionId || null };
+}
+function closeCustomPrompt() {
+  state.promptTarget = null;
+  const dialog = document.querySelector('#custom-prompt-dialog'); if (dialog) dialog.hidden = true;
+}
+function updateCustomPromptSend() {
+  const target = state.promptTarget;
+  const available = target && sameCustomPromptTarget(target, currentPromptTarget(target.slot)) && target.sessionId
+    && sessionIsActive(state.selectedTask?.sessions?.[target.slot]) && state.selectedTask?.mode === 'custom'
+    && !state.selectedTask.archivedAt && !['CLOSED', 'ERROR'].includes(state.selectedTask.status);
+  document.querySelector('#custom-prompt-send').disabled = state.promptBusy || !available
+    || !document.querySelector('#custom-prompt-ready').checked || !document.querySelector('#custom-prompt-preview').value;
+  document.querySelector('#custom-prompt-ready').disabled = state.promptBusy;
+}
+function openCustomPrompt(slot) {
+  if (state.promptBusy || state.selectedTask?.mode !== 'custom') return;
+  state.promptTarget = currentPromptTarget(slot);
+  state.promptTarget.sessionCreatedAt = state.selectedTask.sessions[slot]?.createdAt;
+  document.querySelector('#custom-prompt-title').textContent = `${t(`custom.${slot}`)} · ${t('custom.prompt')}`;
+  document.querySelector('#custom-prompt-preview').value = customTerminalPrompt(state.selectedTask, slot);
+  document.querySelector('#custom-prompt-ready').checked = false;
+  document.querySelector('#custom-prompt-status').textContent = '';
+  document.querySelector('#custom-prompt-dialog').hidden = false;
+  updateCustomPromptSend(); document.querySelector('#custom-prompt-close').focus();
+}
+async function sendCustomPrompt() {
+  updateCustomPromptSend();
+  if (document.querySelector('#custom-prompt-send').disabled) return;
+  const target = state.promptTarget, controller = state.terminalViews.get(target.slot);
+  if (!controller || controller.disposed || controller.promptWriting) return;
+  const assertCurrent = () => {
+    if (state.promptTarget !== target || controller.disposed || !sameCustomPromptTarget(target, currentPromptTarget(target.slot))
+      || state.terminalViews.get(target.slot) !== controller) throw new Error(t('custom.targetChanged'));
+  };
+  controller.promptWriting = true; state.promptBusy = true; updateCustomPromptSend();
+  const previous = controller.inputQueue;
+  const operation = (async () => {
+    await previous; assertCurrent();
+    const task = await fetchJson(`/api/workspace-tasks/${encodeURIComponent(target.taskId)}`, { projectId: target.projectId });
+    assertCurrent();
+    if (task.mode !== 'custom' || task.sessions?.[target.slot]?.sessionId !== target.sessionId
+      || task.sessions[target.slot].createdAt !== target.sessionCreatedAt || !sessionIsActive(task.sessions[target.slot])) throw new Error(t('custom.targetChanged'));
+    assertCurrent(); // Closing the dialog cancels until the write is dispatched.
+    await postAction('workspaceTaskPromptSend', { workspaceTaskId: target.taskId, slot: target.slot, confirmed: true, sessionCreatedAt: target.sessionCreatedAt }, target.projectId);
+    if (!controller.disposed) scheduleTerminalRead(controller, 0);
+  })();
+  controller.inputQueue = operation.catch(() => {});
+  try { await operation; if (state.promptTarget === target) document.querySelector('#custom-prompt-status').textContent = t('custom.sent'); }
+  catch { if (state.promptTarget === target) document.querySelector('#custom-prompt-status').textContent = t('custom.uncertain'); }
+  finally {
+    controller.promptWriting = false; state.promptBusy = false;
+    document.querySelector('#custom-prompt-ready').checked = false; updateCustomPromptSend();
+  }
+}
+
+async function createTask(event) {
+  event?.preventDefault();
+  if (state.actionBusy) return;
+  if (!state.createOpen || state.createLoading) return;
   if (!state.projectId || state.projects.find(project => project.id === state.projectId)?.available === false) return;
   setBusy(true);
+  setCreateBusy(true);
   try {
-    const payload = await postAction('workspaceTaskCreate', { language: localeCode() });
+    const mode = creationMode();
+    const params = { language: localeCode(), mode };
+    if (mode === 'custom') params.custom = { terminal1: { command: document.querySelector('#workspace-create-command1').value.trim() }, terminal2: { command: document.querySelector('#workspace-create-command2').value.trim() } };
+    const payload = await postAction('workspaceTaskCreate', params);
+    state.createOpen = false; document.querySelector('#workspace-create-dialog').hidden = true;
     state.selectedId = payload.workspaceTask?.id || null;
     showToast(t('task.created'), 'success');
     await refresh();
   } catch (error) {
+    const notice = document.querySelector('#workspace-create-error'); notice.hidden = false; notice.textContent = error.payload?.error?.message || error.message;
     showToast(error.payload?.error?.message || t('action.createError'), 'error');
     await refresh();
   } finally {
     setBusy(false);
+    setCreateBusy(false);
     renderTaskList();
     renderSelectedTask();
   }
@@ -1494,28 +2184,6 @@ async function closeAllTerminals() {
   }
 }
 
-async function restartTask() {
-  if (!state.selectedId || state.actionBusy) return;
-  disposeTerminalViews();
-  setBusy(true);
-  try {
-    const payload = await postAction('workspaceTaskRestart', {
-      workspaceTaskId: state.selectedId,
-      language: localeCode(),
-    });
-    state.selectedTask = payload.workspaceTask || null;
-    showToast(t('task.restarted'), 'success');
-    await refresh();
-  } catch (error) {
-    showToast(error.payload?.error?.message || t('action.restartError'), 'error');
-    await refresh();
-  } finally {
-    setBusy(false);
-    renderTaskList();
-    renderSelectedTask();
-  }
-}
-
 function setLocale(locale) {
   state.locale = locale === 'zh' ? 'zh' : 'en';
   try { localStorage.setItem('coordinate-agents-workspace-locale', state.locale); } catch { /* Optional. */ }
@@ -1523,6 +2191,7 @@ function setLocale(locale) {
 }
 
 function renderNoProject() {
+  changesDrawer.reset(null);
   disposeTerminalViews(); state.repository = { name: t('project.none'), root: '', branch: null }; state.tasks = []; state.selectedId = null; state.selectedTask = null;
   renderRepository(); renderTaskList(); renderSelectedTask();
   for (const id of ['new-task-button', 'empty-new-task']) { const button = document.querySelector(`#${id}`); if (button) button.disabled = true; }
@@ -1578,9 +2247,11 @@ async function reloadProjectsAfterArchive(target) {
   if (!state.projects.some(project => project.id === state.projectId)) {
     disposeTerminalViews(); state.projectEpoch++;
     state.projectId = payload.defaultProjectId || state.projects[0]?.id || null;
+    changesDrawer.reset(state.projectId);
     state.selectedId = null; state.selectedTask = null; state.tasks = [];
     if (state.projectId) state.expandedProjects.add(state.projectId);
     try { window.history.replaceState(null, '', state.projectId ? `#${state.projectId}` : window.location.pathname); } catch { /* Optional. */ }
+    void checkWorkspaceHealth();
   }
   renderProjects();
   if (state.projectId) await refresh(); else renderNoProject();
@@ -1612,6 +2283,7 @@ async function clearArchivedConversations() {
 }
 
 function bindEvents() {
+  bindSettingsTabs();
   document.querySelector('#project-switcher')?.addEventListener('change', event => {
     const id = event.target.value;
     if (id && id !== state.projectId) void selectProject(id);
@@ -1652,8 +2324,37 @@ function bindEvents() {
   document.querySelector('#project-list')?.addEventListener('scroll', closeContextMenu);
   document.querySelector('#zen-button')?.addEventListener('click', () => setZenMode(true));
   document.querySelector('#zen-exit')?.addEventListener('click', () => setZenMode(false));
-  document.querySelector('#new-task-button')?.addEventListener('click', createTask);
-  document.querySelector('#empty-new-task')?.addEventListener('click', createTask);
+  document.querySelector('#new-task-button')?.addEventListener('click', openCreateTask);
+  document.querySelector('#empty-new-task')?.addEventListener('click', openCreateTask);
+  document.querySelector('#workspace-create-form')?.addEventListener('submit', event => void createTask(event));
+  document.querySelector('#workspace-create-dialog')?.addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeCreateTask();
+  });
+  document.querySelector('#workspace-create-dialog')?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (state.settingsOpen || event.target.closest('button, textarea, select, [contenteditable="true"]')) return;
+    event.preventDefault();
+    if (event.repeat || state.actionBusy || state.createLoading) return;
+    const submit = document.querySelector('#workspace-create-submit');
+    if (!submit.disabled) document.querySelector('#workspace-create-form').requestSubmit(submit);
+  });
+  for (const field of document.querySelectorAll('input[name="workspaceMode"]')) field.addEventListener('change', renderCreateMode);
+  for (const [slot, id] of [['terminal1', 'workspace-create-command1'], ['terminal2', 'workspace-create-command2']]) {
+    document.querySelector(`#${id}`)?.addEventListener('input', () => { state.createCommandEdited[slot] = true; });
+  }
+  for (const id of ['workspace-create-close', 'workspace-create-cancel']) document.querySelector(`#${id}`)?.addEventListener('click', closeCreateTask);
+  document.querySelector('#workspace-create-edit-prompts')?.addEventListener('click', () => void openSettings('custom'));
+  document.querySelector('#notifications-save')?.addEventListener('click', () => void saveNotificationSettings());
+  document.querySelector('#notifications-test')?.addEventListener('click', () => void sendNotificationTest());
+  document.querySelector('#custom-settings-save')?.addEventListener('click', () => void saveCustomSettings());
+  for (const id of ['custom-command1', 'custom-command2', 'custom-project-prompt', 'custom-terminal1-prompt', 'custom-terminal2-prompt']) document.querySelector(`#${id}`)?.addEventListener('input', () => state.customDrafts.set(state.projectId, customSettingsForm()));
+  document.querySelector('#custom-prompt-close')?.addEventListener('click', closeCustomPrompt);
+  document.querySelector('#custom-prompt-ready')?.addEventListener('change', updateCustomPromptSend);
+  document.querySelector('#custom-prompt-send')?.addEventListener('click', () => void sendCustomPrompt());
+  document.querySelector('#custom-prompt-copy')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(document.querySelector('#custom-prompt-preview').value); showToast(t('custom.copied'), 'success'); }
+    catch { showToast(t('terminal.inputError'), 'error'); }
+  });
   document.querySelector('#codex-model')?.addEventListener('change', () => renderEffortChoices());
   document.querySelector('#terminal-settings-button')?.addEventListener('click', () => void openSettings());
   document.querySelector('#terminal-settings-close')?.addEventListener('click', closeSettings);
@@ -1664,11 +2365,33 @@ function bindEvents() {
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && state.settingsOpen) closeSettings();
+    else if (event.key === 'Escape' && state.createOpen) closeCreateTask();
+    else if (event.key === 'Escape' && state.promptTarget) closeCustomPrompt();
+    else if (event.key === 'Escape' && state.healthOpen) setHealthOpen(false, { focus: true });
+  });
+  document.querySelector('#workspace-health-button')?.addEventListener('click', () => {
+    setHealthOpen(!state.healthOpen, { focus: true });
+    if (state.healthOpen) void checkWorkspaceHealth();
+  });
+  document.addEventListener('pointerdown', event => {
+    if (state.healthOpen
+      && !document.querySelector('#workspace-health-panel')?.contains(event.target)
+      && !document.querySelector('#workspace-health-button')?.contains(event.target)) setHealthOpen(false);
+  });
+  for (const id of ['workspace-health-close', 'workspace-health-continue']) document.querySelector(`#${id}`)?.addEventListener('click', () => setHealthOpen(false, { focus: true }));
+  document.querySelector('#workspace-health-recheck')?.addEventListener('click', () => void checkWorkspaceHealth());
+  document.querySelector('#workspace-health-settings')?.addEventListener('click', () => { setHealthOpen(false); void openSettings(); });
+  document.querySelector('#workspace-health-checks')?.addEventListener('click', async event => {
+    if (!event.target.closest('[data-health-copy]')) return;
+    try { await navigator.clipboard.writeText('npm install -g @openai/codex'); showToast(t('health.copied'), 'success'); }
+    catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction('resume'));
+  document.querySelector('#conversation-confirm-button')?.addEventListener('click', () => conversationTaskAction('confirm'));
+  document.querySelector('#conversation-id')?.addEventListener('input', renderConversationResume);
+  document.querySelector('#conversation-manual-check')?.addEventListener('change', renderConversationResume);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
-  document.querySelector('#restart-task-button')?.addEventListener('click', restartTask);
-  document.querySelector('#refresh-button')?.addEventListener('click', () => refresh({ showError: true }));
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));
   document.querySelector('#theme-button')?.addEventListener('click', () => setTheme(state.theme === 'light' ? 'dark' : 'light'));
@@ -1703,12 +2426,17 @@ async function boot() {
     if (!state.selectedId) {
       try { state.selectedId = localStorage.getItem(`workspace-selection-${state.projectId}`) || null; } catch { /* Optional. */ }
     }
+    changesDrawer.reset(state.projectId);
     state.expandedProjects.add(state.projectId);
     document.querySelector('#new-project-button')?.addEventListener('click', openProjectDialog);
     bindProjectDialog();
   } catch (error) { showToast(error.message, 'error'); }
   await refresh({ showError: true });
+  void checkWorkspaceHealth();
+  showHealthOnboarding();
   state.refreshTimer = window.setInterval(() => void refresh(), REFRESH_MS);
 }
 
 void boot();
+
+window.addEventListener('pagehide', disposeTerminalViews);

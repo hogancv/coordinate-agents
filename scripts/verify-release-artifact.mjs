@@ -24,10 +24,14 @@ const MAX_OUTPUT = 20_000;
 const REQUIRED_FILES = [
   'bin/coordinate-agents.mjs', 'lib/web-cli.mjs',
   'inspector/server/workspace-server.mjs', 'inspector/server/http-server.mjs',
-  'inspector/server/workspace-data.mjs', 'inspector/server/action-gateway.mjs',
+  'inspector/server/workspace-data.mjs', 'inspector/server/workspace-health.mjs', 'inspector/server/action-gateway.mjs',
   'inspector/server/workspace-projects.mjs', 'inspector/server/native-folder-picker.mjs',
-  ...['index.html', 'app.js', 'styles.css', 'composer-model.mjs', 'terminal-model.mjs', 'vendor/xterm.js', 'vendor/xterm.css', 'vendor/xterm.LICENSE'].map(file => `inspector/web-workspace/${file}`),
-  ...['pty-runtime', 'session-host', 'session-manager', 'session-service', 'workspace-task-runtime', 'workspace-message', 'workspace-services', 'workspace-init', 'config', 'user-config', 'runtime-contract', 'runtime-events', 'workspace-role-prompts'].map(file => `skills/coordinate-agents/scripts/${file}.mjs`),
+  ...['index.html', 'app.js', 'i18n.mjs', 'styles.css', 'composer-model.mjs', 'collaboration-timeline.mjs', 'collaboration-health.mjs', 'custom-terminal-model.mjs', 'terminal-model.mjs', 'terminal-stream.mjs', 'git-changes.mjs', 'review-feedback.mjs', 'vendor/xterm.js', 'vendor/xterm.css', 'vendor/xterm.LICENSE'].map(file => `inspector/web-workspace/${file}`),
+  'skills/coordinate-agents/scripts/workspace-notifications-windows.ps1',
+  'skills/coordinate-agents/scripts/workspace-native-identity.mjs',
+  'skills/coordinate-agents/scripts/codex-conversation.mjs',
+  'skills/coordinate-agents/scripts/workspace-resume-state.mjs',
+  ...['pty-runtime', 'session-host', 'session-manager', 'session-service', 'workspace-task-runtime', 'workspace-collaboration', 'workspace-custom-config', 'workspace-notification-config', 'workspace-notifications', 'workspace-message', 'workspace-git-changes', 'workspace-services', 'workspace-init', 'config', 'user-config', 'runtime-contract', 'runtime-events', 'workspace-role-prompts'].map(file => `skills/coordinate-agents/scripts/${file}.mjs`),
   ...['index', 'base', 'codex-cli', 'antigravity-cli', 'generic-cli', 'executable', 'contract-v1', 'trusted-local'].map(file => `skills/coordinate-agents/adapters/${file}.mjs`),
   'README.md', 'README.zh-CN.md', 'CHANGELOG.md', 'LICENSE', 'package.json',
 ];

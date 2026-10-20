@@ -32,6 +32,7 @@ import { redactOutput } from '../adapters/executable.mjs';
 import { loadConfiguredTrustedAdapters } from '../adapters/trusted-local.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
 import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
+import { validateRuntimeGeneration } from './workspace-native-identity.mjs';
 
 export const EXECUTION_SESSION_STATES = Object.freeze([
   'starting',
@@ -194,6 +195,7 @@ function publicRecord(record) {
   if (!record) return null;
   return {
     id: record.id,
+    runtimeGeneration: record.runtimeGeneration || null,
     agent: record.agent,
     command: record.command,
     resolvedCommand: record.resolvedCommand || null,
@@ -221,6 +223,8 @@ function writeRecord(root, record) {
   atomicWrite(path, `${JSON.stringify({
     schemaVersion: 1,
     id: record.id,
+    runtimeGeneration: record.runtimeGeneration || null,
+    adapter: record.adapter || null,
     agent: record.agent,
     command: record.command,
     resolvedCommand: record.resolvedCommand || null,
@@ -238,6 +242,8 @@ function writeRecord(root, record) {
     signal: record.signal || null,
     error: record.error ? redactOutput(record.error, 2 * 1024) : null,
     outputTail: record.outputTail ? redactOutput(record.outputTail, MAX_PERSISTED_OUTPUT_BYTES) : '',
+    outputCursor: record.outputCursor ?? null,
+    outputTailStartCursor: record.outputTailStartCursor ?? null,
     endpoint: record.endpoint,
     hostPid: Number.isInteger(record.hostPid) ? record.hostPid : null,
     taskId: record.taskId || null,
@@ -299,6 +305,7 @@ function parseRecord(root, path) {
   const record = JSON.parse(readInternalFile(bus, path));
   if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error(`Invalid execution session record: ${path}`);
   validateSessionId(record.id);
+  if (record.runtimeGeneration != null) validateRuntimeGeneration(record.runtimeGeneration);
   if (typeof record.agent !== 'string' || typeof record.command !== 'string' || typeof record.cwd !== 'string') throw new Error(`Incomplete execution session record: ${path}`);
   if (!EXECUTION_SESSION_STATES.includes(record.state)) throw new Error(`Invalid execution session state: ${record.state}`);
   return record;
@@ -391,6 +398,95 @@ function requestHost(record, command, { timeoutMs = 2_000 } = {}) {
   });
 }
 
+function subscribeHost(record, { cursor, onEvent, onError = () => {}, signal }) {
+  return new Promise((resolveSubscription, reject) => {
+    let ready = false;
+    let stopped = false;
+    let terminal = false;
+    let paused = false;
+    let buffer = '';
+    const socket = createConnection(record.endpoint);
+    const timer = setTimeout(() => fail(new Error('Session subscription timed out.')), 2_000);
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
+      socket.destroy();
+    };
+    const fail = error => {
+      if (stopped) return;
+      stop();
+      if (ready) onError(error); else reject(error);
+    };
+    const abort = () => {
+      if (!ready) reject(new Error('Session subscription cancelled.'));
+      stop();
+    };
+    const consume = () => {
+      while (!stopped && !paused) {
+        const newline = buffer.indexOf('\n');
+        if (newline < 0) break;
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        let message;
+        try { message = JSON.parse(line); } catch { fail(new Error('Invalid Session subscription message.')); return; }
+        if (!ready) {
+          if (!message.ok || !message.result?.subscribed) { fail(new Error('Session Host does not support subscriptions.')); return; }
+          ready = true;
+          clearTimeout(timer);
+          resolveSubscription(stop);
+          continue;
+        }
+        if (!['terminal-output', 'terminal-state'].includes(message.event)) continue;
+        const session = publicRecord(mergeRuntimeRecord(record, message.session));
+        if (message.event === 'terminal-state' && !ACTIVE_STATES.has(session.state)) terminal = true;
+        try {
+          if (onEvent({ event: message.event, session, ...(message.output ? { output: message.output } : {}) }) === false) {
+            paused = true;
+            socket.pause();
+          }
+        } catch (error) { fail(error); return; }
+      }
+    };
+    stop.resume = () => { if (!stopped) { paused = false; consume(); if (!paused) socket.resume(); } };
+    socket.setEncoding('utf8');
+    socket.on('data', chunk => {
+      buffer += chunk;
+      if (buffer.length > 1024 * 1024) { fail(new Error('Session subscription exceeded its buffer limit.')); return; }
+      consume();
+    });
+    socket.on('error', fail);
+    socket.once('close', () => {
+      if (terminal) stop();
+      else fail(new Error('Session subscription disconnected.'));
+    });
+    socket.once('connect', () => socket.write(`${JSON.stringify({ id: randomUUID(), op: 'subscribe', cursor })}\n`));
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
+function readPersistedPage(record, cursor, maxLines, maxBytes) {
+  const bytes = Buffer.from(record.outputTail || '');
+  const start = record.outputTailStartCursor;
+  let offset = Math.min(bytes.length, Math.max(0, (cursor ?? start) - start));
+  while (offset < bytes.length && (bytes[offset] & 0xc0) === 0x80) offset += 1;
+  let end = Math.min(bytes.length, offset + maxBytes);
+  while (end > offset && end < bytes.length && (bytes[end] & 0xc0) === 0x80) end -= 1;
+  if (end === offset && offset < bytes.length) {
+    end += 1;
+    while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end += 1;
+  }
+  let lines = 0;
+  for (let i = offset; i < end; i += 1) {
+    if (bytes[i] === 10 && ++lines >= maxLines) { end = i + 1; break; }
+  }
+  return { output: bytes.subarray(offset, end).toString('utf8'), cursor,
+    nextCursor: start + end, latestCursor: record.outputCursor,
+    truncated: (cursor ?? 0) < start, hasMore: end < bytes.length };
+}
+
 async function syncHostRecord(root, record) {
   if (!ACTIVE_STATES.has(record.state)) {
     ensureSessionStateEvent(root, record);
@@ -439,7 +535,7 @@ async function syncHostRecord(root, record) {
   }
 }
 
-function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false }) {
+function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'en', workspace = false, conversationId }) {
   const contract = getAdapterContract(adapter);
   if (contract) {
     if (!contract.capabilities.persistentSession) {
@@ -451,7 +547,7 @@ function resolveLaunch(adapter, { root, agent, initialPrompt = '', language = 'e
       });
     }
     return validateLaunchResult(
-      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace }),
+      adapter.resolveSessionLaunch({ root, agent, initialPrompt, language, workspace, ...(conversationId !== undefined ? { conversationId } : {}) }),
       { kind: 'persistent-session' },
     );
   }
@@ -582,8 +678,9 @@ export class ExecutionSessionManager {
     }
   }
 
-  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false } = {}) {
+  async _open({ root, agent, sessionId = null, resolved, adapter, initialPrompt = '', language = 'en', taskId = null, subtaskId = null, reuseExisting = true, workspace = false, conversationId } = {}) {
     const repository = sessionRoot(root);
+    if (conversationId !== undefined && (agent !== 'codex' || resolved.adapter !== 'codex-cli' || initialPrompt || reuseExisting)) throw new Error('Native resume requires a fresh owned Codex runtime without an initial prompt.');
     if (typeof initialPrompt !== 'string' || Buffer.byteLength(initialPrompt, 'utf8') > MAX_INPUT_BYTES) {
       throw runtimeError('SESSION_START_FAILED', 'Initial session input exceeds the size limit.', {
         recoverable: false,
@@ -620,7 +717,7 @@ export class ExecutionSessionManager {
       appendSessionEvent(repository, associated, 'SESSION_REUSED', {}, { taskId, subtaskId });
       return { session: publicRecord(associated), reused: true, initialInputConsumed: false };
     }
-    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace });
+    let launch = resolveLaunch(adapter, { root: repository, agent, initialPrompt, language, workspace, conversationId });
     if (!launch?.command || !Array.isArray(launch.args)) throw runtimeError('SESSION_START_FAILED', 'Adapter did not return a safe PTY launch.', { recoverable: false, agent, command: resolved?.command || null, root: repository });
     // Re-run the adapter's exact configured-command check immediately before
     // starting the owned host. This preserves adapter-specific Windows
@@ -641,6 +738,8 @@ export class ExecutionSessionManager {
     const createdAt = now();
     const record = {
       id,
+      runtimeGeneration: randomUUID(),
+      adapter: resolved.adapter || contract?.id || null,
       agent,
       command: resolved.command,
       resolvedCommand: checked.resolvedCommand || launch.resolvedCommand || launch.command,
@@ -701,6 +800,8 @@ export class ExecutionSessionManager {
           type: 'init',
           session: {
             id,
+            runtimeGeneration: record.runtimeGeneration,
+            adapter: record.adapter,
             agent,
             command: resolved.command,
             resolvedCommand: record.resolvedCommand,
@@ -831,7 +932,7 @@ export class ExecutionSessionManager {
     if (ACTIVE_STATES.has(current.state)) {
       const boundedLines = Number.isInteger(maxLines) ? Math.min(MAX_READ_LINES, Math.max(1, maxLines)) : 100;
       const boundedBytes = Number.isInteger(maxBytes) ? Math.min(MAX_READ_BYTES, Math.max(1, maxBytes)) : 16 * 1024;
-      try { output = await requestHost(current, { op: 'read', maxLines: boundedLines, maxBytes: boundedBytes }); } catch { /* Status remains the inspectable fact. */ }
+      try { output = await requestHost(current, { op: 'read', tail: true, maxLines: boundedLines, maxBytes: boundedBytes }); } catch { /* Status remains the inspectable fact. */ }
     }
     return { session: publicRecord(current), output: { ...output, output: redactOutput(output.output || '', Math.min(MAX_READ_BYTES, maxBytes)) } };
   }
@@ -840,24 +941,52 @@ export class ExecutionSessionManager {
     const repository = sessionRoot(root);
     const record = readRecord(repository, id);
     const current = await syncHostRecord(repository, record);
+    maxLines = Math.min(MAX_READ_LINES, Math.max(1, Number.isInteger(maxLines) ? maxLines : 100));
+    maxBytes = Math.min(MAX_READ_BYTES, Math.max(1, Number.isInteger(maxBytes) ? maxBytes : MAX_READ_BYTES));
     if (!ACTIVE_STATES.has(current.state)) {
-      // A cursor is meaningful only while the owned host is still buffering
-      // live output. Once it has exited, return the bounded persisted tail as
-      // a replacement snapshot so clients do not append the same tail twice.
+      if (Number.isSafeInteger(current.outputCursor) && Number.isSafeInteger(current.outputTailStartCursor)
+        && Buffer.byteLength(current.outputTail || '') === current.outputCursor - current.outputTailStartCursor) {
+        return { session: publicRecord(current), ...readPersistedPage(current, cursor, maxLines, maxBytes) };
+      }
+      // Legacy or redacted snapshots have no exact byte mapping. Display them
+      // only on initial load; reconnect reports the gap without duplicate text.
+      const resuming = Number.isInteger(cursor);
       return {
         session: publicRecord(current),
-        output: current.outputTail || '',
-        nextCursor: null,
-        truncated: Number.isInteger(cursor),
+        output: resuming ? '' : current.outputTail || '',
+        nextCursor: current.outputCursor ?? cursor ?? null,
+        latestCursor: current.outputCursor ?? cursor ?? null,
+        truncated: resuming && (current.outputCursor == null || cursor < current.outputCursor),
+        hasMore: false,
       };
     }
     const result = await requestHost(current, {
       op: 'read',
       cursor: Number.isInteger(cursor) ? cursor : null,
-      maxLines: Math.min(MAX_READ_LINES, Math.max(1, Number.isInteger(maxLines) ? maxLines : 100)),
-      maxBytes: Math.min(MAX_READ_BYTES, Math.max(1, Number.isInteger(maxBytes) ? maxBytes : MAX_READ_BYTES)),
+      maxLines,
+      maxBytes,
     });
-    return { session: publicRecord(current), ...result, output: redactOutput(result.output || '', MAX_READ_BYTES) };
+    return { session: { ...publicRecord(current), state: result.state, lastActivityAt: result.lastActivityAt }, ...result };
+  }
+
+  async subscribe(root, id, options = {}) {
+    const repository = sessionRoot(root);
+    const record = readRecord(repository, id);
+    if (options.signal?.aborted) throw new Error('Session subscription cancelled.');
+    if (!ACTIVE_STATES.has(record.state)) {
+      let result;
+      let cursor = options.cursor;
+      do {
+        if (options.signal?.aborted) break;
+        result = await this.read(repository, id, { ...options, cursor });
+        options.onEvent({ event: 'terminal-output', session: result.session, output: result });
+        cursor = result.nextCursor;
+      } while (result.hasMore);
+      if (options.signal?.aborted) return () => {};
+      options.onEvent({ event: 'terminal-state', session: result.session });
+      return () => {};
+    }
+    return subscribeHost(record, options);
   }
 
   async write(root, id, input, { submit = true, taskId = null, subtaskId = null } = {}) {

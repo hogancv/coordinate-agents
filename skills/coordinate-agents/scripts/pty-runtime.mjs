@@ -110,12 +110,11 @@ function boundedInteger(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGE
   return Math.min(max, Math.max(min, value));
 }
 
-function utf8Tail(text, maxBytes) {
-  const bytes = Buffer.from(text, 'utf8');
-  let start = Math.max(0, bytes.length - maxBytes);
-  // Skip continuation bytes at the left edge, keeping only complete codepoints.
+// Cursors count UTF-8 bytes in the original stream, independent of PTY chunk
+// boundaries. All retained/page boundaries land between complete codepoints.
+function utf8Start(bytes, start) {
   while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
-  return bytes.subarray(start).toString('utf8');
+  return start;
 }
 
 class OutputBuffer {
@@ -127,47 +126,75 @@ class OutputBuffer {
   }
 
   append(value) {
-    const text = `${value || ''}`;
-    if (!text) return this.cursor;
-    this.cursor += 1;
-    let chunk = text;
-    let chunkBytes = Buffer.byteLength(chunk, 'utf8');
-    if (chunkBytes > this.maxBytes) {
-      chunk = utf8Tail(chunk, this.maxBytes);
-      chunkBytes = Buffer.byteLength(chunk, 'utf8');
-    }
-    this.chunks.push({ cursor: this.cursor, text: chunk, bytes: chunkBytes });
-    this.bytes += chunkBytes;
-    while (this.bytes > this.maxBytes && this.chunks.length > 1) {
-      const removed = this.chunks.shift();
-      this.bytes -= removed.bytes;
+    const data = Buffer.from(`${value || ''}`, 'utf8');
+    if (!data.length) return this.cursor;
+    const start = this.cursor;
+    this.cursor += data.length;
+    // Copy only a bounded suffix, so a subarray cannot retain a huge allocation.
+    const offset = utf8Start(data, Math.max(0, data.length - this.maxBytes));
+    const bytes = offset ? Buffer.from(data.subarray(offset)) : data;
+    if (offset) { this.chunks = []; this.bytes = 0; }
+    this.chunks.push({ start: start + offset, data: bytes });
+    this.bytes += bytes.length;
+    while (this.bytes > this.maxBytes) {
+      const chunk = this.chunks[0];
+      const excess = this.bytes - this.maxBytes;
+      if (excess >= chunk.data.length) {
+        this.bytes -= chunk.data.length;
+        this.chunks.shift();
+      } else {
+        const cut = utf8Start(chunk.data, excess);
+        chunk.data = Buffer.from(chunk.data.subarray(cut));
+        chunk.start += cut;
+        this.bytes -= cut;
+      }
     }
     return this.cursor;
   }
 
-  read({ cursor = null, maxLines = null, maxBytes = this.maxBytes } = {}) {
+  read({ cursor = null, maxLines = null, maxBytes = this.maxBytes, tail = false } = {}) {
     const limit = boundedInteger(maxBytes, this.maxBytes, { min: 1, max: this.maxBytes });
-    const firstCursor = this.chunks[0]?.cursor ?? this.cursor + 1;
-    let truncated = Number.isInteger(cursor) && cursor < firstCursor - 1;
-    const selected = Number.isInteger(cursor)
-      ? this.chunks.filter(chunk => chunk.cursor > cursor)
-      : this.chunks;
-    let output = selected.map(chunk => chunk.text).join('');
-    if (Buffer.byteLength(output, 'utf8') > limit) {
-      output = utf8Tail(output, limit);
-      truncated = true;
+    const firstCursor = this.chunks[0]?.start ?? this.cursor;
+    const requested = Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
+    let position = Math.min(this.cursor, Math.max(firstCursor, requested));
+    const truncated = requested < firstCursor;
+    if (tail) {
+      // Explicit snapshot consumers still need the recent tail, not page one.
+      const bytes = Buffer.concat(this.chunks.map(chunk => chunk.data), this.bytes);
+      let offset = utf8Start(bytes, Math.max(0, bytes.length - limit));
+      if (Number.isInteger(maxLines) && maxLines > 0) {
+        const text = bytes.subarray(offset).toString('utf8');
+        const lines = text.split(/(?<=\n)/);
+        offset += Buffer.byteLength(lines.slice(0, Math.max(0, lines.length - maxLines)).join(''));
+      }
+      return { output: bytes.subarray(offset).toString('utf8'), cursor, nextCursor: this.cursor, latestCursor: this.cursor,
+        startCursor: firstCursor + offset, truncated, bufferedBytes: this.bytes, hasMore: false };
     }
-    if (Number.isInteger(maxLines) && maxLines > 0) {
-      const lines = output.split(/(?<=\n)/);
-      if (lines.length > maxLines) { output = lines.slice(-maxLines).join(''); truncated = true; }
+    const parts = [];
+    let delivered = 0;
+    let lines = 0;
+    for (const chunk of this.chunks) {
+      if (chunk.start + chunk.data.length <= position) continue;
+      const start = utf8Start(chunk.data, Math.max(0, position - chunk.start));
+      position = chunk.start + start;
+      let end = Math.min(chunk.data.length, start + limit - delivered);
+      while (end > start && end < chunk.data.length && (chunk.data[end] & 0xc0) === 0x80) end -= 1;
+      // A limit smaller than one codepoint still delivers that one character
+      // (at most four bytes), instead of stalling forever on the same cursor.
+      if (end === start && delivered === 0) end = utf8Start(chunk.data, start + 1);
+      for (let i = start; i < end; i += 1) {
+        if (chunk.data[i] === 10 && Number.isInteger(maxLines) && maxLines > 0 && ++lines >= maxLines) {
+          end = i + 1;
+          break;
+        }
+      }
+      parts.push(chunk.data.subarray(start, end));
+      delivered += end - start;
+      position = chunk.start + end;
+      if (end < chunk.data.length || delivered >= limit || (maxLines > 0 && lines >= maxLines)) break;
     }
-    return {
-      output,
-      cursor: Number.isInteger(cursor) ? cursor : null,
-      nextCursor: this.cursor,
-      truncated,
-      bufferedBytes: this.bytes,
-    };
+    return { output: Buffer.concat(parts, delivered).toString('utf8'), cursor,
+      nextCursor: position, latestCursor: this.cursor, truncated, bufferedBytes: this.bytes, hasMore: position < this.cursor };
   }
 }
 

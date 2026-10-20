@@ -65,6 +65,14 @@
 **Learning:** `readRuntimeEvents` called `realpathSync.native` redundantly on every read even though `eventPaths(root)` already computed the canonical repository path. Furthermore, calling `Buffer.byteLength` on every JSON event line forced UTF-8 byte counting overhead. Fast-pathing string lengths where `line.length <= MAX_EVENT_LINE_BYTES / 4` avoids `Buffer.byteLength` calculation altogether.
 **Action:** Reuse pre-calculated canonical paths from path resolution helpers, and guard expensive string byte-length measurement calls with mathematical string length limits.
 
+## 2026-09-21 - Fast-path length checks and bounded slicing for code point arrays in string summary generation
+**Learning:** `collaborationSummary` executed `Array.from(text)` unconditionally to count Unicode code points for truncation, allocating full arrays of single-character strings even for short strings. Guarding with `text.length <= 240` (since UTF-16 code units always $\ge$ code points) skips string array allocation for short strings (~135x speedup), while slicing `text.slice(0, 482)` before `Array.from()` bounds memory allocations for long strings (~3x speedup).
+**Action:** Before converting a string to a code point array via `Array.from()`, check string length (`length <= target`) and slice bounded code units (`target * 2 + 2`) to avoid unnecessary array allocations.
+
+## 2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration
+**Learning:** `validateCollaborationEvents` spread `STATUSES` into a new `['IDLE', ...STATUSES]` array on every event iteration in `.map()`, causing $O(N)$ allocations and linear scans. `collaborationSummary` allocated `Array.from(text)` character arrays for every string even when `text.length <= 240`.
+**Action:** Precompute static state transition Sets at module scope and fast-path scalar string length checks (`length <= threshold`) before allocating unicode character arrays.
+
 ## 2026-09-21 - Single-pass maximum filename search in currentState
 **Learning:** `currentState` in `agent-observer.mjs` used `readdirSync(directory).filter(name => name.endsWith('.json')).sort().reverse()[0]`, which created 3 intermediate arrays (`.filter`, `.sort`, `.reverse`) and performed an $O(N \log N)$ sorting pass to find a single maximum filename.
 **Action:** Use a single-pass `for...of` loop over `readdirSync` to find the lexicographically maximum file string in $O(N)$ time with zero extra array allocations.

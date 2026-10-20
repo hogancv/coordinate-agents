@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFi
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
+import { stripVTControlCharacters } from 'node:util';
 
 const [packagePath, temporaryPath, expectedVersion] = process.argv.slice(2);
 const packageRoot = realpathSync.native(packagePath);
@@ -96,7 +97,7 @@ async function action(name,params={},scoped=true) {
 async function read(sessionId) {return get(`/api/sessions/${sessionId}/read`);}
 try {
   await start();
-  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
+  for (const asset of ['/app.js','/styles.css','/terminal-model.mjs','/composer-model.mjs','/collaboration-timeline.mjs','/collaboration-health.mjs','/custom-terminal-model.mjs','/vendor/xterm.js','/vendor/xterm.css']) assert.equal((await fetch(base+asset)).status,200,asset);
   assert.ok((await get('/api/repository')).root);
   assert.equal((await get('/api/workspace-settings')).codex.command,executable);
   assert.deepEqual(await get('/api/workspace-tasks'),[]);
@@ -110,18 +111,48 @@ try {
   const detail=await get(`/api/workspace-tasks/${task.id}`); assert.equal(detail.status,'RUNNING');
   const codex=detail.sessions.codex.sessionId, agy=detail.sessions.antigravity.sessionId; assert.notEqual(codex,agy);
   for (const id of [codex,agy]) {const record=JSON.parse(readFileSync(join(project,'.agent-bus/sessions',`${id}.json`),'utf8')); assert.equal(record.taskId,task.id);}
-  await poll(()=>read(codex),r=>r.output.output.includes('You clarify and review.'),'Codex role prompt');
+  await poll(()=>read(codex),r=>r.output.output.includes('You clarify, delegate and review.'),'Codex role prompt');
   await poll(()=>read(agy),r=>r.output.output.includes('You implement.'),'Antigravity role prompt');
   await action('sessionWrite',{sessionId:codex,input:'input-output-check',submit:true});
   await poll(()=>read(codex),r=>r.output.output.includes('mock-reply:codex:input-output-check'),'terminal reply');
   await action('sessionResize',{sessionId:codex,cols:91,rows:27});
   const message=join(packageRoot,'skills/coordinate-agents/scripts/workspace-message.mjs');
   const sent=JSON.parse(run([message,task.id,'send','directed-message-check'])); assert.equal(sent.sessionId,agy); assert.equal(sent.sent,true);
-  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:directed-message-check'),'directed reply');
+  // ConPTY can soft-wrap a UUID across rows. Verify rendered bytes without
+  // interpreting a layout newline as a different cooperation identity.
+  await poll(()=>read(agy),r=>r.output.output.includes('mock-reply:antigravity:') && r.output.output.includes('directed-message-check') && stripVTControlCharacters(r.output.output).replace(/[\r\n]/g,'').includes(sent.roundId),'directed reply');
   const received=JSON.parse(run([message,task.id,'read',String(sent.cursor)])); assert.match(received.output,/directed-message-check/);
+  for (const status of ['working','done','reviewing','approved']) {
+    const reported=JSON.parse(run([message,task.id,'report',status,sent.roundId,'Installed receipt token=package-secret']));
+    assert.equal(reported.status,status.toUpperCase());
+  }
+  const collaboration=(await get(`/api/workspace-tasks/${task.id}`)).collaborationEvents;
+  assert.deepEqual(collaboration.map(event=>event.status),['SENT','WORKING','DONE','REVIEWING','APPROVED']);
+  assert.ok(collaboration.every(event=>event.taskId===task.id && event.roundId===sent.roundId));
+  assert.doesNotMatch(JSON.stringify(collaboration),/package-secret|directed-message-check/);
+  run([message,task.id,'report','approved',sent.roundId,'Installed receipt token=package-secret']);
+  run([message,task.id,'report','approved',sent.roundId,'Updated receipt']);
+  assert.deepEqual((await get(`/api/workspace-tasks/${task.id}`)).collaborationEvents,collaboration);
   const another=await action('workspaceTaskCreate',{language:'zh-CN'}); const task2=another.workspaceTask || another.task; allTasks.push(task2.id);
   assert.notEqual(task2.sessions.antigravity.sessionId,agy);
+  assert.deepEqual((await get(`/api/workspace-tasks/${task2.id}`)).collaborationEvents,[]);
   const secondRead=await read(task2.sessions.antigravity.sessionId); assert.doesNotMatch(secondRead.output.output,/directed-message-check/);
+  // Native notification modules/Windows script load from the installed tarball.
+  // Mock the OS command so package verification never displays a real toast.
+  const notifications = await import(pathToFileURL(join(packageRoot, 'skills/coordinate-agents/scripts/workspace-notifications.mjs')).href);
+  assert.equal((await get('/api/workspace-settings')).notifications.config.enabled, false);
+  const notificationConfig = { enabled: true, events: { done: false, approved: true, failed: true } };
+  await action('workspaceNotificationsSave', { notifications: notificationConfig });
+  assert.deepEqual((await get('/api/workspace-settings')).notifications.config, notificationConfig);
+  for (const platform of ['win32', 'darwin']) {
+    const result = await notifications.sendNativeNotification({ title: 'installed test', body: 'Chinese 中文 🙂' }, { platform, run: async (command, args) => {
+      if (platform === 'win32') assert.match(Buffer.from(args.at(-1), 'base64').toString('utf16le'), /CreateToastNotifier/);
+      else assert.equal(command, '/usr/bin/osascript');
+      return { stdout: platform === 'win32' ? 'CA_ACCEPTED' : '' };
+    } });
+    assert.equal(result.status, 'accepted');
+  }
+  await action('workspaceNotificationsSave', { notifications: { ...notificationConfig, enabled: false } });
   // Settings round trip preserves configured Node args and existing pair launches.
   await action('workspaceSettingsSave',{codex:executable,antigravity:executable,args:[fixture,'codex','argument with spaces','--model','fixture-model','-c','model_reasoning_effort="high"']});
   assert.ok((await get('/api/workspace-settings')).codex.args.includes('fixture-model'));
@@ -135,9 +166,12 @@ try {
   await stop();await start(); assert.equal((await get(`/api/workspace-tasks/${task.id}`)).sessions.codex.sessionId,codex);
   assert.equal(readFileSync(join(temporary,'launches.jsonl'),'utf8').trim().split('\n').length,launchesBefore);
   assert.match((await read(agy)).output.output,/directed-message-check/);
+  assert.deepEqual((await get(`/api/workspace-tasks/${task.id}`)).collaborationEvents,collaboration);
   await action('workspaceTaskClose',{workspaceTaskId:task.id});
   const restarted=await action('workspaceTaskRestart',{workspaceTaskId:task.id}); const current=restarted.workspaceTask || restarted.task;
   assert.notEqual(current.sessions.codex.sessionId,codex); assert.equal(current.status,'RUNNING');
+  assert.deepEqual(current.collaborationEvents,collaboration);
+  assert.deepEqual((await get(`/api/workspace-tasks/${task.id}`)).collaborationEvents,collaboration);
   await action('sessionClose',{sessionId:current.sessions.codex.sessionId});
   for (const id of allTasks) await action('workspaceTaskClose',{workspaceTaskId:id});
   assert.equal(existsSync(join(project,'.agent-bus/tasks')),false); assert.equal(existsSync(join(project,'.agent-bus/graphs')),false);
@@ -162,7 +196,7 @@ try {
   assert.equal(readFileSync(join(project, '.agent-bus/config.json'), 'utf8').length > 0, true);
   const projectCleanup = await action('workspaceArchivesClear', {}, false);
   assert.equal(projectCleanup.deletedTasks, 1); assert.equal(projectCleanup.deletedSessions, 2);
-  console.log(JSON.stringify({ok:true,version:expectedVersion,dualTerminals:true,rolePrompts:true,messageRoundTrip:true,taskIsolation:true,customPathsAndArgs:true,resize:true,settings:true,multipleProjects:true,serverReconnect:true,restart:true,cleanup:true,archive:true,archiveCleanup:true,backend:JSON.parse(readFileSync(join(temporary,'launches.jsonl'),'utf8').trim().split('\n')[0]).tty ? 'node-pty' : 'stdio-fallback',sessionCount:records.length}));
+  console.log(JSON.stringify({ok:true,version:expectedVersion,dualTerminals:true,rolePrompts:true,messageRoundTrip:true,collaborationTimeline:true,taskIsolation:true,customPathsAndArgs:true,resize:true,settings:true,nativeNotifications:true,multipleProjects:true,serverReconnect:true,restart:true,cleanup:true,archive:true,archiveCleanup:true,backend:JSON.parse(readFileSync(join(temporary,'launches.jsonl'),'utf8').trim().split('\n')[0]).tty ? 'node-pty' : 'stdio-fallback',sessionCount:records.length}));
 } finally {
   // If any assertion fails, close only hosts persisted by this isolated install.
   try {

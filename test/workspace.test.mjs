@@ -143,7 +143,11 @@ test('Web Workspace renders the repository and the dual-terminal task workbench'
     assert.deepEqual(workspaceTasks, [], 'standard Task and Graph records stay hidden from the Workspace task list');
 
     const workspaceSettings = await (await fetch(`${started.url}/api/workspace-settings`)).json();
-    assert.deepEqual(Object.keys(workspaceSettings).sort(), ['antigravity', 'codex']);
+    assert.deepEqual(Object.keys(workspaceSettings).sort(), ['antigravity', 'codex', 'custom', 'notifications']);
+    assert.deepEqual(workspaceSettings.notifications.config, { enabled: false, events: { done: false, approved: true, failed: true } });
+    assert.equal(typeof workspaceSettings.notifications.capability.supported, 'boolean');
+    assert.equal(workspaceSettings.custom.terminal1.command, workspaceSettings.codex.command);
+    assert.equal(workspaceSettings.custom.terminal2.command, workspaceSettings.antigravity.command);
     assert.equal(workspaceSettings.codex.adapter, 'codex-cli');
     assert.equal(workspaceSettings.antigravity.adapter, 'antigravity-cli');
     assert.ok(workspaceSettings.codex.command);
@@ -367,7 +371,7 @@ test('Workspace serves the composer model module for the browser bundle', async 
     const xtermCss = await fetch(`${started.url}/vendor/xterm.css`);
     assert.equal(xtermCss.status, 200);
     assert.match(xtermCss.headers.get('content-type'), /text\/css/);
-    const missingSession = await fetch(`${started.url}/api/sessions/session_missing1/read`);
+    const missingSession = await fetch(`${started.url}/api/sessions/session_missing1/read`, { headers: { 'x-coordinate-agents-capability': started.capability } });
     assert.equal(missingSession.status, 404);
     assert.match((await missingSession.json()).code, /SESSION_NOT_FOUND/);
   } finally {
@@ -431,14 +435,14 @@ test('Workspace exposes bounded cursor Session reads but Inspector does not', as
       };
     },
   };
-  const server = createInspectorServer({ root: repositoryRoot, data, ui: 'workspace' });
+  const server = createInspectorServer({ root: repositoryRoot, data, ui: 'workspace', capability: 'read-test' });
   await new Promise((resolvePromise, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolvePromise);
   });
   const port = server.address().port;
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/session_terminal/read?cursor=7&maxLines=999&maxBytes=999999`);
+    const response = await fetch(`http://127.0.0.1:${port}/api/sessions/session_terminal/read?cursor=7&maxLines=999&maxBytes=999999`, { headers: { 'x-coordinate-agents-capability': 'read-test' } });
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.session.id, 'session_terminal');
@@ -623,13 +627,15 @@ test('Session chat entry handles no output, running, ended, failed, and review s
   assert.equal(boundedEntry.body.length, CHAT_MAX_OUTPUT);
 });
 
-test('Bilingual Workspace text describes the fixed dual-terminal flow', () => {
+test('Bilingual Workspace text describes both terminal modes and the default Codex flow', async () => {
   const appJs = readFileSync(join(root, 'inspector', 'web-workspace', 'app.js'), 'utf8');
+  const { I18N } = await import('../inspector/web-workspace/i18n.mjs');
 
-  assert.match(appJs, /Create a task to open fresh Codex and Antigravity terminals/);
-  assert.match(appJs, /新建任务会打开全新的 Codex 与 Antigravity 终端/);
+  assert.match(I18N.en['empty.body'], /Default Collaboration.*Custom Terminals/);
+  assert.match(I18N.en['empty.body'], /requirements in Codex/);
+  assert.match(I18N.zh['empty.body'], /默认协作或自定义双终端/);
+  assert.match(I18N.zh['empty.body'], /默认协作任务.*Codex/);
   assert.match(appJs, /workspaceTaskCreate/);
-  assert.match(appJs, /workspaceTaskRestart/);
   assert.equal(appJs.includes('Nothing runs automatically'), false);
 });
 
@@ -655,7 +661,7 @@ test('Workspace model selection preserves unrelated startup arguments and suppor
 
 test('Workspace closes every open pair even when one close fails', async () => {
   const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
-  const closeSource = source.slice(source.indexOf('async function closeAllTerminals()'), source.indexOf('async function restartTask()'));
+  const closeSource = source.slice(source.indexOf('async function closeAllTerminals()'), source.indexOf('function setLocale('));
   const calls = [];
   const busy = [];
   const toasts = [];

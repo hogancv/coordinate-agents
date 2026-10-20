@@ -2,8 +2,9 @@ import { dirname, join, resolve } from 'node:path';
 import { AgentAdapter } from './base.mjs';
 import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
 import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
+import { assertCodexResumeArguments, codexConversationId } from '../scripts/codex-conversation.mjs';
 
-function codexWindowsEntrypoint(path) {
+export function codexWindowsEntrypoint(path) {
   return join(dirname(path), 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
 }
 
@@ -39,7 +40,7 @@ export class CodexCliAdapter extends AgentAdapter {
     };
   }
 
-  resolveSessionLaunch({ root, initialPrompt = '', workspace = false }) {
+  resolveSessionLaunch({ root, initialPrompt = '', workspace = false, conversationId }) {
     const command = this.config.command || 'codex';
     const resolved = resolveAdapterExecutable(command, {
       windowsEntrypoint: codexWindowsEntrypoint,
@@ -47,6 +48,13 @@ export class CodexCliAdapter extends AgentAdapter {
     });
     if (!resolved.available) throw executableError(resolved, 'Cannot open Codex session safely');
     const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
+    if (conversationId !== undefined) {
+      codexConversationId(conversationId);
+      if (initialPrompt) throw new Error('Native Codex resume cannot replay an initial prompt.');
+      // A configured Node entry script is a wrapper prefix, not a CLI prompt.
+      const nodePrefix = /(?:^|[\\/])node(?:\.exe)?$/i.test(command) && /\.[cm]?js$/i.test(configuredArgs[0] || '') ? 1 : 0;
+      assertCodexResumeArguments(configuredArgs.slice(nodePrefix));
+    }
     const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
     const args = configuredArgs
       .filter(arg => initialPrompt || !`${arg}`.includes('{prompt}'))
@@ -57,7 +65,11 @@ export class CodexCliAdapter extends AgentAdapter {
     // Disable hooks for this session instead of auto-approving them; standard
     // session_open keeps the user's normal hook policy unchanged.
     if (workspace) args.push('-c', 'features.hooks=false');
+    // xterm's alternate buffer has no scrollback. Keep Workspace history in
+    // the normal buffer rather than losing messages as they leave the screen.
+    if (workspace && !args.includes('--no-alt-screen')) args.push('--no-alt-screen');
     args.push('-C', resolve(root));
+    if (conversationId !== undefined) args.push('resume', codexConversationId(conversationId));
     return {
       command: resolved.command,
       prefix: resolved.prefix,
