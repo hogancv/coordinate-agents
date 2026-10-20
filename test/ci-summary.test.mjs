@@ -182,3 +182,24 @@ test('cancelled footer outcomes cannot produce a passed summary',()=>{
  const result=parseTap('# tests 1\n# pass 0\n# fail 0\n# cancelled 1\n# skipped 0\n# todo 0\n');
  assert.equal(result.cancelledCount,1);assert.match(generateMarkdownSummary('Cancelled',result),/❌ Failed/);
 });
+
+test('multiline failure diagnostics stay on one Markdown table row',()=>{
+ const tap=`not ok 1 - request test
+  ---
+  duration_ms: 2
+  failureType: 'testCodeFailure'
+  error: |-
+    request failed
+    expected a valid response
+  ...
+# tests 1
+# pass 0
+# fail 1
+# skipped 0
+# cancelled 0
+# todo 0
+`;
+ const md=generateMarkdownSummary('Multiline',parseTap(tap));
+ const row=md.split('\n').find(line=>line.startsWith('| **request test**'));
+ assert.match(row,/request failed expected a valid response/);assert.ok(row.endsWith(' |'));
+});

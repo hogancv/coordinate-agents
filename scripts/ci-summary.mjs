@@ -31,7 +31,7 @@ export function parseTap(tapContent) {
       const prefix = lines[i + 1].match(/^[ \t]*/)[0];
       if (prefix.length > indent.length) {
         let end = i + 2;
-        while (end < lines.length && lines[end] !== `${prefix}...`) end++;
+        while (end < lines.length && lines[end].trimEnd() !== `${prefix}...`) end++;
         for (let j = i + 2; j < end; j++) {
           if (!lines[j].startsWith(prefix)) continue;
           const field = lines[j].slice(prefix.length).match(/^([a-zA-Z_]\w*):\s*(.*)$/);
@@ -94,7 +94,7 @@ export function generateMarkdownSummary(title, result) {
     md += `| :--- | :--- | :--- |\n`;
     for (const f of failures) {
       const type = f.failureDetails?.failureType || 'fail';
-      const msg = (f.failureDetails?.code || f.failureDetails?.message || '').replace(/\|/g, '\\|').slice(0, 120);
+      const msg = (f.failureDetails?.code || f.failureDetails?.message || '').replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|').slice(0, 120);
       md += `| **${f.name.replace(/\|/g, '\\|')}** | \`${type}\` | ${msg} |\n`;
     }
     md += '\n';
