@@ -118,7 +118,7 @@ function windowsEntrypoint(candidate, { windowsEntrypoint } = {}) {
       return {
         available: true,
         command: host,
-        prefix: ['-NoProfile', '-File', candidate],
+        prefix: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', candidate],
         resolvedCommand: candidate,
         safe: true,
       };

@@ -4,6 +4,7 @@
 
 # Runtime, build, environment, log, tarball, and OS clutter
 .agent-bus/
+.test-results/
 node_modules/
 dist/
 coverage/

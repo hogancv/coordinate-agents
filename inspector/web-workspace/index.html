@@ -130,6 +130,17 @@
         </section>
 
         <section id="workspace-panel" class="workspace-panel" hidden aria-live="polite">
+          <section id="conversation-resume" class="conversation-resume" aria-labelledby="conversation-resume-title" hidden>
+            <div><strong id="conversation-resume-title" data-i18n="resume.title">Resume Conversation</strong><span id="conversation-resume-status" role="status" aria-live="polite"></span></div>
+            <p data-i18n="resume.manualNote">Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.</p>
+            <p data-i18n="resume.identityLimit">Confirmation is a one-time check. /new or conversation switches inside this TUI are not detected. If you switch, stop collaboration and Close/Resume the bound conversation, then confirm again.</p>
+            <div class="conversation-resume-actions">
+              <label><span data-i18n="resume.id">Codex Conversation ID</span><input id="conversation-id" type="text" maxlength="36" placeholder="UUID" autocomplete="off" spellcheck="false" /></label>
+              <button id="conversation-resume-button" class="primary-button" type="button" data-i18n="resume.title">Resume Conversation</button>
+              <label><input id="conversation-manual-check" type="checkbox" /><span data-i18n="resume.checked">I checked the live UUID and project in /status.</span></label>
+              <button id="conversation-confirm-button" class="secondary-button" type="button" data-i18n="resume.confirm">Confirm conversation</button>
+            </div>
+          </section>
           <div id="task-startup" class="startup-notice" role="status" aria-live="polite" hidden></div>
           <div id="task-error" class="task-error" role="alert" hidden></div>
           <section id="agent-terminal-grid" class="terminal-grid" aria-label="Codex and Antigravity terminals"></section>
