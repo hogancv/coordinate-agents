@@ -27,6 +27,15 @@ automatic main-conversation identity collector in this release. A wrong target,
 project mismatch, conflicting original binding or another Task's reserved UUID
 is refused; no replacement blank Codex conversation is silently created.
 
+Manual confirmation is a check at a point in time, not a live identity lease.
+Running `/new` or switching conversations inside the same TUI may leave the
+Runtime Session ID and generation unchanged, so v1 cannot detect that switch or
+automatically invalidate the confirmation. Do not continue collaborating after
+such a switch: close and resume this Task to return to its original bound
+conversation, then check `/status` and confirm again. Automatic switch detection
+and identity invalidation remain future work; a READY label does not establish
+continuous native identity verification.
+
 The configured built-in Codex adapter, user command/wrapper, authentication,
 model/permission options and native TUI/PTY remain in use. Safe ordinary CLI
 options and Node entry-script prefixes are preserved. Ambiguous positional,
@@ -46,12 +55,23 @@ executor. If role injection was interrupted, close and resume to replace that
 executor rather than retrying an uncertain write.
 
 Resume keeps roundId, Cooperation Revision and Timeline. An interrupted round is
-shown for inspection, including uncertain dispatch delivery. Codex checks Git
+shown for inspection, including uncertain dispatch delivery. Resume presentation
+is derived from the current recorded Session Facts on reads: an exited Codex no
+longer displays READY, while the persisted recovery and confirmation history is
+retained. This is not a new live process or native identity probe. Codex checks Git
 Changes and prior records and decides when to send a new instruction. A new
 executor cannot report completion of a prior executor's round. Resumed helpers
 require the current owned Task/slot/Session/runtime generation inherited from the
 CLI environment; old runtime operations and missing claims are rejected. These
 claims are local runtime fences, not an OS-user security boundary.
+
+While Codex is being recovered or awaiting fresh confirmation, an unchanged,
+active Antigravity Session may still report WORKING/DONE/FAILED for its existing
+round. Task/slot/Session/generation, round ownership, legal transitions and the
+current Cooperation Revision are checked under the same lifecycle transaction.
+Duplicate receipts remain idempotent. This exception does not permit new dispatch,
+Codex review, archived/closed Task writes, old executors or wrong rounds; new
+Codex instructions and review still require its current manual confirmation.
 
 Archived Tasks remain unavailable. Concurrent lifecycle and collaboration writes
 serialize through the existing Task lock; dead-owner recovery uses an elected

@@ -36,7 +36,7 @@ import { resolveCustomTaskConfig, validateCustomWorkspaceConfig, composeCustomPr
 import { listRecords, readRecord } from './session-manager.mjs';
 import { WORKSPACE_ROLE_PROMPT_VERSION, workspaceRolePrompt } from './workspace-role-prompts.mjs';
 import { codexConversationId, readCodexConversation } from './codex-conversation.mjs';
-import { manualConfirmationCurrent, validateRoundRuntime, validateWorkspaceResume } from './workspace-resume-state.mjs';
+import { manualConfirmationCurrent, resumeStateFromSessions, workspaceResumeView, validateRoundRuntime, validateWorkspaceResume } from './workspace-resume-state.mjs';
 import { applyNativeIdentityObservation, createNativeIdentityReceiver, nativeIdentityView,
   validateNativeConversations, validateRuntimeGeneration } from './workspace-native-identity.mjs';
 
@@ -110,6 +110,7 @@ function validateCooperation(value) {
 }
 
 const ACTIVE_SESSION_STATES = new Set(['starting', 'running', 'idle', 'busy']);
+const EXECUTOR_RECEIPT_TASK_STATUSES = new Set(['STARTING', 'AWAITING_INPUT', 'RUNNING', 'DEGRADED']);
 const TERMINAL_SESSION_STATES = new Set(['exited', 'failed']);
 const WORKSPACE_TASK_ID_PATTERN = /^workspace-[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
@@ -326,7 +327,7 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   return path;
 }
 
-function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary } = {}) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary, executorReceipt = false } = {}) {
   const repository = repositoryRoot(root);
   const path = workspaceTaskFile(repository, record.id, { create: true });
   // Reuse the existing short file transaction lock for every task-file writer.
@@ -338,8 +339,16 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     const current = existsSync(path) ? readWorkspaceTaskRecord(repository, record.id) : null;
     let base = record;
     if (replaceCooperation && current) {
-      if (current.status !== 'RUNNING' || current.archivedAt || taskSlots(record).some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId)) {
+      if ((current.status !== 'RUNNING' && !(executorReceipt && executorReceiptAvailable(current))) || current.archivedAt
+        || taskSlots(record).some(({ slot }) => current.sessions[slot].sessionId !== record.sessions[slot].sessionId
+          || current.sessions[slot].runtimeGeneration !== record.sessions[slot].runtimeGeneration)) {
         throw new Error('Task pair changed during cooperation update; dispatch input may have been sent. Do not resend automatically.');
+      }
+      if (executorReceipt && current.resume) {
+        const round = current.roundRuntime, owner = current.sessions.antigravity;
+        if (!round || round.roundId !== current.cooperation.roundId || round.sessionId !== owner.sessionId
+          || round.runtimeGeneration !== owner.runtimeGeneration || record.cooperation.roundId !== current.cooperation.roundId
+          || record.cooperation.revision !== current.cooperation.revision + 1) throw new Error('Executor round or cooperation revision changed before receipt commit.');
       }
       // A receipt may only change cooperation fields, never restore stale Sessions or lifecycle state.
       base = { ...current, roundRuntime: record.roundRuntime, resume: record.resume, updatedAt: record.updatedAt };
@@ -501,7 +510,7 @@ function workspaceTaskView(record, facts = new Map(), { includeHistory = true } 
   return {
     id: record.id,
     mode: record.mode,
-    ...(record.mode !== 'custom' ? { resume: record.resume || null } : {}),
+    ...(record.mode !== 'custom' ? { resume: workspaceResumeView(record, facts.get(record.sessions.codex.sessionId), facts.get(record.sessions.antigravity.sessionId)) } : {}),
     ...(record.runtimeFencing ? { runtimeFencing: true } : {}),
     ...(record.custom ? { custom: record.custom } : {}),
     title: record.title,
@@ -1012,9 +1021,7 @@ function updateResumeState(root, record) {
   const executor = record.sessions.antigravity.sessionId ? readRecord(root, record.sessions.antigravity.sessionId) : null;
   const codexActive = ACTIVE_SESSION_STATES.has(codex?.state);
   const executorActive = ACTIVE_SESSION_STATES.has(executor?.state);
-  const executorReady = executorActive && record.startup?.slots.antigravity === 'READY';
-  record.resume.state = !codexActive ? 'FAILED' : !executorReady ? 'PARTIAL'
-    : manualConfirmationCurrent(record, codex) ? 'READY' : 'AWAITING_CONFIRMATION';
+  record.resume.state = resumeStateFromSessions(record, codex, executor);
   // Normal live login/trust/readiness retains the existing onboarding flow.
   // Failed/missing processes and uncertain role writes require explicit Resume.
   record.status = codexActive && executorActive && record.startup && !Object.values(record.startup.slots).includes('INJECTING')
@@ -1324,9 +1331,13 @@ async function withCooperationLock(root, id, operation) {
   }
 }
 
-function assertCooperationSession(root, record, slot) {
+function executorReceiptAvailable(record) {
+  return record.mode !== 'custom' && Boolean(record.resume) && !record.archivedAt && EXECUTOR_RECEIPT_TASK_STATUSES.has(record.status);
+}
+
+function assertCooperationSession(root, record, slot, { executorReceipt = false } = {}) {
   if (record.mode === 'custom') throw new Error('Custom tasks do not support default collaboration.');
-  if (record.archivedAt || record.status !== 'RUNNING') throw new Error('Task pair is not ready. No input was sent.');
+  if (record.archivedAt || (record.status !== 'RUNNING' && !(executorReceipt && executorReceiptAvailable(record)))) throw new Error('Task pair is not ready. No input was sent.');
   const sessionId = record.sessions[slot].sessionId;
   if (!sessionId) throw new Error('Session task binding mismatch: no recorded Session.');
   const session = readRecord(root, sessionId);
@@ -1343,7 +1354,9 @@ function assertRuntimeCaller(root, record, slot, caller) {
   const session = readRecord(root, expected.sessionId);
   if (session.runtimeGeneration !== caller.runtimeGeneration || session.subtaskId !== slot
     || !ACTIVE_SESSION_STATES.has(session.state)) throw new Error('Workspace runtime caller is no longer current.');
-  if (record.resume && !manualConfirmationCurrent(record, readRecord(root, record.sessions.codex.sessionId))) throw new Error('Codex conversation requires current manual runtime confirmation before collaboration.');
+  // A new dispatch or review must come from the confirmed Codex conversation.
+  // An owned executor's existing-round receipt carries no new Codex instruction.
+  if (slot === 'codex' && record.resume && !manualConfirmationCurrent(record, readRecord(root, record.sessions.codex.sessionId))) throw new Error('Codex conversation requires current manual runtime confirmation before collaboration.');
 }
 
 export async function dispatchWorkspaceTask(root, id, roundId, deliver, { caller } = {}) {
@@ -1377,7 +1390,8 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
   const result = await withCooperationLock(root, id, repository => {
     const record = readWorkspaceTaskRecord(repository, id);
     const slot = ['REVIEWING', 'APPROVED', 'CHANGES_REQUESTED'].includes(status) ? 'codex' : 'antigravity';
-    assertCooperationSession(repository, record, slot);
+    const executorReceipt = slot === 'antigravity' && Boolean(record.resume);
+    assertCooperationSession(repository, record, slot, { executorReceipt });
     assertRuntimeCaller(repository, record, slot, caller);
     if (record.resume && slot === 'antigravity' && (!record.roundRuntime || record.roundRuntime.roundId !== roundId
       || record.roundRuntime.sessionId !== record.sessions.antigravity.sessionId
@@ -1389,7 +1403,7 @@ export async function reportWorkspaceTask(root, id, status, roundId, summary = '
     if (previous.status === status && previous.summary === cleaned) return previous;
     record.cooperation = { status, roundId, revision: previous.revision + 1, summary: cleaned, updatedAt: now() };
     record.updatedAt = now();
-    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true, eventSummary: summary });
+    const committed = writeWorkspaceTask(repository, record, { replaceCooperation: true, eventSummary: summary, executorReceipt });
     // Only new formal transitions, never summary edits, lifecycle or output.
     if (previous.status !== status && ['DONE', 'APPROVED', 'FAILED'].includes(status)) {
       committedEvent = { root: repository, task: { id: committed.id, mode: committed.mode, title: committed.title,
