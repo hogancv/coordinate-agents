@@ -130,8 +130,8 @@ export function applyNativeIdentityObservation(task, session, value, allTasks) {
     requireValue(observation.sequence > last.sequence && observation.observedAt >= last.observedAt, 'OUT_OF_ORDER');
   }
   if (!previous) {
-    requireValue(!allTasks.some(other => other.id !== task.id && Object.values(other.nativeConversations || {})
-      .some(entry => entry.adapter === adapter && entry.binding.conversationId === observation.conversationId)), 'CONVERSATION_ALREADY_BOUND');
+    requireValue(!allTasks.some(other => other.id !== task.id && ((slot === 'codex' && other.resume?.conversationId === observation.conversationId)
+      || Object.values(other.nativeConversations || {}).some(entry => entry.adapter === adapter && entry.binding.conversationId === observation.conversationId))), 'CONVERSATION_ALREADY_BOUND');
   }
   const selected = Object.fromEntries(EVIDENCE_KEYS.map(key => [key, observation[key]]));
   const binding = previous?.binding || selected;

@@ -339,6 +339,12 @@ async function main() {
     command: session.spawnCommand,
     args: session.spawnArgs,
     cwd: session.cwd,
+    env: { ...process.env, ...(session.taskId ? {
+      COORDINATE_AGENTS_TASK_ID: session.taskId,
+      COORDINATE_AGENTS_SLOT: session.subtaskId || '',
+      COORDINATE_AGENTS_SESSION_ID: session.id,
+      COORDINATE_AGENTS_RUNTIME_GENERATION: session.runtimeGeneration || '',
+    } : {}) },
     maxOutputBytes: session.maxOutputBytes,
     nativePtyVerified: session.nativePtyVerified === true,
     onOutput: () => { scheduleMetadata(); notifySubscribers(); },

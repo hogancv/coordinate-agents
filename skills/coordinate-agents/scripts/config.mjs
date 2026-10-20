@@ -192,7 +192,7 @@ export function writeConfig(bus, config) {
   atomicWrite(destination, `${JSON.stringify(config, null, 2)}\n`, join(bus, 'tmp'));
 }
 
-function reapDeadConfigOwner(lock) {
+export function reapDeadConfigOwner(lock) {
   let marker, reaper;
   try {
     const before = lstatSync(lock);
