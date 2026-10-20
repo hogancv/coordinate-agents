@@ -1250,7 +1250,56 @@ function reconcileTaskItems(container, tasks, projectId, notice = null) {
   reconcileListChildren(container, children);
 }
 
+function renderConversationResume() {
+  const panel = document.querySelector('#conversation-resume');
+  if (!panel) return;
+  const task = state.selectedTask;
+  panel.hidden = !task || task.mode === 'custom' || Boolean(task.archivedAt);
+  if (panel.hidden) return;
+  const session = task.sessions?.codex;
+  const field = document.querySelector('#conversation-id');
+  const check = document.querySelector('#conversation-manual-check');
+  const key = `${state.projectId}:${task.id}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
+  const target = task.resume?.conversationId || session?.nativeIdentity?.binding?.conversationId || '';
+  if (panel.dataset.target !== key) { field.value = target; check.checked = false; panel.dataset.target = key; }
+  if (target) field.value = target;
+  field.readOnly = Boolean(target);
+  field.disabled = state.actionBusy;
+  check.disabled = state.actionBusy || task.status === 'CLOSED' || !isActiveTerminalSession(session);
+  const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
+  document.querySelector('#conversation-resume-button').disabled = state.actionBusy || !valid
+    || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || check.disabled || !check.checked;
+  const summary = document.querySelector('#conversation-resume-status');
+  const status = state.conversationActionTarget === key ? 'STARTING' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
+  summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
+}
+
+async function conversationTaskAction(operation) {
+  renderConversationResume();
+  const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
+  if (!button || button.disabled || state.actionBusy) return;
+  const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
+  const session = task.sessions.codex;
+  const key = document.querySelector('#conversation-resume').dataset.target;
+  const params = { workspaceTaskId: task.id, conversationId: document.querySelector('#conversation-id').value.trim() };
+  if (operation === 'confirm') Object.assign(params, { confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
+  else params.language = localeCode();
+  const current = () => projectId === state.projectId && epoch === state.projectEpoch && task.id === state.selectedId;
+  setBusy(true); state.conversationActionTarget = key; renderConversationResume();
+  try {
+    await postAction(operation === 'confirm' ? 'workspaceTaskConfirmConversation' : 'workspaceTaskResume', params, projectId);
+    if (current()) await refresh();
+  } catch (error) {
+    if (current()) showToast(error.payload?.error?.message || error.message, 'error');
+  } finally {
+    state.conversationActionTarget = null;
+    if (current()) { setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask(); }
+  }
+}
+
 function renderSelectedTask() {
+  renderConversationResume();
   collaborationTimeline.update();
   collaborationHealthView.update();
   changesDrawer.updateContext();
@@ -2338,6 +2387,10 @@ function bindEvents() {
     catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction('resume'));
+  document.querySelector('#conversation-confirm-button')?.addEventListener('click', () => conversationTaskAction('confirm'));
+  document.querySelector('#conversation-id')?.addEventListener('input', renderConversationResume);
+  document.querySelector('#conversation-manual-check')?.addEventListener('change', renderConversationResume);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));
