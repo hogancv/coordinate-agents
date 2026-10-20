@@ -72,3 +72,7 @@
 ## 2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration
 **Learning:** `validateCollaborationEvents` spread `STATUSES` into a new `['IDLE', ...STATUSES]` array on every event iteration in `.map()`, causing $O(N)$ allocations and linear scans. `collaborationSummary` allocated `Array.from(text)` character arrays for every string even when `text.length <= 240`.
 **Action:** Precompute static state transition Sets at module scope and fast-path scalar string length checks (`length <= threshold`) before allocating unicode character arrays.
+
+## 2026-09-21 - Single-pass maximum filename search in currentState
+**Learning:** `currentState` in `agent-observer.mjs` used `readdirSync(directory).filter(name => name.endsWith('.json')).sort().reverse()[0]`, which created 3 intermediate arrays (`.filter`, `.sort`, `.reverse`) and performed an $O(N \log N)$ sorting pass to find a single maximum filename.
+**Action:** Use a single-pass `for...of` loop over `readdirSync` to find the lexicographically maximum file string in $O(N)$ time with zero extra array allocations.
