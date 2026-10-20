@@ -119,9 +119,10 @@ test('external Adapter author guide links the public SDK and shipped example', (
   ]) assert.ok(existsSync(join(root, path)), `Missing shipped external Adapter example file: ${path}`);
 });
 
-test('the sole llms index is canonical and points to rendered documentation', () => {
+test('root llms index is generated from canonical documentation and points to rendered pages', () => {
   const canonical = read(join('docs', 'llms.txt'));
-  assert.equal(existsSync(join(root, 'llms.txt')), false, 'Do not recreate a duplicate root index');
+  assert.ok(existsSync(join(root, 'llms.txt')), 'Repository scanners need a root llms.txt');
+  assert.equal(read('llms.txt'), canonical, 'Generated root index must match docs/llms.txt');
   for (const url of [
     'https://hogancv.github.io/coordinate-agents/',
     'https://hogancv.github.io/coordinate-agents/getting-started.html',

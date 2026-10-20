@@ -9,6 +9,10 @@ const index = readFileSync(join(docs, 'llms.txt'), 'utf8');
 const site = 'https://hogancv.github.io/coordinate-agents/';
 const routes = [...new Set(index.match(/https:\/\/hogancv\.github\.io\/coordinate-agents\/[^\s)]*/g) || [])];
 const errors = [];
+const generated = join(docs, '..', 'llms.txt');
+if (!existsSync(generated) || readFileSync(generated, 'utf8') !== index) {
+  errors.push('Root llms.txt is missing or stale; run npm run sync:llms.');
+}
 if (!index.startsWith('# Coordinate Agents\n')) errors.push('Missing index title.');
 if (!index.includes('Canonical repository: https://github.com/hogancv/coordinate-agents')) {
   errors.push('Missing canonical repository.');
