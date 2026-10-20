@@ -1,5 +1,8 @@
 # npm 3.0.0 Web-first release evidence
 
+For the user-facing direction change and original v2.4.0 documentation, see
+[v2.4 docs and migration](../v2.4.html). The measurements below remain the historical release evidence.
+
 > The measurements and tarball integrity below describe the initial Web-first refactor snapshot, before the subsequent Workspace archive feature. Archive follow-up verification is recorded separately in `workspace-archive.md`.
 
 The npm product is Web Workspace; the GitHub Plugin remains version 2.4.0 and retains its complete source/structured workflow. No publish, push, tag, merge, Release or workflow dispatch was performed during this initial verification.

@@ -1,4 +1,13 @@
+---
+layout: page
+title: Changelog
+description: Published Coordinate Agents release history for the Web package and retained structured workflow.
+---
+
 # Changelog
+
+For the v2.4 → v3 product-direction change and original v2.4.0 documentation,
+see [v2.4 docs and migration / 旧版文档与迁移](./v2.4.html).
 
 ## [3.0.1] - 2026-10-13
 
@@ -39,7 +48,7 @@
 - Replace Plugin-based npm artifact gates with an isolated production install, import/payload checks, offline mock dual terminals, role/message/task isolation, project/settings/reconnect/restart and cleanup checks. Plugin/MCP tests remain independent. Add a Windows/macOS/Linux × Node 18/22/24 acceptance matrix.
 - Fix absent terminal read limits being treated as one byte/line, ensure the message helper runs through symlink/realpath aliases, and let the Session Host consume initialization before disconnecting IPC (validated with delayed imports and Node 22). Preserve loopback, Host/Origin, capability, bounded input and filesystem guards.
 - No generated build is required for `npm pack --ignore-scripts`. The manually authorized Trusted Publishing/OIDC workflow publishes the exact verified tarball. No publication is performed by this change.
-- Exact size/install/startup measurements and validation limitations: [V3 release evidence](docs/releases/v3-web-first.md).
+- Exact size/install/startup measurements and validation limitations: [V3 release evidence](./releases/v3-web-first.md).
 
 ## 2.4.0 — Lightweight Web Workspace
 

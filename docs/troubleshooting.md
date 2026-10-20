@@ -1,10 +1,108 @@
 ---
 layout: page
 title: Troubleshooting
-description: Match real coordinate-agents, Node, Codex, agy, agent-bus, Windows path, and npm metadata errors to safe recovery steps.
+description: Diagnose Web Workspace releases, startup, terminal settings, collaboration receipts, notifications, and optional Legacy Plugin or Agent Bus failures.
 ---
 
 # Troubleshooting
+
+For the previous product direction, see [v2.4 original docs and migration](./v2.4.html).
+
+## A documented feature is missing, or a command is unavailable
+
+Check whether you are running the npm package or current source. As checked on
+2026-10-20, npm `latest` is 3.0.1; later Git Changes/review, Custom, notification,
+Timeline, and Health additions require source until a new release is published.
+
+```sh
+npx @hogancv/coordinate-agents@latest --version
+# From a source checkout, after npm ci:
+node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
+```
+
+npm 3.x exposes Web/help/version only. `doctor`, `install`, `config`, `task`,
+`quickstart`, and `inspector` require the GitHub Plugin, source Legacy entry, or
+npm 2.4.0. Do not install npm latest as a repair for a missing Plugin runtime.
+
+## The server cannot start or the port is busy
+
+Check Node.js >=18, Git, a regular non-symlink project directory, and dependency
+installation (`npm ci` for source). Use `--port 0` to choose a free port instead
+of terminating an unrelated process. Inspect the printed error and selected
+`--root`; a non-Git startup folder initializes Git and Workspace storage.
+
+## An agent command is missing or cannot log in
+
+Run `codex --version` and `agy --version`, or the two configured Custom commands,
+in the environment used to launch Web. Settings accepts executable names or
+absolute paths, without inline flags or shell syntax. Correct the selected
+project's settings and explicitly create/restart a task; running CLIs are not
+reconfigured in place. Custom restarts retain their task's command snapshot.
+
+Executable detection does not verify login, provider access, model health, or
+quota. Open that CLI directly to fix its own authentication/configuration; do
+not copy credentials between agents. If Node cannot load the native dependency
+in source, rerun `npm ci` for the current Node version.
+
+## Terminal display or resize is limited
+
+Check Session diagnostics for `backend`. Native PTY availability depends on
+platform and Node version. Node 18 retains owned-stdio fallback; it is not a
+real terminal and cannot provide native TUI or child-observed resize. On Windows
+Node >=20, a disposable detached Session Host probes real TTY behavior before
+selecting the native backend. Fallback requires confirmed owned-process cleanup.
+An actual Session failure does not automatically retry a task. Fix the cause
+and use explicit restart; do not resend implementation instructions blindly.
+
+## A task is quiet or the timeline has no DONE
+
+Expand the timeline and inspect formal receipts plus linked Session facts.
+`SENT` means input was dispatched; ordinary output or idle does not mean done.
+Health silence hints identify missing observable progress, not proven failure.
+A pending `wait` should continue with its returned cursor/revision, not repeat
+`send`. History from versions that did not record events cannot be backfilled.
+Custom tasks have no default cooperation rounds or reports.
+
+## Review feedback or a Custom prompt cannot be sent
+
+For Default review feedback, ensure Codex is at a blank input prompt and confirm
+readiness for each send. Switching files, refreshing the diff, or closing the
+Changes drawer during preflight cancels pending feedback. Custom tasks can view
+and copy diffs but do not support Send to Codex.
+
+For a Custom prompt, check the CLI accepts multiline bracketed paste, then
+confirm readiness in its preview. Closing the preview cancels pending delivery;
+uncertain or already dispatched input is not retried automatically. Copy and
+paste manually when readiness is unknown.
+
+## A desktop notification is missing
+
+Use current source on Windows 10/11 or macOS; Linux is unsupported. Enable and
+save the selected project's notification preferences. Check the chosen events:
+APPROVED and FAILED are selected by default, DONE is optional. Use Send test
+notification, then check OS permissions and Focus / Do Not Disturb. An accepted
+OS command is not proof the notification appeared on screen.
+
+Only formal persisted Default receipts trigger notifications. Keep backend,
+agent processes, and the interactive OS session running. Browser close is fine;
+Custom output, Session exits, archive, and idle are not notification events.
+At-most-once dispatch means failed or interrupted attempts are not retried.
+Changing a summary does not resend; a new round can notify again.
+
+## A closed browser left agents running, or a project disappeared
+
+Independent Session Hosts can outlive the browser and Web server. Reopen Web
+and use explicit terminal-close controls. Archiving closes related terminals
+and hides records, while retaining source files. Archived projects stay hidden
+until you explicitly add the same folder again. Clearing archived conversations
+is permanent and removes their timeline history.
+
+## Structured Plugin / Legacy troubleshooting
+
+The remaining sections apply to the optional GitHub Plugin and Legacy runtime,
+not npm 3.x Web. Use `node bin/coordinate-agents-legacy.mjs` from source or pin
+npm **2.4.0**. See [Structured workflow](./structured-workflow.html) and
+[Legacy installation](./legacy-ai-install.html).
 
 ## Plugin-first diagnosis and structured errors
 
@@ -53,8 +151,8 @@ user fixes the command, `task resume` is required before another dispatch.
 Start with the same package version and target used for installation:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@<version> doctor --codex
-npx --yes @hogancv/coordinate-agents@<version> doctor --antigravity
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --codex
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor --antigravity
 ```
 
 Preserve redacted output and the exit status. Do not paste credentials or force a destructive repair.
@@ -82,10 +180,10 @@ command, not a role label:
 
 ```sh
 # Antigravity
-npx @hogancv/coordinate-agents config set agent.antigravity.command agy
+npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
 
 # Claude Code as a registered custom agent
-npx @hogancv/coordinate-agents agent add claude --adapter generic-cli --command claude \
+npx @hogancv/coordinate-agents@2.4.0 agent add claude --adapter generic-cli --command claude \
   --args '["--print", "{prompt}"]'
 ```
 
@@ -103,7 +201,7 @@ show me the resolved configuration. Do not start until I confirm.
 
 The built-in Antigravity Adapter does not automatically append a full-permission flag. The legacy
 one-shot path passes configured `args` and then adds `--prompt-interactive <prompt>`; a persistent
-Session starts with `--prompt-interactive=` for current `agy`/`agy-proxy` parsers, then writes its
+Session starts with `--prompt-interactive=` for current `agy` parsers, then writes its
 first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
 `--dangerously-skip-permissions` and the user explicitly wants it, set
 `agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
@@ -134,12 +232,12 @@ Antigravity CLI (agy): missing or requires attention
 Run `where codex` / `where agy` on Windows or `command -v codex` / `command -v agy` on POSIX.
 Install the missing native CLI from its official source, authenticate it, and prove a native model
 response before rerunning `doctor`. A selected-target check fails when that target CLI is absent;
-the unselected CLI is informational only. If a machine-specific wrapper is used, configure the
-actual command instead of expecting the Adapter to infer it:
+the unselected CLI is informational only. For native Antigravity, configure `agy` directly; its global proxy settings apply
+without a project-specific wrapper:
 
 ```sh
-npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
-npx @hogancv/coordinate-agents doctor
+npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
+npx @hogancv/coordinate-agents@2.4.0 doctor
 ```
 
 The project-level command in `.agent-bus/config.json` takes precedence over this user setting.
@@ -210,7 +308,7 @@ Git worktree root and copy the generated `launch` commands unchanged. They encod
 
 ```powershell
 git rev-parse --show-toplevel
-npx --yes @hogancv/coordinate-agents@<version> doctor
+npx --yes @hogancv/coordinate-agents@2.4.0 doctor
 ```
 
 Do not manually translate `C:\project` to `/mnt/c/project` unless both CLIs execute in WSL. Windows
@@ -236,5 +334,5 @@ switch to an untrusted registry, or run a GitHub checkout as an installer. Wait 
 metadata or use an already verified stable exact version.
 
 See the canonical bilingual
-[AI installation guide](https://github.com/hogancv/coordinate-agents/blob/main/AI_INSTALL.md)
+[AI installation guide](https://hogancv.github.io/coordinate-agents/install-with-ai.html)
 and the [security boundary](./security.html).

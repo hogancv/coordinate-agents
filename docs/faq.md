@@ -1,75 +1,108 @@
 ---
 layout: page
 title: FAQ
-description: Answers about multi-agent coordination, Codex and Antigravity reference roles, adapter architecture, recovery, and security.
+description: Answers about Web Workspace setup, coding-agent pairs, source versus npm releases, local data, persistence, and optional structured workflows.
 ---
 
 # Frequently asked questions
 
-## What is the Plugin-first Task surface?
+## What is Coordinate Agents now?
 
-The Codex Plugin routes first-use intent through focused Skills: setup discovers
-and configures a local Implementer, task owns durable Task records, review checks
-evidence, and recover diagnoses explicit continuation. The Task API is layered on
-the existing `.agent-bus`; it does not create a second transport. The npm CLI is
-the Runtime/fallback surface for automation and advanced inspection.
+A local Web Workspace for two persistent coding-agent terminals. Default
+Collaboration pairs Codex for clarification/delegation/review with Antigravity
+for implementation. Custom Terminals lets you choose your own CLI pair and
+prompts. The repository also retains a separate structured Plugin and Legacy
+runtime for durable Tasks, Agent Bus, MCP, and Task Graphs.
 
-## What is coordinate-agents?
+## Why are features in the docs missing from my npm installation?
 
-A local-first coordination protocol, runtime, and Codex App/CLI skill for multi-agent software engineering in Git repositories. The core is agent-agnostic with an adapter-based runtime. OpenAI Codex App/CLI and Google Antigravity CLI serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop/IPC surfaces connect through the adapter extension model.
+As checked on 2026-10-20, npm `latest` is 3.0.1. Current source includes later
+Git Changes/review feedback, Custom Terminals, notification, Timeline, and Health
+work. Run the source checkout to use those additions. A merge to main does not
+publish npm; see [Getting started](./getting-started.html).
 
-## Can I use it directly in Codex App?
+## Do I need a Codex Plugin or a global npm installation?
 
-Yes. Install and enable the Codex plugin, add the target Git repository as a Codex App project, set
-the thread project path to the repository root containing `.git`, and invoke `$coordinate-agents` in
-a new thread. You do not need to manually open two CLI windows. The Runtime opens or reuses a
-project/Agent-scoped persistent Execution Session for the configured Implementer, so configure the
-actual executable command, such as `agy` or `claude`, and keep that CLI installed on the same machine.
+No. Start Web with `npx @hogancv/coordinate-agents@latest web`, or run the source
+entry after `npm ci`. Install the Plugin only if you want the separate
+[structured workflow](./structured-workflow.html). npm 3.x does not provide
+`install`, `doctor`, `quickstart`, `config`, `task`, or `inspector`.
 
-The Session is a Runtime-owned PTY host, not the Codex App Terminal UI. Session tools are bounded and
-operate only on the process created by that host.
+## Which CLIs can I use?
 
-For a non-reference CLI, ask Codex App to inspect the installed executable and its `--help` output,
-register it with `generic-cli`, run `doctor`, and show the resolved configuration before starting a
-task. This avoids copying prompt, directory, or permission flags from another CLI version.
+Default Collaboration expects `codex` and `agy`, with executable overrides in
+settings. Custom mode launches two installed interactive CLIs through
+`generic-cli`, including the same command twice. Executable fields take names
+or absolute paths, without inline flags or shell syntax. Compatibility with an
+unknown CLI's readiness and multiline paste must be checked by the user.
+Custom mode does not add default roles, rounds, or Codex review handoff.
 
-## What is an Execution Session?
+## Does local-first mean the agents work offline?
 
-An Execution Session is independent process state for a configured Agent in one repository. A Task
-stores a non-owning `sessionId`; a healthy Session can therefore survive a review round and receive
-`CHANGES_REQUESTED` rework through the same PTY. `status`, `inspect`, `write`, `read`, and `close`
-are explicit bounded operations. Recovery inspection does not restart, replay, or attach to an
-arbitrary process, and no Session operation automates the Codex App Terminal UI.
+Workspace storage and coordination are local. Each CLI still uses its own
+provider, login, networking, and permission settings. Coordinate Agents does
+not share credentials or guarantee offline model inference. Never put tokens,
+cookies, passwords, or private keys in `.agent-bus/`.
 
-## How do I prevent multiple AI agents from editing code simultaneously?
+## Does creating a task isolate its file changes?
 
-Assign clear, non-overlapping workflow roles. In the default reference workflow, Antigravity is the exclusive implementation writer while Codex specifies requirements and reviews commits. Do not execute concurrent Git writes on the same worktree.
+No. Web task terminal pairs share the selected project's working directory.
+Use separate Git worktrees when independent writers need isolation; do not run
+conflicting edits in the same worktree. The structured Task Graph workflow has
+its own explicit worktree contracts, separate from Web tasks.
 
-## Does it share my accounts or API credentials?
+## What does APPROVED mean? Does it authorize a release?
 
-No. Each agent and CLI maintains its native authentication and environment independently. Never place API tokens or credentials in `.agent-bus`.
+It means Codex reported approval for that collaboration round. Reports are not
+independently verified by the Workspace. `DONE` means the implementer reported
+ready for review; `SENT` confirms dispatch only. Task running/closed status is
+terminal lifecycle. Web prompts require user authorization for commit, push, and
+release, but do not enforce a technical release gate. Structured
+`REVIEW_APPROVED` and `RELEASE_APPROVED` have separate protocol semantics.
 
-## Can custom or third-party CLI agents be added?
+## Is a quiet terminal a failed task?
 
-Yes. Custom CLI agents can be registered dynamically using `coordinate-agents agent add <id> --adapter generic-cli --command <cmd> --args '<args>'`. Workflow roles (`planner`, `implementer`, `reviewer`) can be assigned to any registered agent.
+No. Health hints show missing receipts, quiet work/review, and linked Session
+facts. They do not infer success or failure from silence and do not retry or
+restart agents. Check the terminal and formal receipt before deciding how to
+continue. A pending wait is not a reason to resend an instruction.
 
-The built-in Antigravity Adapter does not automatically add full permissions. Its legacy one-shot
-path passes configured arguments and then appends `--prompt-interactive <prompt>`; a persistent
-Session starts with `--prompt-interactive=` for current `agy`/`agy-proxy` parsers, then writes its
-first instruction through the PTY unless `{prompt}` is explicitly configured. If the local `agy --help` confirms
-`--dangerously-skip-permissions` and the user explicitly wants it, set it with
-`config set agent.antigravity.args`; otherwise the local `agy` configuration remains authoritative.
+## What survives refresh or closing the browser?
 
-## Can interrupted work be resumed?
+Projects, task records, and collaboration history are local files. Independent
+Session Hosts let a refreshed browser reconnect to running agents. Browser close
+or Web server shutdown does not itself close those agents; use terminal-close
+controls explicitly. Restarting a pair creates fresh Sessions, not restored
+model context, while keeping recorded task history.
 
-Yes. Message queues (`new`, `processing`, `processed`) and append-only state logs survive terminal restarts. Use `coordinate-agents doctor` or `scripts/agent-bus.mjs recover` to recover stale claims.
+## How do notifications work?
 
-## Is `.agent-bus` encrypted?
+Enable project preferences in the Desktop Notifications settings tab. Windows
+10/11 and macOS are supported; Linux reports unsupported. Only formal Default
+Collaboration receipts trigger them. Attempts are at most once per project/task/
+round/status, so an OS failure can lose a notification without automatic retry.
+The browser may be closed while backend and agents continue running. System
+permissions and Focus mode control visible delivery.
 
-No. It is a local plaintext directory on the filesystem and is excluded from ordinary Git tracking via `.git/info/exclude`, not an encrypted store.
+## What does Git Changes include?
 
-## How do I uninstall it?
+Current working-tree changes, including existing user edits. It is not an
+agent-only diff or a review of committed history. In Default mode you can select
+diff lines and send notes after confirming Codex is at a blank input prompt.
+A successful send clears that confirmation. Custom mode supports viewing/copying.
 
-Run `npx @hogancv/coordinate-agents@2.4.0 uninstall`. Unrecognized or user-modified skill installations are preserved unless `--force` is explicitly authorized.
+## How do I archive or remove local history?
 
-For detailed answers and exact commands, read the [English README](https://github.com/hogancv/coordinate-agents#faq) or [Simplified Chinese README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md#常见问题).
+Right-click a task or project to archive it and close its terminals. Source
+files remain. Settings can permanently clear archived conversations, including
+their timeline history, across registered projects. Re-adding an archived folder
+restores its project entry. A global npm install can be removed with
+`npm uninstall -g @hogancv/coordinate-agents`; that does not remove project data.
+
+## Where are the original protocol and adapter docs?
+
+The optional structured system remains a local-first coordination protocol, runtime,
+and Plugin with Codex/Antigravity reference adapters. The default reference workflow
+uses Planner, Implementer, and Reviewer roles. Start with [Structured workflow](./structured-workflow.html),
+then [Protocol](./protocol.html), [MCP](./mcp.html), or [Adapter author guide](./adapter-author-guide.html).
+For Legacy Skill uninstall and backup restore, use [Legacy installation](./legacy-ai-install.html).

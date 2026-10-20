@@ -7,6 +7,11 @@ permalink: /adapter-conformance.html
 
 # Adapter Conformance Kit
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 > **V3 distribution / 分发说明:** Adapter conformance remains a source/Plugin gate, independent of the Web-first npm 3.x payload. npm 3 no longer packages this kit or the author example. Web package installation has its own cross-platform acceptance workflow.
 
 
@@ -130,9 +135,9 @@ An adapter module can be added only through an explicit local path supplied by
 the user or an already persisted `adapters` entry:
 
 ```sh
-npx @hogancv/coordinate-agents adapter register "C:\\path\\to\\adapter.mjs" --json
-npx @hogancv/coordinate-agents adapter list --json
-npx @hogancv/coordinate-agents adapter remove "C:\\path\\to\\adapter.mjs" --json
+npx @hogancv/coordinate-agents@2.4.0 adapter register "C:\\path\\to\\adapter.mjs" --json
+npx @hogancv/coordinate-agents@2.4.0 adapter list --json
+npx @hogancv/coordinate-agents@2.4.0 adapter remove "C:\\path\\to\\adapter.mjs" --json
 ```
 
 Registration accepts only an existing regular `.mjs`, `.js`, or `.cjs` file

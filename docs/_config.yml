@@ -1,5 +1,5 @@
 title: coordinate-agents
-description: Local-first coordination protocol and runtime for AI coding agents.
+description: Local Web Workspace for persistent coding-agent terminals and Codex + Antigravity collaboration.
 url: https://hogancv.github.io
 baseurl: /coordinate-agents
 repository: hogancv/coordinate-agents
@@ -9,12 +9,11 @@ plugins:
   - jekyll-sitemap
 header_pages:
   - getting-started.md
-  - install-with-ai.md
-  - protocol.md
   - inspector.md
-  - mcp.md
-  - task-graph-v1.md
-  - MCP_TROUBLESHOOTING.md
-  - security.md
+  - install-with-ai.md
   - troubleshooting.md
   - faq.md
+  - structured-workflow.md
+  - v2.4.md
+  - changelog.md
+  - security.md

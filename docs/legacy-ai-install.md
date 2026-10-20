@@ -1,13 +1,24 @@
-# AI installation guide / AI 安装指南
+---
+layout: page
+title: Legacy Skill installation
+description: Preserved npm 2.4.0 Skill installation, verification, upgrade, uninstall, and backup procedures; separate from npm 3 Web Workspace.
+---
+
+# Legacy Skill installation guide / 旧版 Skill 安装指南
+
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
 
 > **V3 distribution / 分发说明:** npm 3.0 is Web-first: use `npx @hogancv/coordinate-agents@latest web`. All structured installation/doctor/setup/SDK instructions below refer to the GitHub Plugin/source or npm **2.4.0**. npm 3.x does not install Skills or provide the Legacy runtime. Plugin versions are independent; its resolver selects `bin/coordinate-agents-legacy.mjs`. / npm 3.0 仅分发 Web；以下结构化安装流程使用 GitHub Plugin/源码或 npm 2.4.0。
 
-This is the canonical installation procedure for AI assistants installing
-`coordinate-agents`. Human-readable usage remains in [README.md](./README.md) and
-[README.zh-CN.md](./README.zh-CN.md).
+This guide preserves the optional Legacy Skill installation lifecycle.
+For Web Workspace use [AI installation guide / AI 安装指南](./install-with-ai.html). Human-readable usage remains in [README.md](https://github.com/hogancv/coordinate-agents/blob/main/README.md) and
+[README.zh-CN.md](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md).
 
-本文件是 AI 助手安装 `coordinate-agents` 时必须遵循的唯一安装流程。面向用户的使用说明见
-[README.md](./README.md) 和 [README.zh-CN.md](./README.zh-CN.md)。
+本文件仅适用于旧版 Skill 安装；Web Workspace 的当前安装入口是 [AI installation guide / AI 安装指南](./install-with-ai.html)。面向用户的使用说明见
+[README.md](https://github.com/hogancv/coordinate-agents/blob/main/README.md) 和 [README.zh-CN.md](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)。
 
 ## Contents / 目录
 
@@ -41,7 +52,7 @@ This is the canonical installation procedure for AI assistants installing
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
    - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents@2.4.0 agent add <id> --adapter <adapter>`.
    - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents@2.4.0 adapter register <local-file>`; the loader never scans directories or imports URLs.
-   - Adapter authors can start with the offline [External Adapter Author Guide](./docs/adapter-author-guide.md) and its bundled minimal example.
+   - Adapter authors can start with the offline [External Adapter Author Guide](./adapter-author-guide.md) and its bundled minimal example.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
 `coordinate-agents` 包含两个不同层级：
@@ -50,7 +61,7 @@ This is the canonical installation procedure for AI assistants installing
 
 ## Plugin-first onboarding / 插件优先的首次使用
 
-Codex Plugin is the preferred product entry point. It discovers the local
+Codex Plugin is the entry point for the optional structured workflow. It discovers the local
 Coding CLIs, configures an Implementer, and exposes a durable Task API over the
 existing Agent Bus. The focused Skills are `coordinate-agents`,
 `coordinate-setup`, `coordinate-task`, `coordinate-review`, and
@@ -86,10 +97,10 @@ node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "
 node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --json
 ```
 
-For example, after the user chooses `agy-proxy`:
+For example, after the user chooses native `agy`:
 
 ```text
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup configure --agent antigravity --command agy-proxy --adapter antigravity-cli --root "<repository>" --json
+node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup configure --agent antigravity --command agy --adapter antigravity-cli --root "<repository>" --json
 ```
 
 After discovery, the Skill must use one high-level `setup configure` transaction. It writes the
@@ -154,11 +165,10 @@ Accept only this identity:
 
 Before installation, query npm and confirm that `name` is exactly
 `@hogancv/coordinate-agents`, `repository.url` points to
-`github.com/hogancv/coordinate-agents`, and `dist-tags.latest` is a stable SemVer without a
-prerelease suffix:
+`github.com/hogancv/coordinate-agents`, and the selected Legacy version is exactly `2.4.0`:
 
 ```sh
-npm view @hogancv/coordinate-agents name version dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents@2.4.0 name version repository.url --json
 ```
 
 Also confirm that the installation document was read from the canonical GitHub repository, not
@@ -166,7 +176,7 @@ from a fork. If any owner, repository, package name, or metadata differs, stop a
 mismatch. Do not install.
 
 安装前必须确认仓库 owner 为 `hogancv`、仓库名为 `coordinate-agents`、npm 包名为
-`@hogancv/coordinate-agents`，并确认 `dist-tags.latest` 指向不含预发布后缀的稳定 SemVer。
+`@hogancv/coordinate-agents`，并确认查询的旧版包版本为 `2.4.0`，不要使用 Web 的 `dist-tags.latest`。
 任何一项不一致都必须停止并报告，不得继续安装。
 
 ## Security rules / 安全规则
@@ -203,7 +213,7 @@ npm --version
 git --version
 codex --version
 agy --version
-npm view @hogancv/coordinate-agents name version dist-tags.latest repository.url --json
+npm view @hogancv/coordinate-agents@2.4.0 name version repository.url --json
 ```
 
 Requirements:
@@ -221,8 +231,7 @@ to complete the CLI's own browser flow; do not ask the user to provide the resul
 
 ## Install both agents / 安装两个代理
 
-Let `VERIFIED_VERSION` mean the exact stable version returned by the identity check. Substitute
-that literal version for `<VERIFIED_VERSION>`:
+Use the verified Legacy version `2.4.0` for every command in this guide:
 
 ```sh
 npx --yes @hogancv/coordinate-agents@2.4.0 install
@@ -401,10 +410,10 @@ Plugin tree:
 ~/.coordinate-agents/config.json
 ```
 
-For example, configure a custom Antigravity wrapper and inspect the result:
+For example, use native Antigravity and inspect the result:
 
 ```sh
-npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
 npx --yes @hogancv/coordinate-agents@2.4.0 config get agent.antigravity.command
 npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
@@ -418,7 +427,7 @@ errors are handled as runtime failures after launch. The user file is outside `s
 
 Permission and sandbox flags are vendor-specific and explicit. The legacy one-shot
 `antigravity-cli` launch passes configured `args` and then appends `--prompt-interactive <prompt>`.
-For a persistent Session, the adapter starts `--prompt-interactive ""` so current `agy`/`agy-proxy`
+For a persistent Session, the adapter starts `--prompt-interactive ""` so current `agy`
 parsers receive the required empty initial prompt value, then writes the first instruction through
 the PTY unless configured args explicitly include `{prompt}`. The Adapter does not add
 `--dangerously-skip-permissions` or another full-permission flag automatically. If the local `agy`
@@ -440,10 +449,10 @@ versions without checking that CLI's help output.
 ~/.coordinate-agents/config.json
 ```
 
-例如配置自定义 Antigravity 包装命令并查询结果：
+例如直接使用原生 Antigravity 命令并查询结果：
 
 ```sh
-npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
+npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
 npx --yes @hogancv/coordinate-agents@2.4.0 config get agent.antigravity.command
 npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
@@ -455,7 +464,7 @@ npx --yes @hogancv/coordinate-agents@2.4.0 config list
 载荷之外，因此安装和更新会保留它。
 
 权限和沙箱参数由各厂商决定，并且必须显式配置。旧版一次性 `antigravity-cli` 启动只会传递已配置的 `args`，然后追加
-`--prompt-interactive <prompt>`；持久 Session 会先使用 `--prompt-interactive ""` 提供当前 `agy`/`agy-proxy` 所需的空初始提示值，
+`--prompt-interactive <prompt>`；持久 Session 会先使用 `--prompt-interactive ""` 提供当前 `agy` 所需的空初始提示值，
 再通过 PTY 写入第一条真正的指令，除非参数中显式包含 `{prompt}`。
 该 Adapter 不会自动添加 `--dangerously-skip-permissions` 或其他完全权限参数。如果本机 `agy`
 自身配置已经开启完全权限，该配置会继续生效。如果 `agy --help` 确认必须显式传入该参数，且用户明确要求使用，才写入
@@ -500,8 +509,8 @@ Codex App 中，只有在验证通过且用户**明确要求开始协作**后，
 
 ## Upgrade / 更新
 
-Repeat the canonical identity check, record the newly verified stable version, then run the
-appropriate exact-version update and matching doctor command:
+Repeat the canonical identity check against Legacy `2.4.0`, then run its update
+and matching doctor command. Do not upgrade a Skill install to the Web-only npm latest:
 
 ```sh
 # Both agents

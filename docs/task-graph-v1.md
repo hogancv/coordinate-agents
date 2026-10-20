@@ -6,6 +6,11 @@ description: Additive Task Graph input, deterministic execution, durable recover
 
 # Task Graph v1 Contract
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 Task Graph v1 is an additive input contract over the canonical Coordinate
 Agents Runtime. It does not reinterpret or replace schema-version-1 single
 Tasks. The existing `task create`, `task dispatch`, `task status`, `task

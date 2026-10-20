@@ -31,7 +31,7 @@ on:
       - 'test/release-workflow.test.mjs'
       - 'test/tar-capability.test.mjs'
       - 'README*.md'
-      - 'CHANGELOG.md'
+      - 'docs/changelog.md'
       - 'LICENSE'
       - '.github/workflows/web-package-acceptance.yml'
       - '.github/workflows/release.yml'

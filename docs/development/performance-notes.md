@@ -1,3 +1,9 @@
+# Historical performance notes
+
+Preserved from the former `.jules/bolt.md` automation journal. These entries
+record observations from earlier work, not current instructions or verified
+performance claims. Check the present implementation before reusing a suggestion.
+
 # Bolt's Journal - Critical Learnings
 
 ## 2025-05-19 - Pattern compilation in scope audit

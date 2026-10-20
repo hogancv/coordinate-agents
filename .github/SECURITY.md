@@ -23,15 +23,38 @@ The only official identities are:
 - Repository: `https://github.com/hogancv/coordinate-agents`
 - npm package: `@hogancv/coordinate-agents`
 
-Follow [`AI_INSTALL.md`](./AI_INSTALL.md). Verify the owner, package metadata, and stable version
+Follow [the installation guide](../docs/install-with-ai.md). Verify the owner, package metadata, and stable version
 before installation. Do not use a third-party mirror, fork, repackaged archive, unknown installer,
 or `curl | sh`. The installer never needs an account token, cookie, password, private key, browser
 profile, or recovery code. Report any request for those values as suspicious.
 
-The installer writes selected skill copies under `~/.codex/skills/coordinate-agents` and/or
+The npm 3.x package starts the Web Workspace; it does not install Skills or provide
+`doctor`. For that product use version/help checks and verify Web startup separately.
+
+The optional Legacy npm 2.4.0 Skill installer writes selected copies under
+`~/.codex/skills/coordinate-agents` and/or
 `~/.gemini/skills/coordinate-agents`, plus sibling backups during managed updates. It refuses
 to overwrite or remove unrecognized directories unless the user explicitly chooses `--force`.
-Run `doctor` after installation and treat any non-zero result as a failure.
+For that Legacy installer, run the matching selected-target `doctor` and treat any
+non-zero result as a failure. See [Legacy installation](../docs/legacy-ai-install.md).
+
+## Web Workspace boundary
+
+The browser server listens on loopback and checks Host, Origin, a per-launch
+capability, action schemas, and project/session ownership. This is not multi-user
+authentication or a sandbox for agent executables. Agent CLIs retain their own
+provider logins and configured filesystem/command permissions.
+
+Web tasks share the selected project's working directory. A new pair of terminals
+does not create an isolated worktree. Collaboration states are agent reports,
+not independent validation. Role prompts require user authorization for commit,
+push, and release, but do not technically enforce the structured release gate.
+
+Closing the browser or Web server does not itself close independent Session Hosts;
+use explicit terminal-close controls. Archive closes associated terminals and hides
+records while preserving source. Clearing archived conversations permanently deletes
+their stored task and timeline history. Read [Web security](../docs/security.md) for
+storage, notifications, and diagnostic-sharing limits.
 
 ## Runtime data and adapter boundary
 
@@ -106,8 +129,8 @@ it before sharing diagnostics.
 - Adapter Contract v1 validates metadata and launch-result shapes; it does not sandbox adapter code.
   A module registered with `coordinate-agents adapter register <local-file>` executes with the current
   Node.js process permissions and must be treated as trusted local code.
-- The offline [External Adapter Author Guide](./docs/adapter-author-guide.md) and
-  [minimal example](./examples/minimal-external-adapter/README.md) use only the public SDK entry and
+- The offline [External Adapter Author Guide](../docs/adapter-author-guide.md) and
+  [minimal example](../examples/minimal-external-adapter/README.md) use only the public SDK entry and
   do not require provider accounts, tokens, network access, or real user configuration.
 - Trusted-local loading accepts only the explicit regular `.mjs`, `.js`, or `.cjs` file path and performs no
   URL import, directory scan, remote registry lookup, download, or automatic npm installation. Registration
@@ -127,7 +150,10 @@ it before sharing diagnostics.
 - A Session Host may interrupt or terminate only the process it created. The Runtime never attaches to
   arbitrary PIDs or automates the Codex App Terminal UI.
 
-### Human release gate
+### Human release gate (structured workflow)
+
+The following applies to the retained Plugin / Legacy Task protocol. Web has
+the prompt-level authorization boundary described above.
 
 `REVIEW_APPROVED` is review sign-off, not release authorization. Only the exact human prompt `RELEASE_APPROVED` authorizes merge, tag, push, deploy, or publish actions.
 

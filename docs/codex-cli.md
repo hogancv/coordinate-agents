@@ -6,6 +6,11 @@ description: OpenAI Codex App or CLI serves as the reference planner and reviewe
 
 # Codex App/CLI role (Reference planner & reviewer)
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 > [!NOTE]
 > This page describes Codex App/CLI's responsibilities in the **default reference workflow**. The underlying `.agent-bus` runtime is agent-agnostic and allows assigning the `planner` and `reviewer` roles to other registered agents.
 

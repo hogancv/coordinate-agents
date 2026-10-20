@@ -21,60 +21,48 @@ test('skill entrypoint references resolve to available workflow resources', () =
   }
 });
 
-test('AI installation guide defines canonical identity and the complete safe lifecycle', () => {
-  const guide = read('AI_INSTALL.md');
-  for (const value of [
-    'https://github.com/hogancv/coordinate-agents',
-    '@hogancv/coordinate-agents',
-    'GitHub owner',
-    'dist-tags.latest',
-    'node --version',
-    'git --version',
-    'codex --version',
-    'agy --version',
-    'doctor --lang zh-CN',
-    'doctor --codex --lang zh-CN',
-    'doctor --antigravity --lang zh-CN',
-    '~/.codex/skills/coordinate-agents',
-    '~/.gemini/skills/coordinate-agents',
-    'coordinate-agents.backup-',
-    '## Upgrade / 更新',
-    '## Uninstall / 卸载',
-    '## Restore a backup / 恢复备份',
-    '## Troubleshooting / 故障排查',
-  ]) assert.ok(guide.includes(value), `AI_INSTALL.md is missing ${value}`);
-
+test('AI installation guide defaults to Web and preserves the separate Legacy lifecycle', () => {
+  const guide = read('docs/install-with-ai.md');
+  for (const value of ['https://github.com/hogancv/coordinate-agents',
+    '@hogancv/coordinate-agents', 'GitHub owner', 'dist-tags.latest',
+    'node --version', 'git --version', 'codex --version', 'agy --version',
+    '## Upgrade / 更新', '## Uninstall / 卸载', '## Troubleshooting / 故障排查',
+    'structured-workflow.html', 'legacy-ai-install.html']) {
+    assert.ok(guide.includes(value), `Installation guide is missing ${value}`);
+  }
   assert.match(guide, /Never use `curl \| sh`/);
   assert.match(guide, /Never request, print, copy, or store a token, cookie, password/);
-  assert.match(guide, /Do not run `quickstart`[\s\S]*unless the user separately asks/);
-  assert.match(guide, /non-zero[\s\S]*failed installation/);
+  assert.match(guide, /Do not run `quickstart`[\s\S]*unless\s+the user separately asks/);
+  assert.match(guide, /non-zero[\s\S]*failed step/);
+  assert.doesNotMatch(guide, /npx[^\n]* (?:install|doctor|quickstart)(?: |$)/m);
+
+  const legacy = read('docs/legacy-ai-install.md');
+  for (const fact of ['@hogancv/coordinate-agents@2.4.0',
+    'doctor --lang zh-CN', 'doctor --codex --lang zh-CN',
+    'doctor --antigravity --lang zh-CN', '~/.codex/skills/coordinate-agents',
+    '~/.gemini/skills/coordinate-agents', 'coordinate-agents.backup-',
+    '## Restore a backup / 恢复备份']) {
+    assert.ok(legacy.includes(fact), `Legacy installation is missing ${fact}`);
+  }
 });
 
-test('both READMEs prioritize Web-first npm and preserve structured source documentation', () => {
-  const english = read('README.md');
-  const chinese = read('README.zh-CN.md');
-  const englishHeadings = ['Two collaboration modes', 'Why Coordinate Agents', 'How the structured workflow works', 'Quick Start', 'Example', 'Key Capabilities', 'Supported Agents and Adapters', 'Web Workspace and Local Inspector', 'Documentation', 'Safety and Release Boundary', 'Project Status', 'License'];
-  const chineseHeadings = ['两种协作模式', '为什么使用 Coordinate Agents', '结构化流程的工作原理', '快速开始', '示例', '核心能力', '支持的代理与适配器', 'Web Workspace 与本地 Inspector', '文档导航', '安全与发布边界', '项目状态', '许可证'];
-  for (const heading of englishHeadings) assert.match(english, new RegExp(`^## ${heading}$`, 'm'));
-  for (const heading of chineseHeadings) assert.match(chinese, new RegExp(`^## ${heading}$`, 'm'));
-  assert.ok(english.split(/\r?\n/).length < 400);
-  assert.ok(chinese.split(/\r?\n/).length < 400);
-  for (const document of [english, chinese]) {
-    assert.match(document, /codex plugin marketplace add hogancv\/coordinate-agents/);
-    assert.match(document, /codex plugin add coordinate-agents@coordinate-agents/);
-    assert.match(document, /AI_INSTALL\.md/);
-    assert.match(document, /docs\/session-runtime\.md/);
-    assert.match(document, /docs\/event-journal\.md/);
-    assert.match(document, /RELEASE_APPROVED/);
+test('both READMEs lead with Web and source/release guidance before optional Plugin setup', () => {
+  for (const name of ['README.md', 'README.zh-CN.md']) {
+    const document = read(name);
+    const quickStart = document.indexOf('npx @hogancv/coordinate-agents@latest web');
+    const sourceStart = document.indexOf('node bin/coordinate-agents.mjs web');
+    const pluginInstall = document.indexOf('codex plugin marketplace add');
+    assert.ok(quickStart >= 0 && sourceStart > quickStart && pluginInstall > sourceStart,
+      `${name} must introduce Web and source before optional Plugin installation`);
+    assert.ok(document.split(/\r?\n/).length < 250, `${name} should stay concise`);
+    for (const link of ['docs/install-with-ai.md', 'docs/getting-started.md', 'docs/inspector.md',
+      'docs/structured-workflow.md', 'docs/legacy-ai-install.md']) {
+      assert.ok(document.includes(`](${link.startsWith('.') ? link : './' + link})`),
+        `${name} must link ${link}`);
+    }
+    for (const fact of ['3.0.1', 'npm ci', '--port 0', 'workspace-message.mjs',
+      'REVIEW_APPROVED', 'RELEASE_APPROVED']) assert.ok(document.includes(fact), `${name}: ${fact}`);
   }
-  assert.ok(
-    english.indexOf('npx @hogancv/coordinate-agents@latest') < english.indexOf('codex plugin marketplace add'),
-    'Web npm usage must precede structured Plugin installation'
-  );
-  assert.ok(
-    chinese.indexOf('npx @hogancv/coordinate-agents@latest') < chinese.indexOf('codex plugin marketplace add'),
-    'Chinese Web npm usage must precede structured Plugin installation'
-  );
 });
 
 test('README relative links resolve to repository files', () => {
@@ -92,7 +80,11 @@ test('documentation site exposes stable task-focused pages and canonical metadat
   const pages = [
     'index.md',
     'getting-started.md',
+    'structured-workflow.md',
+    'legacy-ai-install.md',
+    'v2.4.md',
     'install-with-ai.md',
+    'changelog.md',
     'codex-cli.md',
     'antigravity-cli.md',
     'protocol.md',
@@ -127,9 +119,9 @@ test('external Adapter author guide links the public SDK and shipped example', (
   ]) assert.ok(existsSync(join(root, path)), `Missing shipped external Adapter example file: ${path}`);
 });
 
-test('published llms index is canonical, synchronized, and points to rendered documentation', () => {
+test('the sole llms index is canonical and points to rendered documentation', () => {
   const canonical = read(join('docs', 'llms.txt'));
-  assert.equal(read('llms.txt'), canonical);
+  assert.equal(existsSync(join(root, 'llms.txt')), false, 'Do not recreate a duplicate root index');
   for (const url of [
     'https://hogancv.github.io/coordinate-agents/',
     'https://hogancv.github.io/coordinate-agents/getting-started.html',
@@ -140,32 +132,25 @@ test('published llms index is canonical, synchronized, and points to rendered do
   assert.match(read(join('docs', 'index.md')), /\[Machine-readable documentation index\]\(\.\/llms\.txt\)/);
 });
 
-test('evidence-focused docs contain complete workflows, comparison, and concrete failures', () => {
-  const gettingStarted = read(join('docs', 'getting-started.md'));
-  for (const evidence of ['about **5 minutes**', 'Before installation', 'IMPLEMENTATION_DONE',
-    'REVIEW_APPROVED', 'RELEASE_APPROVED', 'npm run demo', 'Success and failure signals']) {
-    assert.ok(gettingStarted.includes(evidence), `getting-started is missing ${evidence}`);
+test('onboarding separates Web first-use evidence from retained structured lifecycle', () => {
+  const gettingStarted = read('docs/getting-started.md');
+  for (const fact of ['--port 0', '--root', 'npm ci', 'blank input prompt',
+    'Success and failure signals', 'structured-workflow.html']) {
+    assert.ok(gettingStarted.includes(fact), `getting-started is missing ${fact}`);
   }
-  const install = read(join('docs', 'install-with-ai.md'));
-  for (const evidence of ['Codex installation conversation', 'Antigravity installation conversation',
-    'Commands the AI may execute', 'Commands the AI must not execute implicitly',
-    'Common failures and recovery', 'Installation result report', 'doctor` exit status `0`']) {
-    assert.ok(install.includes(evidence), `install-with-ai is missing ${evidence}`);
+  assert.doesNotMatch(gettingStarted, /npx[^\n]* (?:install|doctor|quickstart)(?: |$)/m);
+  const structured = read('docs/structured-workflow.md');
+  for (const fact of ['IMPLEMENTATION_DONE', 'REVIEW_APPROVED', 'RELEASE_APPROVED',
+    'npm run demo', 'default reference workflow', '@hogancv/coordinate-agents@2.4.0']) {
+    assert.ok(structured.includes(fact), `Structured workflow is missing ${fact}`);
   }
-  const comparison = read(join('docs', 'comparison.md'));
-  for (const evidence of ['Single agent', 'Manual dual terminals', '`coordinate-agents`',
-    'Configured Implementer', 'Configured Reviewer', 'Local persistent `.agent-bus`',
-    'Exact user authorization', 'Do not use this project when']) {
-    assert.ok(comparison.includes(evidence), `comparison is missing ${evidence}`);
-  }
-  const troubleshooting = read(join('docs', 'troubleshooting.md'));
-  for (const evidence of ['Skill not discovered', 'Node version too low',
-    '`codex` or `agy` is not found', 'Unknown installation directory',
-    '`doctor` fails after installation', 'Message remains in `processing`',
-    '`.agent-bus` is damaged or unsafe', 'Windows path normalization',
-    'npm registry metadata is inconsistent', 'npm ERR! code ETARGET']) {
-    assert.ok(troubleshooting.includes(evidence), `troubleshooting is missing ${evidence}`);
-  }
+  const install = read('docs/install-with-ai.md');
+  for (const heading of ['Commands the AI may execute', 'Commands the AI must not execute implicitly',
+    'Installation result report']) assert.ok(install.includes(heading));
+  const troubleshooting = read('docs/troubleshooting.md');
+  for (const fact of ['The server cannot start', 'Terminal display or resize',
+    'A desktop notification is missing', 'Structured Plugin / Legacy troubleshooting',
+    'Skill not discovered', 'npm ERR! code ETARGET']) assert.ok(troubleshooting.includes(fact));
 });
 
 test('Web documentation distinguishes lightweight terminal groups from structured Tasks', () => {
@@ -176,7 +161,9 @@ test('Web documentation distinguishes lightweight terminal groups from structure
     assert.doesNotMatch(content, /three-column AI-chat|chat-first, three-column|三栏 AI 聊天式|primary read-only local browser entry/);
   }
   const web = read('docs/inspector.md');
-  for (const fact of ['2.3.0-web-lite-1', 'workspace-message.mjs', '.agent-bus/workspace-tasks/',
+  const promptVersion = read('skills/coordinate-agents/scripts/workspace-role-prompts.mjs')
+    .match(/WORKSPACE_ROLE_PROMPT_VERSION = '([^']+)'/)[1];
+  for (const fact of [promptVersion, 'workspace-message.mjs', '.agent-bus/workspace-tasks/',
     'not implementation or', 'not an enforced state machine', 'does not publish npm',
     'sessionResize', 'x-coordinate-agents-capability', 'does not\ncreate an isolated Git worktree']) {
     assert.ok(web.includes(fact), `Web documentation missing boundary: ${fact}`);
@@ -186,23 +173,23 @@ test('Web documentation distinguishes lightweight terminal groups from structure
 
 test('repository AI, security, and machine index files have distinct documented roles', () => {
   const agents = read('AGENTS.md');
-  const security = read('SECURITY.md');
-  const llms = read('llms.txt');
+  const security = read('.github/SECURITY.md');
+  const llms = read('docs/llms.txt');
   assert.match(agents, /not the installation entry point/i);
   assert.match(agents, /npm run check/);
   assert.match(agents, /RELEASE_APPROVED/);
   assert.match(security, /private vulnerability reporting/i);
   assert.match(security, /\.agent-bus\/.*local plaintext/s);
   assert.match(llms, /Canonical repository: https:\/\/github\.com\/hogancv\/coordinate-agents/);
-  assert.match(llms, /AI_INSTALL\.md/);
+  assert.match(llms, /install-with-ai\.html/);
 });
 
 test('npm excludes source-only installation and machine documentation', () => {
   const packageJson = JSON.parse(read('package.json'));
-  for (const name of ['AI_INSTALL.md', 'SECURITY.md', 'llms.txt', 'docs/llms.txt']) {
+  for (const name of ['docs/install-with-ai.md', '.github/SECURITY.md', 'llms.txt', 'docs/llms.txt']) {
     assert.ok(!packageJson.files.includes(name), `${name} must remain source-only`);
   }
-  assert.match(packageJson.scripts['check:llms'], /sync-llms\.mjs --check/);
+  assert.match(packageJson.scripts['check:llms'], /check-llms\.mjs/);
 });
 
 test('doctor never pipes a downloaded Antigravity installer directly into a shell', () => {
@@ -211,37 +198,17 @@ test('doctor never pipes a downloaded Antigravity installer directly into a shel
   assert.match(cli, /Review the downloaded official script/);
 });
 
-test('documentation defines agent-agnostic runtime, adapter architecture, and dynamic registration in both language flows', () => {
-  const english = read('README.md');
-  const chinese = read('README.zh-CN.md');
-
-  for (const phrase of [
-    'local-first coordination protocol and runtime',
-    'Agent Bus',
-    'Planner, Implementer, and Reviewer',
-    'Supported Agents and Adapters',
-    'antigravity-cli',
-    'codex-cli',
-    'generic-cli',
-    'Project command configuration takes precedence',
-    'Persistent, bounded, and inspectable execution sessions',
-  ]) {
-    assert.ok(english.includes(phrase), `English README missing architectural term: ${phrase}`);
+test('advanced runtime documentation remains reachable without dominating Web onboarding', () => {
+  const structured = read('docs/structured-workflow.md');
+  for (const fact of ['Planner/Reviewer', 'Implementer', 'Agent Bus',
+    'generic-cli', 'sessionId', 'task dispatch']) assert.ok(structured.includes(fact));
+  for (const name of ['protocol.md', 'task-graph-v1.md', 'adapter-author-guide.md',
+    'adapter-conformance.md', 'event-journal.md', 'plugin-e2e.md', 'codex-cli.md',
+    'antigravity-cli.md']) {
+    assert.match(read(`docs/${name}`), /Structured workflow[\s\S]*npm 3\.x Web/,
+      `${name} must identify its product surface`);
   }
-
-  for (const phrase of [
-    '本地优先协作协议和运行时',
-    'Agent Bus',
-    'Planner、Implementer 与 Reviewer',
-    '支持的代理与适配器',
-    'antigravity-cli',
-    'codex-cli',
-    'generic-cli',
-    '项目命令配置优先于用户配置',
-    '持久、有限输出且可检查的 Execution Session',
-  ]) {
-    assert.ok(chinese.includes(phrase), `Chinese README missing architectural term: ${phrase}`);
-  }
+  assert.match(read('docs/zh-CN/index.md'), /本地优先协调协议与运行时/);
 });
 
 test('canonical index, site pages, and demo prose distinguish runtime protocol from default reference workflow', () => {
@@ -263,8 +230,8 @@ test('canonical index, site pages, and demo prose distinguish runtime protocol f
   assert.match(comparison, /Protocol & Runtime/);
   assert.match(comparison, /default reference workflow/i);
 
-  const gettingStarted = read(join('docs', 'getting-started.md'));
-  assert.match(gettingStarted, /default reference workflow/i);
+  const structured = read(join('docs', 'structured-workflow.md'));
+  assert.match(structured, /default reference workflow/i);
 
   const pluginE2E = read(join('docs', 'plugin-e2e.md'));
   for (const evidence of ['Plugin-only Runtime', 'Setup transaction', 'Task dispatch',
@@ -284,7 +251,7 @@ test('canonical index, site pages, and demo prose distinguish runtime protocol f
   assert.match(agyDoc, /Reference implementer/i);
   assert.match(agyDoc, /default reference workflow/i);
 
-  const demoTranscript = read(join('assets', 'demo-transcript.txt'));
+  const demoTranscript = read(join('docs', 'assets', 'demo-transcript.txt'));
   assert.match(demoTranscript, /Default reference workflow/i);
 });
 
@@ -395,5 +362,61 @@ test('documentation forbids unscoped npx coordinate-agents invocations', () => {
       /npx (?!@hogancv\/)coordinate-agents\b/,
       `Unscoped "npx coordinate-agents" found in ${relPath}; must use "npx @hogancv/coordinate-agents"`
     );
+  }
+});
+
+
+test('public documentation links resolve, including rendered HTML page routes', () => {
+  const paths = ['README.md', 'README.zh-CN.md', '.github/SECURITY.md',
+    ...readdirSync(join(root, 'docs')).filter(name => name.endsWith('.md')).map(name => `docs/${name}`),
+    'docs/zh-CN/index.md'];
+  for (const path of paths) {
+    const directory = resolve(root, path, '..');
+    for (const match of read(path).matchAll(/\]\(([^)#]+)(?:#[^)]*)?\)/g)) {
+      const target = match[1];
+      if (/^(?:[a-z]+:|\/)/i.test(target)) continue;
+      let resolved = resolve(directory, target);
+      if (resolved.endsWith('.html')) resolved = resolved.slice(0, -5) + '.md';
+      assert.ok(existsSync(resolved), `${path} has a broken link: ${target}`);
+    }
+  }
+});
+
+test('public standalone structured npm commands pin the Legacy package', () => {
+  const paths = ['README.md', 'README.zh-CN.md', '.github/SECURITY.md',
+    ...readdirSync(join(root, 'docs')).filter(name => name.endsWith('.md')).map(name => `docs/${name}`)];
+  for (const path of paths) {
+    assert.doesNotMatch(read(path),
+      /npx (?:--yes )?@hogancv\/coordinate-agents(?:@latest)? (?:install|update|uninstall|doctor|config|quickstart|task|agent|adapter|inspector)\b/,
+      `${path} must not route structured commands to Web-only npm latest`);
+  }
+});
+
+
+test('v2.4 readers have visible migration routes and immutable release documentation', () => {
+  for (const path of ['README.md', 'README.zh-CN.md', 'docs/install-with-ai.md', 'docs/index.md',
+    'docs/zh-CN/index.md', 'docs/changelog.md']) {
+    assert.match(read(path), /\]\([^)]*v2\.4\.(?:md|html)\)/, `${path} must link the v2.4 entry`);
+  }
+  assert.ok(read('docs/_config.yml').includes('  - v2.4.md'));
+  assert.ok(read('docs/llms.txt').includes('/v2.4.html'));
+
+  const archive = read('docs/v2.4.md');
+  const snapshot = '3e36942ce52004ad3136c6f24be57a8255361c75';
+  for (const path of ['README.md', 'README.zh-CN.md', 'AI_INSTALL.md',
+    'docs/index.md', 'docs/getting-started.md', 'docs/inspector.md']) {
+    assert.ok(archive.includes(`blob/${snapshot}/${path}`), `Missing original v2.4.0 ${path}`);
+  }
+  assert.ok(archive.includes(`tree/${snapshot}/docs`));
+  for (const path of ['structured-workflow.md', 'legacy-ai-install.md', 'protocol.md',
+    'task-graph-v1.md', 'adapter-author-guide.md', 'adapter-conformance.md', 'event-journal.md',
+    'plugin-e2e.md', 'codex-cli.md', 'antigravity-cli.md', 'mcp.md', 'MCP_TROUBLESHOOTING.md',
+    'session-runtime.md']) {
+    const document = read(`docs/${path}`);
+    const firstSection = document.indexOf('\n## ');
+    const annotation = document.indexOf('v2.4 lineage');
+    assert.ok(annotation >= 0 && (firstSection < 0 || annotation < firstSection),
+      `${path} must identify the retained version lineage before detailed instructions`);
+    assert.ok(document.includes('](./v2.4.html)'), `${path} must link the historical docs`);
   }
 });

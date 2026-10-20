@@ -7,6 +7,11 @@ permalink: /adapter-author-guide.html
 
 # External Adapter Author Guide
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 > **V3 distribution / 分发说明:** The SDK, conformance kit and external examples are GitHub Plugin/source and npm 2.4.0 resources. npm 3.x retains internal launch validation but does not publish Adapter SDK exports, conformance or examples.
 
 

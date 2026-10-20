@@ -6,6 +6,11 @@ description: Diagnose a loaded Coordinate Agents Plugin whose MCP tools are not 
 
 # MCP troubleshooting
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 Use this page when the `coordinate-agents` Skill is visible but Codex says that
 `coordinate_agents_setup_discover` (or another Coordinate Agents tool) is not a
 callable MCP tool.

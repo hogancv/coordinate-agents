@@ -1,58 +1,57 @@
 ---
 layout: page
-title: Compare multi-agent development approaches
-description: Evidence-based comparison of single-agent coding, ad hoc dual terminals, and the structured coordinate-agents protocol and runtime.
+title: Compare workflows
+description: Compare one coding agent, manually managed terminals, the local Web Workspace, and optional structured Plugin and Task Graph coordination.
 ---
 
-# Compare multi-agent development approaches
+# Compare workflows
 
-This page compares workflow guarantees, not model intelligence. Codex CLI, Antigravity CLI, and other tools can
-each solve many tasks alone; `coordinate-agents` is useful when separation of duties, role-based handoffs, and a
-recoverable local bus are worth the structured process.
+Coordinate Agents adds a workspace and coordination tools around coding CLIs.
+It does not change the underlying models' intelligence. Choose the amount of
+coordination that helps your task.
 
-| Approach | Implementation owner | Review owner | State recovery | Release gate | Shared credentials |
-| --- | --- | --- | --- | --- | --- |
-| Single agent | Same agent | Same agent | Depends on the tool | Usually none | None |
-| Manual dual terminals | Not fixed | Not fixed | Weak or manual notes | Manual | None |
-| `coordinate-agents` (Protocol & Runtime) | Configured Implementer (`antigravity` by default) | Configured Reviewer (`codex` by default) | Local persistent `.agent-bus` | Exact user authorization | Not required |
+| Approach | Setup and roles | Recorded state | Isolation and limits |
+| --- | --- | --- | --- |
+| Single agent | Use the agent directly; it plans, implements, and reviews. | Whatever that agent provides. | Lowest coordination overhead; independent review is optional. |
+| Manual dual terminals | Start two CLIs and exchange instructions yourself. | Native CLI history and your notes. | Roles and routing are manual; both processes can share one worktree. |
+| Coordinate Agents Web: Default | Start Web, configure `codex`/`agy`, create a task. Codex delegates/reviews; Antigravity implements. | Local projects, terminal bindings, collaboration receipts and timeline. | Prompts guide roles; no isolated worktree or independently verified completion. |
+| Coordinate Agents Web: Custom | Choose two executables and optional prompts. | Local task/slot bindings and prompt snapshots. | You control coordination; no default roles, rounds, or Codex feedback handoff. |
+| Coordinate Agents structured Plugin / Legacy CLI / MCP | Configure a registered Implementer and use durable Task APIs. | Agent Bus messages, evidence, review decisions, recovery and optional Task Graphs. | Separate protocol contracts and explicit execution/review/release boundaries. |
 
-## What the differences mean
+Current Web features added after npm 3.0.1 require the source checkout until a
+new package is published. See [Getting started](./getting-started.html).
 
-**Single agent.** This has the lowest coordination cost and is usually best for small, reversible
-changes. The same context plans, edits, tests, and judges its own output. Independent review and a
-durable cross-tool handoff are not provided by this project.
+## When Web Workspace helps
 
-**Manual dual terminals.** Two CLIs can share a repository and communicate through chat or ad hoc
-Markdown files. This is flexible, but role ownership, message claiming, interruption recovery,
-deduplication, and release authorization depend on both prompts being followed perfectly. Two
-processes can accidentally modify the same worktree. Codex App can remove the manual terminal
-overhead when the Skill is invoked from the correct project path, but the configured Implementer
-still runs in a Runtime-owned persistent Session and must use a real executable command such as
-`agy` or `claude`.
+Use it when you want two coding CLIs in one local browser, persistent sessions,
+project/task history, and an explicit implementation/review handoff. Default
+Collaboration supplies that handoff with lightweight role prompts and reports.
+Custom mode suits a CLI pair whose behavior you want to control yourself.
 
-**`coordinate-agents`.** The coordination protocol and runtime decouple agents into configurable workflow roles (`planner`, `implementer`, `reviewer`) and independent project/Agent-scoped Execution Sessions. In the default reference workflow, Codex clarifies requirements, writes acceptance criteria, reviews the implementation commit and evidence, and controls the release gate, while Antigravity is the exclusive product-code writer. Messages move atomically through `new`, `processing`, and `processed`; leases, bounded PTY I/O, Session reuse, and recovery preserve work across terminal exits. Neither agent reads or copies the other's authentication files. Dynamic registration allows connecting third-party agents (`generic-cli`) with customized role assignments.
+Git Changes, review notes, timeline, health hints, and optional notifications
+make the current source easier to observe. They do not verify correctness,
+ensure the agent followed its prompt, or automatically recover failed work.
 
-## Observable guarantees and limits
+## When the structured workflow helps
 
-The bus records who sent a message, its type, claim state, related commit, and evidence path. The
-deterministic demo verifies `IMPLEMENT -> IMPLEMENTATION_DONE -> REVIEW_APPROVED` on the default reference workflow and reruns tests.
-The installer refuses unrecognized or modified directories unless the user explicitly forces a
-destructive action.
+The retained **Protocol & Runtime** adds durable Task dispatch, Agent Bus
+claims, implementation evidence, review decisions, and explicit recovery.
+Configured Implementer and Configured Reviewer identities are part of its
+records, with Local persistent `.agent-bus` storage and Exact user authorization
+for its release boundary. The default reference workflow uses Antigravity for
+implementation and Codex for planning/review; adapters allow other agents.
 
-These are workflow controls, not a security sandbox. `.agent-bus` is local plaintext, any process
-with filesystem access may read it, and the tool cannot prevent a deliberately disobedient CLI from
-editing files. Git history, tests, OS permissions, and human release authorization remain necessary.
+Use [Structured workflow](./structured-workflow.html) when those records and
+contracts matter. Task Graphs add explicit dependency planning and isolated
+subtask worktrees. These APIs are not available through npm 3.x Web tasks.
 
 ## Do not use this project when
 
-- one agent can complete the task safely and independent review is unnecessary;
-- multiple agents must edit product code concurrently on the same worktree without worktrees;
-- agents work in different repositories or on machines without a shared filesystem;
-- the project requires encrypted or remotely replicated coordination state;
-- an organization needs mandatory identity, policy, or cryptographic approval enforcement;
-- the repository cannot tolerate a local ignored `.agent-bus/` directory.
+- One agent already completes the task comfortably and an additional workspace adds no value.
+- You need encrypted or remotely replicated coordination storage, multi-user access, or cross-machine sessions.
+- You expect Web tasks to isolate concurrent edits automatically.
+- You need a security sandbox or cryptographically enforced role/release policy.
 
-Use separate Git worktrees or a different orchestrator when concurrent implementation by multiple
-writers on the same worktree is the actual requirement. For the default workflow's exact ownership rules, read the
-[Codex role (reference)](./codex-cli.html), [Antigravity role (reference)](./antigravity-cli.html), [protocol specification](./protocol.html), and
-[security boundary](./security.html).
+Every Web task uses its project's worktree. Use separate worktrees for conflicting
+writers. Agent CLI permissions remain authoritative, local state is plaintext,
+and review reports do not authorize release. See [Security](./security.html).

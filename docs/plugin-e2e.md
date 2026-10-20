@@ -6,6 +6,11 @@ description: Architecture audit, bundled Runtime resolution, Setup transaction, 
 
 # Plugin-first E2E workflow
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 This page records the implementation audit and the acceptance path for a user
 who installs only the Codex Plugin. The Plugin is the product surface; the npm
 CLI remains a standalone Runtime, compatibility, and debugging surface.

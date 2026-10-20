@@ -1,7 +1,7 @@
 # Repository instructions for AI contributors
 
 This file governs development and maintenance **after an agent has entered this repository**. It
-is not the installation entry point. For installation, read [`AI_INSTALL.md`](./AI_INSTALL.md).
+is not the installation entry point. For installation, read [the installation guide](./docs/install-with-ai.md).
 
 ## Canonical identity
 
@@ -20,11 +20,11 @@ fixtures, logs, documentation, or release artifacts.
 - `inspector/server/http-server.mjs`: shared HTTP transport; `workspace-data.mjs` and `workspace-services.mjs` supply only Web data/operations. `server.mjs`, `inspector-data.mjs` and `legacy-action-gateway.mjs` are repository-only structured compatibility surfaces.
 - `.codex-plugin/plugin.json`: Codex Plugin manifest.
 - `skills/coordinate-agents/`: canonical self-contained Skill and runtime source (`SKILL.md`, `agents/`, `adapters/`, `references/`, `scripts/`). The Session implementation is `scripts/pty-runtime.mjs`, `scripts/session-host.mjs`, `scripts/session-manager.mjs`, and `scripts/session-service.mjs`; `references/session-runtime.md` is the detailed protocol reference.
-- `scripts/`: repository development and release tooling (`demo.mjs`, `sync-llms.mjs`).
-- `AI_INSTALL.md`: canonical safe installation procedure for AI assistants.
+- `scripts/`: repository development and release tooling (`demo.mjs`, `check-llms.mjs`).
+- `docs/install-with-ai.md`: canonical installation procedure and AI request examples.
 - `README.md` and `README.zh-CN.md`: user-facing English and Simplified Chinese documentation.
 - `docs/`: GitHub Pages source for stable, evidence-focused task and FAQ pages. `docs/llms.txt`
-  is the canonical machine index; `npm run sync:llms` generates the repository-root copy.
+  is the sole machine index; `npm run check:llms` validates its local documentation routes.
 - `test/`: Node.js tests, including cross-platform CLI, protocol, docs, and release checks.
 - `.github/workflows/`: pinned CI and trusted npm publishing workflows.
 
@@ -70,7 +70,7 @@ from a single local run; report the environments actually verified.
    `references/` and link it directly from `SKILL.md`.
 8. Update documentation that directly describes the changed behavior. Keep corresponding
    English and Simplified Chinese pages semantically synchronized when affected.
-   Update `docs/llms.txt` only when its index changes; never edit generated root `llms.txt` directly.
+   Update `docs/llms.txt` only when its index changes; do not generate a duplicate root index.
 9. If installation payload contents change, update `package.json` `files`, package tests, and the
    package version as appropriate. Keep `package-lock.json` synchronized.
 10. Do not use third-party mirrors, mutable unknown scripts, `curl | sh`, or long-lived npm tokens

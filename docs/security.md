@@ -1,10 +1,48 @@
 ---
 layout: page
 title: Security
-description: Security and privacy boundaries for the local plaintext .agent-bus and package installer.
+description: Web Workspace loopback access, trusted agent permissions, local plaintext data, and separate structured runtime and installer boundaries.
 ---
 
 # Security
+
+## Web Workspace
+
+The Web server is loopback-only, with per-launch capability checks, Host/Origin
+validation, bounded request bodies, and allow-listed actions. The capability is
+not multi-user authentication. Do not expose the service through a proxy or
+tunnel without a separate security boundary.
+
+Agent executables and wrappers are trusted local programs with their configured
+permissions. HTTP project binding does not sandbox an agent's shell or prevent
+filesystem edits. CLI login and provider configuration remain independent;
+local coordination does not imply offline model inference or credential isolation.
+
+Each Web task uses its project's working directory. New terminal pairs do not
+create isolated worktrees. Role prompts require user authorization for commit,
+push, and release, but provide no technically enforced release gate. Formal
+DONE/APPROVED receipts are agent reports, not independent verification.
+
+Browser close or Web server shutdown is not a terminal-close action. Use the
+explicit close controls to stop owned agent Sessions. Archive closes terminals
+and hides history while preserving source files; clearing archived conversations
+permanently deletes their stored task and timeline history.
+
+Project/task records, prompt snapshots, timeline pages, Session data, and the
+project registry are local plaintext. Git exclusion is not encryption. Agent
+providers may receive prompts/code under their own configuration. Notification
+text excludes prompts, terminal output, receipt summaries, and absolute paths,
+but OS display policy and other local processes remain outside Workspace control.
+
+Inspect and redact diagnostics before sharing. See the
+[Workspace guide](./inspector.html) for storage paths and lifecycle details.
+
+## Shared Session Runtime and structured workflow
+
+The remaining Task, Task Graph, Agent Bus, adapter, and installer guarantees
+apply to their corresponding source/Plugin or Legacy APIs. They must not be
+inferred from Web task receipts. For entry points see
+[Structured workflow](./structured-workflow.html).
 
 `.agent-bus` is **local plaintext working data**, including the append-only Event Journal under
 `.agent-bus/events/`. It is not encrypted and must not contain tokens, cookies, passwords, private keys, or unnecessary production data.
@@ -62,6 +100,6 @@ resolution, reset, retry, merge, push, tag, publish, deploy, or release occurs. 
 rechecks those facts before recording `REVIEW_APPROVED` or `CHANGES_REQUESTED`, and cleanup
 retains the aggregate branch, commits, conflict facts, and evidence.
 
-Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. Use the explicit `clean --confirm DELETE_AGENT_BUS` operation after audit retention is no longer needed.
+Local Git exclusion prevents ordinary commits but does not block administrators, same-user processes, backups, cloud sync, or malware. Inspect and redact bus data before sharing diagnostics. For the Legacy runtime only, `clean --confirm DELETE_AGENT_BUS` is an explicit destructive operation after audit retention is no longer needed. It is not a Web uninstall step.
 
-The installer refuses unknown directories, symlinks, junctions, path escapes, modified installs, and extra files by default. Review the full [security policy](https://github.com/hogancv/coordinate-agents/blob/main/SECURITY.md), including private vulnerability reporting.
+The installer refuses unknown directories, symlinks, junctions, path escapes, modified installs, and extra files by default. Review the full [security policy](https://github.com/hogancv/coordinate-agents/blob/main/.github/SECURITY.md), including private vulnerability reporting.

@@ -6,6 +6,17 @@ description: Persistent project-scoped coding-agent sessions, bounded PTY I/O, r
 
 # Execution Session and PTY Runtime
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
+Web Workspace and the structured Plugin share Session Host and PTY infrastructure.
+Web creates a fresh task-bound terminal pair (Custom mode also binds each slot);
+refresh reconnects, while explicit restart creates new Sessions. The healthy
+Session reuse and Task/Graph tool contracts below describe the separate structured
+workflow. See [Workspace guide](./inspector.html) for Web behavior.
+
 The Plugin Task API uses an independent `Execution Session` for a long-lived
 coding-agent process. A Task stores a non-owning `sessionId`; the Session
 Manager owns lifecycle and the PTY Runtime owns bounded interactive I/O.

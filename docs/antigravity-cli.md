@@ -6,6 +6,11 @@ description: Google Antigravity CLI serves as the reference implementer in coord
 
 # Antigravity CLI role (Reference implementer)
 
+> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+
 > [!NOTE]
 > This page describes Google Antigravity CLI's responsibilities in the **default reference workflow**. The underlying `.agent-bus` runtime is agent-agnostic and allows assigning the `implementer` role to other registered agents.
 
@@ -30,12 +35,17 @@ Session status, bounded output, input, and close are available through the Coord
 Session tools. They operate on the Runtime-owned process only and never type into or control the
 Codex App Terminal UI.
 
-The executable can be overridden per machine without changing the installed Skill or project
-defaults:
+Use native `agy` directly. If it already has a global proxy configured, no project-specific
+proxy wrapper is needed. Clear any old wrapper prompt template when switching:
 
 ```sh
-npx @hogancv/coordinate-agents config set agent.antigravity.command agy-proxy
+npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
+npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '[]'
 ```
+
+The native CLI provides `agy --continue` to continue the most recent conversation and
+`agy --conversation <id>` to resume a conversation by ID. These options remain available
+when invoking `agy` directly with its existing global proxy configuration.
 
 The project command, if explicitly present, takes precedence over
 `~/.coordinate-agents/config.json`, which takes precedence over the Adapter default `agy`.
@@ -49,7 +59,7 @@ failure with a bounded stdout/stderr tail.
 
 The built-in `antigravity-cli` Adapter does not infer a permission mode. Its legacy one-shot path
 passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent Session
-starts with `--prompt-interactive=` so current `agy`/`agy-proxy` parsers receive the required
+starts with `--prompt-interactive=` so current `agy` parsers receive the required
 empty initial prompt value, then writes its first instruction through the PTY unless `{prompt}` is
 explicitly configured. It does not automatically add
 `--dangerously-skip-permissions` or another sandbox-bypass flag. If `agy` is already configured

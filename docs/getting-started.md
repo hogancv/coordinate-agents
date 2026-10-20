@@ -1,255 +1,137 @@
 ---
 layout: page
 title: Getting started
-description: A verified first-run lifecycle for Codex App or Codex CLI specifications, Antigravity implementation, review, recovery, and release gating.
+description: Start the local Web Workspace, choose npm or current source, configure terminals, and complete a first Codex and Antigravity collaboration task.
 ---
 
 # Getting started
 
-> **V3 distribution / 分发说明:** npm 3.x distributes Web Workspace only. Structured commands below require npm 2.4.0 or the GitHub Plugin/source Legacy entry. Use terminal settings for npm 3 Web command/model configuration.
+For the previous product direction, see [v2.4 original docs and migration](./v2.4.html).
 
+The main entry is the **Web Workspace**, a local browser workbench with two
+persistent coding-agent terminals. No Codex Plugin, Skill installation, MCP
+setup, or global npm installation is needed for this path.
 
-## Open the local Web Workspace (lightweight mode)
+## 1. Check prerequisites
 
-The **Web Workspace** provides a task list and interactive Codex + Antigravity
-terminal pairs. From an initialized Git repository with an Agent Bus, start
-the loopback-only server using a published version that includes these features:
-
-```console
-$ npx @hogancv/coordinate-agents@latest web --port 3000
-Workspace running:
-
-http://localhost:3000
-```
-
-For this source checkout, run `node bin/coordinate-agents.mjs web --port 3000`;
-merging to main does not publish npm. In Terminal settings, choose the actual
-commands (such as `agy-proxy`), then click New task to start two fresh PTYs
-with Web-lite prompts. Enter requirements directly in Codex.
-
-Selection and refresh are read-only, but creation and terminal input have real
-side effects. Workspace groups are separate from standard Tasks: running/closed
-does not mean implementation or review completion. Web-lite does not
-automatically invoke the skill or create structured Task, Graph, review, or
-recovery records. Use the structured paths below for those capabilities.
-`inspector` remains read-only. See [Web Workspace](./inspector.md) for details.
-
-## Codex Plugin-first path
-
-The Codex Plugin is the preferred structured-workflow experience. Its Multi-Skill surface
-routes onboarding without exposing Agent Bus folders:
-
-| Intent | Skill | First action |
-| --- | --- | --- |
-| Discover | `coordinate-setup` | resolver-backed `setup --json` with no configuration mutation |
-| Configure | `coordinate-setup` | one `setup configure` transaction for command, Agent, Adapter, and Implementer role |
-| Try | `coordinate-task` | `task create`, then `task dispatch` for the approved specification |
-| Review | `coordinate-review` | verify the Task's commit, diff, tests, evidence, and record the decision |
-| Recover | `coordinate-recover` | inspect `task status`, then explicit `task resume` before another dispatch |
-
-The Plugin's Task API is the product abstraction over the existing durable
-Agent Bus. All five Skills invoke the same bundled Runtime with:
-
-```text
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...
-```
-
-The active Skill supplies the absolute `<skill-dir>`. This resolves the canonical
-`bin/coordinate-agents-legacy.mjs` inside the cached or local Plugin payload; a global
-`coordinate-agents` executable is not required. The npm CLI remains a
-Runtime/fallback and advanced-debugging path, not a prerequisite for Plugin
-onboarding. The three homepage prompts are discover, configure, and try, with
-the Todo web app using the same Task workflow as any other request.
+Install Node.js >=18, Git, and the coding CLIs you want to use. For Default
+Collaboration, check:
 
 ```sh
-# The following is the Skill's canonical invocation pattern; replace <skill-dir>
-# with the absolute directory containing the active Skill's SKILL.md.
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" setup --root "<repository>" --json
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task create --root "<repository>" --title "Build a Todo web app" --json
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task dispatch --root "<repository>" --id task-... --spec "<approved specification>" --json
-node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" task status --root "<repository>" --id task-... --json
+node --version
+git --version
+codex --version
+agy --version
 ```
 
-JSON stdout is one parseable document with `{ok, command, ...}` on success or
-`{ok:false, command, error:{code,message,recoverable,...}}` on failure. A failed
-Implementer is terminal for that activation; the Plugin reports the structured
-error and never loops through automatic retries.
+Sign in to each agent through its own CLI before creating a task. Workspace
+checks executable availability; that does not verify provider access, login,
+model availability, or account quota. Custom tasks check their saved two commands
+instead of requiring the default pair.
 
-> [!NOTE]
-> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex App/CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](https://github.com/hogancv/coordinate-agents#dynamic-agent-registration) and custom role assignments.
+Native PTY support depends on the installed Node/platform combination. Node 18
+retains an owned-stdio fallback; it cannot provide full TUI or child-observed
+resize behavior. See [terminal troubleshooting](./troubleshooting.html#terminal-display-or-resize-is-limited).
 
-This walkthrough starts from an existing Git repository and ends with a reviewed commit. It takes
-about **5 minutes** after Node.js, Git, Codex App or Codex CLI, and an Implementer CLI such as
-Antigravity (`agy`) are installed. Native authentication remains owned by each CLI; Coordinate
-Agents does not preflight login state. Model response time is the main variable.
+## 2. Choose published npm or current source
 
-## Codex App path (recommended)
+### Published npm
 
-Codex App can invoke the Skill directly, so users do not need to manually open two CLI windows.
-
-1. Install and enable the `coordinate-agents` Codex plugin from the GitHub marketplace.
-2. Add or open the target Git repository as a Codex App project.
-3. Set the thread's project/workspace path to the repository root—the directory containing `.git`.
-4. Start a new thread, invoke `$coordinate-agents`, and ask Codex to run discovery first.
-5. After choosing an executable, let `coordinate-setup` run `setup configure`; do not manually chain
-   `config set`, `agent add`, workflow edits, and `doctor`.
-
-The Codex App thread is the Planner/Reviewer side. The Runtime opens or reuses a project/Agent-scoped
-Execution Session with a persistent PTY for the Implementer, so the execution command must be an
-installed executable on the same machine. The Session is independent of the Codex App Terminal UI;
-the Plugin itself supplies the Runtime and a global npm install is not required. After discovery,
-let the high-level setup transaction configure the selected executable, project Agent, Adapter, and
-Implementer role. The following commands are only the standalone npm compatibility/debugging path:
-
-```console
-$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
-$ npx --yes @hogancv/coordinate-agents@2.4.0 agent add claude \
-    --adapter generic-cli --command claude \
-    --args '["--print", "{prompt}"]'
+```sh
+npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 ```
 
-Use the actual command that starts the Implementer (`agy`, `claude`, or a vendor wrapper), and verify
-its arguments with that CLI's own `--help` output. The runtime uses the selected project root as the
-child process working directory, so a `--dir` argument is not universally available or necessary.
-For a convenient setup, ask Codex App: “Use `$coordinate-agents` to configure Claude Code as this
-project's Implementer; inspect `claude --help`, register it with `generic-cli`, run `doctor`, show me
-the resolved configuration, and do not start until I confirm.” Use the CLI path below only for
-automation or hosts without direct Codex App Skill execution.
+As checked on **2026-10-20**, `latest` resolves to **3.0.1**. To reproduce that
+release explicitly, use `@3.0.1` in place of `@latest`.
 
-The built-in Antigravity adapter does not automatically add a full-permission flag. The legacy
-one-shot path passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent
-Session starts with `--prompt-interactive=` for current `agy`/`agy-proxy` parsers, then writes its
-first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
-`--dangerously-skip-permissions` and the user explicitly wants it, configure that argument rather
-than assuming the Plugin added it:
+### Current source
 
-```console
-$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-$ npx --yes @hogancv/coordinate-agents@2.4.0 config list
+The Git Changes/review feedback, Custom Terminals, desktop notification,
+Collaboration Timeline, and Collaboration Health additions were made after
+3.0.1. To use the current code:
+
+```sh
+git clone https://github.com/hogancv/coordinate-agents.git
+cd coordinate-agents
+npm ci
+node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
 ```
 
-## 1. Check prerequisites and install both Skills
+For an existing checkout, run the last two commands from its root. A source
+merge does not publish npm. Feature descriptions in the [Workspace guide](./inspector.html)
+refer to the current checkout.
 
-```console
-$ node --version
-v22.23.0
-$ git --version
-git version 2.53.0.windows.1
-$ codex --version
-codex-cli 0.146.0
-$ agy --version
-1.1.12
-$ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy-proxy
-Updated user configuration: ~/.coordinate-agents/config.json
-$ npx --yes @hogancv/coordinate-agents@2.4.0 install
-Installed Codex: .../skills/coordinate-agents
-Installed Antigravity: .../skills/coordinate-agents
-$ npx --yes @hogancv/coordinate-agents@2.4.0 doctor
-Node.js: available (v22.23.0)
-Git: available (git version 2.53.0.windows.1)
-Codex CLI: available (codex-cli 0.146.0)
-Antigravity CLI (agy): available (1.1.12)
-Codex: healthy (1.2.3) at .../codex/skills/coordinate-agents
-Antigravity: healthy (1.2.3) at .../agy/skills/coordinate-agents
-All prerequisites and selected installations are healthy.
-```
+Open the printed URL, normally `http://localhost:3000`. Use `--port 0` to choose
+a free port. The selected startup folder is registered automatically. A Git
+subdirectory resolves to its repository root; a non-Git startup folder initializes
+Git and Workspace storage without a commit. Choose the directory deliberately.
 
-The final Implementer command is resolved as project explicit command, then the user-level
-`~/.coordinate-agents/config.json` command, then the Adapter default. `doctor` reports that command
-and executable status. `launch` fails fast with Agent state `ERROR` on an unavailable executable,
-spawn failure, non-zero exit, or conversation/runtime error; it does not silently fall back or retry.
+The npm 3.x command surface is `web`, `--help`, and `--version`. Web accepts
+`--root`, `--port`, and `--json`. Older `install`, `doctor`, `config`, `task`,
+`quickstart`, and `inspector` commands require the separate Legacy runtime.
 
-Versions and home paths vary. The final healthy summary and exit status `0` are the success
-signals. A non-zero exit, `missing`, `invalid`, or `requires attention` means installation is not
-complete; follow the printed repair suggestion and rerun `doctor`.
+## 3. Check Workspace settings
 
-Before installation, neither selected Skill home contains `coordinate-agents`. Afterwards,
-each selected home contains the same managed payload:
+Settings has three independently saved tabs in current source:
 
-```text
-coordinate-agents/
-├── .coordinate-agents.json
-├── SKILL.md
-├── agents/
-├── references/
-└── scripts/
-```
+- **Default Collaboration:** `codex` and `agy` executable overrides, plus optional Codex model and reasoning choices. Changes apply to new launches and restarts.
+- **Custom Terminals:** two executable defaults and optional shared/per-terminal prompts. New tasks snapshot these settings; existing Custom tasks retain their snapshot on restart.
+- **Desktop Notifications:** project-level preferences, disabled by default. Windows 10/11 and macOS are supported; Linux reports unsupported.
 
-The installer does not copy account tokens. Codex and Antigravity keep their native credentials in
-their own homes.
+Executable fields accept a command name or absolute path, without inline
+arguments or shell syntax. Leave the Codex model blank to use the CLI default.
+Save the active tab; switching tabs retains unsaved edits.
 
-## 2. Initialize the first task
+## 4. Run your first default task
 
-For the Plugin path, do not use `quickstart` as a substitute for Task dispatch. After Codex has a
-complete specification, the Skill calls `task create` and then `task dispatch`; dispatch performs
-Implementer resolution, executable checking, the `IMPLEMENT` Bus handoff, Session open/reuse,
-persistent PTY input, and failure propagation. The Task stores a non-owning `sessionId`. A successful
-`IMPLEMENTATION_DONE` maps the Task to `REVIEWING`; if the Implementer remains active, the Task is
-`WAITING_IMPLEMENTER` and the Session remains inspectable.
+1. Click **New task**, choose **Default Collaboration**, and wait for the two CLIs to initialize.
+2. Enter a concrete requirement directly in Codex, for example: “Fix this cache invalidation bug, preserve the public API, and run the relevant regression test.”
+3. Codex sends the goal, scope, and acceptance criteria to this task's Antigravity using its supplied helper.
+4. Antigravity reports `WORKING`, implements, validates, and reports `DONE` or `FAILED`.
+5. Codex reviews the actual changes and evidence, then reports `APPROVED` or `CHANGES_REQUESTED`. Corrections are sent as a new round.
 
-When review returns `CHANGES_REQUESTED`, the next explicit dispatch reuses the same healthy Session
-and writes the new feedback into it. An exited or failed Session is not automatically restarted;
-recovery inspection is read-only, and an explicit resume/dispatch is required.
+Expand **Collaboration Timeline** to inspect dispatches and reports.
+`SENT` confirms dispatch, not completion. `DONE` and `APPROVED` are formal agent
+reports, not independent verification. Task-list running/closed status describes
+terminal lifecycle, not implementation or review completion.
 
-Run this from the project Git root:
+Use **Git Changes** to inspect working-tree diffs. In Default mode, select lines,
+add review notes, and confirm Codex is at a blank input prompt before sending.
+That readiness confirmation is cleared after each successful send. Diffs may
+include earlier user edits and do not cover changes already committed.
 
-```console
-$ npx --yes @hogancv/coordinate-agents@2.4.0 quickstart \
-    --template feature --task "Add completion support to the Todo app"
-Collaboration workspace initialized: .../todo-app
-Generated role prompts: .../todo-app/.agent-bus/launch
+## 5. Keep or close your sessions
 
-1. Codex terminal (copy and run):
-npx --yes @hogancv/coordinate-agents@2.4.0 launch --agent codex ...
+Refresh reconnects to the saved sessions. Switching projects leaves background
+terminals running. Browser close and Web server shutdown do not themselves close
+the independent Session Hosts; use **Close**, **Restart**, or the selected
+project's **Close all terminals** controls explicitly.
 
-2. Antigravity terminal (copy and run):
-npx --yes @hogancv/coordinate-agents@2.4.0 launch --agent antigravity ...
-```
+Right-click a task or project to archive it and close its terminals. Source files
+remain. Settings can permanently clear archived conversations across registered
+projects, including their timeline history. Re-adding an archived project's
+folder restores its project entry.
 
-Run the two printed commands in separate terminals. Exact commands contain an encoded project path
-so spaces and Windows metacharacters do not require manual quoting.
-
-Keep the Antigravity launch terminal open. Its Adapter-declared supervisor waits after each clean
-`agy` exit and reactivates it for later review feedback without claiming the Bus message itself.
-Use Ctrl+C or a processed `STOP` message to end it; `--once` opts into one activation for scripts.
-
-`quickstart` adds a project-local `.agent-bus/` directory and excludes it through
-`.git/info/exclude`; it does not add bus messages to commits. The project source tree is unchanged
-until Antigravity implements an approved specification.
-
-## 3. Complete one lifecycle
-
-1. Tell Codex the observable behavior, constraints, and acceptance criteria.
-2. Codex writes a specification and sends `IMPLEMENT`.
-3. Antigravity claims it, edits product code, runs tests, commits, and sends
-   `IMPLEMENTATION_DONE` with the commit ID and evidence.
-4. Codex inspects the real commit and reruns relevant checks. It sends `REVIEW_APPROVED` or
-   `CHANGES_REQUESTED`.
-5. Antigravity fixes requested changes and repeats the evidence handoff.
-6. A release remains blocked until the user approves the exact release plan with
-   `RELEASE_APPROVED`.
-
-The repository's deterministic demo proves this full lifecycle without using either live model:
-
-```console
-$ npm run demo
-[CODEX] Clarify requirement and submit implementation specification
-[ANTIGRAVITY] Claim message, implement, test, and commit
-validation: node --test PASS
-[CODEX] Claim result and review real commit plus validation evidence
-review: APPROVED
-[RESULT] IMPLEMENTED -> TESTED -> COMMITTED -> REVIEW_APPROVED
-tests: PASS
-bus: PASS
-```
+Web tasks share the project's working directory and do not create isolated
+worktrees. Avoid simultaneous conflicting edits. Prompts require authorization
+for commit, push, and release; they are behavioral instructions, not a sandbox.
 
 ## Success and failure signals
 
-Success means all of the following are observable: Antigravity alone changed product files; the
-implementation commit exists; tests pass; Codex reviewed that exact commit; both inboxes have no
-unexpected `processing` claims; and release permission has not been inferred from review approval.
+A successful first run shows both configured CLIs, a single task-bound dispatch,
+an implementation receipt, and Codex's review of real changes and validation.
+Check the report and diff; do not use terminal idle or task-list status as proof.
 
-Stop and diagnose if both terminals show the same role, both agents attempt Git writes, a message
-stays in `processing` after its worker exited, evidence names a nonexistent commit, tests fail, or
-the project root differs between terminals. See [troubleshooting](./troubleshooting.html),
-[role comparison](./comparison.html), and the [protocol](./protocol.html).
+On startup failure, inspect the executable and session diagnostics before
+explicitly restarting. A timeout means pending, not permission to resend input.
+Health hints identify missing evidence or session problems; silence alone does
+not prove an agent is stuck. See [Troubleshooting](./troubleshooting.html).
+
+## If you need structured Tasks or a Codex Plugin
+
+Use the separate [Structured workflow guide](./structured-workflow.html) for
+Plugin installation, Agent Bus Tasks, implementation evidence, Task Graphs,
+recorded review, and recovery. These capabilities are retained in GitHub source /
+Plugin and npm 2.4.0; npm 3.x Web does not expose them.
+
+Next: [Workspace guide](./inspector.html) · [FAQ](./faq.html) · [Security](./security.html)

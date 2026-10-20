@@ -1,86 +1,80 @@
 ---
 layout: home
-title: coordinate-agents
-description: A local AI coding-agent workbench with lightweight Web collaboration and a structured coordination protocol and runtime.
+title: Coordinate Agents
+description: A local Web Workspace for persistent coding-agent terminal pairs, default Codex and Antigravity collaboration, and custom CLIs.
 permalink: /
 ---
 
-# Local collaboration workbench and runtime for AI coding agents
+# A local workspace for coding-agent terminals
 
-Choose [Web Workspace](./inspector.html) for lightweight Codex + Antigravity
-terminal collaboration, or Skill / CLI / MCP for the structured workflow
-described below. Web uses fresh paired PTYs and task-bound messaging without
-automatically invoking the skill or creating Task/Graph records. Its group
-status describes terminal lifecycle, not implementation or review completion.
-The two modes share the local Session Runtime; their workflow guarantees differ.
+> **v2.4 users:** See [original v2.4.0 docs and v3 migration](./v2.4.html) for the
+> product-direction change, historical documentation, and retained structured workflow.
 
-`coordinate-agents` is a local-first coordination protocol and runtime for multi-agent software engineering in Git repositories. The core is agent-agnostic and uses an adapter-based runtime. **OpenAI Codex App/CLI** and **Google Antigravity CLI (`agy`)** serve as first-party reference adapters and the default reference workflow, while generic CLI agents can be registered directly and desktop, MCP, HTTP, or IPC surfaces can integrate via the adapter extension model.
+Coordinate Agents brings two persistent agent terminals into a local browser
+workspace. Use **Default Collaboration** for Codex to delegate implementation
+to Antigravity and review the result, or **Custom Terminals** to choose your own
+CLI pair and prompts. Projects and task history stay on your machine; each CLI
+uses its own provider configuration and login.
 
-The agents communicate through a recoverable project-local `.agent-bus`. No external CAO server, daemon,
-database, or shared API key is required. During an explicit Task/Session operation, the Runtime may
-create a local Runtime-owned Session Host for a persistent PTY; it is not Codex Terminal UI control.
+## Start the Workspace
 
-## Codex Plugin via GitHub Marketplace (Structured mode)
+Install Node.js >=18, Git, and your agent CLIs. For the default pair, make sure
+`codex` and `agy` work and are signed in. No Codex Plugin is required.
 
 ```sh
-codex plugin marketplace add hogancv/coordinate-agents
-codex plugin add coordinate-agents@coordinate-agents
+npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 ```
 
-After enabling the plugin, start a new Codex App thread and invoke `$coordinate-agents`. The App
-path is the preferred interactive workflow; the npm CLI quickstart below is the fallback for
-automation or hosts without direct Codex App Skill execution.
+Open the printed localhost URL, check settings, create a task, and enter your
+request in Codex. The startup folder is registered automatically; a non-Git
+folder is initialized without a commit.
 
-Plugin-only installation does not require `npm install -g @hogancv/coordinate-agents`. Every Skill
-uses the bundled resolver convention `node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs"`
-to start the one canonical `bin/coordinate-agents-legacy.mjs` from the active Plugin payload. The resolver
-does not depend on a `coordinate-agents` executable being present on `PATH` and handles cached Git
-marketplaces, personal local marketplaces, and Windows paths with spaces.
+**Source and release differ.** As checked on 2026-10-20, npm `latest` is 3.0.1.
+The current source also includes Git Changes/review feedback, Custom Terminals,
+desktop notifications, Collaboration Timeline, and Collaboration Health added
+after that release. To use those additions:
 
-The Plugin is a Multi-Skill surface: `coordinate-setup` discovers and configures an Implementer,
-`coordinate-task` owns the durable Task API, `coordinate-review` verifies commits and evidence,
-and `coordinate-recover` handles explicit recovery. Use `setup --json` and `task status --json`
-for machine-readable runtime facts; all of these paths use the same project-local Agent Bus.
+```sh
+git clone https://github.com/hogancv/coordinate-agents.git
+cd coordinate-agents
+npm ci
+node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
+```
 
-## Start here: Install Plugin → Discover → Configure → Build
+Merging source does not publish npm. See [Getting started](./getting-started.html)
+for prerequisites, settings, first-task steps, and release differences.
 
-For the simplest interactive path, install the Codex plugin, add the target Git repository to Codex
-App, set the thread project path to the repository root containing `.git`, and invoke
-`$coordinate-agents`. A second manually opened CLI window is not required; configure the actual
-Implementer executable (`agy`, `claude`, or a wrapper) for the local runtime. The Task records a
-non-owning `sessionId`; a healthy Session is reused through review rework.
+## Everyday use
 
-Use `coordinate-setup` for discovery and the single high-level `setup configure` transaction. It
-persists the machine command, registers the project Agent, assigns the Implementer workflow role,
-checks Adapter compatibility and executable availability, and returns `READY`. After Codex finishes
-the specification, `coordinate-task task dispatch` owns the Task → Agent Bus → Adapter → Implementer
-handoff; `coordinate-review task review` records the review decision. See the [Plugin E2E audit and
-acceptance gates](./plugin-e2e.html) for the exact state and error mapping.
+- [Workspace guide](./inspector.html): Default and Custom terminals, settings, Git Changes, review feedback, timeline, health, notifications, and archives.
+- [Install with AI](./install-with-ai.html): choose Web or the optional structured Plugin before installing.
+- [Troubleshooting](./troubleshooting.html): missing commands, ports, PTY limitations, receipts, and notifications.
+- [Changelog](./changelog.html): published release history.
+- [FAQ](./faq.html): local data, session persistence, supported CLIs, and workflow limits.
+- [Comparison](./comparison.html): a single agent, manual terminals, Workspace, and structured coordination.
+- [Security](./security.html): local storage, process permissions, loopback access, and diagnostics.
+- [简体中文](./zh-CN/): Chinese introduction and documentation routes.
 
-For a custom CLI, ask the active Codex App thread to inspect the installed executable and its
-`--help` output, register it with `generic-cli`, run `doctor`, and show the resolved configuration
-before starting a task. The legacy Antigravity launch passes configured arguments and appends
-only `--prompt-interactive <prompt>`; a persistent Session starts with `--prompt-interactive=` for
-current `agy`/`agy-proxy` parsers, then writes its first instruction through the PTY unless `{prompt}`
-is explicitly configured. The Adapter does not automatically add a full-permission or
-sandbox-bypass flag.
+Task-list status describes terminal lifecycle. Collaboration states are explicit
+agent reports, not independent proof of implementation or review. Web tasks
+share the project's working directory; a terminal pair does not create an
+isolated worktree. Role prompts guide behavior and do not enforce a sandbox or
+release gate.
 
-- [Getting started](./getting-started.html)
-- [Install safely with an AI](./install-with-ai.html)
-- [Codex CLI role](./codex-cli.html)
-- [Antigravity CLI role](./antigravity-cli.html)
-- [Protocol and recovery](./protocol.html)
-- [Execution Session and PTY Runtime](./session-runtime.html)
-- [Task Graph v1 Contract](./task-graph-v1.html)
-- [Adapter Conformance Kit](./adapter-conformance.html)
-- [External Adapter Author Guide](./adapter-author-guide.html)
-- [Local Inspector Web UI](./inspector.html)
-- [Durable Runtime Event Journal](./event-journal.html)
-- [Security boundary](./security.html)
-- [Troubleshooting](./troubleshooting.html)
-- [Role comparison](./comparison.html)
-- [FAQ](./faq.html)
-- [Machine-readable documentation index](./llms.txt)
-- [简体中文入口](./zh-CN/)
+## Optional structured workflow
+
+The GitHub Plugin and Legacy runtime retain the local-first Agent Bus, durable
+Tasks, Task Graphs, evidence-based review, and explicit recovery. They share
+Session infrastructure with Web, but have different APIs and workflow guarantees.
+The npm 3.x Web package does not include the structured CLI or MCP server.
+
+- [Structured workflow](./structured-workflow.html): Plugin installation, setup, dispatch, review, and recovery.
+- [Legacy Skill installation](./legacy-ai-install.html): npm 2.4.0 installation, upgrade, uninstall, and backup steps.
+- [Plugin end-to-end guide](./plugin-e2e.html), [MCP tools](./mcp.html), [MCP troubleshooting](./MCP_TROUBLESHOOTING.html).
+- [Protocol](./protocol.html), [Task Graph](./task-graph-v1.html), [Runtime events](./event-journal.html).
+- [Session Runtime](./session-runtime.html), [Adapter author guide](./adapter-author-guide.html), [Adapter conformance](./adapter-conformance.html).
+- [Codex reference role](./codex-cli.html), [Antigravity reference role](./antigravity-cli.html).
+
+[Machine-readable documentation index](./llms.txt)
 
 Canonical sources: [GitHub](https://github.com/hogancv/coordinate-agents) · [npm](https://www.npmjs.com/package/@hogancv/coordinate-agents)

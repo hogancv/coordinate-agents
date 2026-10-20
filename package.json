@@ -63,7 +63,7 @@
     "skills/coordinate-agents/adapters/trusted-local.mjs",
     "README.md",
     "README.zh-CN.md",
-    "CHANGELOG.md",
+    "docs/changelog.md",
     "LICENSE"
   ],
   "scripts": {
@@ -72,8 +72,7 @@
     "test:full": "node --test --test-concurrency=1",
     "test:projects": "node --test test/workspace-projects.test.mjs",
     "test:native-pty": "node --test --test-concurrency=1 test/native-pty.test.mjs",
-    "sync:llms": "node scripts/sync-llms.mjs",
-    "check:llms": "node scripts/sync-llms.mjs --check",
+    "check:llms": "node scripts/check-llms.mjs",
     "check": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm run test:core",
     "check:full": "node bin/coordinate-agents.mjs --help && npm run check:llms && npm run test:full",
     "demo": "node scripts/demo.mjs",

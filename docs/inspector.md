@@ -1,216 +1,277 @@
 ---
 layout: page
-title: Web Workspace and Local Inspector
-description: A localhost-only dual-terminal workbench with lightweight collaboration, task-bound PTYs, and a guarded Runtime gateway; Inspector remains read-only.
+title: Web Workspace guide
+description: Use default and custom coding-agent terminals, Git Changes review feedback, collaboration timeline and health, notifications, projects, and persistent sessions.
 ---
 
-# Web Workspace and Local Inspector
+# Web Workspace guide
 
-> **V3 distribution / 分发说明:** npm 3.x starts the Web Workspace only and exposes no structured Task/Graph API. The read-only Inspector remains in GitHub via `node bin/coordinate-agents-legacy.mjs inspector` or npm 2.4.0. Web startup initializes config/persistence directly without executing Agent Bus.
+This guide describes the **current source checkout**. npm `latest` was 3.0.1
+when checked on 2026-10-20; Git Changes/review feedback, Custom Terminals,
+notifications, Collaboration Timeline, and Collaboration Health were added
+after that release. See [Getting started](./getting-started.html) to choose
+between the published package and source.
 
-
-The **Web Workspace** is the lightweight interactive entry for Coordinate
-Agents. Each Workspace task group owns a fresh terminal pair: **Default
-Collaboration (Codex + Antigravity)** or **Custom Terminals**. The **Skill / CLI / MCP** path remains the structured workflow for durable
-Tasks, Task Graphs, implementation evidence, recorded review, and recovery.
-These modes share Session Runtime infrastructure, not an identical workflow.
-The `inspector` command remains the compatible read-only observation UI.
-
-## Custom Terminals / 自定义双终端
-
-Custom mode launches two independent, task-and-slot-bound Generic CLI Sessions. Commands are executable names or absolute paths only, without arguments or shell syntax. Same-command pairs are supported. Project defaults and three optional Prompts are atomically stored in `.agent-bus/workspace-custom.json`; each task snapshots its commands and Prompts, including across restart. The shared Prompt is bounded to 8KB UTF-8; each terminal Prompt to 4KB. Prompt preview/copy and explicit confirmed bracketed-paste delivery are available per terminal, with keyboard queue reservation and no automatic retry. Unknown CLI readiness is never inferred. Default roles, rounds and cooperation reports are not available in Custom; diff viewing/copying remains usable.
-
-自定义模式通过 Generic CLI 启动两个独立且归属于当前 Task / Slot 的 Session。命令仅支持可执行文件名或绝对路径，不能包含参数或 Shell 语法；允许两个相同命令。项目默认配置与三个可选 Prompt 原子保存于 `.agent-bus/workspace-custom.json`，任务创建时快照化，重启不受新配置影响。共享 Prompt 最多 8KB UTF-8，终端 Prompt 各 4KB。每个终端可预览、复制或在确认 CLI 支持多行括号粘贴后显式发送；发送预留键盘队列、不自动重试，不推断未知 CLI 就绪状态。Custom 不启用默认角色、roundId 或协作报告；Diff 仍可查看和复制。
-
-## Start the Web Workspace
-
-During Prompt preflight, closing its preview cancels the send; input already dispatched cannot be recalled. Saving Custom defaults refreshes untouched command fields in an open creation dialog without replacing temporary overrides. A selected Custom task's health checks use its command snapshot; default checks remain for Default tasks or no selected task.
-
-Prompt 预检期间关闭预览会取消发送；已经派发的输入无法撤回。保存自定义默认配置会同步仍打开的创建窗口中未编辑过的命令框，不覆盖临时命令。选中 Custom 任务时按命令快照进行健康检查；Default 任务或未选择任务时保留默认检查。
-
-From a local folder, using an npm version
-that includes the desired Web features:
+## Start and select a project
 
 ```sh
-npx @hogancv/coordinate-agents web --port 3000
+# Published Web package
+npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
+# Current checkout, after npm ci
+node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
 ```
 
-To run the current source checkout (a merge does not publish npm):
+Open the printed localhost URL. `--port 0` selects a free port. A merge to main
+does not publish npm. The server listens on `127.0.0.1` and, when available,
+the same port on `::1`.
+
+The startup folder is registered and selected automatically. Git subdirectories
+resolve to the repository root. Ordinary startup folders initialize Git and
+Workspace storage without a commit; symlinked roots are rejected. **New project**
+can browse a local folder or accept its path, with confirmation before initializing
+an ordinary folder. Unavailable registered directories remain visible for diagnosis.
+
+The sidebar groups tasks by project. Switching projects keeps background sessions
+running and restores the last selected task. Search filters project names and
+loaded/cached task titles; projects whose tasks have not loaded are identified.
+Clear search or press Escape to restore the prior expansion state.
+
+## Default Collaboration
+
+**New task → Default Collaboration** creates fresh Codex and Antigravity
+Sessions, waits for readiness, and delivers the Web role prompts. There is no
+separate requirements form: type your request in Codex.
+
+Codex clarifies the requirement, sends implementation goals and acceptance
+criteria to this task's Antigravity, waits for a receipt, then reviews the real
+diff and validation. Antigravity reports `WORKING`, implements, then reports
+`DONE` or `FAILED`. Codex reports `REVIEWING`, followed by `APPROVED` or
+`CHANGES_REQUESTED`; requested corrections start a new round.
+
+Current role prompt version is `2.3.0-web-lite-3`. Prompts initialize with one
+short acknowledgement and no tools. They do not automatically invoke Skills,
+scan Agent Bus, recover old Tasks, discover plugins, or create Task Graphs.
+They prohibit commit, push, and release without user authorization and remain
+behavioral guidance: this is **not an enforced state machine** or sandbox.
+
+The task-supplied `workspace-message.mjs` helper supports `send`, `read`, `wait`,
+`report`, and `changes`. Agents should use the exact helper path supplied in
+their prompt. It verifies the saved task/agent/session binding; it does not find
+a different task's most recent Session. Waiting uses a cursor and cooperation
+revision. A timeout is pending and does not authorize resending.
+
+**Workspace task status describes terminal lifecycle, not implementation or
+review completion.** Cooperation states are agent reports, not independently
+verified results. Ordinary terminal output and `idle` do not establish completion.
+Web task records are separate from structured Tasks and Task Graphs.
+
+Web groups share the bound repository; creating a group does not
+create an isolated Git worktree. Avoid conflicting concurrent modifications.
+
+## Custom Terminals
+
+Choose **New task → Custom Terminals** to launch two independent Generic CLI
+Sessions bound to the task and their terminal slots. The same command can be
+used twice. Executable fields accept names or absolute paths, without inline
+arguments or shell syntax; no shell command is evaluated by those fields.
+
+Project defaults are saved atomically in `.agent-bus/workspace-custom.json`.
+Each task snapshots its two commands and optional prompts, retaining that
+snapshot across restarts. The shared prompt is limited to 8 KB UTF-8; each
+terminal prompt to 4 KB. Saving defaults updates untouched command fields in
+an open creation dialog while preserving temporary overrides.
+
+Use each terminal's **Project Prompt** button to preview the shared and terminal
+prompts, separated by `---`. Copy them, or explicitly confirm that the target
+CLI is ready and supports multiline bracketed paste before sending. Readiness
+of an unknown CLI is not inferred. Sending reserves the keyboard queue and
+uses one raw Session write with a final Enter; uncertain delivery is not retried.
+Closing the preview during preflight cancels a pending send. Dispatched input
+cannot be recalled.
+
+Custom mode does not inject the default roles, create collaboration rounds, or
+enable Send to Codex review feedback. Git diff viewing/copying remains available.
+Environment checks use the selected Custom task's command snapshot; without a
+selected Custom task, checks use the default pair.
+
+## Terminals and session lifecycle
+
+Keyboard input, Enter, arrows, and Ctrl-C are sent as ordered raw terminal data.
+Output uses resumable cursors and bounded polling; it is not reconstructed into
+a chat transcript. The visible area drives `sessionResize`.
+
+Drag the divider to change the split between 25% and 75%; double-click restores
+50:50. The saved ratio survives refresh. Focus enlarges one terminal without
+restarting it; restore returns to the saved split, and switch focuses the other.
+Zen mode keeps the terminal controls. Narrow screens stack the terminals.
+The UI supports Simplified Chinese and English.
+
+Page load, task selection, and refresh never launch or retry agents. Refresh
+reconnects to the saved independent Session Hosts. Close ends the selected
+pair; restart creates two new Sessions and retains previous closed records.
+Close all terminals applies only to the selected project. Startup failures
+trigger owned-pair cleanup and a bounded error, not an automatic retry.
+
+Closing the browser or pressing Ctrl-C in the Web server is not a terminal-close
+operation. Use explicit close controls to stop agents. Session Runtime owns
+only the processes it creates and does not attach to arbitrary PIDs.
+
+Native PTY availability is platform/Node dependent. Node 18 keeps an owned-stdio
+fallback. On Windows Node >=20, the runtime probes native PTY startup and real
+TTY behavior in a disposable detached Session Host. Fallback is selected only
+after owned-process cleanup is confirmed; actual Session failure never retries
+a task automatically. Diagnostics expose `backend`. Stdio fallback cannot
+provide full TUI behavior or child-observed resize.
+
+## Workspace settings
+
+Settings has three tabs with independent saves. Saving keeps the dialog open;
+switching tabs retains unsaved edits. The fixed footer shows Close and the
+active tab's save button.
+
+| Tab | Scope and effect |
+| --- | --- |
+| Default Collaboration | `codex` and `agy` executable overrides, optional Codex model/reasoning. Applies to new launches and restarts; model choices use the local model cache. |
+| Custom Terminals | Two executable defaults and shared/per-terminal prompts. New tasks snapshot them; existing Custom tasks keep their saved snapshot. |
+| Desktop Notifications | Project-level notification preferences, read on the next formal receipt. |
+
+Default terminal settings preserve unrelated arguments and use project > user >
+adapter-default precedence. They do not reconfigure running CLIs. Executable
+availability does not establish login, model access, provider health, or quota.
+
+## Git Changes and review feedback
+
+The Changes drawer shows bounded working-tree Git status and diffs. It includes
+pre-existing user edits and does not attribute every change to an agent. A clean
+working tree does not disprove changes already committed; inspect those commits
+separately. This view is not a history review or isolated per-round diff.
+
+In Default mode, select diff lines, add notes, and review the feedback preview.
+Before each send, confirm Codex is at a blank input prompt. A successful send
+clears that confirmation; editing previously sent feedback requires confirming
+again. The preview is bounded to 40 selected lines and 8 KB.
+
+Switching files, refreshing the diff, or closing the drawer during preflight
+cancels pending feedback before terminal input is dispatched. Input already
+sent cannot be recalled. Sending notes does not itself record approval or
+prove that Codex acted on them. Custom tasks can view/copy diffs, but cannot
+use this Codex-specific handoff.
+
+## Collaboration Timeline
+
+Expand the normally collapsed panel above Default Collaboration terminals to
+view persisted `SENT`, `WORKING`, `DONE`, `REVIEWING`, `CHANGES_REQUESTED`,
+`APPROVED`, and `FAILED` events. Entries include time, source agent, round ID,
+transition, and a redacted short receipt. Filter current, all, or a specific
+past round.
+
+`SENT` confirms input dispatch only; the other states are formal reports from
+agents. The panel does not independently verify results or dispatch, retry, or
+review work. It is hidden in Custom mode and Zen mode. History survives page
+refresh, Workspace restart, and terminal-pair restart. History not recorded by
+earlier versions cannot be reconstructed.
+
+Clearing archived tasks also removes their stored timeline.
+
+## Collaboration Health
+
+Task-list hints and the panel beside the timeline show waiting for a `WORKING`
+receipt, quiet implementation/review, `DONE` awaiting review, formal `FAILED`,
+and linked Session exits, failures, or unavailable records. Silence means a
+lack of observable evidence, not proof that an agent is stuck or failed.
+
+The attention threshold defaults to 30 minutes and can be set to 1–10080 minutes,
+saved in the current browser. New formal receipts reset the timer, including
+same-status progress summaries; identical duplicate reports retain idempotent
+behavior. Closed/archived tasks and prior terminal pairs have no active hints.
+Custom mode shows Session facts only.
+
+Health uses ordinary Workspace refresh. It does not send system notifications,
+resend instructions, create rounds, restart sessions, or change cooperation state.
+
+## Desktop notifications
+
+Supported on Windows 10/11 and macOS; Linux reports unsupported. In settings,
+enable notifications for the current project and save the Notifications tab.
+Notifications start disabled. `APPROVED` and `FAILED` are selected by default;
+`DONE` is optional. The fixed **Send test notification** action does not create
+a task or change cooperation. OS acceptance does not establish visible delivery;
+check system permissions and Focus / Do Not Disturb if nothing appears.
+
+Only validated, persisted Default Collaboration receipts trigger notifications.
+They are dispatched from `workspace-message report`, independently of browser
+connections. The browser can be closed while the backend, agents, and interactive
+OS session keep running. Custom output, idle, Session exit, task close/restart,
+and archive are not notification events.
+
+Windows uses PowerShell 5.1 and WinRT Toast. On first enabled dispatch or test,
+it creates a per-user Coordinate Agents Notifications Start Menu shortcut with
+AppUserModelID `CoordinateAgents.Workspace`; no admin access or third-party
+service is required. macOS uses `/usr/bin/osascript` with fixed script and
+separate arguments. OS policy controls sender permissions and display.
+
+Preferences live in `.agent-bus/workspace-notifications.json`; the bounded
+ledger under `.agent-bus/notifications/` claims project/task/round/status before
+OS dispatch. Attempts are at most once, including failures; a crash after claim
+can lose a notification. Summary edits do not resend; a new round can notify
+again. Notifications contain sanitized project/task labels, not prompts, output,
+receipt summaries, or absolute paths. The ledger is capped at 4096 claims and
+reclaims deleted-task entries; otherwise it reports capacity instead of risking
+duplicates. Dispatch failures do not change the task receipt. Automated tests
+mock native dispatch and do not prove real on-screen delivery.
+
+## Storage and archives
+
+The user configuration directory holds the locked, atomically written
+`workspace-projects.json` registry. Each project keeps its own `.agent-bus/`:
+
+- `.agent-bus/workspace-tasks/<id>.json`: Web task identity, mode, terminal bindings, and cooperation facts.
+- `workspace-custom.json`: Custom defaults; tasks retain their own snapshots.
+- `workspace-notifications.json` and `notifications/`: notification preferences and dispatch facts.
+- Session Runtime records and bounded terminal output.
+
+Right-click a task or project to archive it, close its terminals, and hide its
+records while keeping project source files. Archived projects remain hidden
+across refresh/restart; explicitly re-adding the folder restores the project
+entry. Settings offers permanent clearing of archived conversations across all
+registered projects. This removes their stored history, including timelines.
+
+Web records are distinct from `.agent-bus/tasks/` and `.agent-bus/task-graphs/`.
+The Web UI does not display, migrate, or delete those structured records.
+
+## Local HTTP boundary
+
+The page supplies a per-launch capability in `meta[name="coordinate-agents-capability"]`.
+Requests send it as `x-coordinate-agents-capability`. The gateway checks loopback
+Host/Origin, capability, bounded JSON, allow-listed actions, and repository binding.
+Project APIs resolve their own project; browser tabs do not change a server-global
+selection. `POST /api/action` handles explicit mutations such as task creation,
+terminal input, resize, settings, and archiving.
+
+The default Web API serves Workspace task/settings/health, repository/diff, and
+bound Session data. It does **not** expose structured `/api/tasks`, `/api/graphs`,
+Task Graph actions, or MCP. Those remain separate source/Plugin surfaces.
+A capability protects local requests; it is not multi-user authentication.
+
+## Read-only Inspector and structured workflows
+
+The retained Inspector is a separate read-only UI, not the current Web Workspace:
 
 ```sh
-node bin/coordinate-agents.mjs web --port 3000
+node bin/coordinate-agents-legacy.mjs inspector --port 3001
+# Older published CLI, pinned explicitly:
+npx @hogancv/coordinate-agents@2.4.0 inspector --port 3001
 ```
 
-Open the printed URL, normally `http://localhost:3000`. The startup directory
-(or `--root`) is registered and selected automatically. Git subdirectories
-normalize to the repository root; ordinary startup folders initialize Git and
-Agent Bus without a commit. Symlinked roots are rejected.
-It listens on `127.0.0.1` and, when
-available, the same port on `::1`. Stop the server with `Ctrl-C`; use the
-explicit terminal-close controls to close persistent sessions.
-The workbench needs no Codex Plugin or remote coordination service;
-agent CLIs still require their own provider configuration and login.
+It is absent from npm 3.x. See [Structured workflow](./structured-workflow.html),
+[Session Runtime](./session-runtime.html), and [Event Journal](./event-journal.html)
+for the corresponding contracts.
 
-## Layout and first use
+## Security
 
-- **Sidebar:** expandable project groups, New project, New task, Terminal
-  settings, and Workspace groups only. Standard Tasks and Task Graphs are
-  hidden, not deleted.
-- **New task:** opens a Default / Custom mode picker. Default starts two new persistent PTYs, waits for CLI readiness, and
-  submits role prompts. Titles are generated from time and ID, not output.
-  There is no requirements form: enter requirements in Codex.
-- **Interactive terminals:** keyboard input, Enter, arrows, and Ctrl-C are
-  sent as ordered raw PTY data. Size follows the visible space; bounded,
-  redacted output is polled independently, faster while active and after input.
-- **Controls:** refresh, close, restart the pair, or close all Workspace
-  terminal groups in the selected project. Selecting or reloading never launches or retries an agent.
-  Restart explicitly creates two new Sessions.
-- **Settings:** customize the two fixed agents' commands, for example
-  `agy-proxy` for Antigravity. Codex model and reasoning choices use the local
-  model cache. Settings are saved in the selected project's configuration,
-  preserving unrelated arguments. Changes apply to future launches, not running
-  CLIs. Project > user > adapter-default precedence still applies.
-- **Language and layout:** `zh-CN` / `en-US` toggle persisted in localStorage,
-  scrollable task list and viewport-sized terminal panels. Narrow screens
-  stack terminals and place the sidebar in a drawer.
-
-There is no Composer, synthetic chat timeline, right context panel, or
-Graph / Agents / Sessions / Activity navigation. `composer-model.mjs` remains
-a static compatibility resource, unused by the current Workspace UI.
-
-## Project storage and routing
-
-New project opens the operating system folder chooser (macOS, Windows, or
-Linux with Zenity). Cancel leaves project data unchanged. Plain folders require
-initialization confirmation after selection. If the native chooser is unavailable,
-the page falls back to a directory-only browser with absolute-path entry, parent
-navigation, 100-entry pages, and a hidden-directory toggle. Ordinary folders
-show an explicit **Add and initialize** confirmation. Initialization failures
-identify the failed stage and keep any generated data for manual recovery.
-
-The user configuration directory contains `workspace-projects.json`, an
-atomically written, locked registry with stable IDs and canonical paths. Each
-project retains its own `.agent-bus/workspace-tasks/`; nothing is migrated.
-Unavailable directories remain visible. Refresh reloads the shared registry.
-Switching projects preserves background terminals and restores the last task.
-URLs use `#project-ID/workspace-ID`; old task-only links use the startup project.
-
-`GET /api/projects` returns the registry and startup ID. Guarded `projectBrowse`
-and `projectAdd` actions use `POST /api/action`. Project APIs use
-`/api/projects/:projectId/api/...`, including the action gateway. These routes
-require the launch capability and loopback Host/Origin checks. Each request
-resolves its own project; tabs never change a server-global selection. Legacy
-single-repository APIs remain bound to startup; read-only Inspector is unchanged.
-
-## Web-lite collaboration and its limits
-
-Web uses prompt version `2.3.0-web-lite-1`; CLI quickstart keeps its original
-`2.3.0` prompts. Initialization is one short acknowledgement without tools.
-The Web prompt does **not** automatically invoke the coordinate-agents skill,
-restore old Tasks, scan Agent Bus, discover plugins, or create Task/Graph
-records. Those operations require an explicit request.
-
-Codex clarifies and reviews, directly answers greetings and explanations,
-and delegates implementation goals, scope, and acceptance requirements to
-the paired Antigravity. Antigravity implements, reports changes, validation,
-and remaining issues, then waits. Codex reviews the real diff and evidence
-proportionately. Prompts forbid commit, push, or release without authorization;
-they are behavioral instructions, **not an enforced state machine or security
-sandbox**. Applicable repository instructions still apply.
-
-The injected communication entry uses `workspace-message.mjs`:
-
-```sh
-node skills/coordinate-agents/scripts/workspace-message.mjs <workspace-task-id> send 'instruction'
-node skills/coordinate-agents/scripts/workspace-message.mjs <workspace-task-id> read <cursor>
-```
-
-It resolves only the group's saved Antigravity Session, verifies task/agent
-binding, writes the instruction and Enter through Runtime, and returns a
-cursor for bounded reads. It never selects another task's recent Session.
-Delivery is not completion; output may contain redraws, and `idle` is not
-proof of success. Timeout means pending, not permission to resend.
-
-**Workspace group status describes terminal lifecycle, not implementation or
-review completion.** Terminal replies do not automatically create structured
-`IMPLEMENTATION_DONE`, review decisions, or recoverable Task checkpoints. Use
-the [structured workflow](./getting-started.md#codex-plugin-first-path) when
-needed. Web groups share the bound repository; creating a group does not
-create an isolated Git worktree. Do not run conflicting code modifications
-concurrently across groups.
-
-## Persistence and pair lifecycle
-
-```text
-Workspace group (.agent-bus/workspace-tasks/<id>.json)
-  ├── saved Codex Session ID       → Runtime-owned PTY → Codex CLI
-  └── saved Antigravity Session ID → Runtime-owned PTY → configured agy command
-```
-
-Records contain generated title, status, prompt version, and both bindings.
-New groups never reuse another group's active Sessions. Startup failure
-triggers pair cleanup and a bounded error; closed Session records remain for
-audit. Close is idempotent. Restart retains old closed records and creates
-new IDs. Failures do not trigger automatic retries.
-
-Workspace records are independent of `.agent-bus/tasks/*.json` and
-`.agent-bus/task-graphs/*.json`. Existing standard records and backend contracts
-are preserved; hiding them is not migration or deletion.
-
-## Endpoints and guarded actions
-
-Workspace GET endpoints:
-
-- `/api/workspace-tasks` and `/api/workspace-tasks/:id`: Workspace groups.
-- `/api/workspace-settings`: resolved terminal configuration and model choices.
-- `/api/repository`: bounded Git identity facts.
-
-Existing read contracts remain: `/api/tasks`, `/api/tasks/:id`, `/api/graphs`,
-`/api/graphs/:id`, `/api/agents`, `/api/sessions`, `/api/events`, and
-`/api/events/stream` (SSE with `Last-Event-ID` support). Journal history and
-its labeled Derived / Legacy History fallback are not fabricated or backfilled.
-The terminal UI uses bounded polling, not a reconstructed chat/event timeline.
-
-`POST /api/action` is the sole browser mutation endpoint. Workspace uses
-`workspaceTaskCreate`, `workspaceTaskClose`, `workspaceTaskRestart`,
-`setupConfigure`, `sessionWrite`, `sessionResize`, and Session read/status
-operations. Standard Task, Graph, setup, review, recovery, and Session action
-contracts remain backend capabilities, not pages in the current UI.
-
-Requests require the per-launch capability from the page's
-`meta[name="coordinate-agents-capability"]`, sent in the
-`x-coordinate-agents-capability` header. The gateway enforces loopback Host
-and Origin, capability matching, bounded JSON, allow-listed names and schemas,
-and the bound root before dispatching Runtime services. Correlation and
-canonical bounded errors are preserved. Session input and resize enforce
-Runtime ownership and state; arbitrary PIDs are not Session targets.
-
-Page load, selection, refresh, and GET do not launch processes or send
-instructions. Clicking New task and typing are explicit actions with real
-process/filesystem consequences, not read-only observation; there is no
-separate confirmation per keystroke.
-
-## Inspector compatibility
-
-```sh
-npx @hogancv/coordinate-agents inspector --port 3000
-```
-
-Inspector retains its read-only UI, GET contracts, and non-GET rejection.
-Use another port if Workspace already occupies this one.
-
-## Security boundary
-
-The local capability is not multi-user authentication. Do not expose the
-server through a proxy or tunnel without an explicit security boundary.
-There is no cloud synchronization or multi-tenant mode.
-
-Agent commands and wrappers are trusted executables with their configured
-permissions. The HTTP root restriction does not sandbox an agent's shell
-or prevent repository edits. Proxy and permission settings belong to the
-CLI/wrapper; Web-lite does not provide credential isolation or an approval bypass.
-
-`.agent-bus` is local plaintext data. Bounded redaction reduces exposure but
-is not a secret store: never put tokens, cookies, passwords, or private keys
-in messages or evidence. See [Security](./security.md) and
-[Session Runtime](./session-runtime.md) for underlying boundaries.
+Keep the service on loopback; it has no cloud sync or multi-tenant mode.
+Agent commands and wrappers are trusted local executables with their configured
+permissions. HTTP root checks do not sandbox agent shell commands or prevent
+repository edits. `.agent-bus/` is local plaintext; bounded redaction is not a
+secret store. Do not put credentials in prompts, receipts, or diagnostics.
+See [Security](./security.html) before sharing data.
