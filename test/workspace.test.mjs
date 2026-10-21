@@ -667,7 +667,8 @@ test('Workspace closes every open pair even when one close fails', async () => {
   const toasts = [];
   let refreshed = false;
   const context = vm.createContext({
-    state: { actionBusy: false }, setBusy: value => busy.push(value),
+    state: { actionBusy: false, projectId: 'project-one' }, setBusy: value => busy.push(value),
+    window: { confirm: () => true }, statusKey: value => String(value).toLowerCase(),
     fetchJson: async () => [{ id: 'one', status: 'running' }, { id: 'closed', status: 'closed' }, { id: 'two', status: 'running' }],
     postAction: async (action, params) => { calls.push([action, params.workspaceTaskId]); if (params.workspaceTaskId === 'one') throw new Error('close failed'); },
     showToast: (...args) => toasts.push(args), t: key => key,

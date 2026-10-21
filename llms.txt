@@ -10,10 +10,11 @@ The main entry is Web Workspace, not a Skill installer or Task Graph orchestrato
 Node.js >=18 and Git are required. Agent CLIs and provider login are installed
 and managed separately. No Codex Plugin or global npm install is required for Web.
 
-As checked on 2026-10-20, npm dist-tags.latest is 3.0.1. Current source includes
-later Git Changes/review feedback, Custom Terminals, desktop notifications,
-Collaboration Timeline, and Collaboration Health. Use source for those additions;
-a merge to main does not publish npm. Package and Plugin versions are independent.
+Web 3.0.2 includes the additions made after 3.0.1: Git Changes/review feedback,
+Custom Terminals, desktop notifications, Timeline, Health and native Codex recovery.
+Pin @3.0.2 for a reproducible install; verify registry dist-tags before selecting
+latest. Source development remains separate; a merge to main does not publish npm.
+Package and Plugin versions are independent.
 
 Published: npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 Current source: npm ci, then node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
@@ -29,8 +30,8 @@ quickstart/task/inspector. Those require the Plugin, source Legacy entry, or npm
 
 Each task creates fresh task-bound Sessions; Custom also binds each terminal slot.
 Default commands are codex and agy, with executable overrides in project settings.
-Workspace settings allow choosing Antigravity tool permission mode (prompt by default,
-or --dangerously-skip-permissions for automatic tool approval). Project/user args override it;
+Workspace settings allow Antigravity prompt mode or automatic tool approval.
+The adapter defaults to --dangerously-skip-permissions; project/user args override it;
 args: [] opts out. Custom Terminals retain their separate Generic CLI configuration.
 Custom supports the same CLI twice. Commands are executable names or absolute
 paths, without inline arguments or shell syntax. Custom prompt defaults are saved
@@ -69,7 +70,7 @@ Refresh reconnects to independent Session Hosts. Browser/server shutdown does
 not itself close agents; use explicit close/restart controls. Archive closes
 associated terminals and hides records, preserving project source. Clearing
 archived conversations permanently removes stored task/timeline history.
-Recovery actions in source f9f0210 and later (package remains 3.0.1): Reopen task
+Recovery actions introduced at source f9f0210 and packaged in Web 3.0.2: Reopen task
 uses the saved original Codex UUID; without one, the fallback accepts an exact
 local primary CLI UUID. Recover executor preserves live owned Codex and opens
 only a missing Antigravity session. Both current owned terminals must finish

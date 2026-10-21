@@ -115,8 +115,8 @@ project's Implementer; inspect `claude --help`, register it with `generic-cli`, 
 the resolved configuration, and do not start until I confirm.” Use the CLI path below only for
 automation or hosts without direct Codex App Skill execution.
 
-Workspace settings support choosing Antigravity tool permission mode (prompting by default,
-or auto-approving via `--dangerously-skip-permissions`), with explicit saved argument arrays taking precedence.
+Workspace settings support Antigravity prompt mode or automatic approval. The adapter
+default is `--dangerously-skip-permissions`; explicit saved argument arrays take precedence.
 The published npm 2.4.0 runtime requires the explicit permission configuration shown below. The legacy
 one-shot path passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent
 Session starts with `--prompt-interactive=` for current `agy` parsers, then writes its

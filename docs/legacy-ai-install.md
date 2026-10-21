@@ -401,7 +401,7 @@ npx --yes @hogancv/coordinate-agents@2.4.0 adapter list --json
 只接受没有符号链接、junction 或 hard link 路径的正规 `.mjs`、`.js` 或 `.cjs` 文件。模块会在当前 Node.js 权限下运行，
 这是信任边界而不是 JavaScript 沙箱；注册失败时用户配置与项目 `.agent-bus` 保持不变。
 
-> **Permission-version boundary / 权限版本说明:** The permission examples below describe published npm 2.4.0. Current source allows choosing Antigravity tool permissions in Workspace settings (prompting by default, or `--dangerously-skip-permissions`). / 下文权限说明适用于 npm 2.4.0；当前源码支持在工作区设置中选择 Antigravity 工具权限模式（默认按需确认，或自动批准）。
+> **Permission-version boundary / 权限版本说明:** The permission examples below describe published npm 2.4.0. Web 3.0.2 and current source allow choosing Antigravity prompt mode or automatic approval in Workspace settings; the adapter default is `--dangerously-skip-permissions`, overridden by explicit saved args. / 下文权限说明适用于 npm 2.4.0；Web 3.0.2 和当前源码支持在工作区设置中选择按需确认或自动批准；适配器默认自动批准，显式保存的参数数组覆盖默认值。
 
 ## Configure executable commands / 配置可执行命令
 

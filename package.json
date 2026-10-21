@@ -1,6 +1,6 @@
 {
   "name": "@hogancv/coordinate-agents",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "A lightweight local Web Workspace for Codex + Antigravity terminal collaboration.",
   "type": "module",
   "exports": {

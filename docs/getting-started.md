@@ -41,14 +41,14 @@ resize behavior. See [terminal troubleshooting](./troubleshooting.html#terminal-
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 ```
 
-As checked on **2026-10-20**, `latest` resolves to **3.0.1**. To reproduce that
-release explicitly, use `@3.0.1` in place of `@latest`.
+This guide covers the **3.0.2 Web release**. Use `@3.0.2` in place of `@latest`
+for a pinned installation; verify `npm view @hogancv/coordinate-agents dist-tags`
+before assuming which release `latest` selects.
 
 ### Current source
 
-The Git Changes/review feedback, Custom Terminals, desktop notification,
-Collaboration Timeline, and Collaboration Health additions were made after
-3.0.1. To use the current code:
+Git Changes/review feedback, Custom Terminals, desktop notifications, Timeline,
+Health and native Codex recovery are included in 3.0.2. To develop from source:
 
 ```sh
 git clone https://github.com/hogancv/coordinate-agents.git

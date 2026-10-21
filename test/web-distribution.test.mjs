@@ -71,7 +71,7 @@ test('default Web API refuses structured Task/Graph operations and read routes',
 
 test('npm payload has an explicit runtime whitelist and no Plugin distribution', () => {
   const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
-  assert.equal(manifest.version, '3.0.1');
+  assert.equal(manifest.version, '3.0.2');
   assert.equal(manifest.exports?.['./*'], undefined);
   for (const item of ['skills', 'lib', 'scripts', 'inspector', 'mcp', 'schemas', '.codex-plugin', 'examples', 'adapter-sdk.mjs']) assert.ok(!manifest.files.includes(item), item);
 });

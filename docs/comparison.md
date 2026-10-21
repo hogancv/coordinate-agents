@@ -18,8 +18,8 @@ coordination that helps your task.
 | Coordinate Agents Web: Custom | Choose two executables and optional prompts. | Local task/slot bindings and prompt snapshots. | You control coordination; no default roles, rounds, or Codex feedback handoff. |
 | Coordinate Agents structured Plugin / Legacy CLI / MCP | Configure a registered Implementer and use durable Task APIs. | Agent Bus messages, evidence, review decisions, recovery and optional Task Graphs. | Separate protocol contracts and explicit execution/review/release boundaries. |
 
-Current Web features added after npm 3.0.1 require the source checkout until a
-new package is published. See [Getting started](./getting-started.html).
+Web 3.0.2 packages the Git Changes/review, Custom, notification, Timeline, Health
+and recovery additions made after 3.0.1. See [Getting started](./getting-started.html).
 
 ## When Web Workspace helps
 

@@ -18,7 +18,8 @@
 先安装 **Node.js >=18**、**Git** 和需要使用的 Agent CLI。
 默认协作模式需要 `codex` 和 `agy` 能正常运行，并已完成各自的登录。
 Coordinate Agents 不负责安装这些 Agent CLI。
-工作区设置支持选择 Antigravity 工具权限模式（默认按需确认，或开启 `--dangerously-skip-permissions` 自动批准）；
+工作区设置支持选择 Antigravity 工具权限模式，适配器默认使用 `--dangerously-skip-permissions` 自动批准；
+选择按需确认模式可要求工具审批，显式保存的参数数组覆盖适配器默认值。
 已保存的项目偏好优先。
 
 ```sh
@@ -34,9 +35,9 @@ npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 
 ### npm 已发布版本与当前源码
 
-**截至 2026-10-20 核对，npm `latest` 为 3.0.1。** 本 README 按当前工作区源码编写。
-Git Changes 与审查反馈、自定义双终端、桌面通知、协作时间线、协作健康等功能
-是在该版本发布后加入的；体验这些新增功能请从源码启动。合并到 `main` 不会自动发布 npm。
+**3.0.2 Web 版本包含 3.0.1 之后新增的功能：** Git Changes 与审查反馈、自定义双终端、
+桌面通知、协作时间线、协作健康和 Codex 原生对话恢复。固定安装可使用 `@3.0.2`；
+使用 `@latest` 前请核对 npm `dist-tags.latest`。源码启动方式继续用于开发，合并到 `main` 不会自动发布 npm。
 
 ```sh
 git clone https://github.com/hogancv/coordinate-agents.git

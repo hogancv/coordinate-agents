@@ -12,7 +12,7 @@ import { listRecords } from '../skills/coordinate-agents/scripts/session-manager
 import { getExecutionSessionManager } from '../skills/coordinate-agents/scripts/session-service.mjs';
 
 function fixture(t) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'workspace-resume-')));
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'workspace-resume-')));
   execFileSync('git', ['init', '-q', root]);
   initializeWorkspace(root);
   const home = join(root, 'codex-home');

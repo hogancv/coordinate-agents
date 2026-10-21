@@ -10,9 +10,10 @@ For the previous product direction, see [v2.4 original docs and migration](./v2.
 
 ## A documented feature is missing, or a command is unavailable
 
-Check whether you are running the npm package or current source. As checked on
-2026-10-20, npm `latest` is 3.0.1; later Git Changes/review, Custom, notification,
-Timeline, and Health additions require source until a new release is published.
+Check the installed version. Web 3.0.2 includes Git Changes/review, Custom
+Terminals, notifications, Timeline, Health and native Codex recovery; earlier
+packages may lack these additions. Verify npm dist-tags rather than assuming
+that your installed version or `latest` matches the current source.
 
 ```sh
 npx @hogancv/coordinate-agents@latest --version
@@ -199,8 +200,8 @@ installed `claude` executable and `claude --help`, register it with `generic-cli
 show me the resolved configuration. Do not start until I confirm.
 ```
 
-Workspace settings support choosing Antigravity tool permission mode (prompting by default,
-or auto-approving via `--dangerously-skip-permissions`), with explicit saved argument arrays taking precedence.
+Workspace settings support Antigravity prompt mode or automatic approval. The adapter
+default is `--dangerously-skip-permissions`; explicit saved argument arrays take precedence.
 The published npm 2.4.0 runtime requires the explicit permission configuration shown below. The legacy
 one-shot path passes configured `args` and then adds `--prompt-interactive <prompt>`; a persistent
 Session starts with `--prompt-interactive=` for current `agy` parsers, then writes its

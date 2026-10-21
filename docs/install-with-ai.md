@@ -35,10 +35,10 @@ Check identity and the actual release before installing:
 npm view @hogancv/coordinate-agents dist-tags.latest version repository.url --json
 ```
 
-As checked on **2026-10-20**, `dist-tags.latest` is **3.0.1**. That is an
-observed release, not a promise that all current-source features are in npm.
-Git Changes/review feedback, Custom Terminals, desktop notifications, Timeline,
-and Health were added later. Choose source when the user needs those additions.
+This guide targets **Web 3.0.2**, which includes Git Changes/review feedback,
+Custom Terminals, desktop notifications, Timeline, Health and native Codex recovery.
+Verify registry metadata before selecting `latest`; choose source for development
+or changes made after the selected release.
 Never substitute the npm latest version for the Legacy version 2.4.0.
 
 ## Check prerequisites / 安装前检查
@@ -66,10 +66,10 @@ prove login, provider access, or quota. Do not silently change CLI permissions.
 A global install is optional. Start the verified package with an explicit root:
 
 ```sh
-npx @hogancv/coordinate-agents@3.0.1 web --root "/path/to/project" --port 3000
+npx @hogancv/coordinate-agents@3.0.2 web --root "/path/to/project" --port 3000
 ```
 
-Use the newly verified version in place of 3.0.1 if the user requested the latest
+Use the newly verified version in place of 3.0.2 if the user requested the latest
 release. `--port 0` selects a free port. Opening Web initializes its local project
 storage and, for a non-Git startup folder, Git without a commit. Choose an intended
 project directory; do not launch it from an arbitrary folder for verification.
@@ -95,8 +95,8 @@ and help. Do not run `quickstart`, create a task, or start agent processes unles
 the user separately asks. npm 3.x has no `doctor` or Skill `install` command.
 
 ```sh
-npx @hogancv/coordinate-agents@3.0.1 --version
-npx @hogancv/coordinate-agents@3.0.1 --help
+npx @hogancv/coordinate-agents@3.0.2 --version
+npx @hogancv/coordinate-agents@3.0.2 --help
 # Source equivalents:
 node bin/coordinate-agents.mjs --version
 node bin/coordinate-agents.mjs --help
@@ -167,7 +167,7 @@ check Node.js, Git, and my agent CLI commands. Keep my existing CLI login and
 permission settings. Verify installation without creating an agent task.
 ```
 
-For features added after npm 3.0.1, use this instead:
+For source development or changes beyond the selected npm release, use this instead:
 
 ```text
 Set up the current coordinate-agents source from the official repository so
@@ -176,8 +176,8 @@ notifications. Reuse an existing checkout and preserve local changes. Install
 dependencies and show me the Web startup command for my project.
 ```
 
-As checked on 2026-10-20, npm `latest` is 3.0.1. The AI should check registry
-metadata rather than assume the source and published package are identical.
+The AI should check registry metadata rather than assume that source, the 3.0.2
+release and the current npm `latest` are identical.
 
 ## Commands the AI may execute
 

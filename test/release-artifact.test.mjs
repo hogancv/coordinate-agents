@@ -26,7 +26,7 @@ function sourceCommit() {
 }
 
 test('npm and Plugin distribution versions are independent', () => {
-  assert.equal(packageJson.version, '3.0.1');
+  assert.equal(packageJson.version, '3.0.2');
   assert.equal(pluginJson.version, '2.4.0');
   assert.equal(packageJson.name, '@hogancv/coordinate-agents');
   const changelog = readFileSync(join(root, 'docs/changelog.md'), 'utf8');

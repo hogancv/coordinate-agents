@@ -26,9 +26,9 @@ npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 打开打印的 localhost 地址，在设置中检查命令，新建默认协作任务，直接在 Codex 输入需求。
 启动目录会自动登记；普通目录启动时初始化 Git 和 Workspace 存储，不创建提交。
 
-**源码与 npm 分开看。** 截至 2026-10-20，npm `latest` 为 3.0.1。
-当前源码新增了 Git Changes 与审查反馈、自定义双终端、桌面通知、协作时间线和协作健康。
-体验新增功能请在源码目录运行：
+**3.0.2 已将新增能力纳入 Web 包。** 包括 Git Changes 与审查反馈、自定义双终端、
+桌面通知、协作时间线、协作健康和 Codex 原生对话恢复。固定安装使用 `@3.0.2`；
+使用 `@latest` 前请核对 npm dist-tags。源码开发可在仓库目录运行：
 
 ```sh
 npm ci

@@ -19,8 +19,9 @@ on your machine. Each agent uses its own CLI configuration and provider login.
 Install **Node.js >=18** and **Git**, plus the agent CLIs you want to use.
 For Default Collaboration, make sure `codex` and `agy` work and are signed in
 before creating a task. Coordinate Agents does not install the agent CLIs.
-Workspace settings allow choosing Antigravity tool permission mode (prompting
-by default, or auto-approving via `--dangerously-skip-permissions`); saved project arguments take precedence.
+Workspace settings allow choosing Antigravity tool permission mode. The adapter
+defaults to automatic approval via `--dangerously-skip-permissions`; choose prompt
+mode to require tool approval. Explicit saved arguments override the default.
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
@@ -37,11 +38,11 @@ storage without creating a commit. A Codex Plugin is not needed.
 
 ### Published npm package and current source
 
-**As checked on 2026-10-20, npm `latest` is 3.0.1.** This README describes the
-current checkout, which also contains work added after that release: Git Changes
+**The 3.0.2 Web release includes the features added after 3.0.1:** Git Changes
 and review feedback, Custom Terminals, desktop notifications, Collaboration
-Timeline, and Collaboration Health. Use the source checkout for those additions;
-merging to `main` does not publish a new npm version.
+Timeline/Health, and native Codex conversation recovery. Use `@3.0.2` for a pinned
+install, or verify npm `dist-tags.latest` before using `@latest`. The source
+checkout remains available for development; merging to `main` does not publish npm.
 
 ```sh
 git clone https://github.com/hogancv/coordinate-agents.git

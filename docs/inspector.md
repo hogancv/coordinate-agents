@@ -6,11 +6,10 @@ description: Use default and custom coding-agent terminals, Git Changes review f
 
 # Web Workspace guide
 
-This guide describes the **current source checkout**. npm `latest` was 3.0.1
-when checked on 2026-10-20; Git Changes/review feedback, Custom Terminals,
-notifications, Collaboration Timeline, and Collaboration Health were added
-after that release. See [Getting started](./getting-started.html) to choose
-between the published package and source.
+This guide describes **Web 3.0.2 and the current source checkout**, including
+Git Changes/review feedback, Custom Terminals, notifications, Timeline, Health
+and native Codex recovery. See [Getting started](./getting-started.html) to
+choose a pinned npm installation or source development.
 
 ## Start and select a project
 
@@ -153,8 +152,8 @@ active tab's save button.
 | Custom Terminals | Two executable defaults and shared/per-terminal prompts. New tasks snapshot them; existing Custom tasks keep their saved snapshot. |
 | Desktop Notifications | Project-level notification preferences, read on the next formal receipt. |
 
-Antigravity defaults to standard permission prompts, with an option in Workspace
-settings to enable `--dangerously-skip-permissions` for automatic approval of tool requests.
+Antigravity defaults to `--dangerously-skip-permissions` for automatic approval
+of tool requests. Choose prompt mode in Workspace settings to require approvals.
 Explicit saved argument arrays override the default; running Sessions retain their launch arguments.
 
 Default terminal settings preserve unrelated arguments and use project > user >

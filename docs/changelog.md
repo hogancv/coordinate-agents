@@ -9,6 +9,28 @@ description: Published Coordinate Agents release history for the Web package and
 For the v2.4 → v3 product-direction change and original v2.4.0 documentation,
 see [v2.4 docs and migration / 旧版文档与迁移](./v2.4.html).
 
+## [3.0.2] - 2026-10-21
+
+### Web Workspace
+
+- Add Git Changes with line-based review feedback, Custom Terminals, project-level desktop notifications, Collaboration Timeline and Collaboration Health.
+- Simplify the task header with consistent status/action controls, red power icons and confirmation before closing one task or all task terminals in the current project. Move the Zen exit control to the top right and align sidebar environment status.
+- Preserve task/project list elements across refreshes and keep terminal input, focus and output attached to the selected task.
+
+### Conversation recovery
+
+- Automatically retain the original native conversation for supported local Codex CLI 0.163.x, using process-scoped events and exact primary CLI metadata. Keep exact-UUID fallback for unsupported or unavailable capture.
+- Reopen the original Codex conversation without replaying old prompts or work. Recover a missing Antigravity executor while retaining a valid Codex runtime, recorded rounds and Timeline.
+- Derive readiness from current owned sessions, runtime generations, terminal initialization and identity-conflict facts; remove the extra post-resume UUID-confirmation step while keeping old records readable.
+- Reject fresh-pair restart for bound/reserved Default tasks, fence stale runtime/round writes, and allow an unchanged executor to report its existing round during slow Codex recovery.
+
+### Settings, documentation and compatibility
+
+- Expose Antigravity tool permission mode in Workspace settings. The adapter default remains automatic approval via `--dangerously-skip-permissions`; explicit saved argument arrays, including `args: []`, override it.
+- Align English/Chinese recovery guides and action tables, mark historical designs and native acceptance results by implementation stage, and refresh the Workspace screenshot.
+- Update close-confirmation test fixtures and use native canonical paths for Windows recovery ownership tests.
+- Keep the Web-first npm payload, Node.js >=18 floor and existing PTY/fallback policy. The independently versioned Legacy Plugin remains 2.4.0. Historical native CLI acceptance is not a new cross-platform or continuous-identity guarantee.
+
 ## [3.0.1] - 2026-10-13
 
 ### Windows terminals

@@ -1,7 +1,7 @@
 # Native identity capture: implementation and acceptance
 
-Implementation sections below apply to source **`f9f0210` and later** (package
-version 3.0.1, checked 2026-10-21). The native acceptance results and suite counts
+Implementation sections below apply to source **`f9f0210` and later**, packaged in
+**Web 3.0.2** (checked 2026-10-21). The native acceptance results and suite counts
 are retained as a **historical snapshot of `5fad370`**, before the extra recovery
 confirmation was removed. They are not a new npm release or a fresh acceptance
 run of the current readiness policy. Use the [current action table](codex-conversation-resume.md#action-table)

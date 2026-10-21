@@ -1,8 +1,8 @@
 # Resume a Codex collaboration conversation
 
 Applies to the source implementation at **`f9f0210` and later**, checked on
-2026-10-21. `package.json` still says **3.0.1**; this is a source-commit boundary,
-not a claim that npm 3.0.1 contains this flow. Earlier designs and acceptance
+2026-10-21, and packaged in **Web 3.0.2**. The original source stage used package
+version 3.0.1; that alone did not identify a published flow. Earlier designs and acceptance
 records describe an additional manual-confirmation stage; see [historical scope](#historical-scope).
 
 Default Collaboration keeps Codex as the continuing planner/reviewer. Closing a
