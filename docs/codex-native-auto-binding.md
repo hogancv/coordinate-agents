@@ -1,5 +1,12 @@
 # Native identity capture: implementation and acceptance
 
+Implementation sections below apply to source **`f9f0210` and later** (package
+version 3.0.1, checked 2026-10-21). The native acceptance results and suite counts
+are retained as a **historical snapshot of `5fad370`**, before the extra recovery
+confirmation was removed. They are not a new npm release or a fresh acceptance
+run of the current readiness policy. Use the [current action table](codex-conversation-resume.md#action-table)
+for user-facing recovery steps.
+
 ## Audited sources (2026-10-21)
 
 Official [Hooks documentation](https://learn.chatgpt.com/docs/hooks) documents
@@ -34,14 +41,18 @@ notification command. Exec JSON would replace the interactive TUI. Neither is us
   Identity Store; bind immutable Task/Session/generation claims, revision CAS,
   monotonically ordered observations and cross-task occupancy in its short atomic
   config transaction. File lookup and telemetry handling never hold that lock.
-- Resume state and UI: historical binding gives a direct reopen action; failed or
-  missing capture retains the prefilled manual dialog. Conflicts invalidate manual
-  confirmation and fence new Codex instructions. No second durable state machine.
+- Resume state and UI: historical binding gives a direct reopen action; missing
+  capture or a failed reopen retains exact-UUID fallback. A live owned Codex with
+  a missing executor uses **Recover executor**. Both current terminals must finish
+  startup; no post-resume identity confirmation is required. Conflicts fence new
+  Codex instructions. No second durable state machine.
 
 DISCOVERED means a sanitized startup event is being checked. BOUND means the event
 and primary metadata passed the existing transaction. Neither implies LIVE_VERIFIED.
 OTEL export is asynchronous, has gaps, and is not an input fence; no automatic live
-lease is claimed. Resume still needs current manual confirmation. A `/new` event
+lease is claimed. Recovery readiness depends on current owned Session facts,
+runtime generations, completed startup and the absence of a conflict, independently
+of legacy manual-confirmation records. A `/new` event
 can latch a conflict after its primary record becomes available, but immediate
 switch detection is not guaranteed. Disk-only candidates never create bindings.
 
@@ -63,7 +74,16 @@ exporters and native notify remain in place. Prompts/responses are not logged.
 
 ## Independent native acceptance
 
-Run `npm run test:native-identity` with an audited CLI installed. If its command is
+**Historical applicability:** the acceptance below was run for the automatic-binding
+stage at `5fad370`, package 3.0.1, Codex CLI 0.163.0 on macOS arm64. It predates
+`f9f0210` and its confirmation-free readiness. `scripts/pty-probes/codex-identity.integration.mjs`
+still has the old `AWAITING_CONFIRMATION` assertions and explicit confirmation
+call; those assertions need updating before that script can certify the current
+flow. This documentation change does not claim a new real-CLI acceptance run.
+Current Session/UUID recovery regressions are in `test/workspace-resume.test.mjs`,
+`test/workspace-auto-binding.test.mjs` and `test/workspace-resume-ui.test.mjs`.
+
+The historical command was `npm run test:native-identity` with an audited CLI installed. If its command is
 a symlink rejected by the existing executable safety policy, set
 `COORDINATE_AGENTS_NATIVE_CODEX` to the absolute real executable path. This check uses
 the real TUI, detached Host and primary records, isolated temporary CODEX_HOME,
@@ -96,7 +116,7 @@ body/scan bounds, primary provenance, event ordering and long-running same-ident
 prompts. UI tests execute dialog/action behavior, and Package tests install and
 verify the real npm tarball with offline CLI fixtures.
 
-Final local verification (macOS arm64, Node 24.17.0, 2026-10-21):
+Historical local verification at `5fad370` (macOS arm64, Node 24.17.0, 2026-10-21):
 
 | Command | Passed | Skipped | Failed |
 | --- | ---: | ---: | ---: |

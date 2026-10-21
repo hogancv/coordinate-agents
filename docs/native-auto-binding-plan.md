@@ -1,5 +1,11 @@
 # Codex native auto-binding v1 implementation plan
 
+> Historical implementation plan — applies to source `5fad370` (2026-10-21,
+> package version 3.0.1), where automatic binding still composed the old manual
+> recovery confirmation. Source `f9f0210` supersedes that confirmation requirement.
+> Preserve the plan and verification results as history; current actions and
+> readiness are defined in the [recovery guide](codex-conversation-resume.md#action-table).
+
 Intent: automatically retain the original Codex conversation for a Workspace Task,
 then reopen it with one click. Identity uncertainty must remain visible and must
 never authorize collaboration. Use the existing Task identity transaction and

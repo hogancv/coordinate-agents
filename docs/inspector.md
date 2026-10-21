@@ -68,14 +68,23 @@ Web task records are separate from structured Tasks and Task Graphs.
 Web groups share the bound repository; creating a group does not
 create an isolated Git worktree. Avoid conflicting concurrent modifications.
 
-### Reopen a closed conversation
+### Reopen a conversation or recover its executor
 
-A closed Default task shows a reopen icon immediately after its Closed status.
-Click it to open the native Conversation ID dialog. The form overlays the Workspace
-and does not reduce terminal space. After resuming, return to the terminals to run
-`/status`; use the temporary Awaiting confirmation entry in the header to reopen
-the identity confirmation step. That entry disappears after confirmation.
-See [Codex conversation resume](./codex-conversation-resume.html).
+A closed or failed Default task exposes **Reopen task** beside its status. When
+Codex is still active and only Antigravity is missing, the same recovery entry is
+labeled **Recover executor**. Both use the saved original UUID when available;
+the second action retains the current Codex runtime. Missing UUIDs or a failed
+direct reopen use an overlay with exact-ID input or a prefilled saved target.
+Opening or dismissing the overlay does not launch terminals.
+
+After normal CLI login, trust and initialization, both current owned terminals
+must be ready. The task then allows dispatch and review without `/status`, an
+Awaiting confirmation header entry, or a second UUID confirmation. Historical
+`AWAITING_CONFIRMATION` records are interpreted from current Session facts.
+An identity conflict blocks recovery and new collaboration; readiness does not
+claim continuous TUI identity verification. **Restart Pair** is a separate
+runtime/HTTP operation that creates fresh sessions and refuses bound or reserved
+Default tasks. See the [current action table](./codex-conversation-resume.html#action-table).
 
 ## Custom Terminals
 

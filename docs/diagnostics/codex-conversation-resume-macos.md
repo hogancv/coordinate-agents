@@ -1,5 +1,12 @@
 # Codex-Centric Resume v1: macOS native acceptance
 
+> Historical acceptance — applies to the 2026-10-20 Resume v1 manual-confirmation
+> implementation (source package 3.0.1, Codex CLI 0.162.1). That flow predates
+> automatic binding at `5fad370` and confirmation-free readiness at `f9f0210`.
+> `/status` and explicit confirmation below describe what was tested then, not
+> steps required by the [current recovery guide](../codex-conversation-resume.md#action-table).
+> These results do not certify the later readiness policy.
+
 Date: 2026-10-20. Platform: macOS arm64, Node 24.17.0, native node-pty;
 Codex CLI 0.162.1; Antigravity through the user's existing agy-proxy wrapper.
 Real user model, authentication, environment and native approval settings were

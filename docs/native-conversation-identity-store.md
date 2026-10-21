@@ -1,13 +1,20 @@
 # Native Conversation Identity Store v1
 
-The storage contract below describes PR #137. The later [Codex conversation
-resume](codex-conversation-resume.md) path composes an explicitly labeled human
-confirmation source with this same receiver. Task views may additionally expose
-`MANUAL_CONFIRMED` for the current live generation; this is never automatic
-verification. The default receiver remains untrusted without a verifier.
+> Historical storage-stage document — applies to PR #137's Identity Store v1
+> implementation in the 3.0.1 source line, before native Resume and automatic
+> capture were integrated. The storage schema remains v1, but the original
+> source-registration and restart behavior below is not the current usage guide.
+> Use the [current action table](codex-conversation-resume.md#action-table) for
+> source `f9f0210` and later; the package version alone does not identify the flow.
 
+Later integrations reuse this receiver for explicit human attestations and
+supported native OTEL observations. `MANUAL_CONFIRMED` remains available through
+the compatibility API, not as a required Web recovery step. Current readiness
+does not depend on it and never claims continuous automatic verification. A
+bound/reserved Default Task now refuses fresh restart before closing its terminals.
+The default receiver still rejects observations without a trusted verifier.
 
-This release stores optional native identity **facts**, without discovering CLI
+The original storage-only stage stored optional native identity **facts**, without discovering CLI
 identities or enabling Resume. CLI startup, PTY input, proxy wrappers, Custom
 Terminals, workspace-message and formal cooperation are unchanged. No hooks,
 collector, app-server bridge, private profile or global CLI configuration is added.

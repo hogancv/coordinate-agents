@@ -1,5 +1,11 @@
 # Native Conversation Identity Store v1 implementation plan
 
+> Historical plan — applies to PR #137's storage-only Identity Store v1 stage
+> (source package 3.0.1), before native Resume and automatic capture integration.
+> Claims below about no registered production source or no Resume describe that
+> stage. Source `f9f0210` and later uses the [current recovery action table](../../codex-conversation-resume.md#action-table);
+> this document is not a current implementation checklist.
+
 **Goal:** Persist optional Task/Slot native identity facts without native capture,
 Resume or changes to cooperation and input behavior.
 

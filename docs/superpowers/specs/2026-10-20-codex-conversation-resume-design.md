@@ -1,5 +1,11 @@
 # Codex-Centric Collaboration Resume v1
 
+> Historical design — applies to the 2026-10-20 Resume v1 manual-confirmation
+> phase, retained through source `5fad370` (package version 3.0.1). Source
+> `f9f0210` removes the post-resume UUID-confirmation gate. The steps below record
+> the original design; use the [current action table](../../codex-conversation-resume.md#action-table)
+> for current behavior. These commit stages are not separate npm versions.
+
 The user-supplied goal is the product specification: Codex retains native context;
 Antigravity is replaceable. Preserve Task ID, project, timeline, cooperation facts,
 user CLI configuration and proxy behavior. No new orchestration service or protocol.

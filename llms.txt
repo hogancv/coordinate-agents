@@ -69,6 +69,18 @@ Refresh reconnects to independent Session Hosts. Browser/server shutdown does
 not itself close agents; use explicit close/restart controls. Archive closes
 associated terminals and hides records, preserving project source. Clearing
 archived conversations permanently removes stored task/timeline history.
+Recovery actions in source f9f0210 and later (package remains 3.0.1): Reopen task
+uses the saved original Codex UUID; without one, the fallback accepts an exact
+local primary CLI UUID. Recover executor preserves live owned Codex and opens
+only a missing Antigravity session. Both current owned terminals must finish
+startup with no identity conflict; no /status or extra UUID confirmation is
+required. Legacy AWAITING_CONFIRMATION is read compatibility, not a required step.
+Bound/reserved Default tasks refuse fresh-pair restart; use New task for a new
+context. Recovery never replays old work, and a new executor cannot complete an
+old executor's round. Close confirmations and send-readiness confirmations remain.
+Current action table: https://hogancv.github.io/coordinate-agents/codex-conversation-resume.html#action-table
+Earlier Resume v1 designs and macOS acceptance reports describe their historical
+manual-confirmation stage, not the current flow; see their applicability banners.
 Data under .agent-bus and the user project registry is local plaintext.
 Agent providers still receive data according to each CLI's configuration.
 Server is loopback-only; per-launch capability and Host/Origin checks are not

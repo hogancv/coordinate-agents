@@ -1,5 +1,11 @@
 # Codex-Centric Collaboration Resume Implementation Plan
 
+> Historical implementation plan — applies to Resume v1 before `f9f0210`,
+> including the manual-confirmation flow retained at `5fad370` (package 3.0.1).
+> This plan records the original work and is not a current execution checklist.
+> Recovery now becomes ready from current owned terminals and completed startup;
+> see the [current action table](../../codex-conversation-resume.md#action-table).
+
 > **For agentic workers:** Use superpowers:executing-plans inline, with an independent final review.
 
 **Goal:** Reopen a Task's original native Codex conversation and reconnect or rebuild its executor.
