@@ -183,9 +183,10 @@ test('multi-project gateway isolates settings, task groups and raw PTY operation
     assert.equal((await fetch(`${started.url}/api/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'projectBrowse', params: { path: home } }) })).status, 401);
     const denied = await fetch(`${started.url}/api/action`, { method: 'POST', headers: { ...headers, Origin: 'https://example.com' }, body: JSON.stringify({ action: 'projectBrowse', params: { path: home } }) });
     assert.equal(denied.status, 403);
-    const save = await post(idA, 'workspaceSettingsSave', { codex: 'my-codex', antigravity: 'agy-proxy', args: [] });
+    const save = await post(idA, 'workspaceSettingsSave', { codex: 'my-codex', antigravity: 'agy-proxy', args: [], antigravityArgs: ['--dangerously-skip-permissions'] });
     assert.equal(save.ok, true);
     assert.equal(readConfig(join(a, '.agent-bus')).agents.find(x => x.id === 'antigravity').command, 'agy-proxy');
+    assert.deepEqual(readConfig(join(a, '.agent-bus')).agents.find(x => x.id === 'antigravity').args, ['--dangerously-skip-permissions']);
     assert.notEqual(readConfig(join(b, '.agent-bus')).agents.find(x => x.id === 'antigravity').command, 'agy-proxy');
     assert.equal(existsSync(join(home, '.coordinate-agents', 'config.json')), false);
     for (const [id, folder] of [[idA, a], [idB, b]]) {

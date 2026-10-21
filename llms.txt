@@ -29,8 +29,8 @@ quickstart/task/inspector. Those require the Plugin, source Legacy entry, or npm
 
 Each task creates fresh task-bound Sessions; Custom also binds each terminal slot.
 Default commands are codex and agy, with executable overrides in project settings.
-Current source defaults Antigravity arguments to --dangerously-skip-permissions
-for automatic tool-permission approval. Explicit project/user args override it;
+Workspace settings allow choosing Antigravity tool permission mode (prompt by default,
+or --dangerously-skip-permissions for automatic tool approval). Project/user args override it;
 args: [] opts out. Custom Terminals retain their separate Generic CLI configuration.
 Custom supports the same CLI twice. Commands are executable names or absolute
 paths, without inline arguments or shell syntax. Custom prompt defaults are saved

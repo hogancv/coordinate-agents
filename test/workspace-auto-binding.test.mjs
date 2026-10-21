@@ -63,7 +63,7 @@ test('creation auto-binds, concurrent reopen omits UUID and preserves original T
   const [a, b] = await Promise.all([runtime.runtimeWorkspaceTaskResume(input), runtime.runtimeWorkspaceTaskResume(input)]);
   assert.equal(a.workspaceTask.sessions.codex.sessionId, b.workspaceTask.sessions.codex.sessionId);
   assert.equal(a.workspaceTask.resume.conversationId, id);
-  assert.equal(a.workspaceTask.resume.state, 'AWAITING_CONFIRMATION');
+  assert.equal(a.workspaceTask.resume.state, 'READY');
   assert.deepEqual(a.workspaceTask.collaborationEvents, task.collaborationEvents);
   assert.deepEqual(a.workspaceTask.cooperation, task.cooperation);
   const launches = readFileSync(join(f.root, 'launch.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
@@ -103,18 +103,20 @@ test('unsupported CLI collection leaves ordinary terminals and the manual recove
   await runtime.runtimeWorkspaceTaskClose({ root: f.root, workspaceTaskId: task.id });
   const resumed = (await runtime.runtimeWorkspaceTaskResume({ root: f.root, workspaceTaskId: task.id, conversationId: metadata.payload.id })).workspaceTask;
   assert.equal(resumed.resume.conversationId, metadata.payload.id);
-  assert.equal(resumed.resume.state, 'AWAITING_CONFIRMATION');
+  assert.equal(resumed.resume.state, 'READY');
 });
 
-test('received TUI identity switch latches conflict and invalidates current manual confirmation', { timeout: 40000 }, async t => {
+test('received TUI identity switch after resume latches conflict and blocks collaboration', { timeout: 40000 }, async t => {
   const f = fixture(t), created = await f.create(), task = await f.bound(created.id);
-  const session = task.sessions.codex, input = { root: f.root, workspaceTaskId: task.id };
-  await runtime.runtimeWorkspaceTaskConfirmConversation({ ...input, conversationId: session.nativeIdentity.binding.conversationId,
-    confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
+  const input = { root: f.root, workspaceTaskId: task.id };
+  await runtime.runtimeWorkspaceTaskClose(input);
+  const resumed = (await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask;
+  assert.equal(resumed.resume.state, 'READY');
+  const session = resumed.sessions.codex;
   await getExecutionSessionManager().write(f.root, session.sessionId, 'switch', { submit: false });
   const changed = await until(() => f.read(task.id), value => Boolean(value.sessions.codex.nativeIdentity.firstConflict));
   assert.equal(changed.sessions.codex.nativeIdentity.verification.state, 'UNAVAILABLE');
-  assert.equal(changed.resume.state, 'AWAITING_CONFIRMATION');
+  assert.equal(changed.resume.state, 'FAILED');
   assert.equal(changed.sessions.codex.nativeIdentity.binding.conversationId, session.nativeIdentity.binding.conversationId);
   await assert.rejects(runtime.dispatchWorkspaceTask(f.root, task.id, 'round-blocked', () => assert.fail('must not dispatch'),
     { caller: { taskId: task.id, slot: 'codex', sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration } }), /identity|confirmation/i);

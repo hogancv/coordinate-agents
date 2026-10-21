@@ -1116,54 +1116,98 @@ function updateResumeState(root, record) {
     ? startupStatus(record) : 'DEGRADED';
 }
 
+const inFlightResumes = new Map();
+
 export async function runtimeWorkspaceTaskResume(input = {}) {
   const root = repositoryRoot(input.root);
   const id = input.workspaceTaskId || input.id;
-  return withCooperationLock(root, id, async () => {
-    let record = readWorkspaceTaskRecord(root, id);
-    if (record.archivedAt) throw new Error('Cannot resume an archived Workspace Task.');
-    if (record.mode === 'custom') throw new Error('Custom Terminals do not use Codex conversation resume.');
-    const identity = record.nativeConversations?.codex;
-    if (identity?.firstConflict) throw new Error('Codex native identity changed. Resume requires inspection of the original binding.');
-    const target = codexConversationId(input.conversationId ?? identity?.binding.conversationId ?? record.resume?.conversationId);
-    if ((identity && identity.binding.conversationId !== target) || (record.resume && record.resume.conversationId !== target)) throw new Error('Codex native conversation identity does not match this Task.');
-    readCodexConversation({ root, conversationId: target });
-    await recoverInterruptedResumeSlots(root, record, target);
-    const codex = await resumableSession(root, record, 'codex');
-    const executor = await resumableSession(root, record, 'antigravity');
-    if (codex && !record.resume) throw new Error('Close the current Codex runtime before resuming its original conversation.');
-    if (codex && executor && record.resume && record.startup?.slots.antigravity === 'READY') {
-      record.status = startupStatus(record); record.error = null;
-      updateResumeState(root, record);
+  const inFlightKey = `${root}:${id}`;
+  if (inFlightResumes.has(inFlightKey)) {
+    return await inFlightResumes.get(inFlightKey);
+  }
+
+  const execution = (async () => {
+    const prepared = await withCooperationLock(root, id, async () => {
+      let record = readWorkspaceTaskRecord(root, id);
+      if (record.archivedAt) throw new Error('Cannot resume an archived Workspace Task.');
+      if (record.mode === 'custom') throw new Error('Custom Terminals do not use Codex conversation resume.');
+      const identity = record.nativeConversations?.codex;
+      if (identity?.firstConflict) throw new Error('Codex native identity changed. Resume requires inspection of the original binding.');
+      const target = codexConversationId(input.conversationId ?? identity?.binding.conversationId ?? record.resume?.conversationId);
+      if ((identity && identity.binding.conversationId !== target) || (record.resume && record.resume.conversationId !== target)) {
+        throw new Error('Codex native conversation identity does not match this Task.');
+      }
+      readCodexConversation({ root, conversationId: target });
+      await recoverInterruptedResumeSlots(root, record, target);
+      const codex = await resumableSession(root, record, 'codex');
+      const executor = await resumableSession(root, record, 'antigravity');
+
+      if (codex && executor) {
+        if (record.resume && record.startup?.slots.antigravity === 'READY') {
+          record.status = startupStatus(record);
+          record.error = null;
+          updateResumeState(root, record);
+          writeWorkspaceTask(root, record);
+          return {
+            ready: true,
+            result: jsonSuccess('workspace.task.resume', {
+              workspaceTask: workspaceTaskView(root, record, sessionFactMap(root, sessionIdsFor(record))),
+            }),
+          };
+        }
+        if (!record.resume) {
+          throw new Error('Close the current Codex runtime before resuming its original conversation.');
+        }
+      }
+
+      const oldSessions = { ...record.sessions };
+      const language = normalizeLanguage(input.language || record.startup?.language);
+      const resumeToken = randomUUID();
+      const verification = codex ? record.resume?.verification || null : null;
+
+      record.resume = {
+        schemaVersion: 1,
+        conversationId: target,
+        state: 'STARTING',
+        token: resumeToken,
+        verification,
+        interruption: record.resume?.interruption || (record.cooperation.roundId && !['IDLE', 'APPROVED', 'FAILED'].includes(record.cooperation.status)
+          ? { roundId: record.cooperation.roundId, revision: record.cooperation.revision, status: record.cooperation.status } : null),
+      };
+      record.runtimeFencing = true;
+      record.startup ||= initialStartup(language);
+      // Legacy rounds acquire their original executor owner before replacement.
+      if (!record.roundRuntime && record.cooperation.roundId && record.sessions.antigravity.runtimeGeneration) {
+        record.roundRuntime = {
+          roundId: record.cooperation.roundId,
+          sessionId: record.sessions.antigravity.sessionId,
+          runtimeGeneration: record.sessions.antigravity.runtimeGeneration,
+        };
+      }
+      for (const slot of ['codex', 'antigravity']) {
+        if ((slot === 'codex' ? codex : executor)) continue;
+        record.sessions[slot] = defaultSessions(record)[slot];
+        record.startup.slots[slot] = 'WAITING';
+      }
+      if (Object.values(oldSessions).some(session => session.sessionId && record.sessions[session.slot].sessionId !== session.sessionId)) {
+        record.sessionHistory = [...record.sessionHistory, {
+          codexSessionId: oldSessions.codex.sessionId,
+          antigravitySessionId: oldSessions.antigravity.sessionId,
+          closedAt: now(),
+        }].slice(-MAX_HISTORY);
+      }
+      record.status = 'STARTING';
+      record.error = null;
+      record.updatedAt = now();
+      // Persist intent before launch. Pending target occupancy is checked under
+      // the same short transaction as all identity/lifecycle writes.
       writeWorkspaceTask(root, record);
-      return jsonSuccess('workspace.task.resume', { workspaceTask: workspaceTaskView(root, record, sessionFactMap(root, sessionIdsFor(record))) });
-    }
-    const oldSessions = { ...record.sessions };
-    const language = normalizeLanguage(input.language || record.startup?.language);
-    record.resume = { schemaVersion: 1, conversationId: target, state: 'STARTING',
-      verification: codex ? record.resume?.verification || null : null,
-      interruption: record.resume?.interruption || (record.cooperation.roundId && !['IDLE', 'APPROVED', 'FAILED'].includes(record.cooperation.status)
-        ? { roundId: record.cooperation.roundId, revision: record.cooperation.revision, status: record.cooperation.status } : null) };
-    record.runtimeFencing = true;
-    record.startup ||= initialStartup(language);
-    // Legacy rounds acquire their original executor owner before replacement.
-    if (!record.roundRuntime && record.cooperation.roundId && record.sessions.antigravity.runtimeGeneration) {
-      record.roundRuntime = { roundId: record.cooperation.roundId, sessionId: record.sessions.antigravity.sessionId,
-        runtimeGeneration: record.sessions.antigravity.runtimeGeneration };
-    }
-    for (const slot of ['codex', 'antigravity']) {
-      if ((slot === 'codex' ? codex : executor)) continue;
-      record.sessions[slot] = defaultSessions(record)[slot];
-      record.startup.slots[slot] = 'WAITING';
-    }
-    if (Object.values(oldSessions).some(session => session.sessionId && record.sessions[session.slot].sessionId !== session.sessionId)) {
-      record.sessionHistory = [...record.sessionHistory, { codexSessionId: oldSessions.codex.sessionId,
-        antigravitySessionId: oldSessions.antigravity.sessionId, closedAt: now() }].slice(-MAX_HISTORY);
-    }
-    record.status = 'STARTING'; record.error = null; record.updatedAt = now();
-    // Persist intent before launch. Pending target occupancy is checked under
-    // the same short transaction as all identity/lifecycle writes.
-    writeWorkspaceTask(root, record);
+      return { ready: false, record, codex, executor, language, target, resumeToken };
+    });
+
+    if (prepared.ready) return prepared.result;
+
+    const { record, codex, executor, language, target, resumeToken } = prepared;
     try {
       if (!codex) await openWorkspaceSlot(root, record, 'codex', language, target);
       await prepareWorkspaceSlot(root, record, 'codex');
@@ -1175,10 +1219,37 @@ export async function runtimeWorkspaceTaskResume(input = {}) {
       // back the valid native conversation or automatically replays work.
       record.error = serializeRuntimeError(normalizeRuntimeError(error), { includeLegacy: true });
     }
-    updateResumeState(root, record); record.updatedAt = now();
-    writeWorkspaceTask(root, record);
-    return jsonSuccess('workspace.task.resume', { workspaceTask: workspaceTaskView(root, record, sessionFactMap(root, sessionIdsFor(record))) });
-  });
+
+    return withCooperationLock(root, id, async () => {
+      let current = readWorkspaceTaskRecord(root, id);
+      if (current.archivedAt) throw new Error('Cannot resume an archived Workspace Task.');
+      if (current.resume?.token && current.resume.token !== resumeToken) {
+        return jsonSuccess('workspace.task.resume', {
+          workspaceTask: workspaceTaskView(root, current, sessionFactMap(root, sessionIdsFor(current))),
+        });
+      }
+      current.sessions = { ...record.sessions };
+      current.startup = { ...record.startup };
+      current.sessionHistory = record.sessionHistory;
+      current.error = record.error;
+      if (!record.error) {
+        current.status = startupStatus(current);
+      }
+      updateResumeState(root, current);
+      current.updatedAt = now();
+      writeWorkspaceTask(root, current);
+      return jsonSuccess('workspace.task.resume', {
+        workspaceTask: workspaceTaskView(root, current, sessionFactMap(root, sessionIdsFor(current))),
+      });
+    });
+  })();
+
+  inFlightResumes.set(inFlightKey, execution);
+  try {
+    return await execution;
+  } finally {
+    inFlightResumes.delete(inFlightKey);
+  }
 }
 
 export async function runtimeWorkspaceTaskConfirmConversation(input = {}) {
@@ -1459,9 +1530,9 @@ function assertRuntimeCaller(root, record, slot, caller) {
   const session = readRecord(root, expected.sessionId);
   if (session.runtimeGeneration !== caller.runtimeGeneration || session.subtaskId !== slot
     || !ACTIVE_SESSION_STATES.has(session.state)) throw new Error('Workspace runtime caller is no longer current.');
-  // A new dispatch or review must come from the confirmed Codex conversation.
-  // An owned executor's existing-round receipt carries no new Codex instruction.
-  if (slot === 'codex' && record.resume && !manualConfirmationCurrent(record, readRecord(root, record.sessions.codex.sessionId))) throw new Error('Codex conversation requires current manual runtime confirmation before collaboration.');
+  // Resume uses the validated original target. The current owned runtime may
+  // dispatch and review once startup is ready, without a manual confirmation.
+  if (slot === 'codex' && record.resume && record.startup?.slots.codex !== 'READY') throw new Error('Codex conversation is not ready for collaboration.');
 }
 
 export async function dispatchWorkspaceTask(root, id, roundId, deliver, { caller } = {}) {

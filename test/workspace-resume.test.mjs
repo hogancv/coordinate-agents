@@ -40,7 +40,7 @@ process.stdin.on('data',x=>fs.appendFileSync(${JSON.stringify(join(root,'input.l
   return {root,id,taskId,taskFile:join(path,`${taskId}.json`),script};
 }
 
-test('closed Task resumes exact Codex, rebuilds executor, requires manual proof and retains history', {timeout:45000}, async t=>{
+test('closed Task resumes exact Codex, rebuilds executor, is immediately ready and retains history', {timeout:45000}, async t=>{
   const f=fixture(t);
   assert.equal(typeof runtime.runtimeWorkspaceTaskResume,'function');
   const input={root:f.root,workspaceTaskId:f.taskId,conversationId:f.id};
@@ -48,8 +48,16 @@ test('closed Task resumes exact Codex, rebuilds executor, requires manual proof 
   assert.equal(a.workspaceTask.sessions.codex.sessionId,b.workspaceTask.sessions.codex.sessionId);
   assert.equal(listRecords(f.root).length,2);
   const task=await runtime.readWorkspaceTask(f.root,f.taskId);
-  assert.equal(task.resume.state,'AWAITING_CONFIRMATION');
+  assert.equal(task.resume.state,'READY');
   assert.equal(task.resume.verification,null);
+  const legacy=JSON.parse(readFileSync(f.taskFile));legacy.resume.state='AWAITING_CONFIRMATION';writeFileSync(f.taskFile,JSON.stringify(legacy));
+  const snapshot=readFileSync(f.taskFile,'utf8');
+  assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'READY');
+  assert.equal(readFileSync(f.taskFile,'utf8'),snapshot);
+  await runtime.dispatchWorkspaceTask(f.root,f.taskId,'round-ready',async()=>{},{caller:caller(task,'codex')});
+  await runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-ready','ready without confirmation',{caller:caller(task,'antigravity'),notify:()=>{}});
+  await runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-ready','',{caller:caller(task,'codex'),notify:()=>{}});
+  await runtime.reportWorkspaceTask(f.root,f.taskId,'APPROVED','round-ready','reviewed without confirmation',{caller:caller(task,'codex'),notify:()=>{}});
   const launches=readFileSync(join(f.root,'launch.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
   assert.deepEqual(launches.find(x=>x.slot==='codex').args.slice(-2),['resume',f.id]);
   assert.ok(launches.every(x=>x.sessionId&&x.generation));
@@ -59,14 +67,15 @@ test('closed Task resumes exact Codex, rebuilds executor, requires manual proof 
   assert.equal(confirmed.workspaceTask.resume.state,'READY');
   assert.equal(confirmed.workspaceTask.sessions.codex.nativeIdentity.binding.conversationId,f.id);
   assert.equal(confirmed.workspaceTask.sessions.codex.nativeIdentity.verification.state,'MANUAL_CONFIRMED');
+  const beforeClose=await runtime.readWorkspaceTask(f.root,f.taskId);
   await runtime.runtimeWorkspaceTaskClose(input);
   const closed=await runtime.readWorkspaceTask(f.root,f.taskId);
   assert.equal(closed.sessions.codex.nativeIdentity.verification.state,'UNAVAILABLE');
   assert.equal(closed.sessions.codex.nativeIdentity.binding.conversationId,f.id);
   const resumed=(await runtime.runtimeWorkspaceTaskResume({root:f.root,workspaceTaskId:f.taskId})).workspaceTask;
   assert.notEqual(resumed.sessions.codex.sessionId,task.sessions.codex.sessionId);
-  assert.deepEqual(resumed.cooperation,task.cooperation);
-  assert.deepEqual(resumed.collaborationEvents,task.collaborationEvents);
+  assert.deepEqual(resumed.cooperation,beforeClose.cooperation);
+  assert.deepEqual(resumed.collaborationEvents,beforeClose.collaborationEvents);
   await assert.rejects(runtime.runtimeWorkspaceTaskConfirmConversation({...input,confirmed:true,sessionId:task.sessions.codex.sessionId,runtimeGeneration:task.sessions.codex.runtimeGeneration}),/changed|runtime/i);
 });
 
@@ -89,7 +98,7 @@ test('executor failure preserves valid Codex and retry opens only the missing ex
   config=readConfig(bus);config.agents.find(x=>x.id==='antigravity').command=process.execPath;writeConfig(bus,config);
   const resumed=(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask;
   assert.equal(resumed.sessions.codex.sessionId,partial.sessions.codex.sessionId);
-  assert.equal(resumed.resume.state,'AWAITING_CONFIRMATION');
+  assert.equal(resumed.resume.state,'READY');
   assert.equal(listRecords(f.root).filter(x=>x.agent==='codex').length,1);
 });
 
@@ -116,7 +125,7 @@ test('resumed collaboration rejects stale runtimes and replacement executor rece
  await runtime.runtimeWorkspaceTaskClose(input);
  task=(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask;
  await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-old','replacement before confirmation',{notify:()=>{},caller:caller(task,'antigravity')}),/round.*runtime|executor/i);
- task=await confirm(f,task);
+ assert.equal(task.resume.state,'READY');
  assert.deepEqual(task.cooperation,previous.cooperation);assert.deepEqual(task.collaborationEvents,previous.collaborationEvents);
  assert.equal(task.resume.interruption.roundId,'round-old');
  await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-old','late',{notify:()=>{},caller:oldExecutor}),/runtime|caller/i);
@@ -186,8 +195,8 @@ for(const slot of ['antigravity','codex']) test(`Resume continues ${slot} login 
  assert.equal(task.status,'AWAITING_INPUT');assert.equal(task.startup.slots[slot],'AUTH_REQUIRED');
  await getExecutionSessionManager().write(f.root,task.sessions[slot].sessionId,'y',{submit:false});
  task=(await runtime.runtimeWorkspaceTaskContinue({root:f.root,workspaceTaskId:f.taskId})).workspaceTask;
- assert.equal(task.status,'RUNNING');assert.equal(task.startup.slots[slot],'READY');assert.equal(task.resume.state,'AWAITING_CONFIRMATION');
- const persisted=JSON.parse(readFileSync(f.taskFile));assert.equal(persisted.resume.state,'AWAITING_CONFIRMATION');
+ assert.equal(task.status,'RUNNING');assert.equal(task.startup.slots[slot],'READY');assert.equal(task.resume.state,'READY');
+ const persisted=JSON.parse(readFileSync(f.taskFile));assert.equal(persisted.resume.state,'READY');
  const inputs=readFileSync(join(f.root,'input.log'),'utf8');assert.doesNotMatch(inputs,/codex:(?!79)/);
 });
 
@@ -217,7 +226,7 @@ test('read-only resume views show partial recovery when only the executor exits'
  assert.equal(readFileSync(f.taskFile,'utf8'),saved);
 });
 
-for(const login of [false,true]) test(`original executor receipts survive Codex recovery before confirmation (login=${login})`,{timeout:45000},async t=>{
+for(const login of [false,true]) test(`original executor receipts survive Codex recovery without confirmation (login=${login})`,{timeout:45000},async t=>{
  const f=fixture(t),input={root:f.root,workspaceTaskId:f.taskId,conversationId:f.id};
  const original=await confirm(f,(await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
  const executor=caller(original,'antigravity');let notifications=0;
@@ -232,7 +241,7 @@ for(const login of [false,true]) test(`original executor receipts survive Codex 
  assert.equal(task.status,login?'AWAITING_INPUT':'RUNNING');
  const before=await runtime.readWorkspaceTask(f.root,f.taskId);
  const savedResume=JSON.parse(readFileSync(f.taskFile)).resume;
- await assert.rejects(runtime.dispatchWorkspaceTask(f.root,f.taskId,'round-not-confirmed',()=>assert.fail('must not dispatch'),{caller:caller(task,'codex')}),/confirm|ready/i);
+ if(login) await assert.rejects(runtime.dispatchWorkspaceTask(f.root,f.taskId,'round-not-ready',()=>assert.fail('must not dispatch'),{caller:caller(task,'codex')}),/ready/i);
  const done=await report('DONE','round-inflight','original executor completed');
  assert.equal(done.status,'DONE');assert.equal(done.revision,before.cooperation.revision+1);
  await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'DONE','round-inflight','missing caller',{notify:()=>{}}),/caller|runtime/i);
@@ -244,9 +253,10 @@ for(const login of [false,true]) test(`original executor receipts survive Codex 
  assert.equal(notifications,1);
  assert.deepEqual(JSON.parse(readFileSync(f.taskFile)).resume,savedResume);
  const duplicate=await report('DONE','round-inflight','original executor completed');assert.equal(duplicate.revision,done.revision);assert.equal(notifications,1);
- await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-inflight','',{caller:caller(task,'codex'),notify:()=>{}}),/confirm|ready/i);
+ if(login) await assert.rejects(runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-inflight','',{caller:caller(task,'codex'),notify:()=>{}}),/ready/i);
  if(login){await getExecutionSessionManager().write(f.root,task.sessions.codex.sessionId,'y',{submit:false});await runtime.runtimeWorkspaceTaskContinue(input)}
- task=await confirm(f,await runtime.readWorkspaceTask(f.root,f.taskId));
+ task=await runtime.readWorkspaceTask(f.root,f.taskId);
+ assert.equal(task.resume.state,'READY');
  await runtime.reportWorkspaceTask(f.root,f.taskId,'REVIEWING','round-inflight','',{caller:caller(task,'codex'),notify:()=>{}});
  await runtime.reportWorkspaceTask(f.root,f.taskId,'APPROVED','round-inflight','reviewed after confirmation',{caller:caller(task,'codex'),notify:()=>{}});
  current=await runtime.readWorkspaceTask(f.root,f.taskId);assert.equal(current.cooperation.status,'APPROVED');
@@ -275,4 +285,79 @@ test('startup resume views distinguish unpublished slots from missing associated
  assert.equal((await runtime.readWorkspaceTask(f.root,f.taskId)).resume.state,'PARTIAL');
  assert.equal((await runtime.readWorkspaceTasks(f.root))[0].resume.state,'PARTIAL');
  assert.equal(readFileSync(f.taskFile,'utf8'),snapshot);
+});
+
+test('slow resume launch does not block concurrent executor DONE receipts', {timeout:45000}, async t => {
+ const f = fixture(t), input = { root: f.root, workspaceTaskId: f.taskId, conversationId: f.id };
+ const original = await confirm(f, (await runtime.runtimeWorkspaceTaskResume(input)).workspaceTask);
+ const executor = caller(original, 'antigravity');
+ await runtime.dispatchWorkspaceTask(f.root, f.taskId, 'round-slow-resume', async () => {}, { caller: caller(original, 'codex') });
+ await runtime.reportWorkspaceTask(f.root, f.taskId, 'WORKING', 'round-slow-resume', 'working', { caller: executor, notify: () => {} });
+
+ await getExecutionSessionManager().close(f.root, original.sessions.codex.sessionId, { graceful: false, timeoutMs: 300 });
+
+ let source = readFileSync(f.script, 'utf8');
+ source = source.replace("console.log(slot==='codex'?'Ask Codex to do anything':'? for shortcuts');",
+   "if(slot==='codex'){setTimeout(()=>console.log('Ask Codex to do anything'),1500)}else{console.log('? for shortcuts')}");
+ writeFileSync(f.script, source);
+
+ let resumeCompleted = false;
+ const resumePromise = runtime.runtimeWorkspaceTaskResume(input).then(res => {
+   resumeCompleted = true;
+   return res;
+ });
+
+ await new Promise(done => setTimeout(done, 150));
+
+ const done = await runtime.reportWorkspaceTask(f.root, f.taskId, 'DONE', 'round-slow-resume', 'completed during slow resume', { caller: executor, notify: () => {} });
+ assert.equal(done.status, 'DONE');
+ assert.equal(resumeCompleted, false, 'DONE receipt must commit before slow resume finishes');
+
+ const resumed = (await resumePromise).workspaceTask;
+ assert.equal(resumeCompleted, true);
+ assert.equal(resumed.cooperation.status, 'DONE');
+ assert.equal(resumed.cooperation.roundId, 'round-slow-resume');
+ assert.equal(resumed.collaborationEvents.at(-1).status, 'DONE');
+});
+
+test('degraded task with live bound Codex recovers missing executor without closing Codex or requiring manual confirmation', {timeout:45000}, async t => {
+ const f = fixture(t);
+ const created = (await runtime.runtimeWorkspaceTaskCreate({ root: f.root, language: 'en' })).workspaceTask;
+ assert.equal(created.status, 'RUNNING');
+ assert.equal(created.resume, null);
+ const codexId = created.sessions.codex.sessionId;
+ const originalExecutorId = created.sessions.antigravity.sessionId;
+
+ const observation = {
+   schemaVersion: 1,
+   projectRoot: f.root,
+   taskId: created.id,
+   slot: 'codex',
+   adapter: 'codex-cli',
+   sessionId: created.sessions.codex.sessionId,
+   runtimeGeneration: created.sessions.codex.runtimeGeneration,
+   conversationId: f.id,
+   source: { id: 'test', version: '1' },
+   observedAt: new Date().toISOString(),
+   sequence: 1,
+   expectedRevision: 0,
+ };
+ const token = Symbol('test-token');
+ await runtime.createWorkspaceNativeIdentityStore({ root: f.root, verifyAttestation: val => val === token ? observation : null }).observe(token);
+
+ await getExecutionSessionManager().close(f.root, originalExecutorId, { graceful: false, timeoutMs: 300 });
+ const degraded = await runtime.readWorkspaceTask(f.root, created.id);
+ assert.equal(degraded.status, 'DEGRADED');
+ assert.equal(degraded.resume, null);
+
+ const resumed = (await runtime.runtimeWorkspaceTaskResume({ root: f.root, workspaceTaskId: created.id })).workspaceTask;
+ assert.equal(resumed.sessions.codex.sessionId, codexId);
+ assert.ok(resumed.sessions.antigravity.sessionId);
+ assert.notEqual(resumed.sessions.antigravity.sessionId, originalExecutorId);
+ assert.equal(resumed.status, 'RUNNING');
+ assert.equal(resumed.resume.state, 'READY');
+
+ await runtime.dispatchWorkspaceTask(f.root, created.id, 'round-degraded-recovered', async () => {}, { caller: caller(resumed, 'codex') });
+ const working = await runtime.reportWorkspaceTask(f.root, created.id, 'WORKING', 'round-degraded-recovered', 'executor working', { caller: caller(resumed, 'antigravity') });
+ assert.equal(working.status, 'WORKING');
 });

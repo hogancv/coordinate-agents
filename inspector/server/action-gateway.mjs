@@ -349,17 +349,19 @@ export function createActionGateway({ root, capability, maxBodyBytes = DEFAULT_M
         try {
           if (projectStore?.isArchived(boundRoot)) throw new Error('Project is archived.');
           if (!rawParams || typeof rawParams !== 'object' || Array.isArray(rawParams)
-            || Object.keys(rawParams).some(key => !['codex', 'antigravity', 'args'].includes(key))) throw new Error('Invalid settings.');
+            || Object.keys(rawParams).some(key => !['codex', 'antigravity', 'args', 'antigravityArgs'].includes(key))) throw new Error('Invalid settings.');
           for (const key of ['codex', 'antigravity']) {
             if (typeof rawParams[key] !== 'string' || !rawParams[key].trim() || rawParams[key].length > 512 || /[\x00-\x1f\x7f]/.test(rawParams[key])) throw new Error('Invalid executable command.');
           }
           if (!Array.isArray(rawParams.args) || rawParams.args.length > 64 || rawParams.args.some(arg => typeof arg !== 'string' || arg.length > 512 || /[\x00-\x1f]/.test(arg))) throw new Error('Invalid executable arguments.');
+          if (rawParams.antigravityArgs !== undefined && (!Array.isArray(rawParams.antigravityArgs) || rawParams.antigravityArgs.length > 64 || rawParams.antigravityArgs.some(arg => typeof arg !== 'string' || arg.length > 512 || /[\x00-\x1f]/.test(arg)))) throw new Error('Invalid executable arguments.');
           withConfigTransaction(join(boundRoot, '.agent-bus'), config => {
             for (const id of ['codex', 'antigravity']) {
               let agent = config.agents.find(item => item.id === id);
               if (!agent) { agent = { id, adapter: `${id}-cli` }; config.agents.push(agent); }
               agent.command = rawParams[id].trim();
               if (id === 'codex') agent.args = rawParams.args;
+              if (id === 'antigravity' && rawParams.antigravityArgs !== undefined) agent.args = rawParams.antigravityArgs;
             }
             return config;
           });

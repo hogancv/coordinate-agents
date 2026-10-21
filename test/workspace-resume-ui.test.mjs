@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.meta.url), 'utf8');
 function ui() {
-  const ids = ['conversation-resume', 'conversation-resume-open', 'conversation-confirm-open',
-    'conversation-id', 'conversation-manual-check', 'conversation-resume-button',
-    'conversation-confirm-button', 'conversation-resume-status', 'conversation-identity-status'];
+  const ids = ['conversation-resume', 'conversation-resume-open',
+    'conversation-id', 'conversation-resume-button', 'conversation-resume-title',
+    'conversation-resume-status', 'conversation-identity-status'];
   const elements = Object.fromEntries(ids.map(id => ['#' + id, {
     dataset: {}, value: '', checked: false, hidden: false, open: false,
     setAttribute(name, value) { this[name] = value; },
@@ -31,7 +31,6 @@ test('closed tasks expose a compact reopen entry without opening the dialog auto
   const { elements: e, state, context: c } = ui();
   c.renderConversationResume();
   assert.equal(e['#conversation-resume-open'].hidden, false);
-  assert.equal(e['#conversation-confirm-open'].hidden, true);
   assert.equal(e['#conversation-resume'].open, false);
   c.openConversationResume();
   assert.equal(e['#conversation-resume'].open, true);
@@ -81,50 +80,56 @@ test('reopen failures expose the prefilled fallback and failed or partial tasks 
   assert.match(e['#conversation-resume-status'].textContent, /IDENTITY_CHANGED/);
 });
 
-test('resumed tasks keep a temporary confirmation entry until identity is confirmed', () => {
+test('resumed tasks have no confirmation entry or dialog, including legacy pending tasks', () => {
   const { elements: e, state, context: c } = ui();
   state.selectedTask.status = 'RUNNING';
   state.selectedTask.sessions.codex.state = 'running';
-  state.selectedTask.resume = { state: 'AWAITING_CONFIRMATION', conversationId: '019a0000-0000-7000-8000-000000000001' };
-  c.renderConversationResume();
-  assert.equal(e['#conversation-resume-open'].hidden, true);
-  assert.equal(e['#conversation-confirm-open'].hidden, false);
-  c.openConversationResume();
-  assert.equal(e['#conversation-resume'].open, true);
-  assert.equal(e['#conversation-confirm-button'].disabled, true);
-  e['#conversation-manual-check'].checked = true; c.renderConversationResume();
-  assert.equal(e['#conversation-confirm-button'].disabled, false);
-  state.selectedTask.resume.state = 'READY'; c.renderConversationResume();
-  assert.equal(e['#conversation-confirm-open'].hidden, true);
-  assert.equal(e['#conversation-resume'].open, false);
+  for (const status of ['READY', 'AWAITING_CONFIRMATION', 'PARTIAL']) {
+    state.selectedTask.resume = { state: status, conversationId: '019a0000-0000-7000-8000-000000000001' };
+    c.renderConversationResume(); c.openConversationResume();
+    assert.equal(e['#conversation-resume-open'].hidden, true);
+    assert.equal(e['#conversation-resume'].open, false);
+  }
+  const html = readFileSync(new URL('../inspector/web-workspace/index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /conversation-confirm|conversation-manual-check|resume.manualNote/);
 });
 
-test('switching targets or hiding archived/custom tasks dismisses the dialog and clears confirmation', () => {
+test('switching targets or hiding archived/custom tasks dismisses the dialog', () => {
   const { elements: e, state, context: c } = ui();
   c.renderConversationResume(); c.openConversationResume();
-  e['#conversation-manual-check'].checked = true;
   state.projectId = 'p2'; state.projectEpoch++; c.renderConversationResume();
   assert.equal(e['#conversation-resume'].open, false);
-  assert.equal(e['#conversation-manual-check'].checked, false);
   c.openConversationResume(); state.selectedTask.archivedAt = 'now'; c.renderConversationResume();
   assert.equal(e['#conversation-resume'].open, false);
   assert.equal(e['#conversation-resume-open'].hidden, true);
   delete state.selectedTask.archivedAt; state.selectedTask.mode = 'custom'; c.renderConversationResume();
   assert.equal(e['#conversation-resume-open'].hidden, true);
-  assert.equal(e['#conversation-confirm-open'].hidden, true);
 });
 
-test('manual proof captures the current runtime generation and ignores completion after a project switch', async () => {
+test('fallback resume ignores completion after a project switch', async () => {
   const { elements: e, state, context: c } = ui();
-  state.selectedTask.status = 'RUNNING'; state.selectedTask.sessions.codex.state = 'running';
-  state.selectedTask.resume = { state: 'AWAITING_CONFIRMATION', conversationId: '019a0000-0000-7000-8000-000000000001' };
-  c.renderConversationResume(); c.openConversationResume(); e['#conversation-manual-check'].checked = true;
+  c.renderConversationResume(); c.openConversationResume();
+  e['#conversation-id'].value = '019a0000-0000-7000-8000-000000000001';
+  c.renderConversationResume();
   let finish, seen; const pending = new Promise(done => { finish = done; });
   c.postAction = async (action, params, projectId) => { seen = { action, params, projectId }; return pending; };
   let refreshes = 0; c.refresh = async () => { refreshes++; };
-  const operation = c.conversationTaskAction('confirm');
-  assert.equal(seen.action, 'workspaceTaskConfirmConversation');
-  assert.equal(seen.params.runtimeGeneration, 'old-generation'); assert.equal(seen.projectId, 'p1');
+  const operation = c.conversationTaskAction();
+  assert.equal(seen.action, 'workspaceTaskResume');
+  assert.equal(seen.params.conversationId, e['#conversation-id'].value); assert.equal(seen.projectId, 'p1');
   state.projectId = 'p2'; state.projectEpoch++; finish({ ok: true }); await operation;
   assert.equal(refreshes, 0);
+});
+
+test('degraded task with live Codex and inactive executor labels recovery for the missing executor', () => {
+  const { elements: e, state, context: c } = ui();
+  state.selectedTask.status = 'DEGRADED';
+  state.selectedTask.sessions.codex.state = 'running';
+  state.selectedTask.sessions.antigravity = { sessionId: 'session-antigravity', state: 'exited' };
+  c.renderConversationResume();
+  assert.equal(e['#conversation-resume-open'].hidden, false);
+  assert.equal(e['#conversation-resume-open'].title, 'resume.recoverExecutor');
+  c.openConversationResume();
+  assert.equal(e['#conversation-resume-title'].textContent, 'resume.recoverExecutor');
+  assert.equal(e['#conversation-resume-button'].textContent, 'resume.recoverExecutor');
 });

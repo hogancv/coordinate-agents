@@ -17,37 +17,30 @@ new Task for a new context. Unbound Tasks and Custom Terminals retain fresh rest
    If automatic capture was unavailable and the Task has no binding, a recovery
    dialog accepts the original native UUID, then **Resume Conversation / 继续对话**. The native record
    must exist locally and belong to this project and a primary Codex CLI conversation.
-3. Choose **Back to terminals**, complete the CLI's normal startup screens, and
-   run `/status` in the resumed Codex terminal. Check both UUID and Directory.
-4. The header temporarily shows **Awaiting confirmation / 待确认**. Click it to reopen
-   the dialog, check the manual confirmation box, and choose **Confirm conversation**.
-   This entry disappears after confirmation. Resume does not send old role prompts
-   or replay history. Custom and archived Tasks have neither entry.
+3. Complete the CLI's normal login, trust and startup screens. Once both terminals
+   are ready, the task can dispatch and review immediately, without `/status` or
+   manual confirmation. Tasks saved by older versions in Awaiting Confirmation
+   also become ready based on their current terminal state.
+4. Resume does not send old role prompts or replay history. Custom and archived
+   Tasks do not expose the native conversation recovery entry.
 
 Failed or partial pairs also expose the recovery entry. A failed direct reopen
 opens the fallback with the saved UUID prefilled. The dialog supports Escape, its close button, and clicking the backdrop. Switching
-projects or Tasks dismisses it and clears the manual check. Opening or dismissing
+projects or Tasks dismisses it. Opening or dismissing
 it does not resume a CLI; **Reopen task** or the dialog's explicit action starts recovery.
 
-This v1 path uses **manual live confirmation**. Exact local metadata, launch
-arguments, a running process and historical bindings do not automatically verify
-which native conversation the TUI loaded. The UI shows awaiting confirmation,
-manually confirmed, partial recovery and failed recovery distinctly. Automatic
-binding uses a process-scoped native startup event plus exact primary CLI metadata;
-it never upgrades a historical binding to live verification. A wrong target,
-project mismatch, conflicting original binding or another Task's reserved UUID
-is refused; no replacement blank Codex conversation is silently created.
+Resume uses the validated original UUID and current owned runtime. Automatic
+binding uses a process-scoped native startup event plus exact primary CLI metadata.
+A wrong target, project mismatch, conflicting original binding or another Task's
+reserved UUID is refused; no replacement blank Codex conversation is silently created.
+Readiness allows collaboration without claiming continuous native identity verification.
 
-Manual confirmation is a check at a point in time, not a live identity lease.
 Running `/new` or switching conversations inside the same TUI may leave the
 Runtime Session ID and generation unchanged. When a supported native event and
-primary record expose a different UUID, v1 latches an identity conflict, invalidates
-the old confirmation, and blocks new dispatch/review. Event export is asynchronous,
-so detection is not immediate or guaranteed. Do not continue collaborating after
-such a switch: close and resume this Task to return to its original bound
-conversation, then check `/status` and confirm again. A latched conflict needs inspection;
-it cannot be cleared by confirming a different UUID. A READY label does not establish
-continuous native identity verification.
+primary record expose a different UUID, the task latches an identity conflict
+and blocks new dispatch/review. Event export is asynchronous, so detection is not
+immediate or guaranteed. Stop collaboration after switching and inspect the
+original task binding. A latched conflict cannot be cleared by entering a different UUID.
 
 The configured built-in Codex adapter, user command/wrapper, authentication,
 model/permission options and native TUI/PTY remain in use. Safe ordinary CLI
@@ -87,13 +80,13 @@ require the current owned Task/slot/Session/runtime generation inherited from th
 CLI environment; old runtime operations and missing claims are rejected. These
 claims are local runtime fences, not an OS-user security boundary.
 
-While Codex is being recovered or awaiting fresh confirmation, an unchanged,
+While Codex is being recovered, an unchanged,
 active Antigravity Session may still report WORKING/DONE/FAILED for its existing
 round. Task/slot/Session/generation, round ownership, legal transitions and the
 current Cooperation Revision are checked under the same lifecycle transaction.
 Duplicate receipts remain idempotent. This exception does not permit new dispatch,
 Codex review, archived/closed Task writes, old executors or wrong rounds; new
-Codex instructions and review still require its current manual confirmation.
+Codex instructions and review require its current owned runtime and completed startup.
 
 Archived Tasks remain unavailable. Concurrent lifecycle and collaboration writes
 serialize through the existing Task lock; dead-owner recovery uses an elected

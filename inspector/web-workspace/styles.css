@@ -90,6 +90,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .brand-row strong { font-size: .82rem; letter-spacing: -.015em; font-weight: 650; }
 .brand-row span { color: var(--muted); font-size: .6rem; }
 .brand-mark { display: grid; width: 1.7rem; height: 1.7rem; flex: 0 0 auto; place-items: center; border: 1px solid rgba(157, 181, 255, .15); border-radius: 7px; color: var(--accent); background: rgba(157, 181, 255, .08); font-size: 1rem; }
+.brand-subtitle { display: flex; align-items: center; gap: .3rem; line-height: 1rem; }
+.brand-close-all { width: 1.8rem; height: 1.8rem; flex: 0 0 auto; color: var(--muted); }
+.brand-close-all:hover:not(:disabled) { color: var(--red); border-color: currentColor; }
+.brand-close-all svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 
 .repository-card { min-width: 0; padding: 0 .2rem; }
 .sidebar-section-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 1.4rem; padding-inline: .25rem; }
@@ -221,19 +225,29 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .task-heading-title-row .status-pill { flex-shrink: 0; white-space: nowrap; }
 .task-meta-row { flex-wrap: wrap; gap: .5rem; margin-top: .42rem; color: var(--muted); font-size: .68rem; }
 .task-meta-row code, .terminal-card-footer code { color: var(--muted); font: .64rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.task-toolbar-actions { display: flex; flex: 0 0 auto; gap: .45rem; padding-right: .75rem; margin-right: .2rem; border-right: 1px solid var(--line); }
+.task-status-control { display: inline-flex; align-items: stretch; flex: 0 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 999px; color: var(--accent); background: rgba(157, 181, 255, .08); }
+.task-status-control:has(.running) { color: var(--green); background: rgba(95, 224, 160, .08); }
+.task-status-control:has(.starting, .awaiting_input, .degraded) { color: var(--yellow); background: rgba(244, 204, 112, .08); }
+.task-status-control:has(.error) { color: var(--red); background: rgba(255, 130, 146, .08); }
+.task-status-control:has(.closed, .exited) { color: var(--muted); background: var(--surface-subtle); }
+.task-status-button, .task-reopen-button { display: inline-flex; align-items: center; justify-content: center; width: 1.8rem; flex-shrink: 0; padding: .28rem 0; border: 0; border-left: 1px solid var(--line); border-radius: 0; color: inherit; background: transparent; }
+.task-status-button:disabled { opacity: 1; cursor: default; }
+.task-status-button:hover:not(:disabled), .task-reopen-button:hover:not(:disabled) { background: var(--sidebar-hover); }
+.task-status-control button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.task-close-icon { width: 1rem; height: 1rem; color: var(--red); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 .status-pill { display: inline-flex; padding: .25rem .5rem; border-radius: 999px; color: var(--accent); background: rgba(157, 181, 255, .12); font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .status-pill.running { color: var(--green); background: rgba(95, 224, 160, .11); }
 .status-pill.starting, .status-pill.awaiting_input, .status-pill.degraded { color: var(--yellow); background: rgba(244, 204, 112, .11); }
 .status-pill.error { color: var(--red); background: rgba(255, 130, 146, .11); }
 .status-pill.closed, .status-pill.exited { color: var(--muted); background: rgba(155, 170, 202, .12); }
+.task-status-control > .status-pill { align-items: center; padding: .28rem .5rem; border-radius: 0; color: inherit; background: transparent; }
 .cooperation-pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0; }
 .cooperation-pill.sent, .cooperation-pill.done, .cooperation-pill.changes_requested { color: var(--yellow); background: rgba(244, 204, 112, .11); }
 .cooperation-pill.working, .cooperation-pill.reviewing { color: var(--accent); background: rgba(157, 181, 255, .12); }
 .cooperation-pill.approved { color: var(--green); background: rgba(95, 224, 160, .11); }
 .cooperation-pill.failed { color: var(--red); background: rgba(255, 130, 146, .11); }
 .startup-notice { margin-bottom: .65rem; padding: .5rem .7rem; border: 1px solid rgba(244, 204, 112, .25); border-radius: .55rem; color: var(--text); background: rgba(244, 204, 112, .10); font-size: .75rem; line-height: 1.5; }
-.task-error { margin-bottom: .9rem; padding: .7rem .8rem; border: 1px solid rgba(255, 130, 146, .25); border-radius: .55rem; color: var(--error-text); background: rgba(255, 130, 146, .08); font-size: .75rem; line-height: 1.45; overflow-wrap: anywhere; }
+.task-error { margin: 0; padding: .7rem .8rem; border-bottom: 1px solid rgba(255, 130, 146, .25); color: var(--error-text); background: rgba(255, 130, 146, .08); font-size: .75rem; line-height: 1.45; overflow-wrap: anywhere; }
 
 .terminal-grid { display: grid; min-width: 0; max-width: 100%; min-height: 0; flex: 1; grid-template-columns: minmax(0, var(--codex-width, .5fr)) 8px minmax(0, var(--antigravity-width, .5fr)); grid-auto-rows: minmax(0, 1fr); overflow: hidden; gap: 0; }
 .terminal-splitter { position: relative; cursor: col-resize; touch-action: none; outline: none; }
@@ -271,6 +285,8 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .settings-field input, .settings-field select { min-width: 0; width: 100%; padding: .65rem .7rem; border: 1px solid var(--line); border-radius: .5rem; color: var(--text); background: var(--terminal); font: .78rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; outline: none; }
 .settings-field input:focus, .settings-field select:focus { border-color: var(--accent); box-shadow: 0 0 0 .15rem rgba(157, 181, 255, .12); }
 .settings-error { padding: .65rem .7rem; border: 1px solid rgba(255, 130, 146, .3); border-radius: .5rem; color: var(--error-text); background: rgba(255, 130, 146, .08); font-size: .74rem; line-height: 1.45; overflow-wrap: anywhere; }
+.settings-warning { display: flex; align-items: flex-start; gap: .5rem; padding: .65rem .7rem; border: 1px solid var(--yellow); border-radius: .5rem; color: var(--yellow); background: rgba(244, 204, 112, .12); font-size: .74rem; line-height: 1.45; overflow-wrap: anywhere; }
+.settings-warning .warning-icon { flex-shrink: 0; margin-top: .1rem; }
 .settings-modal-actions { display: flex; justify-content: flex-end; gap: .55rem; }
 #workspace-create-submit { display: inline-flex; align-items: center; justify-content: center; gap: .65rem; }
 .button-shortcut { display: inline-flex; flex-shrink: 0; padding: .1rem .2rem; border: 1px solid currentColor; border-radius: .25rem; opacity: .75; }
@@ -332,7 +348,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 #project-error { color: var(--red); }
 
 /* Zen changes presentation only: mounted terminals and their input stay alive. */
-.zen-exit { position: fixed; bottom: .45rem; right: .6rem; z-index: 40; padding: .3rem .5rem; font-size: .65rem; opacity: .45; background: var(--panel); }
+.zen-exit { position: fixed; top: .45rem; right: .6rem; z-index: 40; padding: .3rem .5rem; font-size: .65rem; opacity: .45; background: var(--panel); }
 .zen-exit:hover, .zen-exit:focus-visible { opacity: 1; }
 .zen-mode .workspace-app { grid-template-columns: minmax(0, 1fr); }
 .zen-mode .sidebar, .zen-mode .topbar, .zen-mode .task-toolbar,
@@ -342,6 +358,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .zen-mode .terminal-grid { background: var(--line); }
 .zen-mode .terminal-card { position: relative; border: 0; border-radius: 0; box-shadow: none; }
 .zen-mode .terminal-card-header { position: absolute; top: .35rem; right: .35rem; z-index: 2; border: 0; padding: 0; background: transparent; }
+.zen-mode .terminal-card:last-child .terminal-card-header { right: 7rem; }
 .zen-mode .terminal-card-title, .zen-mode .terminal-card-actions .terminal-status { display: none; }
 .zen-mode .terminal-card-actions { opacity: .45; }
 .zen-mode .terminal-card-actions:hover, .zen-mode .terminal-card-actions:focus-within { opacity: 1; }
@@ -470,7 +487,7 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 body.zen-mode .collaboration-health { display: none; }
 
 .brand-row > div:last-of-type { flex: 1; }
-.brand-health-button { flex: 0 0 auto; padding: .25rem .3rem; border-radius: 5px; white-space: nowrap; }
+.brand-health-button { flex: 0 0 auto; height: 1rem; padding: 0 .3rem; border-radius: 5px; font-size: .6rem; line-height: 1; white-space: nowrap; }
 .brand-health-button span { font-size: .58rem; color: inherit; }
 .brand-health-button #workspace-health-indicator { font-size: .7rem; }
 .health-panel { position: fixed; top: 64px; left: 12px; right: auto; max-height: calc(100vh - 80px); z-index: 26; }
@@ -483,17 +500,13 @@ body.zen-mode .collaboration-health { display: none; }
 .collaboration-health-button[data-health="reported-failure"] { color: var(--red); border-color: var(--red); }
 .zen-mode #collaboration-health-drawer, .zen-mode #collaboration-health-mask { display: none; }
 /* Recovery is opt-in and overlays the workspace without reducing terminal space. */
-.task-reopen-button { width: 1.8rem; height: 1.8rem; flex-shrink: 0; }
 .task-reopen-button svg { width: 1rem; height: 1rem; }
-.conversation-confirm-entry { cursor: pointer; color: var(--yellow); border: 1px solid var(--line); }
-.conversation-confirm-entry:hover { border-color: var(--line-strong); }
 .conversation-resume-dialog { width: min(36rem, calc(100vw - 2rem)); max-height: calc(100dvh - 3rem); padding: 0; overflow-y: auto; border: 1px solid var(--line-strong); border-radius: .9rem; background: var(--panel); color: var(--text); box-shadow: 0 1.5rem 5rem rgba(0, 0, 0, .35); }
 .conversation-resume-dialog::backdrop { background: rgba(4, 8, 16, .5); backdrop-filter: blur(3px); }
 .conversation-resume { display: grid; gap: 1rem; padding: 1.25rem; }
 .conversation-resume h2 { margin: 0; font-size: 1.1rem; }
 .conversation-resume p { margin: 0; font-size: .8rem; line-height: 1.6; color: var(--muted); }
 .conversation-resume .conversation-resume-status { color: var(--text); }
-.conversation-resume-actions, .conversation-confirm-controls { display: grid; gap: .75rem; }
+.conversation-resume-actions { display: grid; gap: .75rem; }
 .conversation-resume-actions label { font-size: .85rem; }
-.conversation-confirm-controls label { display: flex; gap: .5rem; align-items: flex-start; line-height: 1.5; }
 #conversation-id { width: 100%; min-width: 0; padding: .65rem .75rem; background: var(--bg); color: inherit; border: 1px solid var(--line); border-radius: .5rem; font: inherit; }

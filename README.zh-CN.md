@@ -18,8 +18,8 @@
 先安装 **Node.js >=18**、**Git** 和需要使用的 Agent CLI。
 默认协作模式需要 `codex` 和 `agy` 能正常运行，并已完成各自的登录。
 Coordinate Agents 不负责安装这些 Agent CLI。
-当前源码默认给 Antigravity 添加 `--dangerously-skip-permissions`，自动批准工具权限请求；
-已保存的显式启动参数优先。
+工作区设置支持选择 Antigravity 工具权限模式（默认按需确认，或开启 `--dangerously-skip-permissions` 自动批准）；
+已保存的项目偏好优先。
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000

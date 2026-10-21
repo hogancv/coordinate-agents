@@ -17,9 +17,14 @@
           <div class="brand-mark" aria-hidden="true">✦</div>
           <div>
             <strong>Coordinate Agents</strong>
-            <span>Web Workspace</span>
+            <div class="brand-subtitle">
+              <span>Web Workspace</span>
+              <button id="workspace-health-button" class="secondary-button health-button brand-health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.brand">Environment</span></button>
+            </div>
           </div>
-          <button id="workspace-health-button" class="secondary-button health-button brand-health-button" type="button" aria-expanded="false" aria-controls="workspace-health-panel"><span id="workspace-health-indicator" aria-hidden="true">○</span><span id="workspace-health-label" data-i18n="health.brand">Environment</span></button>
+          <button id="close-all-terminals-button" class="icon-button brand-close-all" type="button" aria-label="Close all terminals" title="Close all terminals" disabled>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v7M5.4 4.7a7 7 0 1 0 9.2 0"/></svg>
+          </button>
           <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Close sidebar">×</button>
         </div>
 
@@ -86,13 +91,16 @@
           <div id="task-heading" class="task-heading" hidden>
             <div class="task-heading-title-row">
               <h2 id="selected-task-title">—</h2>
-              <span id="selected-task-status" class="status-pill">—</span>
-              <button id="conversation-resume-open" class="icon-button task-reopen-button" type="button" aria-label="Reopen task" title="Reopen task" aria-haspopup="dialog" aria-controls="conversation-resume" aria-expanded="false" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7"/><path d="M3 4v7h7"/></svg>
-              </button>
-              <button id="conversation-confirm-open" class="status-pill conversation-confirm-entry" type="button" aria-haspopup="dialog" aria-controls="conversation-resume" aria-expanded="false" data-i18n="resume.pending" hidden>Awaiting confirmation</button>
+              <div class="task-status-control" role="group">
+                <span id="selected-task-status" class="status-pill">—</span>
+                <button id="close-task-button" class="task-status-button" type="button" aria-label="Close task" title="Close task">
+                  <svg class="task-close-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v7M5.4 4.7a7 7 0 1 0 9.2 0"/></svg>
+                </button>
+                <button id="conversation-resume-open" class="task-reopen-button" type="button" aria-label="Reopen task" title="Reopen task" aria-haspopup="dialog" aria-controls="conversation-resume" aria-expanded="false" hidden>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 7"/><path d="M3 4v7h7"/></svg>
+                </button>
+              </div>
               <span id="conversation-identity-status" class="status-pill" role="status" hidden></span>
-              <span id="selected-task-mode" class="status-pill"></span>
               <span id="selected-task-cooperation" class="status-pill cooperation-pill" role="status" aria-live="polite" hidden></span>
             </div>
             <div class="task-meta-row" hidden>
@@ -103,10 +111,6 @@
           <div class="topbar-actions">
             <button id="collaboration-health-button" class="secondary-button collaboration-health-button" type="button" aria-expanded="false" aria-controls="collaboration-health-drawer" disabled>Collaboration health</button>
             <button id="changes-button" class="secondary-button" type="button" aria-expanded="false" aria-controls="changes-drawer" disabled>Changes —</button>
-            <div id="task-toolbar-actions" class="task-toolbar-actions" hidden>
-              <button id="close-all-terminals-button" class="danger-button" type="button" data-i18n="task.closeAll">Close all terminals</button>
-              <button id="close-task-button" class="danger-button" type="button" data-i18n="task.close">Close task</button>
-            </div>
             <button id="zen-button" class="secondary-button" type="button" aria-pressed="false" data-i18n="zen.enter" disabled>Zen mode</button>
             <button id="theme-button" class="icon-button theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode">
               <svg class="theme-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 11.5A7 7 0 0 1 8.5 3.5a7 7 0 1 0 8 8z"/></svg>
@@ -197,16 +201,11 @@
           <button id="conversation-resume-close" class="icon-button" type="button" aria-label="Close">×</button>
         </header>
         <p id="conversation-resume-status" class="conversation-resume-status" role="status" aria-live="polite"></p>
-        <p data-i18n="resume.manualNote">Manual confirmation: use /status in Codex to check its Session UUID and Directory. Native record checks are not automatic live identity verification.</p>
         <p data-i18n="resume.identityLimit">Confirmation is a one-time check. /new or conversation switches inside this TUI are not detected. If you switch, stop collaboration and Close/Resume the bound conversation, then confirm again.</p>
         <div class="conversation-resume-actions">
           <label for="conversation-id" data-i18n="resume.id">Codex Conversation ID</label>
           <input id="conversation-id" type="text" maxlength="36" placeholder="UUID" autocomplete="off" spellcheck="false" />
           <button id="conversation-resume-button" class="primary-button" type="button" data-i18n="resume.title">Resume Conversation</button>
-          <div id="conversation-confirm-controls" class="conversation-confirm-controls" hidden>
-            <label><input id="conversation-manual-check" type="checkbox" /><span data-i18n="resume.checked">I checked the live UUID and project in /status.</span></label>
-            <button id="conversation-confirm-button" class="secondary-button" type="button" data-i18n="resume.confirm">Confirm conversation</button>
-          </div>
         </div>
         <footer class="settings-modal-actions"><button id="conversation-resume-dismiss" class="secondary-button" type="button" data-i18n="resume.backToTerminal">Back to terminals</button></footer>
       </section>
@@ -284,7 +283,19 @@
                 <label class="settings-field" for="antigravity-command">
                   <span data-i18n="settings.antigravity">Antigravity</span>
                   <input id="antigravity-command" name="antigravityCommand" type="text" maxlength="512" autocomplete="off" spellcheck="false" required>
-                  <span class="settings-hint" data-i18n="settings.antigravityPermissions">Default arguments include --dangerously-skip-permissions to auto-approve tool permission requests. Explicit saved arguments take precedence.</span>
+                </label>
+                <label class="settings-field" for="antigravity-permissions">
+                  <span data-i18n="settings.antigravityPermissions">Antigravity tool permissions</span>
+                  <select id="antigravity-permissions" aria-describedby="antigravity-permissions-hint">
+                    <option value="auto-approve" data-i18n="settings.antigravityPermissionsAuto" selected>Auto-approve tools (--dangerously-skip-permissions)</option>
+                    <option value="prompt" data-i18n="settings.antigravityPermissionsPrompt">Prompt for permissions (standard)</option>
+                  </select>
+                  <div id="antigravity-permissions-warning" class="settings-warning" role="alert">
+                    <svg class="warning-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                      <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/>
+                    </svg>
+                    <span id="antigravity-permissions-hint" data-i18n="settings.antigravityPermissionsHint">Warning: Auto-approve mode skips CLI tool authorization, including file writes and shell execution.</span>
+                  </div>
                 </label>
               </div>
               <p class="settings-hint" data-i18n="settings.hint">Use codex and agy, or enter an executable name or absolute path. Do not include shell arguments.</p>

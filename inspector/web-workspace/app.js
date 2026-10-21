@@ -361,12 +361,27 @@ function renderEffortChoices(saved = '') {
   select.value = saved;
 }
 
+function updateAntigravityPermissionsWarning() {
+  const permissions = document.querySelector('#antigravity-permissions');
+  const warning = document.querySelector('#antigravity-permissions-warning');
+  if (!warning) return;
+  const isAuto = permissions ? permissions.value === 'auto-approve' : true;
+  warning.hidden = !isAuto;
+}
+
 function renderSettingsForm() {
   const codex = document.querySelector('#codex-command');
   const antigravity = document.querySelector('#antigravity-command');
+  const permissions = document.querySelector('#antigravity-permissions');
   renderModelChoices();
   if (codex) codex.value = state.settings.codex || DEFAULT_TERMINAL_COMMANDS.codex;
   if (antigravity) antigravity.value = state.settings.antigravity || DEFAULT_TERMINAL_COMMANDS.antigravity;
+  if (permissions) {
+    const args = state.settings.antigravityArgs;
+    const isPrompt = Array.isArray(args) && !args.includes('--dangerously-skip-permissions');
+    permissions.value = isPrompt ? 'prompt' : 'auto-approve';
+    updateAntigravityPermissionsWarning();
+  }
 }
 
 function canEditProjectSettings() { return Boolean(state.projectId) && state.projects.find(project => project.id === state.projectId)?.available !== false; }
@@ -374,13 +389,13 @@ function canEditProjectSettings() { return Boolean(state.projectId) && state.pro
 function setSettingsBusy(busy) {
   state.settingsBusy = busy;
   for (const tab of document.querySelectorAll('[data-settings-tab]')) tab.disabled = busy;
-  for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
+  for (const id of ['terminal-settings-close', 'terminal-settings-cancel', 'terminal-settings-save', 'codex-command', 'codex-model', 'codex-effort', 'antigravity-command', 'antigravity-permissions']) {
     const element = document.querySelector(`#${id}`);
     if (element) element.disabled = busy;
   }
   const save = document.querySelector('#terminal-settings-save');
   if (save) { save.textContent = busy ? t('settings.saving') : t('settings.save'); save.disabled = busy || !canEditProjectSettings(); }
-  for (const id of ['codex-command', 'codex-model', 'codex-effort', 'antigravity-command']) {
+  for (const id of ['codex-command', 'codex-model', 'codex-effort', 'antigravity-command', 'antigravity-permissions']) {
     const field = document.querySelector(`#${id}`); if (field) field.disabled = busy || !canEditProjectSettings();
   }
   renderArchiveSummary();
@@ -434,6 +449,8 @@ async function openSettings(tab = 'default') {
       model: readCodexModel(payload?.codex?.args || []),
       codex: payload?.codex?.command || DEFAULT_TERMINAL_COMMANDS.codex,
       antigravity: payload?.antigravity?.command || DEFAULT_TERMINAL_COMMANDS.antigravity,
+      antigravityArgs: payload?.antigravity?.args || [],
+      antigravityArgsSource: payload?.antigravity?.argsSource,
     };
     if (state.settingsOpen) renderSettingsForm();
   } catch (error) {
@@ -510,13 +527,15 @@ async function saveSettings(event) {
     return;
   }
   const args = replaceCodexEffort(replaceCodexModel(state.settings.args || [], model), effort);
+  const permissions = document.querySelector('#antigravity-permissions')?.value;
+  const antigravityArgs = permissions === 'auto-approve' ? ['--dangerously-skip-permissions'] : [];
   setBusy(true);
   setSettingsBusy(true);
   settingsError();
   try {
-    await postAction('workspaceSettingsSave', { ...commands, args }, projectId);
+    await postAction('workspaceSettingsSave', { ...commands, args, antigravityArgs }, projectId);
     if (projectId !== state.projectId || epoch !== state.projectEpoch) return;
-    state.settings = { ...state.settings, ...commands, model, effort, args };
+    state.settings = { ...state.settings, ...commands, model, effort, args, antigravityArgs };
     showToast(t('settings.saved'), 'success');
     void checkWorkspaceHealth();
   } catch (error) {
@@ -1255,7 +1274,6 @@ function renderConversationResume() {
   const panel = document.querySelector('#conversation-resume');
   if (!panel) return;
   const reopen = document.querySelector('#conversation-resume-open');
-  const confirmEntry = document.querySelector('#conversation-confirm-open');
   const task = state.selectedTask;
   const available = Boolean(state.projectId && task && task.id === state.selectedId && task.mode !== 'custom' && !task.archivedAt);
   const session = task?.sessions?.codex;
@@ -1266,17 +1284,13 @@ function renderConversationResume() {
   }
   const recoverable = available && ['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
   reopen.hidden = !recoverable;
-  const pending = available && task.status !== 'CLOSED' && isActiveTerminalSession(session)
-    && ['AWAITING_CONFIRMATION', 'PARTIAL'].includes(task.resume?.state);
-  confirmEntry.hidden = !pending;
-  for (const button of [reopen, confirmEntry]) {
-    button.disabled = state.actionBusy;
-    button.setAttribute('aria-expanded', String(panel.open));
-  }
+  reopen.disabled = state.actionBusy;
+  reopen.setAttribute('aria-expanded', String(panel.open));
+  const isRecoverExecutor = available && isActiveTerminalSession(session) && !isActiveTerminalSession(task?.sessions?.antigravity);
+  const reopenText = isRecoverExecutor ? t('resume.recoverExecutor') : t('resume.reopen');
   document.querySelector('#conversation-resume-close')?.setAttribute('aria-label', t('resume.close'));
-  reopen.title = t('resume.reopen');
-  reopen.setAttribute('aria-label', t('resume.reopen'));
-  confirmEntry.textContent = t('resume.pending');
+  reopen.title = reopenText;
+  reopen.setAttribute('aria-label', reopenText);
   const identityStatus = document.querySelector('#conversation-identity-status');
   if (identityStatus) {
     const identity = session?.nativeIdentity;
@@ -1285,26 +1299,25 @@ function renderConversationResume() {
       : ['LISTENING', 'DISCOVERED'].includes(identity?.discovery?.state) ? 'DISCOVERING' : 'MANUAL_AVAILABLE';
     identityStatus.textContent = t(`identity.${identityState}`);
   }
-  if (!available || (reopen.hidden && confirmEntry.hidden && !state.actionBusy)) {
+  if (!available || (reopen.hidden && !state.actionBusy)) {
     closeConversationResume({ restoreFocus: false });
     return;
   }
   const field = document.querySelector('#conversation-id');
-  const check = document.querySelector('#conversation-manual-check');
   const key = `${taskKey}:${session?.sessionId || ''}:${session?.runtimeGeneration || ''}`;
   const target = task.resume?.conversationId || session?.nativeIdentity?.binding?.conversationId || '';
-  if (panel.dataset.target !== key) { field.value = target; check.checked = false; panel.dataset.target = key; }
+  if (panel.dataset.target !== key) { field.value = target; panel.dataset.target = key; }
   if (target) field.value = target;
   field.readOnly = Boolean(target);
   field.disabled = state.actionBusy;
-  check.disabled = state.actionBusy || task.status === 'CLOSED' || !isActiveTerminalSession(session);
-  const controls = document.querySelector('#conversation-confirm-controls');
-  if (controls) controls.hidden = !pending;
   const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
   const resumeButton = document.querySelector('#conversation-resume-button');
+  const resumeTitle = document.querySelector('#conversation-resume-title');
+  const actionText = isRecoverExecutor ? t('resume.recoverExecutor') : t('resume.title');
+  if (resumeTitle) resumeTitle.textContent = actionText;
+  if (resumeButton) resumeButton.textContent = actionText;
   resumeButton.disabled = state.actionBusy || !valid || Boolean(session?.nativeIdentity?.firstConflict) || !recoverable;
   resumeButton.hidden = !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
-  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || Boolean(session?.nativeIdentity?.firstConflict) || check.disabled || !check.checked;
   const summary = document.querySelector('#conversation-resume-status');
   const status = state.conversationActionTarget === key ? 'STARTING' : session?.nativeIdentity?.firstConflict ? 'IDENTITY_CHANGED' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
   summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
@@ -1316,7 +1329,7 @@ async function reopenConversationTask() {
   const task = state.selectedTask;
   const identity = task.sessions.codex?.nativeIdentity;
   if (!identity?.firstConflict && (identity?.binding?.conversationId || task.resume?.conversationId)) {
-    return conversationTaskAction('resume', { automatic: true });
+    return conversationTaskAction({ automatic: true });
   }
   openConversationResume();
 }
@@ -1324,42 +1337,37 @@ async function reopenConversationTask() {
 function openConversationResume() {
   renderConversationResume();
   const reopen = document.querySelector('#conversation-resume-open');
-  const confirmEntry = document.querySelector('#conversation-confirm-open');
-  if (state.actionBusy || (reopen.hidden && confirmEntry.hidden)) return;
+  if (state.actionBusy || reopen.hidden) return;
   const panel = document.querySelector('#conversation-resume');
   if (!panel.open) panel.showModal();
-  for (const button of [reopen, confirmEntry]) button.setAttribute('aria-expanded', 'true');
+  reopen.setAttribute('aria-expanded', 'true');
   const field = document.querySelector('#conversation-id');
-  (field.readOnly && !confirmEntry.hidden ? document.querySelector('#conversation-manual-check') : field).focus();
+  field.focus();
 }
 
 function closeConversationResume({ restoreFocus = true } = {}) {
   const panel = document.querySelector('#conversation-resume');
   if (panel?.open) panel.close();
-  document.querySelector('#conversation-manual-check').checked = false;
   const reopen = document.querySelector('#conversation-resume-open');
-  const confirmEntry = document.querySelector('#conversation-confirm-open');
-  for (const button of [reopen, confirmEntry]) button?.setAttribute('aria-expanded', 'false');
-  const trigger = !confirmEntry?.hidden ? confirmEntry : reopen;
+  reopen?.setAttribute('aria-expanded', 'false');
+  const trigger = reopen;
   if (restoreFocus && trigger && !trigger.hidden && !trigger.disabled) trigger.focus();
 }
 
-async function conversationTaskAction(operation, { automatic = false } = {}) {
+async function conversationTaskAction({ automatic = false } = {}) {
   renderConversationResume();
-  const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
+  const button = document.querySelector('#conversation-resume-button');
   if ((!automatic && !document.querySelector('#conversation-resume').open) || !button || button.disabled || state.actionBusy) return;
   const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
-  const session = task.sessions.codex;
   const key = document.querySelector('#conversation-resume').dataset.target;
   const params = { workspaceTaskId: task.id,
     ...(!automatic ? { conversationId: document.querySelector('#conversation-id').value.trim() } : {}) };
-  if (operation === 'confirm') Object.assign(params, { confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
-  else params.language = localeCode();
+  params.language = localeCode();
   const current = () => projectId === state.projectId && epoch === state.projectEpoch && task.id === state.selectedId;
   setBusy(true); state.conversationActionTarget = key; renderConversationResume();
   let failed = false;
   try {
-    await postAction(operation === 'confirm' ? 'workspaceTaskConfirmConversation' : 'workspaceTaskResume', params, projectId);
+    await postAction('workspaceTaskResume', params, projectId);
     if (current()) await refresh();
   } catch (error) {
     failed = true;
@@ -1367,7 +1375,7 @@ async function conversationTaskAction(operation, { automatic = false } = {}) {
   } finally {
     state.conversationActionTarget = null;
     if (current()) {
-      setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask();
+      setBusy(false); renderSelectedTask();
       if (automatic && (failed || state.selectedTask.resume?.state === 'FAILED')) openConversationResume();
     }
   }
@@ -1380,10 +1388,14 @@ function renderSelectedTask() {
   changesDrawer.updateContext();
   const workspaceHeading = document.querySelector('#workspace-heading');
   const taskHeading = document.querySelector('#task-heading');
-  const taskActions = document.querySelector('#task-toolbar-actions');
   if (workspaceHeading) workspaceHeading.hidden = Boolean(state.selectedTask);
   if (taskHeading) taskHeading.hidden = !state.selectedTask;
-  if (taskActions) taskActions.hidden = !state.selectedTask;
+  const closeAll = document.querySelector('#close-all-terminals-button');
+  if (closeAll) {
+    closeAll.disabled = state.actionBusy || !state.projectId;
+    closeAll.title = t('task.closeAll');
+    closeAll.setAttribute('aria-label', t('task.closeAll'));
+  }
   const zenButton = document.querySelector('#zen-button');
   if (zenButton) zenButton.disabled = !state.selectedTask;
   if (!state.selectedTask && document.body.classList.contains('zen-mode')) setZenMode(false);
@@ -1402,8 +1414,6 @@ function renderSelectedTask() {
   if (empty) empty.hidden = true;
   if (panel) panel.hidden = false;
   const task = state.selectedTask;
-  const modeBadge = document.querySelector('#selected-task-mode');
-  if (modeBadge) modeBadge.textContent = t(task.mode === 'custom' ? 'custom.customBadge' : 'custom.defaultBadge');
   const title = document.querySelector('#selected-task-title');
   const status = document.querySelector('#selected-task-status');
   const collaboration = document.querySelector('#selected-task-cooperation');
@@ -1439,7 +1449,13 @@ function renderSelectedTask() {
     error.textContent = message ? `${t('task.error')}: ${bounded(message)}` : '';
   }
   const close = document.querySelector('#close-task-button');
-  if (close) close.disabled = state.actionBusy || statusKey(task.status) === 'closed';
+  if (close) {
+    const closed = statusKey(task.status) === 'closed';
+    close.hidden = closed;
+    close.disabled = state.actionBusy || closed;
+    close.title = closed ? statusLabel(task.status) : t('task.close');
+    close.setAttribute('aria-label', closed ? statusLabel(task.status) : `${statusLabel(task.status)} · ${t('task.close')}`);
+  }
 
   const panes = selectTerminalPanes({ workspaceTask: task });
   const grid = document.querySelector('#agent-terminal-grid');
@@ -2222,6 +2238,7 @@ async function createTask(event) {
 
 async function closeTask() {
   if (!state.selectedId || state.actionBusy) return;
+  if (!window.confirm(t('task.closeConfirm').replace('{title}', state.selectedTask?.title || state.selectedId))) return;
   setBusy(true);
   try {
     await postAction('workspaceTaskClose', { workspaceTaskId: state.selectedId });
@@ -2238,13 +2255,14 @@ async function closeTask() {
 }
 
 async function closeAllTerminals() {
-  if (state.actionBusy) return;
+  if (state.actionBusy || !state.projectId) return;
+  if (!window.confirm(t('task.closeAllConfirm'))) return;
   setBusy(true);
   try {
     const tasks = await fetchJson('/api/workspace-tasks');
     const failures = [];
     for (const task of tasks) {
-      if (task.status === 'closed') continue;
+      if (statusKey(task.status) === 'closed') continue;
       try { await postAction('workspaceTaskClose', { workspaceTaskId: task.id }); }
       catch (error) { failures.push(`${task.id}: ${error.payload?.error?.message || error.message}`); }
     }
@@ -2431,6 +2449,7 @@ function bindEvents() {
     catch { showToast(t('terminal.inputError'), 'error'); }
   });
   document.querySelector('#codex-model')?.addEventListener('change', () => renderEffortChoices());
+  document.querySelector('#antigravity-permissions')?.addEventListener('change', updateAntigravityPermissionsWarning);
   document.querySelector('#terminal-settings-button')?.addEventListener('click', () => void openSettings());
   document.querySelector('#terminal-settings-close')?.addEventListener('click', closeSettings);
   document.querySelector('#terminal-settings-cancel')?.addEventListener('click', closeSettings);
@@ -2463,14 +2482,11 @@ function bindEvents() {
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
   document.querySelector('#conversation-resume-open')?.addEventListener('click', () => void reopenConversationTask());
-  document.querySelector('#conversation-confirm-open')?.addEventListener('click', openConversationResume);
   for (const id of ['conversation-resume-close', 'conversation-resume-dismiss']) document.querySelector(`#${id}`)?.addEventListener('click', () => closeConversationResume());
   document.querySelector('#conversation-resume')?.addEventListener('cancel', event => { event.preventDefault(); closeConversationResume(); });
   document.querySelector('#conversation-resume')?.addEventListener('click', event => { if (event.target.id === 'conversation-resume') closeConversationResume(); });
-  document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction('resume'));
-  document.querySelector('#conversation-confirm-button')?.addEventListener('click', () => conversationTaskAction('confirm'));
+  document.querySelector('#conversation-resume-button')?.addEventListener('click', () => conversationTaskAction());
   document.querySelector('#conversation-id')?.addEventListener('input', renderConversationResume);
-  document.querySelector('#conversation-manual-check')?.addEventListener('change', renderConversationResume);
   document.querySelector('#close-all-terminals-button')?.addEventListener('click', closeAllTerminals);
   document.querySelector('#lang-zh')?.addEventListener('click', () => setLocale('zh'));
   document.querySelector('#lang-en')?.addEventListener('click', () => setLocale('en'));

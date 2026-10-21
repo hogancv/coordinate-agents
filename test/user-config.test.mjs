@@ -281,6 +281,11 @@ test('exact command contract: defaults, precedence, and agy argument templates a
   assert.deepEqual(agyDefaults.args, ['--dangerously-skip-permissions']);
   assert.equal(agyDefaults.argsSource, 'adapter-default');
 
+  const agyOptOut = resolveAgentConfig({ id: 'antigravity', adapter: 'antigravity-cli', args: [] });
+  assert.equal(agyOptOut.command, 'agy');
+  assert.deepEqual(agyOptOut.args, []);
+  assert.equal(agyOptOut.argsSource, 'project');
+
   const codexDefaults = resolveAgentConfig({ id: 'codex', adapter: 'codex-cli' });
   assert.equal(codexDefaults.command, 'codex');
   assert.equal(codexDefaults.commandSource, 'adapter-default');
@@ -355,10 +360,16 @@ test('agy-proxy and agy templates launch with exactly their own arguments', () =
   assert.deepEqual(incompleteSession.args, ['--prompt-interactive=']);
   assert.equal(incompleteSession.initialInputConsumed, false);
 
-  // Default Adapter surface (no user args) still yields agy's interactive form.
+  // Default Adapter surface (no user args) yields agy's interactive form with default auto-approve.
   const defaulted = getAdapter('antigravity-cli', { id: 'antigravity', command: process.execPath });
   const launch = defaulted.resolveLaunch({ prompt: 'Implement feature' });
   assert.deepEqual(launch.args, ['--dangerously-skip-permissions', '--prompt-interactive', 'Implement feature']);
+
+  const autoApproved = getAdapter('antigravity-cli', { id: 'antigravity', command: process.execPath, args: ['--dangerously-skip-permissions'] });
+  assert.deepEqual(autoApproved.resolveLaunch({ prompt: 'Implement feature' }).args, ['--dangerously-skip-permissions', '--prompt-interactive', 'Implement feature']);
+
+  const optedOut = getAdapter('antigravity-cli', { id: 'antigravity', command: process.execPath, args: [] });
+  assert.deepEqual(optedOut.resolveLaunch({ prompt: 'Implement feature' }).args, ['--prompt-interactive', 'Implement feature']);
 });
 
 test('test-runner discovery of the registration fixture never writes the real user config', () => {

@@ -21,7 +21,8 @@ export function validateWorkspaceResume(value) {
   return { schemaVersion: 1, conversationId: codexConversationId(value.conversationId), state: value.state,
     verification: verification ? { mode: 'MANUAL', sessionId: verification.sessionId,
       runtimeGeneration: validateRuntimeGeneration(verification.runtimeGeneration), confirmedAt: verification.confirmedAt } : null,
-    interruption: interruption ? { roundId: interruption.roundId, revision: interruption.revision, status: interruption.status } : null };
+    interruption: interruption ? { roundId: interruption.roundId, revision: interruption.revision, status: interruption.status } : null,
+    ...(value.token ? { token: `${value.token}` } : {}) };
 }
 
 export function manualConfirmationCurrent(record, session) {
@@ -33,11 +34,13 @@ export function manualConfirmationCurrent(record, session) {
 }
 
 export function resumeStateFromSessions(record, codex, executor) {
-  if (!currentActiveSlot(record, 'codex', codex)) return 'FAILED';
-  if (!currentActiveSlot(record, 'antigravity', executor) || record.startup?.slots.antigravity !== 'READY') return 'PARTIAL';
-  return manualConfirmationCurrent(record, codex) ? 'READY' : 'AWAITING_CONFIRMATION';
+  if (record.nativeConversations?.codex?.firstConflict || !currentActiveSlot(record, 'codex', codex)) return 'FAILED';
+  if (!currentActiveSlot(record, 'antigravity', executor)
+    || record.startup?.slots.codex !== 'READY' || record.startup?.slots.antigravity !== 'READY') return 'PARTIAL';
+  return 'READY';
 }
 
+// AWAITING_CONFIRMATION remains readable for tasks saved by earlier versions.
 // Presentation is derived from this read's facts; durable recovery/confirmation
 // history is retained even when a process exits between lifecycle operations.
 export function workspaceResumeView(record, codex, executor) {

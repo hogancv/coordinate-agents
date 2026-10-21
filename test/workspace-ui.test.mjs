@@ -19,6 +19,65 @@ function healthContext(globals = {}) {
   return runFunctions('healthTerminal', 'renderLocale', { isActiveTerminalSession, ...globals });
 }
 
+function closeContext(confirmed) {
+  const calls = [], prompts = [];
+  const state = { selectedId: 'workspace-one', projectId: 'project-one', actionBusy: false,
+    selectedTask: { id: 'workspace-one', title: 'Fix terminal layout' } };
+  const context = vm.createContext({
+    state, window: { confirm(message) { prompts.push(message); return confirmed; } },
+    t: key => key === 'task.closeConfirm' ? 'Close {title}?' : key,
+    statusKey: status => String(status).toLowerCase(),
+    setBusy(busy) { state.actionBusy = busy; },
+    async postAction(action, params) { calls.push({ action, id: params.workspaceTaskId }); },
+    async fetchJson() { calls.push({ read: true }); return [
+      { id: 'workspace-one', status: 'RUNNING' }, { id: 'workspace-two', status: 'ERROR' },
+      { id: 'workspace-closed', status: 'CLOSED' },
+    ]; },
+    async refresh() {}, showToast() {}, renderTaskList() {}, renderSelectedTask() {},
+  });
+  vm.runInContext(app.slice(app.indexOf('async function closeTask('), app.indexOf('function setLocale(')), context);
+  return { context, state, calls, prompts };
+}
+
+test('canceling either close confirmation leaves terminals untouched and does not load tasks', async () => {
+  for (const operation of ['closeTask', 'closeAllTerminals']) {
+    const { context, state, calls, prompts } = closeContext(false);
+    await context[operation]();
+    assert.equal(prompts.length, 1, operation);
+    assert.deepEqual(calls, [], operation);
+    assert.equal(state.actionBusy, false, operation);
+  }
+});
+
+test('confirming task closure names the selected task and closes it once', async () => {
+  const { context, state, calls, prompts } = closeContext(true);
+  await context.closeTask();
+  assert.equal(prompts.length, 1);
+  assert.ok(prompts[0].includes('Fix terminal layout'));
+  assert.deepEqual(calls, [{ action: 'workspaceTaskClose', id: 'workspace-one' }]);
+  assert.equal(state.actionBusy, false);
+});
+
+test('confirming bulk closure closes open tasks once and skips already closed tasks', async () => {
+  const { context, state, calls, prompts } = closeContext(true);
+  await context.closeAllTerminals();
+  assert.equal(prompts.length, 1);
+  assert.deepEqual(calls, [{ read: true },
+    { action: 'workspaceTaskClose', id: 'workspace-one' },
+    { action: 'workspaceTaskClose', id: 'workspace-two' }]);
+  assert.equal(state.actionBusy, false);
+});
+
+test('busy close actions never prompt and bulk closure without a project does nothing', async () => {
+  const { context, state, calls, prompts } = closeContext(true);
+  state.actionBusy = true;
+  await context.closeTask(); await context.closeAllTerminals();
+  state.actionBusy = false; state.projectId = null;
+  await context.closeAllTerminals();
+  assert.deepEqual(prompts, []);
+  assert.deepEqual(calls, []);
+});
+
 test('health treats unknown sign-in and unstarted PTY as neutral, but notices live fallback', () => {
   const state = { health: { checks: Object.fromEntries(['node', 'git', 'codex', 'antigravity'].map(id => [id, { status: 'ok', authenticated: 'unknown' }])) }, tasks: [] };
   const context = healthContext({ state });

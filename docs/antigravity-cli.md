@@ -57,10 +57,11 @@ failure with a bounded stdout/stderr tail.
 
 ## Permission and sandbox arguments
 
-Current source defaults Antigravity arguments to `--dangerously-skip-permissions`,
-so new launches automatically approve tool permission requests, including file
-writes and command execution. The executable field remains `agy` (or its exact
-override); the flag is passed separately as an argument, not shell text.
+Workspace settings support choosing Antigravity tool permission mode: standard prompt mode
+(default) or auto-approval via `--dangerously-skip-permissions`. In auto-approval mode,
+launches automatically approve tool permission requests, including file writes and command
+execution. The executable field remains `agy` (or its exact override); arguments are
+passed separately as an array, not shell text.
 
 Explicit project arguments take precedence over user arguments, which take
 precedence over this default. An explicit `args: []` opts out. Existing configured

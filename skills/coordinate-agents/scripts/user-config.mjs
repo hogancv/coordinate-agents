@@ -24,7 +24,9 @@ const ADAPTER_DEFAULT_COMMANDS = Object.freeze({
   'antigravity-cli': 'agy',
 });
 const ADAPTER_DEFAULT_ARGS = Object.freeze({
-  'antigravity-cli': Object.freeze(['--dangerously-skip-permissions']),
+  'antigravity-cli': Object.freeze([
+    '--dangerously-skip-permissions',
+  ]),
 });
 
 function optionsWithHome(options) {

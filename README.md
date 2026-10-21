@@ -19,8 +19,8 @@ on your machine. Each agent uses its own CLI configuration and provider login.
 Install **Node.js >=18** and **Git**, plus the agent CLIs you want to use.
 For Default Collaboration, make sure `codex` and `agy` work and are signed in
 before creating a task. Coordinate Agents does not install the agent CLIs.
-Current source starts Antigravity with `--dangerously-skip-permissions` by default
-to auto-approve tool permission requests; explicit saved arguments take precedence.
+Workspace settings allow choosing Antigravity tool permission mode (prompting
+by default, or auto-approving via `--dangerously-skip-permissions`); saved project arguments take precedence.
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000

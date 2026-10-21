@@ -199,14 +199,14 @@ installed `claude` executable and `claude --help`, register it with `generic-cli
 show me the resolved configuration. Do not start until I confirm.
 ```
 
-Current source defaults Antigravity arguments to `--dangerously-skip-permissions`,
-with explicit saved argument arrays taking precedence. The published npm 2.4.0
-runtime still requires the explicit permission configuration shown below. The legacy
+Workspace settings support choosing Antigravity tool permission mode (prompting by default,
+or auto-approving via `--dangerously-skip-permissions`), with explicit saved argument arrays taking precedence.
+The published npm 2.4.0 runtime requires the explicit permission configuration shown below. The legacy
 one-shot path passes configured `args` and then adds `--prompt-interactive <prompt>`; a persistent
 Session starts with `--prompt-interactive=` for current `agy` parsers, then writes its
 first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
-`--dangerously-skip-permissions` and the user explicitly wants it, set
-`agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
+`--dangerously-skip-permissions` and the user explicitly wants it, configure that argument in Workspace
+settings or set `agent.antigravity.args` with `config set`; `config list` shows the saved user arguments, while
 `doctor` checks the executable/version only.
 
 If a Windows PowerShell proxy reports `flag needs an argument: -prompt-interactive`,
