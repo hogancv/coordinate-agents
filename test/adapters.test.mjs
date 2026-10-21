@@ -173,7 +173,7 @@ test('Antigravity persistent sessions encode the empty prompt in one argument', 
     language: 'en',
   });
 
-  assert.deepEqual(resolved.args, ['--prompt-interactive=']);
+  assert.deepEqual(resolved.args, ['--dangerously-skip-permissions', '--prompt-interactive=']);
   assert.equal(resolved.initialInputConsumed, false);
 });
 
@@ -223,7 +223,7 @@ test('Antigravity empty prompt survives Windows PowerShell proxy forwarding', { 
       env: { ...process.env, CA_ARGV_NODE: process.execPath, CA_ARGV_PROBE: capture },
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout.trim()), ['--prompt-interactive=']);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), ['--dangerously-skip-permissions', '--prompt-interactive=']);
     assert.equal(launch.initialInputConsumed, false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
