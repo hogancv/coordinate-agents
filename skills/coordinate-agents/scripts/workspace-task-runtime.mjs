@@ -467,9 +467,11 @@ function readWorkspaceTaskRecord(root, id) {
 export function listWorkspaceTaskRecords(root) {
   const { directory, repository } = workspaceTaskDirectory(root);
   if (!existsSync(directory)) return [];
+  // Performance optimization: Avoid redundant filename .sort() before .map(),
+  // and use direct string comparison for ISO timestamps to avoid string allocations
+  // and localeCompare overhead during record sorting.
   return readdirSync(directory)
     .filter(name => name.endsWith('.json'))
-    .sort()
     .map(name => {
       const path = join(directory, name);
       try {
@@ -479,7 +481,7 @@ export function listWorkspaceTaskRecords(root) {
         throw normalizeRuntimeError(error, 'WORKSPACE_TASK_STATE_CONFLICT');
       }
     })
-    .sort((left, right) => `${right.updatedAt}`.localeCompare(`${left.updatedAt}`));
+    .sort((left, right) => (right.updatedAt > left.updatedAt ? 1 : (right.updatedAt < left.updatedAt ? -1 : 0)));
 }
 
 function normalizeLanguage(language) {
