@@ -122,6 +122,7 @@ test('missing explicit command fails closed, records ERROR, and never falls back
     assert.match(launch.stderr, /Implementer unavailable/);
     assert.match(launch.stderr, /COMMAND_NOT_FOUND/);
     assert.match(launch.stderr, /nonexistent-agent/);
+    assert.match(launch.stderr, /config set agent\.antigravity\.command agy(?:\r?\n|$)/);
     assert.equal(state(repository).states.antigravity.state, 'ERROR');
     const artifacts = readdirSync(join(repository, '.agent-bus', 'logs')).filter(name => name.endsWith('.json'));
     assert.ok(artifacts.length >= 1);

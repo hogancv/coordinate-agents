@@ -156,6 +156,8 @@
               <div class="timeline-content">
                 <div class="timeline-controls"><label id="timeline-filter-label" for="timeline-round">Round</label><select id="timeline-round"></select></div>
                 <p id="timeline-note" class="timeline-note"></p>
+                <button id="timeline-more" class="secondary-button" type="button" hidden>Load earlier events</button>
+                <p id="timeline-error" class="timeline-note" role="status" hidden></p>
                 <ol id="timeline-events" class="timeline-events" aria-label="Collaboration events" tabindex="0"></ol>
                 <p id="timeline-empty" class="timeline-note"></p>
               </div>
@@ -284,7 +286,7 @@
                   <span class="settings-hint" data-i18n="settings.antigravityPermissions">Default arguments include --dangerously-skip-permissions to auto-approve tool permission requests. Explicit saved arguments take precedence.</span>
                 </label>
               </div>
-              <p class="settings-hint" data-i18n="settings.hint">Enter an executable name or absolute path, such as agy-proxy. Do not include shell arguments.</p>
+              <p class="settings-hint" data-i18n="settings.hint">Use codex and agy, or enter an executable name or absolute path. Do not include shell arguments.</p>
             </form>
             <section class="archive-settings">
               <h3 id="archive-settings-title" data-i18n="archive.title">Archived conversations</h3>

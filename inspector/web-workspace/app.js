@@ -82,6 +82,7 @@ const state = {
 
 const collaborationTimeline = mountCollaborationTimeline({ document, t,
   getContext: () => ({ projectId: state.projectId, selectedId: state.selectedId, task: state.selectedTask }),
+  loadPage: ({ projectId, taskId, historyPage }) => fetchJson(`/api/workspace-tasks/${encodeURIComponent(taskId)}?historyPage=${historyPage}`, { projectId }),
   onResize: () => updateTerminalLayout(),
 });
 

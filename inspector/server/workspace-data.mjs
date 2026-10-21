@@ -191,7 +191,7 @@ export function createWorkspaceData(root) {
         sessions: tasks.filter(task => !task.archivedAt && task.status !== 'CLOSED').flatMap(task => Object.values(task.sessions)) });
     },
     readWorkspaceTasks: () => readWorkspaceTasks(repository),
-    readWorkspaceTask: id => readWorkspaceTask(repository, id),
+    readWorkspaceTask: (id, options) => readWorkspaceTask(repository, id, options),
     async readSessionOutput(sessionId, options) {
       await assertWorkspaceSession({ root: repository, sessionId });
       return readSessionOutput(repository, sessionId, options);

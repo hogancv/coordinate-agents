@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, readdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { dispatchWorkspaceTask, reportWorkspaceTask, readWorkspaceTask, readWorkspaceTasks, validateWorkspaceTaskRecord } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
+import { spawn, spawnSync } from 'node:child_process';
+import { dispatchWorkspaceTask, reportWorkspaceTask, readWorkspaceTask, readWorkspaceTasks, validateWorkspaceTaskRecord, runtimeWorkspaceArchivesClear } from '../skills/coordinate-agents/scripts/workspace-task-runtime.mjs';
 import { startWorkspace } from './support/workspace-server.mjs';
 
 function fixture(t, id = 'workspace-timeline123') {
@@ -24,6 +24,118 @@ function fixture(t, id = 'workspace-timeline123') {
 const quiet = { notify: () => {} };
 const report = (f, status, round = 'round-first', summary = '') => reportWorkspaceTask(f.root, f.id, status, round, summary, quiet);
 const history = async f => (await readWorkspaceTask(f.root, f.id)).collaborationEvents;
+
+function seedHistory(f, count) {
+  const statuses = ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'CHANGES_REQUESTED'];
+  const events = Array.from({ length: count }, (_, i) => ({ taskId: f.id, roundId: `round-${Math.floor(i / 5)}`,
+    revision: i * 2 + 1, timestamp: '2026-10-16T00:00:00Z', status: statuses[i % 5],
+    fromStatus: i ? statuses[(i - 1) % 5] : 'IDLE', agent: [1, 2].includes(i % 5) ? 'antigravity' : 'codex', summary: `Event ${i}` }));
+  const last = events.at(-1);
+  writeFileSync(f.file, JSON.stringify({ ...f.record, collaborationEvents: events,
+    cooperation: { status: last.status, roundId: last.roundId, revision: last.revision, summary: last.summary, updatedAt: last.timestamp } }));
+  return events;
+}
+
+test('long legacy histories migrate to bounded pages without losing events or revision gaps', async t => {
+  const f = fixture(t), original = seedHistory(f, 390);
+  await dispatchWorkspaceTask(f.root, f.id, 'round-next', async () => {});
+  await report(f, 'WORKING', 'round-next');
+  await report(f, 'WORKING', 'round-next', 'Progress only');
+  await report(f, 'DONE', 'round-next');
+  const recent = await readWorkspaceTask(f.root, f.id);
+  assert.ok(recent.collaborationEvents.length <= 128, 'normal reads must carry bounded history');
+  assert.equal(recent.cooperation.revision, 783, 'migration cannot reset or renumber revisions');
+  assert.deepEqual(recent.collaborationHistory, { archivedEvents: 384, previousPage: 3 });
+  const pages = [];
+  for (let page = recent.collaborationHistory.previousPage; page; ) {
+    const value = await readWorkspaceTask(f.root, f.id, { historyPage: page });
+    assert.equal(value.collaborationEvents.length, 128);
+    pages.unshift(...value.collaborationEvents);
+    page = value.collaborationHistory.previousPage;
+  }
+  const all = [...pages, ...recent.collaborationEvents];
+  assert.deepEqual(all.slice(0, 390), original);
+  assert.deepEqual(all.slice(390).map(e => e.revision), [780, 781, 783]);
+  assert.ok(JSON.parse(readFileSync(f.file)).collaborationEvents.length <= 128);
+  assert.equal((await readWorkspaceTasks(f.root))[0].collaborationEvents, undefined);
+  await assert.rejects(readWorkspaceTask(f.root, f.id, { historyPage: 4 }), /page/i);
+  await assert.rejects(readWorkspaceTask(f.root, f.id, { historyPage: '../1' }), /page/i);
+  for (let i = 0; i < 2; i++) {
+    const server = await startWorkspace({ root: f.root, port: 0 });
+    try {
+      const response = await fetch(`${server.url.replace('localhost', '127.0.0.1')}/api/workspace-tasks/${f.id}?historyPage=1`,
+        { headers: { 'x-coordinate-agents-capability': server.capability } });
+      assert.equal(response.status, 200);
+      const value = await response.json(); assert.deepEqual(value.collaborationEvents, original.slice(0, 128));
+      assert.equal(value.collaborationHistory.previousPage, null);
+    } finally { await new Promise(done => { server.server.close(done); server.server.closeAllConnections?.(); }); }
+  }
+});
+
+test('failed Task commits cannot publish archive pages and a retry preserves all events once', async t => {
+  const f = fixture(t), original = seedHistory(f, 128), before = readFileSync(f.file, 'utf8');
+  const code = `
+    import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module';
+    const rename = fs.renameSync;
+    fs.renameSync = (from, to) => { if (to === process.argv[3]) throw Error('injected Task commit failure'); return rename(from, to); };
+    syncBuiltinESMExports();
+    const { reportWorkspaceTask } = await import(${JSON.stringify(new URL('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs', import.meta.url).href)});
+    try { await reportWorkspaceTask(process.argv[1], process.argv[2], 'REVIEWING', 'round-25', '', { notify: () => {} }); process.exitCode = 1; }
+    catch (error) { if (!error.message.includes('injected Task commit failure')) throw error; }
+  `;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', code, f.root, f.id, f.file], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr); assert.equal(readFileSync(f.file, 'utf8'), before);
+  assert.deepEqual(await history(f), original);
+  await assert.rejects(readWorkspaceTask(f.root, f.id, { historyPage: 1 }), /page/i);
+  await report(f, 'REVIEWING', 'round-25');
+  const recent = await readWorkspaceTask(f.root, f.id);
+  assert.equal(recent.collaborationEvents.length, 1);
+  assert.deepEqual((await readWorkspaceTask(f.root, f.id, { historyPage: 1 })).collaborationEvents, original);
+  assert.equal(recent.collaborationEvents[0].revision, 256);
+  assert.equal(recent.collaborationHistory.archivedEvents, 128);
+});
+
+test('normal reads skip archived pages, explicit paging rejects corruption and linked files, and clearing removes history', async t => {
+  const f = fixture(t); seedHistory(f, 390);
+  await dispatchWorkspaceTask(f.root, f.id, 'round-next', async () => {});
+  const directory = join(f.root, '.agent-bus/workspace-tasks/collaboration-history', f.id), pageFile = join(directory, '1.json');
+  assert.equal(readdirSync(directory).length, 3);
+  const page = readFileSync(pageFile, 'utf8');
+  writeFileSync(pageFile, 'corrupt');
+  assert.equal((await readWorkspaceTask(f.root, f.id)).collaborationHistory.archivedEvents, 384);
+  assert.equal((await readWorkspaceTasks(f.root)).length, 1, 'polling must not parse archived pages');
+  await assert.rejects(readWorkspaceTask(f.root, f.id, { historyPage: 1 }));
+  rmSync(pageFile); const outside = join(f.root, 'private.json'); writeFileSync(outside, page);
+  symlinkSync(outside, pageFile);
+  await assert.rejects(readWorkspaceTask(f.root, f.id, { historyPage: 1 }), /link|path/i);
+  const record = JSON.parse(readFileSync(f.file)); record.status = 'CLOSED'; record.archivedAt = '2026-10-16T00:00:00Z';
+  writeFileSync(f.file, JSON.stringify(record));
+  for (const session of Object.values(record.sessions)) {
+    const file = join(f.root, '.agent-bus/sessions', `${session.sessionId}.json`);
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file)), state: 'exited' }));
+  }
+  assert.equal((await runtimeWorkspaceArchivesClear({ root: f.root })).deletedTasks, 1);
+  assert.throws(() => readdirSync(directory), /ENOENT/);
+  assert.equal(readFileSync(outside, 'utf8'), page, 'history cleanup must never follow a linked page');
+});
+
+test('concurrent report processes cross an archive boundary without duplicating or replacing committed pages', async t => {
+  const f = fixture(t), original = seedHistory(f, 128);
+  const code = `import { reportWorkspaceTask } from ${JSON.stringify(new URL('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs', import.meta.url).href)};
+    await reportWorkspaceTask(process.argv[1], process.argv[2], 'REVIEWING', 'round-25', '', { notify: () => {} });`;
+  const child = () => new Promise((done, reject) => {
+    const process = spawn(globalThis.process.execPath, ['--input-type=module', '-e', code, f.root, f.id], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let error = ''; process.stderr.on('data', chunk => { error += chunk; }); process.on('error', reject);
+    process.on('exit', status => status === 0 ? done() : reject(Error(error)));
+  });
+  await Promise.all([child(), child(), child()]);
+  const pageFile = join(f.root, '.agent-bus/workspace-tasks/collaboration-history', f.id, '1.json');
+  const before = readFileSync(pageFile, 'utf8');
+  assert.deepEqual((await readWorkspaceTask(f.root, f.id, { historyPage: 1 })).collaborationEvents, original);
+  assert.deepEqual((await history(f)).map(event => [event.status, event.revision]), [['REVIEWING', 256]]);
+  await report(f, 'APPROVED', 'round-25');
+  assert.equal(readFileSync(pageFile, 'utf8'), before, 'later receipts must not rewrite committed history pages');
+});
 
 test('formal transitions persist atomically with revisions, keep rework rounds and survive fresh processes', async t => {
   const f = fixture(t);

@@ -8,6 +8,44 @@ const task = (status, age = 31) => ({ id: 'task1', mode: 'default', status: 'RUN
   sessions: { codex: { sessionId: 'c1', state: 'idle' }, antigravity: { sessionId: 'a1', state: 'busy' } } });
 const health = value => collaborationHealth(value, { now });
 
+test('session evidence requires the current repository in both task detail and list views', async t => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { readWorkspaceTask, readWorkspaceTasks } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'health-ownership-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const foreign = join(root, 'copied-project');
+  for (const directory of ['workspace-tasks', 'sessions', 'tmp']) mkdirSync(join(root, '.agent-bus', directory), { recursive: true });
+  mkdirSync(join(foreign, '.agent-bus'), { recursive: true });
+  const id = 'workspace-ownership123';
+  for (const mode of ['default', 'custom']) {
+    const slots = mode === 'custom' ? ['terminal1', 'terminal2'] : ['codex', 'antigravity'];
+    const sessions = Object.fromEntries(slots.map((slot, i) => [slot, { slot, agent: mode === 'custom' ? 'workspace-custom' : slot,
+      role: mode === 'custom' ? 'custom' : i ? 'implementer' : 'planner-reviewer', sessionId: `session_ownership${i}` }]));
+    const record = { schemaVersion: 1, id, mode, title: 'Ownership', status: 'RUNNING', promptVersion: 'test',
+      createdAt: '2026-10-16T00:00:00Z', updatedAt: '2026-10-16T00:00:00Z', sessions,
+      ...(mode === 'custom' ? { custom: { terminal1: { command: 'codex' }, terminal2: { command: 'agy' }, prompts: { project: '', terminal1: '', terminal2: '' } } }
+        : { cooperation: { status: 'WORKING', roundId: 'round-one', revision: 2, summary: '', updatedAt: new Date(now).toISOString() } }) };
+    writeFileSync(join(root, '.agent-bus/workspace-tasks', `${id}.json`), JSON.stringify(record));
+    for (const [slot, session] of Object.entries(sessions)) writeFileSync(join(root, '.agent-bus/sessions', `${session.sessionId}.json`), JSON.stringify({
+      id: session.sessionId, command: 'unused', cwd: root, taskId: id, agent: session.agent, subtaskId: slot, state: 'running' }));
+    const session = sessions[slots[1]], file = join(root, '.agent-bus/sessions', `${session.sessionId}.json`);
+    for (const cwd of [foreign, join(root, 'missing'), '', null, {}, root]) {
+      for (const state of ['running', 'failed']) {
+        writeFileSync(file, JSON.stringify({ id: session.sessionId, command: 'unused', cwd, taskId: id, agent: session.agent, subtaskId: session.slot, state }));
+        for (const view of [await readWorkspaceTask(root, id), (await readWorkspaceTasks(root))[0]]) {
+          const available = cwd === root, shown = view.sessions[slots[1]];
+          assert.equal(shown.recordAvailable, available, `${mode}: ${JSON.stringify(cwd)}`);
+          assert.equal(shown.state, available ? state : null, 'foreign lifecycle data must not affect task status');
+          assert.equal(view.status, available && state === 'running' ? 'RUNNING' : 'DEGRADED');
+          const signal = health(view).signals.find(s => s.kind === 'session');
+          assert.equal(signal?.sessionState, available ? state === 'failed' ? 'failed' : undefined : 'unavailable');
+        }
+      }
+    }
+  }
+});
+
 test('dispatch, execution and review silence are distinct observations, never failures', () => {
   for (const [status, kind, agent] of [['SENT', 'awaiting-start', 'antigravity'], ['WORKING', 'quiet', 'antigravity'], ['DONE', 'awaiting-review', 'codex'], ['REVIEWING', 'quiet', 'codex'], ['CHANGES_REQUESTED', 'awaiting-dispatch', 'codex']]) {
     const value = task(status); const before = structuredClone(value);
@@ -244,4 +282,41 @@ test('health navigation hands keyboard focus to visible Changes and terminal con
   context.inspectCollaborationHealth('terminal', 'codex');
   assert.equal(document.activeElement, document.querySelector('#terminal'));
   assert.equal(terminalFocus, 1); assert.equal(layouts, 0, 'viewing an already focused terminal must not toggle its layout');
+});
+
+
+test('resume confirmation does not trust a Session record from a different repository', async t => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, readFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { readWorkspaceTask, readWorkspaceTasks } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'resume-cwd-evidence-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const directory of ['workspace-tasks', 'sessions', 'tmp']) mkdirSync(join(root, '.agent-bus', directory), { recursive: true });
+  const foreign = join(root, 'other-project'); mkdirSync(join(foreign, '.agent-bus'), { recursive: true });
+  const id = 'workspace-resumeownership123', stamp = '2026-10-21T00:00:00Z';
+  const sessions = Object.fromEntries(['codex', 'antigravity'].map((slot, index) => [slot, {
+    slot, agent: slot, role: index ? 'implementer' : 'planner-reviewer', sessionId: `session_resumeownership${index}`,
+    runtimeGeneration: `019a0000-0000-7000-8000-00000000000${index + 2}`,
+  }]));
+  const record = { schemaVersion: 1, id, title: 'Resume ownership', mode: 'default', status: 'RUNNING',
+    createdAt: stamp, updatedAt: stamp, promptVersion: 'test', sessions,
+    resume: { schemaVersion: 1, conversationId: '019a0000-0000-7000-8000-000000000001', state: 'READY',
+      verification: { mode: 'MANUAL', sessionId: sessions.codex.sessionId, runtimeGeneration: sessions.codex.runtimeGeneration, confirmedAt: stamp } } };
+  const taskFile = join(root, '.agent-bus', 'workspace-tasks', `${id}.json`);
+  writeFileSync(taskFile, JSON.stringify(record));
+  for (const session of Object.values(sessions)) writeFileSync(join(root, '.agent-bus', 'sessions', `${session.sessionId}.json`), JSON.stringify({
+    id: session.sessionId, command: 'unused', cwd: root, taskId: id, agent: session.agent, subtaskId: session.slot,
+    runtimeGeneration: session.runtimeGeneration, state: 'running' }));
+  assert.equal((await readWorkspaceTask(root, id)).sessions.codex.nativeIdentity.verification.state, 'MANUAL_CONFIRMED');
+  const codex = sessions.codex;
+  writeFileSync(join(root, '.agent-bus', 'sessions', `${codex.sessionId}.json`), JSON.stringify({
+    id: codex.sessionId, command: 'unused', cwd: foreign, taskId: id, agent: codex.agent, subtaskId: codex.slot,
+    runtimeGeneration: codex.runtimeGeneration, state: 'running' }));
+  const before = readFileSync(taskFile, 'utf8');
+  for (const view of [await readWorkspaceTask(root, id), (await readWorkspaceTasks(root))[0]]) {
+    assert.equal(view.sessions.codex.recordAvailable, false);
+    assert.equal(view.sessions.codex.nativeIdentity.verification.state, 'UNAVAILABLE');
+    assert.equal(view.resume.state, 'FAILED');
+  }
+  assert.equal(readFileSync(taskFile, 'utf8'), before);
 });
