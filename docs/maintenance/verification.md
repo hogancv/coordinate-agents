@@ -10,7 +10,7 @@ Local verification completed on 2026-10-22 (Asia/Shanghai). Baseline source: `13
 | Built link/asset crawler | 4,656 local references, zero errors |
 | Legacy compatibility | 47 original routes, 371 captured live heading IDs, zero errors |
 | Full paired root content | 17 complete English/Chinese pairs; reciprocal heading targets checked |
-| Related repository regression | Documentation, repository layout, release workflow, Web distribution: 37 passed |
+| Related repository regression | Documentation, repository layout, release workflow, Web distribution and Pages/Adapter acceptance gate: 40 passed |
 | npm payload check | Dry-run: 60 files, no VitePress/tooling/new docs included; root manifest/lockfile unchanged |
 | Action pin verification | checkout/setup-node/upload-pages-artifact/deploy-pages commits resolved through `gh api`; deploy-pages v4.0.5 uses `d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e` |
 | Independent review | Recovery translation omissions corrected; literal code placeholder rendering corrected; final follow-up found no remaining blockers |
@@ -33,3 +33,11 @@ Remaining full translations: 27 Chinese detailed technical/history pages and 3 E
 Publication was authorized and completed: `main` received commit `0dd998af23060585c124613b58c1fd8ef87d53f6`; Pages Source changed from legacy `main:/docs` to `workflow`, retaining the domain and HTTPS. [Pages build/deploy run 39632155635](https://github.com/hogancv/coordinate-agents/actions/runs/39632155635) succeeded, and both remote homepages report VitePress 1.6.4 with the correct language and canonical URLs.
 
 The first remote Legacy CI run exposed an existing Pages assertion hardcoded to require Jekyll and forbid deployment. That obsolete assertion was reproduced locally and updated to verify pinned VitePress build/deploy actions and main-only deployment. This follow-up changes the documentation workflow test, not Adapter/CLI/runtime behavior. Final remote checks and follow-up CI run URLs are included in the task handoff.
+
+## Final live verification and dependency boundary
+
+The follow-up Pages deployment [39632616074](https://github.com/hogancv/coordinate-agents/actions/runs/39632616074) succeeded for `84648f6d13bdc0b63a1175df8e7c1ee17d8cb2c3`. Direct HTTP checks verified all 94 locale routes, 371 old anchors and 99 JavaScript/CSS resources with zero failures. Three representative live historical Markdown downloads matched the local source bytes exactly. Full results are preserved locally at `.test-results/docs-migration/live-verification.json`.
+
+The docs lockfile uses official `registry.npmjs.org` tarballs, retaining the exact versions and integrity hashes. The initial install inherited this machine's npm mirror; the lockfile is normalized so CI and Dependabot do not depend on that mirror. The user's global npm configuration is untouched.
+
+An official-registry audit of the stable VitePress 1.6.4 development dependency tree reports 3 affected package nodes (1 high, 2 moderate), with no compatible fix available in that stable dependency tree. The advisories concern Vite/esbuild development-server and editor-launch behavior; GitHub Pages serves static output and runs no Vite development server. Local development instructions bind to loopback. No unsupported dependency override or prerelease VitePress was introduced to hide the audit result. Application production dependencies and npm payload selection remain unchanged.
