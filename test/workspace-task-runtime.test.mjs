@@ -428,25 +428,22 @@ test('Workspace Task lifecycle creates an isolated pair, preserves history, and 
     assert.equal(closedAgain.workspaceTask.status, 'CLOSED');
     assert.ok(closedAgain.closedSessions.every(session => !ACTIVE.has(session.state)));
 
-    const restarted = await runtimeWorkspaceTaskRestart({ root, workspaceTaskId, language: 'zh-CN' });
-    assert.equal(restarted.workspaceTask.status, 'RUNNING');
-    assert.equal(restarted.workspaceTask.cooperation.status, 'IDLE');
-    assert.equal(restarted.workspaceTask.cooperation.roundId, null);
-    assert.equal(collaborationHealth(restarted.workspaceTask, { now: Date.now() + 3600000 }).signals.length, 0);
-    assert.deepEqual(restarted.workspaceTask.collaborationEvents, history);
-    assert.notEqual(restarted.workspaceTask.sessions.codex.sessionId, first.sessions.codex.sessionId);
-    assert.notEqual(restarted.workspaceTask.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
-    assert.notEqual(restarted.workspaceTask.sessions.codex.runtimeGeneration, first.sessions.codex.runtimeGeneration);
-    assert.equal(restarted.workspaceTask.sessions.codex.nativeIdentity.binding.conversationId, originalIdentity.conversationId);
+    // A fresh UUID would conflict with this immutable native binding. Refuse
+    // before replacing Sessions; native Resume owns reopening bound Tasks.
+    await assert.rejects(runtimeWorkspaceTaskRestart({ root, workspaceTaskId, language: 'zh-CN' }), /original conversation|new Task/i);
+    const retained = await readWorkspaceTask(root, workspaceTaskId);
+    assert.equal(retained.status, 'CLOSED');
+    assert.deepEqual(retained.collaborationEvents, history);
+    assert.deepEqual(retained.sessionHistory, closedAgain.workspaceTask.sessionHistory);
+    assert.equal(retained.sessions.codex.sessionId, first.sessions.codex.sessionId);
+    assert.equal(retained.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
+    assert.equal(retained.sessions.codex.nativeIdentity.binding.conversationId, originalIdentity.conversationId);
     await assert.rejects(identityStore.observe(identityAuthority.issue({ ...originalIdentity, observedAt: new Date().toISOString(),
-      sequence: 2, expectedRevision: 1 })), error => error.details?.reason === 'RUNTIME_MISMATCH');
-    assert.equal(restarted.workspaceTask.sessionHistory.length, 1);
-    assert.equal(restarted.workspaceTask.sessionHistory[0].codexSessionId, first.sessions.codex.sessionId);
-    assert.equal(restarted.workspaceTask.sessionHistory[0].antigravitySessionId, first.sessions.antigravity.sessionId);
+      sequence: 2, expectedRevision: 1 })), error => error.details?.reason === 'TASK_UNAVAILABLE');
 
     const saved = JSON.parse(readFileSync(join(root, '.agent-bus', 'workspace-tasks', `${workspaceTaskId}.json`), 'utf8'));
-    assert.equal(saved.sessions.codex.sessionId, restarted.workspaceTask.sessions.codex.sessionId);
-    assert.equal(saved.sessions.antigravity.sessionId, restarted.workspaceTask.sessions.antigravity.sessionId);
+    assert.equal(saved.sessions.codex.sessionId, first.sessions.codex.sessionId);
+    assert.equal(saved.sessions.antigravity.sessionId, first.sessions.antigravity.sessionId);
     assert.equal(saved.promptVersion, '2.3.0-web-lite-3');
     assert.equal((await readWorkspaceTask(root, workspaceTaskId)).id, workspaceTaskId);
   } finally {

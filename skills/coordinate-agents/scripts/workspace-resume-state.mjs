@@ -27,6 +27,7 @@ export function validateWorkspaceResume(value) {
 export function manualConfirmationCurrent(record, session) {
   const proof = record.resume?.verification;
   return Boolean(proof && record.status !== 'CLOSED' && !record.archivedAt
+    && !record.nativeConversations?.codex?.firstConflict
     && proof.sessionId === record.sessions.codex.sessionId && proof.runtimeGeneration === record.sessions.codex.runtimeGeneration
     && currentActiveSlot(record, 'codex', session));
 }

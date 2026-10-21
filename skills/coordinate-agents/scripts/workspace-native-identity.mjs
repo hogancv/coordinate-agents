@@ -93,8 +93,8 @@ function validateObservation(value) {
 }
 
 // This constructor is a trusted-code composition boundary, NOT a source registry
-// exposed to project configuration or RPC. No production verifier is installed in
-// v1. A future Host must authenticate its source before returning these claims.
+// exposed to project configuration or RPC. The owned Codex Host authenticates
+// its private native-event context before returning claims to this receiver.
 export function createNativeIdentityReceiver({ projectRoot, verifyAttestation, commit }) {
   requireValue(verifyAttestation === undefined || typeof verifyAttestation === 'function');
   return Object.freeze({
@@ -130,6 +130,7 @@ export function applyNativeIdentityObservation(task, session, value, allTasks) {
     requireValue(observation.sequence > last.sequence && observation.observedAt >= last.observedAt, 'OUT_OF_ORDER');
   }
   if (!previous) {
+    requireValue(slot !== 'codex' || !task.resume || task.resume.conversationId === observation.conversationId, 'RESUME_TARGET_MISMATCH');
     requireValue(!allTasks.some(other => other.id !== task.id && ((slot === 'codex' && other.resume?.conversationId === observation.conversationId)
       || Object.values(other.nativeConversations || {}).some(entry => entry.adapter === adapter && entry.binding.conversationId === observation.conversationId))), 'CONVERSATION_ALREADY_BOUND');
   }

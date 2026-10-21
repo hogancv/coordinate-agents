@@ -30,6 +30,7 @@ const REQUIRED_FILES = [
   'skills/coordinate-agents/scripts/workspace-notifications-windows.ps1',
   'skills/coordinate-agents/scripts/workspace-native-identity.mjs',
   'skills/coordinate-agents/scripts/codex-conversation.mjs',
+  'skills/coordinate-agents/scripts/codex-identity-capture.mjs',
   'skills/coordinate-agents/scripts/workspace-resume-state.mjs',
   ...['pty-runtime', 'session-host', 'session-manager', 'session-service', 'workspace-task-runtime', 'workspace-collaboration', 'workspace-custom-config', 'workspace-notification-config', 'workspace-notifications', 'workspace-message', 'workspace-git-changes', 'workspace-services', 'workspace-init', 'config', 'user-config', 'runtime-contract', 'runtime-events', 'workspace-role-prompts'].map(file => `skills/coordinate-agents/scripts/${file}.mjs`),
   ...['index', 'base', 'codex-cli', 'antigravity-cli', 'generic-cli', 'executable', 'contract-v1', 'trusted-local'].map(file => `skills/coordinate-agents/adapters/${file}.mjs`),

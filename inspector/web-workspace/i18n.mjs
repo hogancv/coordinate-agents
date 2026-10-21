@@ -2,6 +2,11 @@ export const I18N = {
   en: {
     "resume.title": "Resume Conversation",
     "resume.reopen": "Reopen task",
+    "identity.BOUND": "Conversation saved",
+    "identity.DISCOVERING": "Identifying conversation…",
+    "identity.MANUAL_AVAILABLE": "Automatic identity unavailable",
+    "identity.IDENTITY_CHANGED": "Conversation changed — collaboration blocked",
+    "resume.IDENTITY_CHANGED": "Conversation identity changed. Inspect the original Task binding before continuing.",
     "resume.pending": "Awaiting confirmation",
     "resume.close": "Close",
     "resume.backToTerminal": "Back to terminals",
@@ -309,6 +314,11 @@ export const I18N = {
   zh: {
     "resume.title": "继续对话",
     "resume.reopen": "重新开启任务",
+    "identity.BOUND": "对话已保存",
+    "identity.DISCOVERING": "正在识别对话…",
+    "identity.MANUAL_AVAILABLE": "自动识别不可用",
+    "identity.IDENTITY_CHANGED": "对话已切换，协作已阻止",
+    "resume.IDENTITY_CHANGED": "对话身份已改变，请检查此任务的原始绑定后再继续。",
     "resume.pending": "待确认",
     "resume.close": "关闭",
     "resume.backToTerminal": "回到终端",

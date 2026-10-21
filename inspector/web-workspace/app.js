@@ -1264,7 +1264,8 @@ function renderConversationResume() {
     closeConversationResume({ restoreFocus: false });
     panel.dataset.task = taskKey;
   }
-  reopen.hidden = !available || task.status !== 'CLOSED';
+  const recoverable = available && ['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  reopen.hidden = !recoverable;
   const pending = available && task.status !== 'CLOSED' && isActiveTerminalSession(session)
     && ['AWAITING_CONFIRMATION', 'PARTIAL'].includes(task.resume?.state);
   confirmEntry.hidden = !pending;
@@ -1276,6 +1277,14 @@ function renderConversationResume() {
   reopen.title = t('resume.reopen');
   reopen.setAttribute('aria-label', t('resume.reopen'));
   confirmEntry.textContent = t('resume.pending');
+  const identityStatus = document.querySelector('#conversation-identity-status');
+  if (identityStatus) {
+    const identity = session?.nativeIdentity;
+    identityStatus.hidden = !available || task.status === 'CLOSED';
+    const identityState = identity?.firstConflict ? 'IDENTITY_CHANGED' : identity?.binding ? 'BOUND'
+      : ['LISTENING', 'DISCOVERED'].includes(identity?.discovery?.state) ? 'DISCOVERING' : 'MANUAL_AVAILABLE';
+    identityStatus.textContent = t(`identity.${identityState}`);
+  }
   if (!available || (reopen.hidden && confirmEntry.hidden && !state.actionBusy)) {
     closeConversationResume({ restoreFocus: false });
     return;
@@ -1293,12 +1302,23 @@ function renderConversationResume() {
   if (controls) controls.hidden = !pending;
   const valid = /^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(field.value.trim());
   const resumeButton = document.querySelector('#conversation-resume-button');
-  resumeButton.disabled = state.actionBusy || !valid || !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
+  resumeButton.disabled = state.actionBusy || !valid || Boolean(session?.nativeIdentity?.firstConflict) || !recoverable;
   resumeButton.hidden = !['CLOSED', 'EXITED', 'DEGRADED', 'ERROR'].includes(task.status);
-  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || check.disabled || !check.checked;
+  document.querySelector('#conversation-confirm-button').disabled = state.actionBusy || !valid || Boolean(session?.nativeIdentity?.firstConflict) || check.disabled || !check.checked;
   const summary = document.querySelector('#conversation-resume-status');
-  const status = state.conversationActionTarget === key ? 'STARTING' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
+  const status = state.conversationActionTarget === key ? 'STARTING' : session?.nativeIdentity?.firstConflict ? 'IDENTITY_CHANGED' : task.resume?.state || (target ? 'CLOSED' : 'UNBOUND');
   summary.textContent = t(`resume.${status}`) + (task.resume?.interruption ? ` ${t('resume.interrupted')} (${task.resume.interruption.roundId})` : '');
+}
+
+async function reopenConversationTask() {
+  renderConversationResume();
+  if (state.actionBusy || document.querySelector('#conversation-resume-open').hidden) return;
+  const task = state.selectedTask;
+  const identity = task.sessions.codex?.nativeIdentity;
+  if (!identity?.firstConflict && (identity?.binding?.conversationId || task.resume?.conversationId)) {
+    return conversationTaskAction('resume', { automatic: true });
+  }
+  openConversationResume();
 }
 
 function openConversationResume() {
@@ -1324,26 +1344,32 @@ function closeConversationResume({ restoreFocus = true } = {}) {
   if (restoreFocus && trigger && !trigger.hidden && !trigger.disabled) trigger.focus();
 }
 
-async function conversationTaskAction(operation) {
+async function conversationTaskAction(operation, { automatic = false } = {}) {
   renderConversationResume();
   const button = document.querySelector(operation === 'confirm' ? '#conversation-confirm-button' : '#conversation-resume-button');
-  if (!document.querySelector('#conversation-resume').open || !button || button.disabled || state.actionBusy) return;
+  if ((!automatic && !document.querySelector('#conversation-resume').open) || !button || button.disabled || state.actionBusy) return;
   const task = state.selectedTask, projectId = state.projectId, epoch = state.projectEpoch;
   const session = task.sessions.codex;
   const key = document.querySelector('#conversation-resume').dataset.target;
-  const params = { workspaceTaskId: task.id, conversationId: document.querySelector('#conversation-id').value.trim() };
+  const params = { workspaceTaskId: task.id,
+    ...(!automatic ? { conversationId: document.querySelector('#conversation-id').value.trim() } : {}) };
   if (operation === 'confirm') Object.assign(params, { confirmed: true, sessionId: session.sessionId, runtimeGeneration: session.runtimeGeneration });
   else params.language = localeCode();
   const current = () => projectId === state.projectId && epoch === state.projectEpoch && task.id === state.selectedId;
   setBusy(true); state.conversationActionTarget = key; renderConversationResume();
+  let failed = false;
   try {
     await postAction(operation === 'confirm' ? 'workspaceTaskConfirmConversation' : 'workspaceTaskResume', params, projectId);
     if (current()) await refresh();
   } catch (error) {
+    failed = true;
     if (current()) showToast(error.payload?.error?.message || error.message, 'error');
   } finally {
     state.conversationActionTarget = null;
-    if (current()) { setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask(); }
+    if (current()) {
+      setBusy(false); document.querySelector('#conversation-manual-check').checked = false; renderSelectedTask();
+      if (automatic && (failed || state.selectedTask.resume?.state === 'FAILED')) openConversationResume();
+    }
   }
 }
 
@@ -2436,7 +2462,8 @@ function bindEvents() {
     catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
-  for (const id of ['conversation-resume-open', 'conversation-confirm-open']) document.querySelector(`#${id}`)?.addEventListener('click', openConversationResume);
+  document.querySelector('#conversation-resume-open')?.addEventListener('click', () => void reopenConversationTask());
+  document.querySelector('#conversation-confirm-open')?.addEventListener('click', openConversationResume);
   for (const id of ['conversation-resume-close', 'conversation-resume-dismiss']) document.querySelector(`#${id}`)?.addEventListener('click', () => closeConversationResume());
   document.querySelector('#conversation-resume')?.addEventListener('cancel', event => { event.preventDefault(); closeConversationResume(); });
   document.querySelector('#conversation-resume')?.addEventListener('click', event => { if (event.target.id === 'conversation-resume') closeConversationResume(); });

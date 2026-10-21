@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { atomicWrite, assertContained, assertSafePath } from './config.mjs';
 import { PtyRuntime, safePtySystemCode } from './pty-runtime.mjs';
 import { redactOutput } from '../adapters/executable.mjs';
+import { createCodexIdentityCapture } from './codex-identity-capture.mjs';
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024;
 const MAX_INPUT_LENGTH = 256 * 1024;
@@ -21,6 +22,8 @@ let server;
 let shuttingDown = false;
 let metadataWriteTimer = null;
 let pendingCloseResponses = 0;
+let nativeCapture = null;
+let nativeCaptureState = { state: 'UNAVAILABLE', reason: 'UNSUPPORTED_CLI' };
 const subscribers = new Set();
 
 function notifySubscribers() {
@@ -143,6 +146,7 @@ function metadataFromRuntime() {
     hostPid: process.pid,
     taskId: session.taskId || null,
     subtaskId: session.subtaskId || null,
+    nativeIdentityCapture: nativeCaptureState,
   };
 }
 
@@ -173,6 +177,7 @@ function cleanupEndpoint() {
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  nativeCapture?.close();
   if (metadataWriteTimer) clearTimeout(metadataWriteTimer);
   try { persistMetadata(); } catch { /* Preserve the process exit. */ }
   try { server?.close(); } catch { /* Already closed. */ }
@@ -334,10 +339,31 @@ async function main() {
     } catch { /* The listen call reports an unsafe/stale endpoint. */ }
   }
 
+  let spawnArgs = session.spawnArgs;
+  if (session.nativeIdentityCaptureVersion) {
+    try {
+      let observer;
+      nativeCapture = await createCodexIdentityCapture({ root: session.root, version: session.nativeIdentityCaptureVersion,
+        isActive: () => Boolean(runtime?.isActive()) && !shuttingDown,
+        onState: value => { nativeCaptureState = value; scheduleMetadata(); },
+        observe: async evidence => {
+          if (!observer) {
+            const { createWorkspaceCodexIdentityObserver } = await import('./workspace-task-runtime.mjs');
+            observer = createWorkspaceCodexIdentityObserver({ root: session.root, session });
+          }
+          return observer(evidence);
+        },
+      });
+      // Add private launch config only in Host memory. Session records retain
+      // the original configured argv and never publish the collector capability.
+      const position = spawnArgs.lastIndexOf('-C');
+      spawnArgs = [...spawnArgs.slice(0, position), ...nativeCapture.args, ...spawnArgs.slice(position)];
+    } catch { nativeCaptureState = { state: 'UNAVAILABLE', reason: 'COLLECTOR_UNAVAILABLE' }; }
+  }
   runtime = new PtyRuntime({
     id: session.id,
     command: session.spawnCommand,
-    args: session.spawnArgs,
+    args: spawnArgs,
     cwd: session.cwd,
     env: { ...process.env, ...(session.taskId ? {
       COORDINATE_AGENTS_TASK_ID: session.taskId,
@@ -352,6 +378,7 @@ async function main() {
       notifySubscribers();
       try { persistMetadata(); } catch { /* Keep the PTY alive if metadata is temporarily unavailable. */ }
       if (runtime.state === 'exited' || runtime.state === 'failed') {
+        nativeCapture?.close();
         // Native exit may arrive while close() is still awaiting taskkill's
         // own handles. Do not exit the Host before the close RPC is flushed.
         setTimeout(() => { if (pendingCloseResponses === 0) shutdown(); }, 25).unref();

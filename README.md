@@ -62,6 +62,7 @@ and [Troubleshooting](./docs/troubleshooting.md) for startup problems.
 | Custom Terminals | Choose two installed CLI executables, including the same CLI twice, with optional shared and per-terminal prompts. |
 | Multiple projects | Browse local folders, switch projects without closing background sessions, and search project/task history. |
 | Persistent terminals | Type directly, resize, focus one terminal, use Zen mode, and reconnect after page refresh. Close or restart sessions explicitly. |
+| Reopen the original Codex conversation | Supported local Codex CLI 0.163.x automatically saves the native conversation binding. Close the task, then click Reopen task; the UUID is filled from storage. Confirm the resumed terminal identity when prompted. [Details](./docs/codex-conversation-resume.md). |
 | Git Changes and review feedback | Inspect working-tree changes, select diff lines, and send review notes to the task's Codex after confirming its input is ready. |
 | Collaboration Timeline | Browse persisted dispatch and agent-report events by round. |
 | Collaboration Health | See missing progress receipts and session problems, with a configurable attention threshold. |

@@ -33,6 +33,7 @@ import { loadConfiguredTrustedAdapters } from '../adapters/trusted-local.mjs';
 import { normalizeRuntimeError, runtimeError } from './runtime-contract.mjs';
 import { appendRuntimeEvent, readRuntimeEvents } from './runtime-events.mjs';
 import { validateRuntimeGeneration } from './workspace-native-identity.mjs';
+import { codexIdentityCaptureVersion } from './codex-identity-capture.mjs';
 
 export const EXECUTION_SESSION_STATES = Object.freeze([
   'starting',
@@ -734,6 +735,8 @@ export class ExecutionSessionManager {
       });
     }
     const id = `session_${randomUUID().replaceAll('-', '')}`;
+    const nativeIdentityCaptureVersion = workspace && agent === 'codex' && resolved.adapter === 'codex-cli' && taskId
+      ? await codexIdentityCaptureVersion(launch) : null;
     const endpoint = endpointFor(repository, id);
     const createdAt = now();
     const record = {
@@ -819,6 +822,7 @@ export class ExecutionSessionManager {
             diagnostics: record.diagnostics,
             taskId,
             subtaskId,
+            nativeIdentityCaptureVersion,
           },
         }, error => error ? reject(error) : resolvePromise());
       });

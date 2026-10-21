@@ -8,6 +8,10 @@ import { pathToFileURL } from 'node:url';
 import { startWorkspace } from './support/workspace-server.mjs';
 
 const repo = resolve('.');
+test('native identity capture runtime ships in the Web package', () => {
+  const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
+  assert.ok(manifest.files.includes('skills/coordinate-agents/scripts/codex-identity-capture.mjs'));
+});
 test('custom terminal modules ship in the precise package whitelist and UI helper is served', async () => {
   const manifest = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
   for (const file of ['inspector/web-workspace/custom-terminal-model.mjs', 'skills/coordinate-agents/scripts/workspace-custom-config.mjs']) assert.ok(manifest.files.includes(file), file);

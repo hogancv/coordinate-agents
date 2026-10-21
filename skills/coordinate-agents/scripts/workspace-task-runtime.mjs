@@ -526,7 +526,8 @@ function sessionView(root, record, slot, facts, nativeConversation) {
     role: slot.role,
     sessionId: slot.sessionId,
     ...(slot.runtimeGeneration ? { runtimeGeneration: slot.runtimeGeneration } : {}),
-    ...(slot.role !== 'custom' ? { nativeIdentity: nativeIdentityView(nativeConversation) } : {}),
+    ...(slot.role !== 'custom' ? { nativeIdentity: { ...nativeIdentityView(nativeConversation),
+      discovery: fact?.nativeIdentityCapture || { state: 'UNAVAILABLE', reason: 'NO_CAPTURE_SOURCE' } } } : {}),
     state: fact?.state || null,
     status: fact?.state || null,
     createdAt: fact?.createdAt || null,
@@ -618,7 +619,7 @@ export async function readWorkspaceTask(root, id, { historyPage = null } = {}) {
 
 // Internal Host/Adapter composition point. Deliberately not registered as a
 // Runtime operation, HTTP action or workspace-message command. The default
-// receiver has no trusted source. A verifier is trusted executable code, never
+// receiver alone has no trusted source. A verifier is trusted executable code, never
 // a user-supplied source name/flag in an observation or project configuration.
 export function createWorkspaceNativeIdentityStore({ root, verifyAttestation } = {}) {
   const repository = repositoryRoot(root);
@@ -639,6 +640,24 @@ export function createWorkspaceNativeIdentityStore({ root, verifyAttestation } =
       } finally { release(); }
     },
   });
+}
+
+// Trusted Host composition only; not registered with HTTP, RPC or workspace-message.
+// The Host's private native-event receiver has already authenticated the launch
+// capability and inspected exact native metadata outside the config transaction.
+export function createWorkspaceCodexIdentityObserver({ root, session }) {
+  const repository = repositoryRoot(root);
+  return async evidence => {
+    const task = readWorkspaceTaskRecord(repository, session.taskId);
+    const prior = task.nativeConversations?.codex;
+    const observation = { schemaVersion: 1, projectRoot: repository, taskId: session.taskId,
+      slot: 'codex', adapter: 'codex-cli', sessionId: session.id, runtimeGeneration: session.runtimeGeneration,
+      conversationId: evidence.conversationId, source: evidence.source, observedAt: evidence.observedAt,
+      sequence: (prior?.lastObservation.sequence || 0) + 1, expectedRevision: prior?.revision || 0 };
+    const token = Symbol('owned-native-event');
+    return createWorkspaceNativeIdentityStore({ root: repository,
+      verifyAttestation: value => value === token ? observation : null }).observe(token);
+  };
 }
 
 async function closeSessionIds(root, sessionIds) {
@@ -1219,6 +1238,9 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
   return withCooperationLock(root, input.workspaceTaskId || input.id, async () => {
     let record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
     if (record.archivedAt) throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Cannot restart an archived Workspace Task.', { recoverable: false, taskId: record.id });
+    if (record.mode !== 'custom' && (record.nativeConversations?.codex?.binding || record.resume?.conversationId)) {
+      throw new Error('This Task retains its original conversation. Reopen it to continue, or create a new Task for a fresh conversation.');
+    }
     const oldSessionIds = sessionIdsFor(record);
     const closed = await rollbackTaskSessions(root, record);
     const stillActive = closed.results.filter(session => ACTIVE_SESSION_STATES.has(`${session?.state || ''}`));
@@ -1429,6 +1451,7 @@ function assertCooperationSession(root, record, slot, { executorReceipt = false 
 }
 
 function assertRuntimeCaller(root, record, slot, caller) {
+  if (slot === 'codex' && record.nativeConversations?.codex?.firstConflict) throw new Error('Codex native identity changed. No collaboration change was made.');
   if (!caller && !record.resume && !record.runtimeFencing) return; // Legacy pre-resume helper compatibility.
   const expected = record.sessions[slot];
   if (!caller || caller.taskId !== record.id || caller.slot !== slot || caller.sessionId !== expected.sessionId

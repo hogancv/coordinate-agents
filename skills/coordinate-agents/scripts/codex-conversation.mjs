@@ -10,7 +10,7 @@ export function codexConversationId(value) {
 
 // Exact native disk metadata is preflight evidence only. It cannot attest which
 // conversation a live TUI has actually loaded. Never use mtime or a "latest" ID.
-export function readCodexConversation({ root, conversationId, codexHome = process.env.CODEX_HOME || join(homedir(), '.codex') }) {
+export function readCodexConversation({ root, conversationId, codexHome = process.env.CODEX_HOME || join(homedir(), '.codex'), maxEntries = 100_000, provenance }) {
   const id = codexConversationId(conversationId);
   const home = realpathSync.native(resolve(codexHome));
   const projectRoot = realpathSync.native(root);
@@ -20,7 +20,7 @@ export function readCodexConversation({ root, conversationId, codexHome = proces
     if (!existsSync(directory)) return;
     if (lstatSync(directory).isSymbolicLink()) throw new Error('Unsafe Codex native records directory.');
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (++visited > 100_000 || depth > 5) throw new Error('Codex native record search limit exceeded.');
+      if (++visited > maxEntries || depth > 5) throw new Error('Codex native record search limit exceeded.');
       const path = join(directory, entry.name);
       if (entry.isDirectory()) visit(path, depth + 1);
       else if (entry.name.endsWith(`-${id}.jsonl`)) {
@@ -44,6 +44,14 @@ export function readCodexConversation({ root, conversationId, codexHome = proces
   } finally { closeSync(fd); }
   if (metadata.type !== 'session_meta' || metadata.payload?.id !== id) throw new Error('Codex native identity metadata does not match the exact UUID.');
   if (metadata.payload.source !== 'cli') throw new Error('Only a primary Codex CLI conversation can be resumed here.');
+  if (provenance) {
+    // Verified 0.163 CLI metadata. Unknown/new producer shapes fail closed for
+    // automatic capture; the existing manual preflight remains compatible.
+    const originator = metadata.payload.originator;
+    if (!['codex_cli_rs', 'codex-tui', 'Codex Desktop', 'Codex_Desktop'].includes(originator)
+      || originator.replace(/[^a-zA-Z0-9_.-]/g, '_') !== provenance.originator
+      || metadata.payload.cli_version !== provenance.version) throw new Error('Unsupported Codex native record provenance.');
+  }
   if (typeof metadata.payload.cwd !== 'string' || realpathSync.native(metadata.payload.cwd) !== projectRoot) throw new Error('Codex conversation belongs to a different project.');
   return { conversationId: id, projectRoot, source: 'cli' };
 }

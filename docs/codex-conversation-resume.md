@@ -2,17 +2,20 @@
 
 Default Collaboration keeps Codex as the continuing planner/reviewer. Closing a
 Task stops its owned terminals while retaining the Task, Git workspace, native
-Codex binding and collaboration timeline. **Restart Pair remains a destructive
-fresh pair restart; it is not Resume.** Custom Terminals keep their separate flow.
+Codex binding and collaboration timeline. **Restart Pair is not Resume.** Once a
+Task has a native binding or reserved Resume target, fresh-pair restart is refused
+before closing terminals: use Reopen for its original conversation, or create a
+new Task for a new context. Unbound Tasks and Custom Terminals retain fresh restart.
 
 ## First binding and continuing later
 
-1. While the original Codex terminal is running, use `/status` and save the exact
-   **Session** UUID and **Directory** for this Task.
+1. Create a Default Collaboration Task. With a supported local Codex CLI 0.163.x,
+   the header first shows **Identifying conversation**, then **Conversation saved**.
+   No `/status` or UUID input is needed to save the original conversation.
 2. Close the Task. The **Reopen task** icon appears immediately after its **Closed**
-   status in the header. Click it to open the recovery dialog; the form no longer
-   occupies space above the terminals. Supply the original native UUID if the Task
-   has no binding, then choose **Resume Conversation / 继续对话**. The native record
+   status in the header. Clicking it directly resumes the saved conversation.
+   If automatic capture was unavailable and the Task has no binding, a recovery
+   dialog accepts the original native UUID, then **Resume Conversation / 继续对话**. The native record
    must exist locally and belong to this project and a primary Codex CLI conversation.
 3. Choose **Back to terminals**, complete the CLI's normal startup screens, and
    run `/status` in the resumed Codex terminal. Check both UUID and Directory.
@@ -21,25 +24,29 @@ fresh pair restart; it is not Resume.** Custom Terminals keep their separate flo
    This entry disappears after confirmation. Resume does not send old role prompts
    or replay history. Custom and archived Tasks have neither entry.
 
-The dialog supports Escape, its close button, and clicking the backdrop. Switching
+Failed or partial pairs also expose the recovery entry. A failed direct reopen
+opens the fallback with the saved UUID prefilled. The dialog supports Escape, its close button, and clicking the backdrop. Switching
 projects or Tasks dismisses it and clears the manual check. Opening or dismissing
-it does not resume a CLI; explicit action buttons still own that operation.
+it does not resume a CLI; **Reopen task** or the dialog's explicit action starts recovery.
 
 This v1 path uses **manual live confirmation**. Exact local metadata, launch
 arguments, a running process and historical bindings do not automatically verify
 which native conversation the TUI loaded. The UI shows awaiting confirmation,
-manually confirmed, partial recovery and failed recovery distinctly. There is no
-automatic main-conversation identity collector in this release. A wrong target,
+manually confirmed, partial recovery and failed recovery distinctly. Automatic
+binding uses a process-scoped native startup event plus exact primary CLI metadata;
+it never upgrades a historical binding to live verification. A wrong target,
 project mismatch, conflicting original binding or another Task's reserved UUID
 is refused; no replacement blank Codex conversation is silently created.
 
 Manual confirmation is a check at a point in time, not a live identity lease.
 Running `/new` or switching conversations inside the same TUI may leave the
-Runtime Session ID and generation unchanged, so v1 cannot detect that switch or
-automatically invalidate the confirmation. Do not continue collaborating after
+Runtime Session ID and generation unchanged. When a supported native event and
+primary record expose a different UUID, v1 latches an identity conflict, invalidates
+the old confirmation, and blocks new dispatch/review. Event export is asynchronous,
+so detection is not immediate or guaranteed. Do not continue collaborating after
 such a switch: close and resume this Task to return to its original bound
-conversation, then check `/status` and confirm again. Automatic switch detection
-and identity invalidation remain future work; a READY label does not establish
+conversation, then check `/status` and confirm again. A latched conflict needs inspection;
+it cannot be cleared by confirming a different UUID. A READY label does not establish
 continuous native identity verification.
 
 The configured built-in Codex adapter, user command/wrapper, authentication,
@@ -49,6 +56,15 @@ prompt, remote, target and worktree options are refused for Resume. No `--last`,
 private CLI profile or global CLI configuration rewrite is used. Native target
 records are read from the effective `CODEX_HOME` or normal `~/.codex` sessions
 and archived_sessions directories. Records are not moved between project paths.
+
+Auto-binding leaves Hooks disabled and uses a dedicated local CLI process
+(`--no-daemon`) with an in-memory loopback OTLP receiver. Its startup config sends
+OTEL logs to that receiver for this invocation, overriding a configured log exporter;
+prompt/response logging is disabled. Trace/metric exporters, native notifications,
+model settings, permissions and login are retained. Nothing is written to global
+Codex configuration. Unknown CLI versions, remote runtimes, unsupported provenance,
+missing/ambiguous records or capture failure retain manual recovery. No newest-file
+selection or unbounded polling runs. See the [source/trust and native acceptance notes](codex-native-auto-binding.md).
 
 ## Executor and interrupted work
 

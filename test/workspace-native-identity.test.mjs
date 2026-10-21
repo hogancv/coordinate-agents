@@ -178,6 +178,15 @@ test('Task/Slot bindings remain separate and one adapter conversation cannot be 
   assert.equal(f.raw(b.id).nativeConversations.codex.binding.conversationId, C);
 });
 
+test('automatic first binding cannot adopt a different UUID than this Task pending Resume target', async t => {
+  const f = fixture(t), task = f.task();
+  task.resume = { schemaVersion: 1, conversationId: B, state: 'AWAITING_CONFIRMATION', verification: null, interruption: null };
+  f.save(task);
+  await assert.rejects(f.store().observe(f.authority.issue(f.claims(task))), reason('RESUME_TARGET_MISMATCH'));
+  assert.equal(f.raw(task.id).nativeConversations, undefined);
+  assert.equal(f.raw(task.id).resume.conversationId, B);
+});
+
 test('two processes racing the same revision produce one atomic binding and reject the loser', async t => {
   const f = fixture(t), task = f.task();
   const worker = claims => `import { createWorkspaceNativeIdentityStore } from ${JSON.stringify(script)};

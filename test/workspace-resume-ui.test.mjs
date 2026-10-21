@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../inspector/web-workspace/app.js', import.
 function ui() {
   const ids = ['conversation-resume', 'conversation-resume-open', 'conversation-confirm-open',
     'conversation-id', 'conversation-manual-check', 'conversation-resume-button',
-    'conversation-confirm-button', 'conversation-resume-status'];
+    'conversation-confirm-button', 'conversation-resume-status', 'conversation-identity-status'];
   const elements = Object.fromEntries(ids.map(id => ['#' + id, {
     dataset: {}, value: '', checked: false, hidden: false, open: false,
     setAttribute(name, value) { this[name] = value; },
@@ -42,10 +42,43 @@ test('closed tasks expose a compact reopen entry without opening the dialog auto
   c.closeConversationResume();
   assert.equal(e['#conversation-resume'].open, false);
   assert.equal(e['#conversation-resume-open'].focused, true);
-  for (const status of ['RUNNING', 'EXITED', 'DEGRADED', 'ERROR']) {
+  for (const status of ['RUNNING']) {
     state.selectedTask.status = status; c.renderConversationResume();
     assert.equal(e['#conversation-resume-open'].hidden, true, status);
   }
+});
+
+test('reopen immediately resumes a bound task without a UUID form and coalesces repeated clicks', async () => {
+  const { elements: e, state, context: c } = ui();
+  state.selectedTask.sessions.codex.nativeIdentity = { binding: { conversationId: '019a0000-0000-7000-8000-000000000001' } };
+  let finish, seen, calls = 0;
+  c.postAction = async (action, params) => { calls++; seen = { action, params }; await new Promise(done => { finish = done; }); };
+  const operation = c.reopenConversationTask();
+  await c.reopenConversationTask();
+  assert.equal(calls, 1);
+  assert.equal(seen.action, 'workspaceTaskResume');
+  assert.equal(seen.params.workspaceTaskId, 'workspace-one');
+  assert.equal(seen.params.conversationId, undefined, 'server chooses its persisted original UUID');
+  assert.equal(e['#conversation-resume'].open, false);
+  finish(); await operation;
+});
+
+test('reopen failures expose the prefilled fallback and failed or partial tasks remain recoverable', async () => {
+  const { elements: e, state, context: c } = ui();
+  const id = '019a0000-0000-7000-8000-000000000001';
+  state.selectedTask.sessions.codex.nativeIdentity = { binding: { conversationId: id } };
+  c.postAction = async () => { throw new Error('Native record unavailable'); };
+  await c.reopenConversationTask();
+  assert.equal(e['#conversation-resume'].open, true);
+  assert.equal(e['#conversation-id'].value, id);
+  for (const status of ['EXITED', 'DEGRADED', 'ERROR']) {
+    state.selectedTask.status = status; c.renderConversationResume();
+    assert.equal(e['#conversation-resume-open'].hidden, false);
+  }
+  state.selectedTask.sessions.codex.nativeIdentity.firstConflict = { conversationId: '019a0000-0000-7000-8000-000000000002' };
+  c.renderConversationResume();
+  assert.equal(e['#conversation-resume-button'].disabled, true);
+  assert.match(e['#conversation-resume-status'].textContent, /IDENTITY_CHANGED/);
 });
 
 test('resumed tasks keep a temporary confirmation entry until identity is confirmed', () => {

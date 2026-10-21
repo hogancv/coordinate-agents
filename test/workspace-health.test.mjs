@@ -161,7 +161,7 @@ test('HTTP health is project scoped, responds during a slow probe, and uses save
   for (const [name, state, backend] of [['historical', 'exited', 'stdio-fallback'], ['selected', 'running', 'node-pty'], ['other-task', 'idle', 'stdio-fallback']]) {
     const taskId = `workspace-health-${name}`;
     const sessionId = `session_health_${name}`;
-    writeFileSync(join(root, '.agent-bus', 'sessions', `${sessionId}.json`), JSON.stringify({ id: sessionId, agent: 'codex', command, cwd: root, state, backend }));
+    writeFileSync(join(root, '.agent-bus', 'sessions', `${sessionId}.json`), JSON.stringify({ id: sessionId, agent: 'codex', taskId, subtaskId: 'codex', command, cwd: root, state, backend }));
     writeFileSync(join(root, '.agent-bus', 'workspace-tasks', `${taskId}.json`), JSON.stringify({ schemaVersion: 1, id: taskId, title: name,
       status: state === 'exited' ? 'EXITED' : 'RUNNING', promptVersion: 'test', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       sessions: { codex: { agent: 'codex', role: 'planner-reviewer', sessionId }, antigravity: { agent: 'antigravity', role: 'implementer', sessionId: null } } }));
