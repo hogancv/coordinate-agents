@@ -13,7 +13,7 @@ Local verification completed on 2026-10-22 (Asia/Shanghai). Baseline source: `13
 | Related repository regression | Documentation, repository layout, release workflow, Web distribution: 37 passed |
 | npm payload check | Dry-run: 60 files, no VitePress/tooling/new docs included; root manifest/lockfile unchanged |
 | Action pin verification | checkout/setup-node/upload-pages-artifact/deploy-pages commits resolved through `gh api`; deploy-pages v4.0.5 uses `d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e` |
-| Independent review | Recovery translation omissions corrected; literal code placeholder rendering corrected; final follow-up requested |
+| Independent review | Recovery translation omissions corrected; literal code placeholder rendering corrected; final follow-up found no remaining blockers |
 
 Browser verification used Ego Browser against the built production preview under `/coordinate-agents/`:
 
@@ -30,4 +30,6 @@ The checks validate the documentation system, not live agent execution. This cha
 
 Remaining full translations: 27 Chinese detailed technical/history pages and 3 English original-Chinese engineering records. Localized entry pages disclose the gap; they are not counted as completed translations. See `docs/documentation-migration.md`, its Chinese counterpart, and `docs/maintenance/route-map.json` for the full lists.
 
-Publication is authorized. The Pages setting must change from legacy `main:/docs` to Actions, and a successful Pages deployment plus remote URL checks must be confirmed before reporting the live migration complete. Final run/PR URLs are recorded in the task handoff after deployment.
+Publication was authorized and completed: `main` received commit `0dd998af23060585c124613b58c1fd8ef87d53f6`; Pages Source changed from legacy `main:/docs` to `workflow`, retaining the domain and HTTPS. [Pages build/deploy run 39632155635](https://github.com/hogancv/coordinate-agents/actions/runs/39632155635) succeeded, and both remote homepages report VitePress 1.6.4 with the correct language and canonical URLs.
+
+The first remote Legacy CI run exposed an existing Pages assertion hardcoded to require Jekyll and forbid deployment. That obsolete assertion was reproduced locally and updated to verify pinned VitePress build/deploy actions and main-only deployment. This follow-up changes the documentation workflow test, not Adapter/CLI/runtime behavior. Final remote checks and follow-up CI run URLs are included in the task handoff.

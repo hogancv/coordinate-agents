@@ -53,12 +53,18 @@ test('Legacy compatibility runs for Adapter/Session source changes independently
   assert.doesNotMatch(workflow, /npm publish|npm install -g|curl\s+.*\|\s*(sh|bash)/i);
 });
 
-test('Pages build is explicit, pinned, and build-only', () => {
+test('Pages builds VitePress with pinned actions and deploys only main', () => {
   const workflow = readFileSync(join(root, '.github', 'workflows', 'pages-build.yml'), 'utf8');
   assert.match(workflow, /name: Pages Build/);
-  assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/);
-  assert.match(workflow, /actions\/jekyll-build-pages@[0-9a-f]{40}/);
-  assert.match(workflow, /source: \.\/docs/);
-  assert.match(workflow, /destination: \.\/_site/);
-  assert.doesNotMatch(workflow, /deploy-pages|pages:\s*write|id-token:\s*write/);
+  for (const action of ['checkout', 'setup-node', 'upload-pages-artifact', 'deploy-pages']) {
+    assert.match(workflow, new RegExp(`actions/${action}@[0-9a-f]{40}`));
+  }
+  for (const command of ['npm ci --prefix docs', 'npm test --prefix docs',
+    'npm run build --prefix docs', 'npm run check --prefix docs']) assert.ok(workflow.includes(command), command);
+  assert.match(workflow, /path: docs\/\.vitepress\/dist/);
+  assert.match(workflow, /if: github\.event_name != 'pull_request' && github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /pages: write/);
+  assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /name: github-pages/);
+  assert.doesNotMatch(workflow, /jekyll|npm publish/);
 });
