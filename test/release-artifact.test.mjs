@@ -1,15 +1,33 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { loaderNodeOptions } from '../scripts/verify-release-artifact.mjs';
+import * as nodeModule from 'node:module';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 const pluginJson = JSON.parse(readFileSync(join(root, '.codex-plugin', 'plugin.json'), 'utf8'));
 const verifier = join(root, 'scripts', 'verify-release-artifact.mjs');
+
+test('module tracing records installed imports without injecting experimental warnings into terminals', { skip: typeof nodeModule.register !== 'function' }, () => {
+  const temporary = mkdtempSync(join(tmpdir(), 'coordinate loader with spaces '));
+  try {
+    const loader = join(temporary, 'loader.mjs'), entry = join(temporary, 'cli.mjs'), trace = join(temporary, 'trace.jsonl');
+    writeFileSync(loader, `import { appendFileSync } from 'node:fs';\nexport async function load(url, context, next) { appendFileSync(${JSON.stringify(trace)}, JSON.stringify(url)+'\\n'); return next(url, context); }`);
+    writeFileSync(entry, "console.log('Ask Codex to do anything');\n");
+    const result = spawnSync(process.execPath, [entry], {
+      env: { ...process.env, NODE_OPTIONS: loaderNodeOptions(loader) }, encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), 'Ask Codex to do anything');
+    assert.doesNotMatch(result.stderr, /ExperimentalWarning/);
+    assert.ok(readFileSync(trace, 'utf8').trim().split('\n').map(JSON.parse).some(url => url.endsWith('/cli.mjs')));
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+});
 
 function npmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';

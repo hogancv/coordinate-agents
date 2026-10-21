@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import * as nodeModule from 'node:module';
 
 const PACKAGE_NAME = '@hogancv/coordinate-agents';
 const REPOSITORY_URL = 'https://github.com/hogancv/coordinate-agents';
@@ -274,7 +275,12 @@ export function detectTarExtractionFlags() {
 }
 
 export function loaderNodeOptions(loader) {
-  return `--experimental-loader=${pathToFileURL(loader).href}`;
+  const url = pathToFileURL(loader).href;
+  if (typeof nodeModule.register !== 'function') return `--experimental-loader=${url}`;
+  // register() was backported to Node 18.19. Avoid the legacy loader warning:
+  // it otherwise enters stdio terminals and can wrap their readiness marker.
+  const source = `import { register } from "node:module"; register(${JSON.stringify(url)});`;
+  return `--import=data:text/javascript,${encodeURIComponent(source)}`;
 }
 
 async function main() {
