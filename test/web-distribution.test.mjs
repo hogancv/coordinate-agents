@@ -82,12 +82,12 @@ test('artifact loader runs from a temporary directory containing spaces', async 
   const temporary = mkdtempSync(join(tmpdir(), 'release loader with spaces-'));
   try {
     const loader = join(temporary, 'loader with spaces.mjs');
-    writeFileSync(loader, 'export async function load(url, context, next) { return next(url, context); }');
+    const marker = join(temporary, 'loader-ran.txt');
+    writeFileSync(loader, `import { writeFileSync } from 'node:fs'; writeFileSync(${JSON.stringify(marker)}, 'loaded'); export async function load(url, context, next) { return next(url, context); }`);
     const result = spawnSync(process.execPath, ['-e', 'console.log("loaded")'], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: loaderNodeOptions(loader) } });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.trim(), 'loaded');
-    assert.match(loaderNodeOptions(loader), /file:/);
-    assert.doesNotMatch(loaderNodeOptions(loader), / /);
+    assert.equal(readFileSync(marker, 'utf8'), 'loaded');
   } finally { rmSync(temporary, { recursive: true, force: true }); }
 });
 
