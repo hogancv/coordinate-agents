@@ -57,21 +57,27 @@ failure with a bounded stdout/stderr tail.
 
 ## Permission and sandbox arguments
 
-The built-in `antigravity-cli` Adapter does not infer a permission mode. Its legacy one-shot path
-passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent Session
-starts with `--prompt-interactive=` so current `agy` parsers receive the required
-empty initial prompt value, then writes its first instruction through the PTY unless `{prompt}` is
-explicitly configured. It does not automatically add
-`--dangerously-skip-permissions` or another sandbox-bypass flag. If `agy` is already configured
-locally for full permissions, that native setting remains in effect.
+Current source defaults Antigravity arguments to `--dangerously-skip-permissions`,
+so new launches automatically approve tool permission requests, including file
+writes and command execution. The executable field remains `agy` (or its exact
+override); the flag is passed separately as an argument, not shell text.
 
-If the installed `agy --help` confirms the explicit flag and the user intentionally wants to use it,
-configure it outside the installed Skill/Plugin:
+Explicit project arguments take precedence over user arguments, which take
+precedence over this default. An explicit `args: []` opts out. Existing configured
+argument arrays are preserved and the flag is not duplicated. Running Sessions
+keep their original arguments; create a new task or explicitly restart to apply
+new settings. Custom Terminals use their separate Generic CLI configuration.
+
+The one-shot launch appends `--prompt-interactive <prompt>`; a persistent Session
+uses `--prompt-interactive=` and delivers the first instruction through its PTY
+unless the configured template consumes `{prompt}`.
+
+The published **npm 2.4.0** runtime retains its original explicit-permission
+behavior. To enable automatic approval there, configure it explicitly:
 
 ```sh
 npx @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-npx @hogancv/coordinate-agents@2.4.0 config list
 ```
 
-`doctor` verifies the executable and version, not the effective provider permission state. Never
-copy a permission flag from another CLI or version without checking its own help output.
+`doctor` verifies the executable/version, not provider authentication or the
+permission state of an already running CLI.

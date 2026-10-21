@@ -144,6 +144,10 @@ active tab's save button.
 | Custom Terminals | Two executable defaults and shared/per-terminal prompts. New tasks snapshot them; existing Custom tasks keep their saved snapshot. |
 | Desktop Notifications | Project-level notification preferences, read on the next formal receipt. |
 
+Antigravity defaults to `--dangerously-skip-permissions` for automatic approval
+of file-write, command-execution, and other tool requests. Explicit saved argument
+arrays override the default; running Sessions retain their launch arguments.
+
 Default terminal settings preserve unrelated arguments and use project > user >
 adapter-default precedence. They do not reconfigure running CLIs. Executable
 availability does not establish login, model access, provider health, or quota.

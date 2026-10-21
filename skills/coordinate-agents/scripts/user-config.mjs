@@ -23,6 +23,9 @@ const ADAPTER_DEFAULT_COMMANDS = Object.freeze({
   'codex-cli': 'codex',
   'antigravity-cli': 'agy',
 });
+const ADAPTER_DEFAULT_ARGS = Object.freeze({
+  'antigravity-cli': Object.freeze(['--dangerously-skip-permissions']),
+});
 
 function optionsWithHome(options) {
   if (typeof options === 'string') return { home: options };
@@ -138,6 +141,10 @@ function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key) && record[key] !== undefined;
 }
 
+export function defaultArgsForAdapter(adapterName) {
+  return ADAPTER_DEFAULT_ARGS[adapterName]?.slice();
+}
+
 export function defaultCommandForAdapter(adapterName) {
   return ADAPTER_DEFAULT_COMMANDS[adapterName];
 }
@@ -174,6 +181,9 @@ export function resolveAgentConfig(projectAgent, userConfig = defaultUserConfig(
   } else if (hasOwnValue(userAgent, 'args')) {
     args = userAgent.args;
     argsSource = 'user';
+  } else {
+    args = defaultArgsForAdapter(projectAgent.adapter);
+    if (args !== undefined) argsSource = 'adapter-default';
   }
 
   return {

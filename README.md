@@ -12,13 +12,15 @@ results, or choose **Custom Terminals** to bring your own CLI pair.
 Your projects, task history, terminal sessions, and collaboration receipts stay
 on your machine. Each agent uses its own CLI configuration and provider login.
 
-![Web Workspace preview](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.jpg)
+![Web Workspace preview](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png)
 
 ## Quick Start
 
 Install **Node.js >=18** and **Git**, plus the agent CLIs you want to use.
 For Default Collaboration, make sure `codex` and `agy` work and are signed in
 before creating a task. Coordinate Agents does not install the agent CLIs.
+Current source starts Antigravity with `--dangerously-skip-permissions` by default
+to auto-approve tool permission requests; explicit saved arguments take precedence.
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000

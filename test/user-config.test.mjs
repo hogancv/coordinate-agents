@@ -278,8 +278,8 @@ test('exact command contract: defaults, precedence, and agy argument templates a
   const agyDefaults = resolveAgentConfig({ id: 'antigravity', adapter: 'antigravity-cli' });
   assert.equal(agyDefaults.command, 'agy');
   assert.equal(agyDefaults.commandSource, 'adapter-default');
-  assert.equal(agyDefaults.args, undefined);
-  assert.equal(agyDefaults.argsSource, null);
+  assert.deepEqual(agyDefaults.args, ['--dangerously-skip-permissions']);
+  assert.equal(agyDefaults.argsSource, 'adapter-default');
 
   const codexDefaults = resolveAgentConfig({ id: 'codex', adapter: 'codex-cli' });
   assert.equal(codexDefaults.command, 'codex');
@@ -358,7 +358,7 @@ test('agy-proxy and agy templates launch with exactly their own arguments', () =
   // Default Adapter surface (no user args) still yields agy's interactive form.
   const defaulted = getAdapter('antigravity-cli', { id: 'antigravity', command: process.execPath });
   const launch = defaulted.resolveLaunch({ prompt: 'Implement feature' });
-  assert.deepEqual(launch.args, ['--prompt-interactive', 'Implement feature']);
+  assert.deepEqual(launch.args, ['--dangerously-skip-permissions', '--prompt-interactive', 'Implement feature']);
 });
 
 test('test-runner discovery of the registration fixture never writes the real user config', () => {

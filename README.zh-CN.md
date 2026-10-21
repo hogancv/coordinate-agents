@@ -11,13 +11,15 @@
 
 项目、任务历史、终端会话和协作回执保存在本机。每个 Agent 使用自己的 CLI 配置和登录状态。
 
-![Web Workspace 预览](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.jpg)
+![Web Workspace 预览](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png)
 
 ## 快速开始
 
 先安装 **Node.js >=18**、**Git** 和需要使用的 Agent CLI。
 默认协作模式需要 `codex` 和 `agy` 能正常运行，并已完成各自的登录。
 Coordinate Agents 不负责安装这些 Agent CLI。
+当前源码默认给 Antigravity 添加 `--dangerously-skip-permissions`，自动批准工具权限请求；
+已保存的显式启动参数优先。
 
 ```sh
 npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000

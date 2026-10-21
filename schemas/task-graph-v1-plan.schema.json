@@ -41,7 +41,7 @@
         "adapterCapabilities": { "type": ["object", "null"] },
         "command": { "type": "string", "minLength": 1 },
         "commandSource": { "type": "string", "enum": ["project", "user", "adapter-default"] },
-        "argsSource": { "type": ["string", "null"], "enum": ["project", "user", null] }
+        "argsSource": { "type": ["string", "null"], "enum": ["project", "user", "adapter-default", null] }
       },
       "additionalProperties": false
     },

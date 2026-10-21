@@ -98,6 +98,27 @@ test('registry snapshot exposes serializable Contract identity and capabilities 
   assert.equal(Object.isFrozen(codex.capabilities), true);
 });
 
+test('default Antigravity launches pass automatic tool approval to the actual executable', () => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-default-permissions-'));
+  try {
+    const script = join(root, 'capture.cjs');
+    writeFileSync(script, 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+    const adapter = getAdapter('antigravity-cli', { id: 'antigravity', command: script });
+    const launches = [adapter.resolveLaunch({ prompt: 'Implement feature' }),
+      adapter.resolveSessionLaunch({ initialPrompt: '', agent: 'antigravity' })];
+    for (const launch of launches) {
+      const result = spawnSync(launch.command, [...launch.prefix, ...launch.args], { encoding: 'utf8', windowsHide: true });
+      assert.equal(result.status, 0, result.stderr);
+      const argv = JSON.parse(result.stdout);
+      assert.equal(argv.filter(arg => arg === '--dangerously-skip-permissions').length, 1);
+    }
+    const optedOut = getAdapter('antigravity-cli', { id: 'antigravity', command: script, args: [] });
+    assert.equal(optedOut.resolveSessionLaunch({ initialPrompt: '' }).args.includes('--dangerously-skip-permissions'), false);
+    const configured = getAdapter('antigravity-cli', { id: 'antigravity', command: script, args: ['--dangerously-skip-permissions'] });
+    assert.equal(configured.resolveSessionLaunch({ initialPrompt: '' }).args.filter(arg => arg === '--dangerously-skip-permissions').length, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test('Antigravity adapter keeps permission flags explicit', () => {
   const agy = getAdapter('antigravity-cli', {
     id: 'antigravity',
@@ -152,7 +173,7 @@ test('Antigravity persistent sessions encode the empty prompt in one argument', 
     language: 'en',
   });
 
-  assert.deepEqual(resolved.args, ['--prompt-interactive=']);
+  assert.deepEqual(resolved.args, ['--dangerously-skip-permissions', '--prompt-interactive=']);
   assert.equal(resolved.initialInputConsumed, false);
 });
 
@@ -202,7 +223,7 @@ test('Antigravity empty prompt survives Windows PowerShell proxy forwarding', { 
       env: { ...process.env, CA_ARGV_NODE: process.execPath, CA_ARGV_PROBE: capture },
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout.trim()), ['--prompt-interactive=']);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), ['--dangerously-skip-permissions', '--prompt-interactive=']);
     assert.equal(launch.initialInputConsumed, false);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

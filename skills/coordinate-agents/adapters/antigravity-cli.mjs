@@ -1,4 +1,5 @@
 import { AgentAdapter } from './base.mjs';
+import { defaultArgsForAdapter } from '../scripts/user-config.mjs';
 import { ADAPTER_CONTRACT_VERSION, defineAdapter } from './contract-v1.mjs';
 import { checkAdapterExecutable, executableError, resolveAdapterExecutable } from './executable.mjs';
 
@@ -20,7 +21,7 @@ export class AntigravityCliAdapter extends AgentAdapter {
     const command = this.config.command || 'agy';
     const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot launch Antigravity safely');
-    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
+    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : defaultArgsForAdapter(this.name);
     const args = [...configuredArgs, '--prompt-interactive', prompt];
     return {
       command: resolved.command,
@@ -34,7 +35,7 @@ export class AntigravityCliAdapter extends AgentAdapter {
     const command = this.config.command || 'agy';
     const resolved = resolveAdapterExecutable(command, { conformanceFixture: this.config.conformanceFixture });
     if (!resolved.available) throw executableError(resolved, 'Cannot open Antigravity session safely');
-    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : [];
+    const configuredArgs = Array.isArray(this.config.args) ? this.config.args : defaultArgsForAdapter(this.name);
     const promptInArguments = Boolean(initialPrompt && configuredArgs.some(arg => `${arg}`.includes('{prompt}')));
     const args = configuredArgs
       .filter(arg => initialPrompt || !`${arg}`.includes('{prompt}'))

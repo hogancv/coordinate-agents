@@ -114,7 +114,7 @@ test('required root contract, public documentation, configuration, and runtime d
     'docs/llms.txt',
     'scripts/sync-llms.mjs',
     'llms.txt',
-    'docs/assets/web-workspace.jpg',
+    'docs/assets/web-workspace.png',
     'docs/development/performance-notes.md',
     'package.json',
     'package-lock.json',

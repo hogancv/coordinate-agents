@@ -115,7 +115,9 @@ project's Implementer; inspect `claude --help`, register it with `generic-cli`, 
 the resolved configuration, and do not start until I confirm.” Use the CLI path below only for
 automation or hosts without direct Codex App Skill execution.
 
-The built-in Antigravity adapter does not automatically add a full-permission flag. The legacy
+Current source defaults Antigravity arguments to `--dangerously-skip-permissions`,
+with explicit saved argument arrays taking precedence. The published npm 2.4.0
+runtime still requires the explicit permission configuration shown below. The legacy
 one-shot path passes configured `args` and then appends `--prompt-interactive <prompt>`; a persistent
 Session starts with `--prompt-interactive=` for current `agy` parsers, then writes its
 first instruction through the PTY unless `{prompt}` is explicitly configured. If `agy --help` confirms
