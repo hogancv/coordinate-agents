@@ -1,8 +1,9 @@
 ---
-layout: page
 title: Web Workspace guide
 description: Use default and custom coding-agent terminals, Git Changes review feedback, collaboration timeline and health, notifications, projects, and persistent sessions.
 ---
+
+<div id="web-工作台指南" class="doc-anchor" aria-hidden="true"></div>
 
 # Web Workspace guide
 
@@ -10,6 +11,8 @@ This guide describes **Web 3.0.2 and the current source checkout**, including
 Git Changes/review feedback, Custom Terminals, notifications, Timeline, Health
 and native Codex recovery. See [Getting started](./getting-started.html) to
 choose a pinned npm installation or source development.
+
+<div id="启动并选择项目" class="doc-anchor" aria-hidden="true"></div>
 
 ## Start and select a project
 
@@ -34,6 +37,8 @@ The sidebar groups tasks by project. Switching projects keeps background session
 running and restores the last selected task. Search filters project names and
 loaded/cached task titles; projects whose tasks have not loaded are identified.
 Clear search or press Escape to restore the prior expansion state.
+
+<div id="默认协作" class="doc-anchor" aria-hidden="true"></div>
 
 ## Default Collaboration
 
@@ -67,6 +72,8 @@ Web task records are separate from structured Tasks and Task Graphs.
 Web groups share the bound repository; creating a group does not
 create an isolated Git worktree. Avoid conflicting concurrent modifications.
 
+<div id="重新打开对话或恢复执行者" class="doc-anchor" aria-hidden="true"></div>
+
 ### Reopen a conversation or recover its executor
 
 A closed or failed Default task exposes **Reopen task** beside its status. When
@@ -84,6 +91,8 @@ An identity conflict blocks recovery and new collaboration; readiness does not
 claim continuous TUI identity verification. **Restart Pair** is a separate
 runtime/HTTP operation that creates fresh sessions and refuses bound or reserved
 Default tasks. See the [current action table](./codex-conversation-resume.html#action-table).
+
+<div id="自定义终端" class="doc-anchor" aria-hidden="true"></div>
 
 ## Custom Terminals
 
@@ -110,6 +119,8 @@ Custom mode does not inject the default roles, create collaboration rounds, or
 enable Send to Codex review feedback. Git diff viewing/copying remains available.
 Environment checks use the selected Custom task's command snapshot; without a
 selected Custom task, checks use the default pair.
+
+<div id="终端与会话生命周期" class="doc-anchor" aria-hidden="true"></div>
 
 ## Terminals and session lifecycle
 
@@ -140,6 +151,8 @@ after owned-process cleanup is confirmed; actual Session failure never retries
 a task automatically. Diagnostics expose `backend`. Stdio fallback cannot
 provide full TUI behavior or child-observed resize.
 
+<div id="工作台设置" class="doc-anchor" aria-hidden="true"></div>
+
 ## Workspace settings
 
 Settings has three tabs with independent saves. Saving keeps the dialog open;
@@ -160,6 +173,8 @@ Default terminal settings preserve unrelated arguments and use project > user >
 adapter-default precedence. They do not reconfigure running CLIs. Executable
 availability does not establish login, model access, provider health, or quota.
 
+<div id="git-changes-与审查反馈" class="doc-anchor" aria-hidden="true"></div>
+
 ## Git Changes and review feedback
 
 The Changes drawer shows bounded working-tree Git status and diffs. It includes
@@ -178,6 +193,8 @@ sent cannot be recalled. Sending notes does not itself record approval or
 prove that Codex acted on them. Custom tasks can view/copy diffs, but cannot
 use this Codex-specific handoff.
 
+<div id="协作时间线" class="doc-anchor" aria-hidden="true"></div>
+
 ## Collaboration Timeline
 
 Expand the normally collapsed panel above Default Collaboration terminals to
@@ -194,6 +211,8 @@ earlier versions cannot be reconstructed.
 
 Clearing archived tasks also removes their stored timeline.
 
+<div id="协作健康提示" class="doc-anchor" aria-hidden="true"></div>
+
 ## Collaboration Health
 
 Task-list hints and the panel beside the timeline show waiting for a `WORKING`
@@ -209,6 +228,8 @@ Custom mode shows Session facts only.
 
 Health uses ordinary Workspace refresh. It does not send system notifications,
 resend instructions, create rounds, restart sessions, or change cooperation state.
+
+<div id="桌面通知" class="doc-anchor" aria-hidden="true"></div>
 
 ## Desktop notifications
 
@@ -241,6 +262,8 @@ reclaims deleted-task entries; otherwise it reports capacity instead of risking
 duplicates. Dispatch failures do not change the task receipt. Automated tests
 mock native dispatch and do not prove real on-screen delivery.
 
+<div id="存储与归档" class="doc-anchor" aria-hidden="true"></div>
+
 ## Storage and archives
 
 The user configuration directory holds the locked, atomically written
@@ -260,6 +283,8 @@ registered projects. This removes their stored history, including timelines.
 Web records are distinct from `.agent-bus/tasks/` and `.agent-bus/task-graphs/`.
 The Web UI does not display, migrate, or delete those structured records.
 
+<div id="本地-http-边界" class="doc-anchor" aria-hidden="true"></div>
+
 ## Local HTTP boundary
 
 The page supplies a per-launch capability in `meta[name="coordinate-agents-capability"]`.
@@ -274,6 +299,8 @@ bound Session data. It does **not** expose structured `/api/tasks`, `/api/graphs
 Task Graph actions, or MCP. Those remain separate source/Plugin surfaces.
 A capability protects local requests; it is not multi-user authentication.
 
+<div id="只读-inspector-与结构化工作流" class="doc-anchor" aria-hidden="true"></div>
+
 ## Read-only Inspector and structured workflows
 
 The retained Inspector is a separate read-only UI, not the current Web Workspace:
@@ -287,6 +314,8 @@ npx @hogancv/coordinate-agents@2.4.0 inspector --port 3001
 It is absent from npm 3.x. See [Structured workflow](./structured-workflow.html),
 [Session Runtime](./session-runtime.html), and [Event Journal](./event-journal.html)
 for the corresponding contracts.
+
+<div id="安全" class="doc-anchor" aria-hidden="true"></div>
 
 ## Security
 

@@ -1,46 +1,56 @@
 ---
-layout: page
 title: Legacy Skill installation
 description: Preserved npm 2.4.0 Skill installation, verification, upgrade, uninstall, and backup procedures; separate from npm 3 Web Workspace.
 ---
 
-# Legacy Skill installation guide / 旧版 Skill 安装指南
+<div id="legacy-skill-installation-guide--旧版-skill-安装指南" class="doc-anchor" aria-hidden="true"></div>
+<div id="legacy-skill-安装指南" class="doc-anchor" aria-hidden="true"></div>
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
-> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
-> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+# Legacy Skill installation guide
 
-> **V3 distribution / 分发说明:** npm 3.0 is Web-first: use `npx @hogancv/coordinate-agents@latest web`. All structured installation/doctor/setup/SDK instructions below refer to the GitHub Plugin/source or npm **2.4.0**. npm 3.x does not install Skills or provide the Legacy runtime. Plugin versions are independent; its resolver selects `bin/coordinate-agents-legacy.mjs`. / npm 3.0 仅分发 Web；以下结构化安装流程使用 GitHub Plugin/源码或 npm 2.4.0。
+::: tip Structured workflow (v2.4 lineage)
+This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+[Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
+:::
+
+::: warning Distribution boundary
+npm 3.0 is Web-first: use `npx @hogancv/coordinate-agents@latest web`. All structured installation/doctor/setup/SDK instructions below refer to the GitHub Plugin/source or npm **2.4.0**. npm 3.x does not install Skills or provide the Legacy runtime. Plugin versions are independent; the current Plugin is version **2.4.0**, and its resolver selects `bin/coordinate-agents-legacy.mjs`.
+:::
 
 This guide preserves the optional Legacy Skill installation lifecycle.
-For Web Workspace use [AI installation guide / AI 安装指南](./install-with-ai.html). Human-readable usage remains in [README.md](https://github.com/hogancv/coordinate-agents/blob/main/README.md) and
+For Web Workspace use [AI installation guide](./install-with-ai.html). Human-readable usage remains in [README.md](https://github.com/hogancv/coordinate-agents/blob/main/README.md) and
 [README.zh-CN.md](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md).
 
-本文件仅适用于旧版 Skill 安装；Web Workspace 的当前安装入口是 [AI installation guide / AI 安装指南](./install-with-ai.html)。面向用户的使用说明见
-[README.md](https://github.com/hogancv/coordinate-agents/blob/main/README.md) 和 [README.zh-CN.md](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)。
+<div id="contents--目录" class="doc-anchor" aria-hidden="true"></div>
+<div id="目录" class="doc-anchor" aria-hidden="true"></div>
 
-## Contents / 目录
+## Contents
 
-- [Canonical identity](#canonical-identity--官方身份)
-- [Architecture & Scope: Host Skill vs Project Agent](#architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理)
-- [Plugin-first onboarding](#plugin-first-onboarding--插件优先的首次使用)
-- [Installation Strategy by Target Host](#installation-strategy-by-target-host--按目标环境选择安装策略)
-- [Security rules](#security-rules--安全规则)
-- [Preflight checks](#preflight-checks--安装前检查)
-- [Install both agents](#install-both-agents--安装两个代理)
-- [Install Codex only](#install-codex-only--只安装-codex)
-- [Install Antigravity only](#install-antigravity-only--只安装-antigravity)
-- [Verify installation](#verify-installation--验证安装)
-- [Use in Codex App](#use-in-codex-app--在-codex-app-中使用)
-- [Configure executable commands](#configure-executable-commands--配置可执行命令)
-- [Start the first task](#start-the-first-task--开始首个任务)
-- [Upgrade](#upgrade--更新)
-- [Uninstall](#uninstall--卸载)
-- [Restore a backup](#restore-a-backup--恢复备份)
-- [Troubleshooting](#troubleshooting--故障排查)
+- [Canonical identity](#canonical-identity)
+- [Architecture & Scope: Host Skill vs Project Agent](#architecture-scope-host-skill-vs-project-agent)
+- [Plugin-first onboarding](#plugin-first-onboarding)
+- [Installation Strategy by Target Host](#installation-strategy-by-target-host)
+- [Security rules](#security-rules)
+- [Preflight checks](#preflight-checks)
+- [Install both agents](#install-both-agents)
+- [Install Codex only](#install-codex-only)
+- [Install Antigravity only](#install-antigravity-only)
+- [Verify installation](#verify-installation)
+- [Use in Codex App](#use-in-codex-app)
+- [Configure executable commands](#configure-executable-commands)
+- [Start the first task](#start-the-first-task)
+- [Upgrade](#upgrade)
+- [Uninstall](#uninstall)
+- [Restore a backup](#restore-a-backup)
+- [Troubleshooting](#troubleshooting)
 
-## Architecture & Scope: Host Skill vs Project Agent / 架构与范围：宿主技能与项目代理
+<a id="architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理"></a>
+
+<div id="architecture--scope-host-skill-vs-project-agent--架构与范围宿主技能与项目代理" class="doc-anchor" aria-hidden="true"></div>
+<div id="architecture--scope-host-skill-vs-project-agent" class="doc-anchor" aria-hidden="true"></div>
+
+## Architecture & Scope: Host Skill vs Project Agent
 
 `coordinate-agents` provides two distinct layers:
 
@@ -52,14 +62,12 @@ For Web Workspace use [AI installation guide / AI 安装指南](./install-with-a
    - A durable, serverless `.agent-bus` protocol engine in each Git project.
    - Dynamic agents and custom tools can be registered into the project via `npx @hogancv/coordinate-agents@2.4.0 agent add <id> --adapter <adapter>`.
    - Contract v1 adapter modules are trusted local code and must be explicitly registered with `npx @hogancv/coordinate-agents@2.4.0 adapter register <local-file>`; the loader never scans directories or imports URLs.
-   - Adapter authors can start with the offline [External Adapter Author Guide](./adapter-author-guide.md) and its bundled minimal example.
+   - Adapter authors can start with the offline [External Adapter Author Guide](./adapter-author-guide.html) and its bundled minimal example.
    - Flexible workflow roles (`planner`, `implementer`, `reviewer`) are mapped to registered agents during `quickstart`.
 
-`coordinate-agents` 包含两个不同层级：
-1. **宿主技能安装（用户环境）**：将技能安装到 Codex App/CLI 与 Antigravity CLI 等宿主环境中，作为交互式默认参考适配器。
-2. **项目级代理注册与协议运行时（Git 仓库）**：在具体项目中通过 `.agent-bus` 协调多代理，可通过 `agent add` 注册任意 CLI/桌面代理，并灵活分配角色（规划者、实现者、审查者）。
+<a id="plugin-first-onboarding--插件优先的首次使用"></a>
 
-## Plugin-first onboarding / 插件优先的首次使用
+## Plugin-first onboarding
 
 Codex Plugin is the entry point for the optional structured workflow. It discovers the local
 Coding CLIs, configures an Implementer, and exposes a durable Task API over the
@@ -118,7 +126,9 @@ Adapter-default precedence remain distinct.
 Do not infer a usable Implementer from a role name. Resolve the actual local
 executable and preserve user configuration outside the installed Skill.
 
-## Installation Strategy by Target Host / 按目标环境选择安装策略
+<a id="installation-strategy-by-target-host--按目标环境选择安装策略"></a>
+
+## Installation Strategy by Target Host
 
 When an AI assistant is asked to install `coordinate-agents`:
 
@@ -134,24 +144,9 @@ When an AI assistant is asked to install `coordinate-agents`:
 - **Target is both CLI hosts via npm**:
   - Use `npx --yes @hogancv/coordinate-agents@2.4.0 install`.
 
-当 AI 助手需要安装 `coordinate-agents` 时：
-- **目标环境为 OpenAI Codex**：
-  - **推荐（GitHub 插件市场）**：
-    ```sh
-    codex plugin marketplace add hogancv/coordinate-agents
-    codex plugin add coordinate-agents@coordinate-agents
-    ```
-  - **回退（不支持插件环境/独立技能）**：使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install --codex`。
-- **目标环境为 Google Antigravity**：
-  - 使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install --antigravity`。
-- **通过 npm 同时为两个 CLI 宿主安装**：
-  - 使用 `npx --yes @hogancv/coordinate-agents@2.4.0 install`。
+<a id="canonical-identity--官方身份"></a>
 
-普通 Codex Plugin 用户不需要 `npm install -g @hogancv/coordinate-agents`；五个 Skill 优先使用
-Plugin 自带的 Coordinate Agents MCP tools。只有 MCP 不可用、standalone、兼容安装或调试场景，才通过
-`node "<skill-dir>/../coordinate-agents/scripts/runtime-entry.mjs" <command> ...` 使用 fallback Runtime。
-
-## Canonical identity / 官方身份
+## Canonical identity
 
 Accept only this identity:
 
@@ -165,7 +160,7 @@ Accept only this identity:
 
 Before installation, query npm and confirm that `name` is exactly
 `@hogancv/coordinate-agents`, `repository.url` points to
-`github.com/hogancv/coordinate-agents`, and the selected Legacy version is exactly `2.4.0`:
+`github.com/hogancv/coordinate-agents`, and the selected Legacy version is exactly `2.4.0`. Do not use the Web `dist-tags.latest` for this check:
 
 ```sh
 npm view @hogancv/coordinate-agents@2.4.0 name version repository.url --json
@@ -175,11 +170,9 @@ Also confirm that the installation document was read from the canonical GitHub r
 from a fork. If any owner, repository, package name, or metadata differs, stop and report the
 mismatch. Do not install.
 
-安装前必须确认仓库 owner 为 `hogancv`、仓库名为 `coordinate-agents`、npm 包名为
-`@hogancv/coordinate-agents`，并确认查询的旧版包版本为 `2.4.0`，不要使用 Web 的 `dist-tags.latest`。
-任何一项不一致都必须停止并报告，不得继续安装。
+<a id="security-rules--安全规则"></a>
 
-## Security rules / 安全规则
+## Security rules
 
 An installing AI must follow all of these rules:
 
@@ -200,10 +193,9 @@ An installing AI must follow all of these rules:
 8. Run `doctor` after installation. A non-zero exit, missing prerequisite, identity mismatch, or
    failed check is a failed installation; never report it as successful.
 
-AI 安装时不得使用第三方镜像、Fork、未知脚本或 `curl | sh`；不得索取或输出任何凭据；不得
-修改产品代码或现有认证；未经用户另行要求，不得自动启动协作任务。验证失败时不得伪装成功。
+<a id="preflight-checks--安装前检查"></a>
 
-## Preflight checks / 安装前检查
+## Preflight checks
 
 Run and record these checks without exposing credentials:
 
@@ -222,14 +214,16 @@ Requirements:
 - `npm` and `git` must run successfully.
 - `codex` and `agy` must both run successfully when installing both agents. For a single-agent
   install, the selected CLI is mandatory; still report the other CLI as present or missing.
-- The npm identity checks in [Canonical identity](#canonical-identity--官方身份) must pass.
+- The npm identity checks in [Canonical identity](#canonical-identity) must pass.
 
 If a prerequisite is missing, stop before changing skill directories, report the exact failed
 check, and use only the prerequisite vendor's official documentation or the platform's trusted
 package manager. Do not improvise a downloaded shell script. Authentication may require the user
 to complete the CLI's own browser flow; do not ask the user to provide the resulting credential.
 
-## Install both agents / 安装两个代理
+<a id="install-both-agents--安装两个代理"></a>
+
+## Install both agents
 
 Use the verified Legacy version `2.4.0` for every command in this guide:
 
@@ -241,7 +235,9 @@ npx --yes @hogancv/coordinate-agents@2.4.0 doctor --lang zh-CN
 For these structured installers, verify the fixed Legacy version with `npm view @hogancv/coordinate-agents@2.4.0 name version repository.url --json`. `dist-tags.latest` now selects Web; do not use it for Skill installation. The second command is
 mandatory.
 
-## Install Codex only / 只安装 Codex
+<a id="install-codex-only--只安装-codex"></a>
+
+## Install Codex only
 
 ```sh
 npx --yes @hogancv/coordinate-agents@2.4.0 install --codex
@@ -250,7 +246,9 @@ npx --yes @hogancv/coordinate-agents@2.4.0 doctor --codex --lang zh-CN
 
 This installs only the Codex skill copy. It does not install or authenticate the Codex CLI itself.
 
-## Install Antigravity only / 只安装 Antigravity
+<a id="install-antigravity-only--只安装-antigravity"></a>
+
+## Install Antigravity only
 
 ```sh
 npx --yes @hogancv/coordinate-agents@2.4.0 install --antigravity
@@ -259,7 +257,9 @@ npx --yes @hogancv/coordinate-agents@2.4.0 doctor --antigravity --lang zh-CN
 
 This installs only the Antigravity skill copy. It does not install or authenticate `agy` itself.
 
-## Verify installation / 验证安装
+<a id="verify-installation--验证安装"></a>
+
+## Verify installation
 
 The selected `doctor` command must exit with status 0 and report every prerequisite and selected
 skill as healthy. Report at least:
@@ -289,7 +289,9 @@ coordinate-agents.backup-YYYY-MM-DDTHH-MM-SS-mmmZ
 the current product repository, or start an agent. Restart the selected CLI or start a new Codex
 App thread after installation so it rediscovers the skill.
 
-## Use in Codex App / 在 Codex App 中使用
+<a id="use-in-codex-app--在-codex-app-中使用"></a>
+
+## Use in Codex App
 
 After the Codex plugin installation is verified, Codex App can use this Skill directly. This is
 the recommended interactive path when the user has Codex App: it does not require manually opening
@@ -353,57 +355,13 @@ Only regular `.mjs`, `.js`, or `.cjs` files without symlink/junction/hard-link p
 The module runs with the current Node.js permissions; this is a trust boundary, not a JavaScript
 sandbox. Failed registration leaves the user configuration and project `.agent-bus` unchanged.
 
-安装并验证 Codex 插件后，可以直接在 Codex App 中使用本 Skill。对于使用 Codex App 的用户，这是推荐的
-交互方式：不需要手动打开两个 CLI 窗口，也不需要复制两条启动命令。
+::: warning Permission-version boundary
+The permission examples below describe published npm 2.4.0. Web 3.0.2 and current source allow choosing Antigravity prompt mode or automatic approval in Workspace settings; the adapter default is `--dangerously-skip-permissions`, overridden by explicit saved args.
+:::
 
-1. 在 Codex App 中添加或打开目标 Git 项目。
-2. 将线程的项目/工作区路径指定为项目根目录，也就是包含 `.git` 的目录。
-3. 新建线程并调用 `$coordinate-agents`。
-4. 让 Codex 在这个项目中初始化或协调任务。
+<a id="configure-executable-commands--配置可执行命令"></a>
 
-App 线程负责 Planner/Reviewer 侧；运行时会在本机以子进程启动已配置的 Implementer CLI。因此，即使用户不需要
-手动打开第二个 CLI 窗口，执行端命令仍必须已安装且正确，例如 `agy` 或 `claude`，不能填写角色名称或另一台机器上才存在的别名。Plugin
-Runtime 已经随载荷提供，不应要求用户安装 global npm CLI；下面的低层命令仅用于 npm 兼容或调试：
-
-```sh
-# 默认使用 Antigravity 作为 Implementer
-npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
-
-# 使用 Claude Code 作为自定义 Implementer
-npx --yes @hogancv/coordinate-agents@2.4.0 agent add claude \
-  --adapter generic-cli --command claude \
-  --args '["--print", "{prompt}"]'
-```
-
-项目路径和执行端命令是两项独立检查：项目路径错误会选错仓库，命令错误会导致 Implementer 无法启动。安装流程本身
-不得启动协作任务；只有在用户另行要求处理选定项目后，才使用这条流程。
-
-对于其他 CLI，推荐直接通过 AI 对话完成配置，让 AI 先检查本机可执行文件和真实帮助输出。例如在 Codex App
-当前线程中说：
-
-```text
-使用 $coordinate-agents，帮我把 Claude Code 配置为这个项目的 Implementer 执行端。请先检查本机
-`claude` 可执行文件和 `claude --help`，使用 `generic-cli` 注册，只选择当前版本支持的提示词和项目路径参数，
-运行 `doctor` 并展示最终解析配置。配置完成且我确认之前，不要启动协作任务。
-```
-
-`generic-cli` 支持 `{prompt}`、`{root}`、`{agent}`、`{lang}` 占位符；运行时也会把选定项目根目录作为子进程工作目录，
-因此不要假设厂商 CLI 一定存在 `--dir`。只有在检查对应 CLI 自己的帮助输出后，才保存 AI 生成的 `args`。
-
-如果适配器实现了公开的 Contract v1，使用其 adapter ID 前必须先显式注册一个确定的本地模块。注册会在写入用户配置前验证
-descriptor，且不会修改项目 Bus：
-
-```sh
-npx --yes @hogancv/coordinate-agents@2.4.0 adapter register "<absolute-local-adapter.mjs>" --json
-npx --yes @hogancv/coordinate-agents@2.4.0 adapter list --json
-```
-
-只接受没有符号链接、junction 或 hard link 路径的正规 `.mjs`、`.js` 或 `.cjs` 文件。模块会在当前 Node.js 权限下运行，
-这是信任边界而不是 JavaScript 沙箱；注册失败时用户配置与项目 `.agent-bus` 保持不变。
-
-> **Permission-version boundary / 权限版本说明:** The permission examples below describe published npm 2.4.0. Web 3.0.2 and current source allow choosing Antigravity prompt mode or automatic approval in Workspace settings; the adapter default is `--dangerously-skip-permissions`, overridden by explicit saved args. / 下文权限说明适用于 npm 2.4.0；Web 3.0.2 和当前源码支持在工作区设置中选择按需确认或自动批准；适配器默认自动批准，显式保存的参数数组覆盖默认值。
-
-## Configure executable commands / 配置可执行命令
+## Configure executable commands
 
 Machine-specific CLI commands belong in the user-level file below, not in the installed Skill or
 Plugin tree:
@@ -445,42 +403,9 @@ npx --yes @hogancv/coordinate-agents@2.4.0 config list
 not the provider's effective permission state. Never copy a permission flag between CLI vendors or
 versions without checking that CLI's help output.
 
-机器相关的 CLI 命令应写入下面的用户级文件，而不是已安装的 Skill 或 Plugin 目录：
+<a id="start-the-first-task--开始首个任务"></a>
 
-```text
-~/.coordinate-agents/config.json
-```
-
-例如直接使用原生 Antigravity 命令并查询结果：
-
-```sh
-npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.command agy
-npx --yes @hogancv/coordinate-agents@2.4.0 config get agent.antigravity.command
-npx --yes @hogancv/coordinate-agents@2.4.0 config list
-```
-
-解析优先级为**项目级显式命令 > 用户级命令 > Adapter 默认值**。已配置但不存在或未通过可执行
-文件检查的命令会使当前启动失败，绝不会静默替换成 `agy` 或其他默认值。`doctor` 会报告最终
-命令。运行时会检查可执行文件是否就绪，但不会探测登录状态、Provider 健康度或模型可用性；
-这些错误在启动后按运行时失败处理。用户配置位于 `skills/`、`.codex-plugin/` 和 npm 包更新
-载荷之外，因此安装和更新会保留它。
-
-权限和沙箱参数由各厂商决定，并且必须显式配置。旧版一次性 `antigravity-cli` 启动只会传递已配置的 `args`，然后追加
-`--prompt-interactive <prompt>`；持久 Session 会先使用 `--prompt-interactive ""` 提供当前 `agy` 所需的空初始提示值，
-再通过 PTY 写入第一条真正的指令，除非参数中显式包含 `{prompt}`。
-该 Adapter 不会自动添加 `--dangerously-skip-permissions` 或其他完全权限参数。如果本机 `agy`
-自身配置已经开启完全权限，该配置会继续生效。如果 `agy --help` 确认必须显式传入该参数，且用户明确要求使用，才写入
-用户级配置：
-
-```sh
-npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
-npx --yes @hogancv/coordinate-agents@2.4.0 config list
-```
-
-`config list` 会显示用户级参数；`doctor` 只验证可执行文件和版本是否就绪，不能证明 Provider 的实际权限状态。不要在
-未检查对应 CLI 帮助输出的情况下，把权限参数跨厂商或跨版本复制。
-
-## Start the first task / 开始首个任务
+## Start the first task
 
 Only after verification succeeds **and the user explicitly asks to begin collaboration**, use the
 following path from the user's Git repository. Codex remains Planner/Reviewer; it must not bypass the
@@ -503,13 +428,9 @@ This creates project-local `.agent-bus/` data and adds `.agent-bus/` to the repo
 not require manually running those two commands. Do not invent a task, run the printed commands, or
 modify product code unless the user asked for those actions.
 
-Codex App 中，只有在验证通过且用户**明确要求开始协作**后，才可将仓库添加或打开为项目，将线程项目/工作区路径指定为
-包含 `.git` 的项目根目录，在新线程中调用 `$coordinate-agents`。不需要手动打开第二个 CLI 窗口；但运行时仍会以本地子进程
-启动已配置的 Implementer，因此必须确认执行命令是真实存在的 `agy`、`claude` 或包装命令。
+<a id="upgrade--更新"></a>
 
-仅 CLI 宿主则运行上面的 `quickstart` 流程。
-
-## Upgrade / 更新
+## Upgrade
 
 Repeat the canonical identity check against Legacy `2.4.0`, then run its update
 and matching doctor command. Do not upgrade a Skill install to the Web-only npm latest:
@@ -526,7 +447,9 @@ The updater backs up a recognized package-managed copy, including a modified man
 replacement. It refuses to replace an unrecognized directory unless `--force` is explicitly
 authorized.
 
-## Uninstall / 卸载
+<a id="uninstall--卸载"></a>
+
+## Uninstall
 
 Uninstall only package-managed copies, then verify that the selected targets are absent:
 
@@ -544,7 +467,9 @@ authorizes `--force`. Uninstalling a skill does not remove Node.js, Git, Codex C
 accounts, npm cache data, previous sibling backups, product code, or project-local `.agent-bus`.
 Do not delete any of those automatically.
 
-## Restore a backup / 恢复备份
+<a id="restore-a-backup--恢复备份"></a>
+
+## Restore a backup
 
 1. List sibling directories matching `coordinate-agents.backup-*` under the relevant
    `skills` directory.
@@ -559,7 +484,9 @@ Do not delete any of those automatically.
 Do not guess which backup to restore and do not delete unused backups without separate user
 approval.
 
-## Troubleshooting / 故障排查
+<a id="troubleshooting--故障排查"></a>
+
+## Troubleshooting
 
 | Symptom | Required response |
 | --- | --- |

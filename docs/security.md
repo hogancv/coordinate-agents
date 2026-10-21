@@ -1,8 +1,9 @@
 ---
-layout: page
 title: Security
 description: Web Workspace loopback access, trusted agent permissions, local plaintext data, and separate structured runtime and installer boundaries.
 ---
+
+<div id="安全" class="doc-anchor" aria-hidden="true"></div>
 
 # Security
 
@@ -36,6 +37,8 @@ but OS display policy and other local processes remain outside Workspace control
 
 Inspect and redact diagnostics before sharing. See the
 [Workspace guide](./inspector.html) for storage paths and lifecycle details.
+
+<div id="共享-session-runtime-与结构化工作流" class="doc-anchor" aria-hidden="true"></div>
 
 ## Shared Session Runtime and structured workflow
 

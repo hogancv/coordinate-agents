@@ -1,17 +1,18 @@
 ---
-layout: default
 title: Coordinate Agents MCP
 description: Local stdio MCP tools over the canonical Coordinate Agents Runtime.
 ---
 
+<div id="技术参考-coordinate-agents-mcp" class="doc-anchor" aria-hidden="true"></div>
+
 # Coordinate Agents MCP
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
-> **V3 distribution / 分发说明:** MCP is distributed through the GitHub Plugin/source (or npm 2.4.0), independently of npm 3.0 Web Workspace. The npm 3 tarball contains no MCP server.
+> **V3 distribution:** MCP is distributed through the GitHub Plugin/source (or npm 2.4.0), independently of npm 3.0 Web Workspace. The npm 3 tarball contains no MCP server.
 
 
 Coordinate Agents exposes a local, stdio-only MCP server for Codex Plugins.

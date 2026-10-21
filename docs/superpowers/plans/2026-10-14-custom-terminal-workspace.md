@@ -1,3 +1,15 @@
+---
+search: false
+title: "Custom Terminal Workspace Implementation Plan"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-custom-terminal-workspace-implementation-plan" class="doc-anchor" aria-hidden="true"></div>
+
 # Custom Terminal Workspace Implementation Plan
 
 **Goal:** Implement the supplied Custom Terminal Workspace v1 specification alongside the unchanged default collaboration flow.

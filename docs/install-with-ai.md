@@ -1,33 +1,38 @@
 ---
-layout: page
-title: Install with AI / AI 安装指南
-description: Canonical bilingual Web Workspace installation, verification, upgrade, uninstall, AI request examples, and separate Legacy Skill entry points.
+title: Install with AI
+description: Canonical Web Workspace installation, verification, upgrade, uninstall, AI request examples, and separate Legacy Skill entry points.
 ---
 
-# Install with AI / AI 安装指南
+<div id="install-with-ai--ai-安装指南" class="doc-anchor" aria-hidden="true"></div>
+<div id="ai-安装指南" class="doc-anchor" aria-hidden="true"></div>
+
+# Install with AI {#install-with-ai-ai-安装指南}
 
 This is the canonical installation guide, consolidated from the former root
-`AI_INSTALL.md` and this page. / 本页合并原根目录 AI 安装指南与使用 AI 安装说明。
+`AI_INSTALL.md` and this page.
 
-> **v2.4 users / 旧版用户：** See [original docs and v3 migration / 旧文档与迁移](./v2.4.html)
-> before replacing an existing structured installation with the Web package.
+::: warning v2.4 users
+See [original docs and v3 migration](./v2.4.html) before replacing an existing structured installation with the Web package.
+:::
 
 Install the **Web Workspace** by default when the user asks for Coordinate Agents.
 The optional Codex Plugin / Legacy Skill / MCP workflow has its own
 [structured guide](./structured-workflow.html) and
-[Legacy installation lifecycle](./legacy-ai-install.html).
+[Legacy installation lifecycle (English)](./legacy-ai-install.html).
 
-用户要求安装 Coordinate Agents 时，默认按本地 Web Workspace 处理。
-只有明确要求 Plugin、Skill、MCP 或结构化 Task 时，才使用对应的结构化安装流程。
-不要把 npm 3.x 当作旧版 Skill 安装器。
+Use structured installation only when the user explicitly requests Plugin, Skill,
+MCP, or structured Tasks. npm 3.x is not the Legacy Skill installer.
 
-## Canonical identity / 官方身份
+<div id="canonical-identity--官方身份" class="doc-anchor" aria-hidden="true"></div>
+<div id="官方身份" class="doc-anchor" aria-hidden="true"></div>
+
+## Canonical identity {#canonical-identity-官方身份}
 
 - GitHub owner: `hogancv`
 - Canonical repository: https://github.com/hogancv/coordinate-agents
 - npm package: `@hogancv/coordinate-agents`
 - Expected `repository.url`: `git+https://github.com/hogancv/coordinate-agents.git`
-- Main usage: [English README](https://github.com/hogancv/coordinate-agents/blob/main/README.md), [中文 README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)
+- Main usage: [English README](https://github.com/hogancv/coordinate-agents/blob/main/README.md), [Chinese README](https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md)
 
 Check identity and the actual release before installing:
 
@@ -37,11 +42,16 @@ npm view @hogancv/coordinate-agents dist-tags.latest version repository.url --js
 
 This guide targets **Web 3.0.2**, which includes Git Changes/review feedback,
 Custom Terminals, desktop notifications, Timeline, Health and native Codex recovery.
+Verified on **2026-10-21**: npm `latest` and the source package version are **3.0.2**;
+the independently versioned `.codex-plugin` Plugin is **2.4.0**.
 Verify registry metadata before selecting `latest`; choose source for development
 or changes made after the selected release.
 Never substitute the npm latest version for the Legacy version 2.4.0.
 
-## Check prerequisites / 安装前检查
+<div id="check-prerequisites--安装前检查" class="doc-anchor" aria-hidden="true"></div>
+<div id="安装前检查" class="doc-anchor" aria-hidden="true"></div>
+
+## Check prerequisites {#check-prerequisites-安装前检查}
 
 ```sh
 node --version
@@ -56,12 +66,19 @@ uses the user's selected executables. Provider login remains with each CLI.
 Do not request, print, copy, or store credentials. Executable detection does not
 prove login, provider access, or quota. Do not silently change CLI permissions.
 
-检查 Node.js、Git 和所选 CLI；不要读取或搬运登录目录。
-原生 PTY 取决于平台与 Node 版本，stdio 回退不能提供完整 TUI 或子进程可见的尺寸变化。
+Check Node.js, Git, and the selected CLI without reading or moving login directories.
+Native PTY support depends on the platform and Node version. The stdio fallback
+cannot provide a complete TUI or resize events visible to the child process.
 
-## Choose installation path / 选择安装方式
+<div id="choose-installation-path--选择安装方式" class="doc-anchor" aria-hidden="true"></div>
+<div id="选择安装方式" class="doc-anchor" aria-hidden="true"></div>
 
-### Published Web package / 已发布 Web 包
+## Choose installation path {#choose-installation-path-选择安装方式}
+
+<div id="published-web-package--已发布-web-包" class="doc-anchor" aria-hidden="true"></div>
+<div id="已发布-web-包" class="doc-anchor" aria-hidden="true"></div>
+
+### Published Web package {#published-web-package-已发布-web-包}
 
 A global install is optional. Start the verified package with an explicit root:
 
@@ -74,7 +91,10 @@ release. `--port 0` selects a free port. Opening Web initializes its local proje
 storage and, for a non-Git startup folder, Git without a commit. Choose an intended
 project directory; do not launch it from an arbitrary folder for verification.
 
-### Current source / 当前源码
+<div id="current-source--当前源码" class="doc-anchor" aria-hidden="true"></div>
+<div id="当前源码" class="doc-anchor" aria-hidden="true"></div>
+
+### Current source {#current-source-当前源码}
 
 ```sh
 git clone https://github.com/hogancv/coordinate-agents.git
@@ -86,9 +106,12 @@ node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
 Reuse an existing checkout when appropriate; preserve local edits. Merging to
 main does not publish npm. The npm package and Plugin have independent versioning.
 
-需要当前新增功能时从源码启动。已有仓库不应覆盖本地修改；安装依赖后运行 Web 入口即可。
+Use source when you need current additions; install its dependencies and run the Web entry point.
 
-## Verify and report / 验证与汇报
+<div id="verify-and-report--验证与汇报" class="doc-anchor" aria-hidden="true"></div>
+<div id="验证与汇报" class="doc-anchor" aria-hidden="true"></div>
+
+## Verify and report {#verify-and-report-验证与汇报}
 
 For a package-only installation request, inspect the selected package's version
 and help. Do not run `quickstart`, create a task, or start agent processes unless
@@ -111,9 +134,12 @@ Report: repository/package identity, chosen version or source commit, Node/Git,
 selected CLI executables, installation location, actual checks, and unresolved
 login/platform issues. Separate installed, server started, and live task verified.
 
-汇报安装版本或源码提交、目录、已验证项及未验证项。不要把安装成功等同于模型任务完成。
+Installation success does not mean that a model task completed.
 
-## Upgrade / 更新
+<div id="upgrade--更新" class="doc-anchor" aria-hidden="true"></div>
+<div id="更新" class="doc-anchor" aria-hidden="true"></div>
+
+## Upgrade {#upgrade-更新}
 
 For npm, re-check metadata and use the selected newer version. A global install
 may be updated with `npm install -g @hogancv/coordinate-agents@<verified-version>`.
@@ -122,7 +148,10 @@ when dependencies change. Stop/restart Web explicitly; handle persistent session
 through their own close/restart controls. Existing task data is separate from
 the installed code. Do not promise automatic data migration or session context restore.
 
-## Uninstall / 卸载
+<div id="uninstall--卸载" class="doc-anchor" aria-hidden="true"></div>
+<div id="卸载" class="doc-anchor" aria-hidden="true"></div>
+
+## Uninstall {#uninstall-卸载}
 
 If globally installed:
 
@@ -136,7 +165,10 @@ project history or the project registry. Prefer the Workspace's explicit archive
 and clear controls when the user wants task history removed; clearing is permanent.
 Do not delete project source or `.agent-bus/` merely to remove an installation.
 
-## Optional structured installation / 可选结构化安装
+<div id="optional-structured-installation--可选结构化安装" class="doc-anchor" aria-hidden="true"></div>
+<div id="可选结构化安装" class="doc-anchor" aria-hidden="true"></div>
+
+## Optional structured installation {#optional-structured-installation-可选结构化安装}
 
 For an explicitly requested Codex Plugin:
 
@@ -147,16 +179,21 @@ codex plugin add coordinate-agents@coordinate-agents
 
 The Plugin supplies its own runtime and does not require a global npm CLI.
 For standalone Legacy Skill installation, pin npm **2.4.0** and follow
-[Legacy installation](./legacy-ai-install.html) for selected-target `doctor`,
+[Legacy installation (English)](./legacy-ai-install.html) for selected-target `doctor`,
 upgrade, uninstall, backup restore, and failure handling. Source commands use
 `node bin/coordinate-agents-legacy.mjs`; npm 3.x does not provide those commands.
 
-## Troubleshooting / 故障排查
+<div id="troubleshooting--故障排查" class="doc-anchor" aria-hidden="true"></div>
+<div id="故障排查" class="doc-anchor" aria-hidden="true"></div>
+
+## Troubleshooting {#troubleshooting-故障排查}
 
 See [Troubleshooting](./troubleshooting.html). Never use `curl | sh` to install
 unreviewed code. Never request, print, copy, or store a token, cookie, password,
 or private key. Review provider installation instructions separately when an
 agent CLI is missing; do not infer permission to replace the user's setup.
+
+<div id="请求安装-web-workspace" class="doc-anchor" aria-hidden="true"></div>
 
 ## Request the Web Workspace
 
@@ -179,6 +216,8 @@ dependencies and show me the Web startup command for my project.
 The AI should check registry metadata rather than assume that source, the 3.0.2
 release and the current npm `latest` are identical.
 
+<div id="ai-可以执行的命令" class="doc-anchor" aria-hidden="true"></div>
+
 ## Commands the AI may execute
 
 Within an installation request, read-only identity and prerequisite checks:
@@ -197,6 +236,8 @@ and open the printed localhost URL. A non-Git startup folder initializes Git
 and local storage without a commit. Creating a task launches real agent processes;
 that is separate from package verification.
 
+<div id="ai-不得隐式执行的命令" class="doc-anchor" aria-hidden="true"></div>
+
 ## Commands the AI must not execute implicitly
 
 Do not run Legacy `install`, `doctor`, or `quickstart` against npm `latest`.
@@ -204,6 +245,8 @@ Do not create collaboration tasks just to prove installation. Do not change
 CLI permission/sandbox settings, copy logins, or delete local task history.
 Provider authentication stays with the selected CLI. Never pipe a downloaded
 installer into a shell without review.
+
+<div id="安装结果汇报" class="doc-anchor" aria-hidden="true"></div>
 
 ## Installation result report
 
@@ -218,13 +261,15 @@ A successful npm command is not proof that a live agent task or desktop toast
 works. A non-zero exit must be reported as a failed step. For common failures
 and recovery, use [Troubleshooting](./troubleshooting.html).
 
+<div id="明确请求-plugin-或-legacy-skill" class="doc-anchor" aria-hidden="true"></div>
+
 ## Explicit Plugin or Legacy Skill requests
 
 For Codex-native structured Tasks, ask for the GitHub Plugin and follow
 [Structured workflow](./structured-workflow.html). Plugin-only installation
 supplies its own runtime, without a global npm CLI prerequisite.
 
-For the npm 2.4.0 Skill installer, use [Legacy Skill installation](./legacy-ai-install.html).
+For the npm 2.4.0 Skill installer, use [Legacy Skill installation (English)](./legacy-ai-install.html).
 It preserves the Codex and Antigravity installation conversations, selected-target
 `doctor` checks, update/uninstall, and backup restore. Never substitute npm's
 current `dist-tags.latest` into that Legacy procedure.

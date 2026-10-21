@@ -1,15 +1,17 @@
 ---
-layout: page
 title: Structured workflow (Plugin and Legacy CLI)
 description: Optional structured Tasks, Agent Bus handoffs, review evidence, and explicit recovery through the GitHub Plugin or Legacy runtime.
 ---
 
+<div id="结构化工作流-plugin-与-legacy-cli" class="doc-anchor" aria-hidden="true"></div>
+
 # Structured workflow: Plugin and Legacy CLI
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
-> This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
-> it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+::: note Structured workflow (v2.4 lineage)
+This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
+it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
+[Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
+:::
 
 This is the optional protocol-driven workflow retained in the GitHub Plugin and source.
 For the current Web Workspace, start with [Getting started](./getting-started.md).
@@ -17,7 +19,11 @@ The Web task list and collaboration receipts are separate from the structured Ta
 
 The npm 3.x package provides Web Workspace only. All structured npm examples on this
 page pin **2.4.0**. From source use `node bin/coordinate-agents-legacy.mjs`;
-the Plugin uses its bundled runtime and has independent versioning.
+the Plugin uses its bundled runtime and has independent versioning. As verified on
+**2026-10-21**, npm `latest` and the source package are **3.0.2**; the
+`.codex-plugin` Plugin is **2.4.0**.
+
+<div id="安装可选-plugin" class="doc-anchor" aria-hidden="true"></div>
 
 ## Install the optional Plugin
 
@@ -29,6 +35,8 @@ codex plugin add coordinate-agents@coordinate-agents
 Open the target repository in Codex, start a new thread, and invoke
 `$coordinate-agents` for discovery before configuring or dispatching work.
 A global npm install is not required.
+
+<div id="优先使用-codex-plugin" class="doc-anchor" aria-hidden="true"></div>
 
 ## Codex Plugin-first path
 
@@ -73,14 +81,17 @@ JSON stdout is one parseable document with `{ok, command, ...}` on success or
 Implementer is terminal for that activation; the Plugin reports the structured
 error and never loops through automatic retries.
 
-> [!NOTE]
-> This walkthrough demonstrates the **default reference workflow** using OpenAI Codex App/CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration](./adapter-author-guide.html) and custom role assignments.
+::: note
+This walkthrough demonstrates the **default reference workflow** using OpenAI Codex App/CLI (planner and reviewer) and Google Antigravity CLI (implementer). The underlying `.agent-bus` runtime also supports custom agents via [dynamic agent registration (English)](./adapter-author-guide.html) and custom role assignments.
+:::
 
 This walkthrough starts from an existing Git repository and ends with a reviewed commit.
 Install Node.js, Git, Codex App or Codex CLI, and an Implementer CLI such as
 Antigravity (`agy`) first. Native authentication remains owned by each CLI;
 Coordinate Agents does not preflight login state. Duration depends on the task
 and provider response time.
+
+<div id="codex-app-路径-推荐" class="doc-anchor" aria-hidden="true"></div>
 
 ## Codex App path (recommended)
 
@@ -128,6 +139,9 @@ settings or via CLI rather than assuming the Plugin added it:
 $ npx --yes @hogancv/coordinate-agents@2.4.0 config set agent.antigravity.args '["--dangerously-skip-permissions"]'
 $ npx --yes @hogancv/coordinate-agents@2.4.0 config list
 ```
+
+<div id="1-check-prerequisites-and-install-both-skills" class="doc-anchor" aria-hidden="true"></div>
+<div id="_1-检查前置条件并安装两个-skill" class="doc-anchor" aria-hidden="true"></div>
 
 ## 1. Check prerequisites and install both Skills
 
@@ -179,6 +193,9 @@ coordinate-agents/
 The installer does not copy account tokens. Codex and Antigravity keep their native credentials in
 their own homes.
 
+<div id="2-initialize-the-first-task" class="doc-anchor" aria-hidden="true"></div>
+<div id="_2-初始化首个任务" class="doc-anchor" aria-hidden="true"></div>
+
 ## 2. Initialize the first task
 
 For the Plugin path, do not use `quickstart` as a substitute for Task dispatch. After Codex has a
@@ -218,6 +235,9 @@ Use Ctrl+C or a processed `STOP` message to end it; `--once` opts into one activ
 `.git/info/exclude`; it does not add bus messages to commits. The project source tree is unchanged
 until Antigravity implements an approved specification.
 
+<div id="3-complete-one-lifecycle" class="doc-anchor" aria-hidden="true"></div>
+<div id="_3-完成一次生命周期" class="doc-anchor" aria-hidden="true"></div>
+
 ## 3. Complete one lifecycle
 
 1. Tell Codex the observable behavior, constraints, and acceptance criteria.
@@ -244,6 +264,8 @@ tests: PASS
 bus: PASS
 ```
 
+<div id="成功与失败信号" class="doc-anchor" aria-hidden="true"></div>
+
 ## Success and failure signals
 
 Success means all of the following are observable: Antigravity alone changed product files; the
@@ -253,4 +275,4 @@ unexpected `processing` claims; and release permission has not been inferred fro
 Stop and diagnose if both terminals show the same role, both agents attempt Git writes, a message
 stays in `processing` after its worker exited, evidence names a nonexistent commit, tests fail, or
 the project root differs between terminals. See [troubleshooting](./troubleshooting.html),
-[role comparison](./comparison.html), and the [protocol](./protocol.html).
+[role comparison](./comparison.html), and the [protocol (English)](./protocol.html).

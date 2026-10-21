@@ -1,15 +1,16 @@
 ---
-layout: page
 title: Antigravity CLI role (Default reference workflow)
 description: Google Antigravity CLI serves as the reference implementer in coordinate-agents.
 ---
 
+<div id="技术参考-antigravity-cli-role-reference-implementer" class="doc-anchor" aria-hidden="true"></div>
+
 # Antigravity CLI role (Reference implementer)
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 > [!NOTE]
 > This page describes Google Antigravity CLI's responsibilities in the **default reference workflow**. The underlying `.agent-bus` runtime is agent-agnostic and allows assigning the `implementer` role to other registered agents.

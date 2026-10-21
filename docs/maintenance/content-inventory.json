@@ -1,0 +1,1444 @@
+{
+  "baselineCommit": "1341ae73daf182cca9b63df728e0e2e1a0b821a9",
+  "checkedOn": "2026-10-21",
+  "files": [
+    {
+      "path": ".github/SECURITY.md",
+      "sha256": "6d5ad33a3b208566214bb7e3fac7eac10c4bb5c793be71b1bc77f6b1ba58f962",
+      "lines": 172,
+      "hanCharacters": 0,
+      "headings": [
+        "# Security policy",
+        "## Supported versions",
+        "## Reporting a vulnerability",
+        "## Installation trust boundary",
+        "## Web Workspace boundary",
+        "## Runtime data and adapter boundary",
+        "### Adapter execution safety",
+        "### Human release gate (structured workflow)",
+        "## Security invariants for contributors"
+      ],
+      "links": [
+        "https://github.com/hogancv/coordinate-agents/security/advisories/new",
+        "../docs/install-with-ai.md",
+        "../docs/legacy-ai-install.md",
+        "../docs/security.md",
+        "../docs/adapter-author-guide.md",
+        "../examples/minimal-external-adapter/README.md"
+      ]
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "aebf0d7c06278017c3b15304b90815751a550d6c3d41bde3d33ce197a40c629d",
+      "lines": 99,
+      "hanCharacters": 0,
+      "headings": [
+        "# Repository instructions for AI contributors",
+        "## Canonical identity",
+        "## Repository map",
+        "## Required checks",
+        "## Change rules",
+        "## Distribution and release strategy",
+        "## Release restrictions"
+      ],
+      "links": [
+        "./docs/install-with-ai.md"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha256": "de5201d2f6bc6dcc43511416001ea1ce9a6cccb1172ba9c111541510da30622b",
+      "lines": 180,
+      "hanCharacters": 8,
+      "headings": [
+        "# Coordinate Agents",
+        "## Quick Start",
+        "### Published npm package and current source",
+        "## What you can do",
+        "## How default collaboration works",
+        "## Custom Terminals",
+        "## Local data and permissions",
+        "## Structured workflow and npm 2 migration",
+        "## Development",
+        "## Documentation",
+        "## License"
+      ],
+      "links": [
+        "./README.zh-CN.md",
+        "./docs/getting-started.md",
+        "./docs/index.md",
+        "./docs/v2.4.md",
+        "https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png",
+        "./docs/getting-started.md",
+        "./docs/troubleshooting.md",
+        "./docs/codex-conversation-resume.md#action-table",
+        "./docs/inspector.md",
+        "./docs/security.md",
+        "./.github/SECURITY.md",
+        "./docs/structured-workflow.md",
+        "./docs/legacy-ai-install.md",
+        "./docs/changelog.md",
+        "./docs/releases/v3-web-first.md",
+        "./docs/getting-started.md",
+        "./docs/inspector.md",
+        "./docs/faq.md",
+        "./docs/comparison.md",
+        "./docs/install-with-ai.md",
+        "./docs/troubleshooting.md",
+        "./docs/security.md",
+        "./docs/structured-workflow.md",
+        "./docs/plugin-e2e.md",
+        "./docs/protocol.md",
+        "./docs/mcp.md",
+        "./docs/task-graph-v1.md",
+        "./docs/session-runtime.md",
+        "./docs/event-journal.md",
+        "./docs/adapter-author-guide.md",
+        "./docs/adapter-conformance.md",
+        "./docs/index.md",
+        "./docs/zh-CN/index.md",
+        "./docs/llms.txt",
+        "./LICENSE"
+      ]
+    },
+    {
+      "path": "README.zh-CN.md",
+      "sha256": "1f890f167df2eb8834cd7b9dcfeb5f991188e166efd44af13100a14b480a5e16",
+      "lines": 162,
+      "hanCharacters": 1752,
+      "headings": [
+        "# Coordinate Agents",
+        "## 快速开始",
+        "### npm 已发布版本与当前源码",
+        "## 当前能做什么",
+        "## 默认协作如何运行",
+        "## 自定义双终端",
+        "## 本地数据与权限",
+        "## 结构化工作流与 npm 2 迁移",
+        "## 本地开发",
+        "## 文档导航",
+        "## 许可证"
+      ],
+      "links": [
+        "./README.md",
+        "./docs/getting-started.md",
+        "./docs/zh-CN/index.md",
+        "./docs/v2.4.md",
+        "https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png",
+        "./docs/getting-started.md",
+        "./docs/troubleshooting.md",
+        "./docs/zh-CN/codex-conversation-resume.md#动作表",
+        "./docs/inspector.md",
+        "./docs/security.md",
+        "./.github/SECURITY.md",
+        "./docs/structured-workflow.md",
+        "./docs/legacy-ai-install.md",
+        "./docs/changelog.md",
+        "./docs/releases/v3-web-first.md",
+        "./docs/getting-started.md",
+        "./docs/inspector.md",
+        "./docs/faq.md",
+        "./docs/comparison.md",
+        "./docs/install-with-ai.md",
+        "./docs/troubleshooting.md",
+        "./docs/security.md",
+        "./docs/structured-workflow.md",
+        "./docs/plugin-e2e.md",
+        "./docs/protocol.md",
+        "./docs/mcp.md",
+        "./docs/task-graph-v1.md",
+        "./docs/session-runtime.md",
+        "./docs/event-journal.md",
+        "./docs/adapter-author-guide.md",
+        "./docs/adapter-conformance.md",
+        "./docs/zh-CN/index.md",
+        "./docs/index.md",
+        "./docs/llms.txt",
+        "./LICENSE"
+      ]
+    },
+    {
+      "path": "docs/MCP_TROUBLESHOOTING.md",
+      "sha256": "b5f32bf65c8588e06b7328ccbd9ebd458b46da6f6a4d8db5102901cf2003c1ac",
+      "lines": 222,
+      "hanCharacters": 16,
+      "headings": [
+        "# MCP troubleshooting",
+        "## 1. Confirm the installed Plugin payload",
+        "## 2. Confirm MCP registration",
+        "## 3. Run the standalone handshake",
+        "## 4. Collect optional stderr diagnostics",
+        "## 5. Complete the Codex restart",
+        "## 6. Isolate Plugin ingestion from Codex MCP support",
+        "## Expected tool catalog"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html"
+      ]
+    },
+    {
+      "path": "docs/adapter-author-guide.md",
+      "sha256": "6089165d25a8788fb9c5ee27fc77a2d6fb84774cf1edbcb7bbcffa7f21dceeb1",
+      "lines": 172,
+      "hanCharacters": 20,
+      "headings": [
+        "# External Adapter Author Guide",
+        "## Public boundary",
+        "## Required methods and facts",
+        "## Offline conformance",
+        "## Explicit trusted-local registration",
+        "## Packaging and identity checklist"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "../examples/minimal-external-adapter/adapter.mjs",
+        "../examples/minimal-external-adapter/fake-agent.mjs"
+      ]
+    },
+    {
+      "path": "docs/adapter-conformance.md",
+      "sha256": "af0ad7bb6580407e664a69c0baf674d0b80eed559355a71034e6f370851bb050",
+      "lines": 214,
+      "hanCharacters": 20,
+      "headings": [
+        "# Adapter Conformance Kit",
+        "## Public import",
+        "## Run the kit",
+        "## Explicit trusted-local modules",
+        "## What is proved",
+        "## Repository acceptance gate"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./adapter-author-guide.md",
+        "../examples/minimal-external-adapter/README.md",
+        "releases/v3-ci.md"
+      ]
+    },
+    {
+      "path": "docs/antigravity-cli.md",
+      "sha256": "2fd803a56e99ca08688dca57eec9a1f6b7ffe440df29f6099c29dd8927a27d63",
+      "lines": 84,
+      "hanCharacters": 16,
+      "headings": [
+        "# Antigravity CLI role (Reference implementer)",
+        "## Permission and sandbox arguments"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html"
+      ]
+    },
+    {
+      "path": "docs/changelog.md",
+      "sha256": "a85c699a38bf19d021a9e9ce3f8141a8fa2d29e2b8e527de0249a73f69563e54",
+      "lines": 214,
+      "hanCharacters": 7,
+      "headings": [
+        "# Changelog",
+        "## [3.0.2] - 2026-10-21",
+        "### Web Workspace",
+        "### Conversation recovery",
+        "### Settings, documentation and compatibility",
+        "## [3.0.1] - 2026-10-13",
+        "### Windows terminals",
+        "### Web Workspace",
+        "### Performance and safety",
+        "### Compatibility",
+        "## 3.0.0 — Web-first npm distribution",
+        "## 2.4.0 — Lightweight Web Workspace",
+        "## 2.3.0 — Multi-Agent Task Graph v1",
+        "### Added",
+        "### Changed",
+        "### Verification",
+        "## 2.2.0 — Adapter SDK Contract v1",
+        "### Added",
+        "### Changed",
+        "### Verification"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./releases/v3-web-first.md"
+      ]
+    },
+    {
+      "path": "docs/codex-cli.md",
+      "sha256": "cde3303fb0c40db2b1c42fca14199168eb91e9e7d908e30fbb75c9301bb9caca",
+      "lines": 30,
+      "hanCharacters": 16,
+      "headings": [
+        "# Codex App/CLI role (Reference planner & reviewer)"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html"
+      ]
+    },
+    {
+      "path": "docs/codex-conversation-resume.md",
+      "sha256": "01418e927bff94a00c5347b6c075b8a149fdc340192062926d8972b314e3a029",
+      "lines": 155,
+      "hanCharacters": 4,
+      "headings": [
+        "# Resume a Codex collaboration conversation",
+        "## Action table",
+        "## First binding and continuing later",
+        "## Executor and interrupted work",
+        "## Validation boundary",
+        "## Historical scope"
+      ],
+      "links": [
+        "#historical-scope",
+        "structured-workflow.md",
+        "codex-native-auto-binding.md",
+        "diagnostics/codex-conversation-resume-macos.md",
+        "superpowers/specs/2026-10-20-codex-conversation-resume-design.md",
+        "superpowers/plans/2026-10-20-codex-conversation-resume.md",
+        "native-conversation-identity-store.md",
+        "superpowers/plans/2026-10-19-native-identity-store.md",
+        "native-auto-binding-plan.md",
+        "diagnostics/codex-conversation-resume-macos.md",
+        "codex-native-auto-binding.md#independent-native-acceptance"
+      ]
+    },
+    {
+      "path": "docs/codex-native-auto-binding.md",
+      "sha256": "7b8e5597f9c067de0c2d9a5b44468b8289c91380efb040e1b07b490d88eb870c",
+      "lines": 133,
+      "hanCharacters": 0,
+      "headings": [
+        "# Native identity capture: implementation and acceptance",
+        "## Audited sources (2026-10-21)",
+        "## Boundaries and responsibilities",
+        "## Independent native acceptance"
+      ],
+      "links": [
+        "codex-conversation-resume.md#action-table",
+        "https://learn.chatgpt.com/docs/hooks",
+        "https://learn.chatgpt.com/docs/config-file/config-reference"
+      ]
+    },
+    {
+      "path": "docs/comparison.md",
+      "sha256": "465707ccf257feafba0571d0b1dc9016e09174fc6c6b28f7cc624d0c768333d8",
+      "lines": 57,
+      "hanCharacters": 0,
+      "headings": [
+        "# Compare workflows",
+        "## When Web Workspace helps",
+        "## When the structured workflow helps",
+        "## Do not use this project when"
+      ],
+      "links": [
+        "./getting-started.html",
+        "./structured-workflow.html",
+        "./security.html"
+      ]
+    },
+    {
+      "path": "docs/development/performance-notes.md",
+      "sha256": "aedad3de17c7866872eaddd539a88176333f7026fb14384788e028b742e80f79",
+      "lines": 84,
+      "hanCharacters": 0,
+      "headings": [
+        "# Historical performance notes",
+        "# Bolt's Journal - Critical Learnings",
+        "## 2025-05-19 - Pattern compilation in scope audit",
+        "## 2025-05-20 - Precomputed declarations and pattern facts in Intent Map scheduling",
+        "## 2025-05-20 - Write-intent conflict detection and wave scheduling",
+        "## 2025-05-21 - Precomputed declarations Map in validateStoredGraph scope evidence check",
+        "## 2025-05-21 - Regex-guaranteed lowercase ASCII strings in Agent and Subtask ID validation",
+        "## 2026-09-17 - Single-pass parent state evaluation",
+        "## 2026-09-18 - Pre-built adapterMap in task graph planning",
+        "## 2026-09-18 - WeakMap declarations lookup cache and Set lookups in task graph scheduling",
+        "## 2026-09-18 - Allocation-free subtask frontier state evaluation",
+        "## 2026-09-18 - Targeted subtask filtering in inspectTaskGraphRecovery",
+        "## 2026-09-18 - Single-pass subtask state counting and pre-aggregated agent roles in Inspector data",
+        "## 2026-09-18 - Pre-indexed tasks Map in readSessions",
+        "## 2026-09-18 - Precomputed conflictDeferred Set in taskGraphPlanCommand",
+        "## 2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation",
+        "## 2026-09-20 - Targeted Session Fact Lookups in Single-Task Reads",
+        "## 2026-09-20 - Skipping full object sanitization on summary views and single-pass graph detail mapping",
+        "## 2026-09-20 - Pre-indexed session task map and pre-read session records in workspace archive cleanup",
+        "## 2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents",
+        "## 2026-09-21 - Fast-path length checks and bounded slicing for code point arrays in string summary generation",
+        "## 2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration",
+        "## 2026-09-21 - Single-pass maximum filename search in currentState"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/development/v3.1-conpty-reliability.md",
+      "sha256": "4cd1439d0c66e44fada940c2af4525004012908a98a87739f9870c95eff37cf1",
+      "lines": 167,
+      "hanCharacters": 3517,
+      "headings": [
+        "# V3.1 Windows ConPTY 与终端可靠性开发记录",
+        "## 结论与验收边界",
+        "## 历史证据与故障分类",
+        "## 实现范围",
+        "## 最小复现与运行方法",
+        "# 原始 node-pty：显式绑定加载、TTY、输入、中文/ANSI、尺寸、自然退出和目录释放",
+        "# 正常日常回归：真实 fallback、缺少绑定、错误注入、UTF-8、前端尺寸队列",
+        "# 必须是 native，绝不把 fallback 的通过记成 native 通过",
+        "# POSIX：仅本次启动进程及其 owned Host 使用",
+        "# PowerShell：当前进程环境；结束测试后清除",
+        "## 测试结果",
+        "## 手动 CI 与默认策略的闸门",
+        "## 交付状态（首次本地验收）",
+        "## Runner 验收补录"
+      ],
+      "links": [
+        "https://github.com/hogancv/coordinate-agents/pull/17",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/32867508239",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/32868040172",
+        "v3.1-local-evidence.json",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/38138450785",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/38139026280",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/38139799801",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/38140458643",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/38142027731"
+      ]
+    },
+    {
+      "path": "docs/diagnostics/codex-conversation-resume-macos.md",
+      "sha256": "fc97a0112be2c59aea4c03010d17ac14eccf66a8f4f30525a55c5a1202577701",
+      "lines": 93,
+      "hanCharacters": 0,
+      "headings": [
+        "# Codex-Centric Resume v1: macOS native acceptance",
+        "## A — continuing native conversation",
+        "## B — rebuilt executor completes a new implementation",
+        "## C — interruption in WORKING",
+        "## D/E — automated boundary and regression evidence",
+        "## Capability boundary"
+      ],
+      "links": [
+        "../codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/diagnostics/windows-native-conpty.md",
+      "sha256": "88e5e2461d59aaefa0ef5582792e1c3e5ae48e9aea86ab1ed56b865c9c3fb8f7",
+      "lines": 150,
+      "hanCharacters": 1897,
+      "headings": [
+        "# Windows 原生 ConPTY 本地开发与验证报告",
+        "## 结论",
+        "## 1. 本机环境",
+        "## 2. 根因与证据边界",
+        "## 3. 独立最小复现",
+        "## 4. 最小生产修补",
+        "## 5. Native backend 实测矩阵",
+        "## 6. 输入输出与浏览器实测",
+        "## 7. Resize 证据",
+        "## 8. 关闭与清理",
+        "## 9. 自动化与回归",
+        "## 10. 未解决事项及发布边界",
+        "## English summary"
+      ],
+      "links": [
+        "./windows-native-conpty-evidence.json",
+        "./windows-conpty-web.png"
+      ]
+    },
+    {
+      "path": "docs/event-journal.md",
+      "sha256": "1a83734c955b6ca746e3d442d1b11b6e5ed49e036e3a09043ad04d701d152732",
+      "lines": 82,
+      "hanCharacters": 16,
+      "headings": [
+        "# Durable Runtime Event Journal",
+        "## Purpose",
+        "## Architecture",
+        "## Contract and storage",
+        "## Recorded transitions",
+        "## Security",
+        "## Compatibility"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "../schemas/event.schema.json"
+      ]
+    },
+    {
+      "path": "docs/faq.md",
+      "sha256": "48a245cd955e0584f7905124b7c2e2844b1d8b9bc070e72747c7b5313b1ca656",
+      "lines": 108,
+      "hanCharacters": 0,
+      "headings": [
+        "# Frequently asked questions",
+        "## What is Coordinate Agents now?",
+        "## Why are features in the docs missing from my npm installation?",
+        "## Do I need a Codex Plugin or a global npm installation?",
+        "## Which CLIs can I use?",
+        "## Does local-first mean the agents work offline?",
+        "## Does creating a task isolate its file changes?",
+        "## What does APPROVED mean? Does it authorize a release?",
+        "## Is a quiet terminal a failed task?",
+        "## What survives refresh or closing the browser?",
+        "## How do notifications work?",
+        "## What does Git Changes include?",
+        "## How do I archive or remove local history?",
+        "## Where are the original protocol and adapter docs?"
+      ],
+      "links": [
+        "./getting-started.html",
+        "./structured-workflow.html",
+        "./structured-workflow.html",
+        "./protocol.html",
+        "./mcp.html",
+        "./adapter-author-guide.html",
+        "./legacy-ai-install.html"
+      ]
+    },
+    {
+      "path": "docs/getting-started.md",
+      "sha256": "a3107d81c5c4f23373a2a8e37a914b32f76988b064e62741e8980595faaa402d",
+      "lines": 137,
+      "hanCharacters": 0,
+      "headings": [
+        "# Getting started",
+        "## 1. Check prerequisites",
+        "## 2. Choose published npm or current source",
+        "### Published npm",
+        "### Current source",
+        "## 3. Check Workspace settings",
+        "## 4. Run your first default task",
+        "## 5. Keep or close your sessions",
+        "## Success and failure signals",
+        "## If you need structured Tasks or a Codex Plugin"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./troubleshooting.html#terminal-display-or-resize-is-limited",
+        "./inspector.html",
+        "./troubleshooting.html",
+        "./structured-workflow.html",
+        "./inspector.html",
+        "./faq.html",
+        "./security.html"
+      ]
+    },
+    {
+      "path": "docs/index.md",
+      "sha256": "e3a81487c26ace9e84387b1c1d358f8842d4ca60885a1d944aeb7bc93e148604",
+      "lines": 80,
+      "hanCharacters": 4,
+      "headings": [
+        "# A local workspace for coding-agent terminals",
+        "## Start the Workspace",
+        "## Everyday use",
+        "## Optional structured workflow"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./inspector.html",
+        "./install-with-ai.html",
+        "./troubleshooting.html",
+        "./changelog.html",
+        "./faq.html",
+        "./comparison.html",
+        "./security.html",
+        "./zh-CN/",
+        "./structured-workflow.html",
+        "./legacy-ai-install.html",
+        "./plugin-e2e.html",
+        "./mcp.html",
+        "./MCP_TROUBLESHOOTING.html",
+        "./protocol.html",
+        "./task-graph-v1.html",
+        "./event-journal.html",
+        "./session-runtime.html",
+        "./adapter-author-guide.html",
+        "./adapter-conformance.html",
+        "./codex-cli.html",
+        "./antigravity-cli.html",
+        "./llms.txt",
+        "https://github.com/hogancv/coordinate-agents",
+        "https://www.npmjs.com/package/@hogancv/coordinate-agents"
+      ]
+    },
+    {
+      "path": "docs/inspector.md",
+      "sha256": "f658a4524b7208d75d5262c51f62ca025eb53cd39859b665e511d2cf3130c6d8",
+      "lines": 298,
+      "hanCharacters": 0,
+      "headings": [
+        "# Web Workspace guide",
+        "## Start and select a project",
+        "# Published Web package",
+        "# Current checkout, after npm ci",
+        "## Default Collaboration",
+        "### Reopen a conversation or recover its executor",
+        "## Custom Terminals",
+        "## Terminals and session lifecycle",
+        "## Workspace settings",
+        "## Git Changes and review feedback",
+        "## Collaboration Timeline",
+        "## Collaboration Health",
+        "## Desktop notifications",
+        "## Storage and archives",
+        "## Local HTTP boundary",
+        "## Read-only Inspector and structured workflows",
+        "# Older published CLI, pinned explicitly:",
+        "## Security"
+      ],
+      "links": [
+        "./getting-started.html",
+        "./codex-conversation-resume.html#action-table",
+        "./structured-workflow.html",
+        "./session-runtime.html",
+        "./event-journal.html",
+        "./security.html"
+      ]
+    },
+    {
+      "path": "docs/install-with-ai.md",
+      "sha256": "462e347843496adbe91751e826d71b08d94ac13b62a66c80c7830cf36860414a",
+      "lines": 230,
+      "hanCharacters": 250,
+      "headings": [
+        "# Install with AI / AI 安装指南",
+        "## Canonical identity / 官方身份",
+        "## Check prerequisites / 安装前检查",
+        "# Default Collaboration only:",
+        "## Choose installation path / 选择安装方式",
+        "### Published Web package / 已发布 Web 包",
+        "### Current source / 当前源码",
+        "## Verify and report / 验证与汇报",
+        "# Source equivalents:",
+        "## Upgrade / 更新",
+        "## Uninstall / 卸载",
+        "## Optional structured installation / 可选结构化安装",
+        "## Troubleshooting / 故障排查",
+        "## Request the Web Workspace",
+        "## Commands the AI may execute",
+        "## Commands the AI must not execute implicitly",
+        "## Installation result report",
+        "## Explicit Plugin or Legacy Skill requests"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./structured-workflow.html",
+        "./legacy-ai-install.html",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.md",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md",
+        "./legacy-ai-install.html",
+        "./troubleshooting.html",
+        "./troubleshooting.html",
+        "./structured-workflow.html",
+        "./legacy-ai-install.html"
+      ]
+    },
+    {
+      "path": "docs/legacy-ai-install.md",
+      "sha256": "3aacf443f74c2227eae6c06645e906540b254b95cb4139e1c3cf329e7632cab0",
+      "lines": 577,
+      "hanCharacters": 1776,
+      "headings": [
+        "# Legacy Skill installation guide / 旧版 Skill 安装指南",
+        "## Contents / 目录",
+        "## Architecture & Scope: Host Skill vs Project Agent / 架构与范围：宿主技能与项目代理",
+        "## Plugin-first onboarding / 插件优先的首次使用",
+        "## Installation Strategy by Target Host / 按目标环境选择安装策略",
+        "## Canonical identity / 官方身份",
+        "## Security rules / 安全规则",
+        "## Preflight checks / 安装前检查",
+        "## Install both agents / 安装两个代理",
+        "## Install Codex only / 只安装 Codex",
+        "## Install Antigravity only / 只安装 Antigravity",
+        "## Verify installation / 验证安装",
+        "## Use in Codex App / 在 Codex App 中使用",
+        "# Default Antigravity Implementer",
+        "# Custom Claude Code Implementer",
+        "# 默认使用 Antigravity 作为 Implementer",
+        "# 使用 Claude Code 作为自定义 Implementer",
+        "## Configure executable commands / 配置可执行命令",
+        "## Start the first task / 开始首个任务",
+        "## Upgrade / 更新",
+        "# Both agents",
+        "# Or add --codex / --antigravity to both commands for one agent only.",
+        "## Uninstall / 卸载",
+        "# Both agents",
+        "# One agent only",
+        "## Restore a backup / 恢复备份",
+        "## Troubleshooting / 故障排查"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./install-with-ai.html",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.md",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md",
+        "./install-with-ai.html",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.md",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md",
+        "#canonical-identity--官方身份",
+        "#architecture--scope-host-skill-vs-project-agent--架构与范围-宿主技能与项目代理",
+        "#plugin-first-onboarding--插件优先的首次使用",
+        "#installation-strategy-by-target-host--按目标环境选择安装策略",
+        "#security-rules--安全规则",
+        "#preflight-checks--安装前检查",
+        "#install-both-agents--安装两个代理",
+        "#install-codex-only--只安装-codex",
+        "#install-antigravity-only--只安装-antigravity",
+        "#verify-installation--验证安装",
+        "#use-in-codex-app--在-codex-app-中使用",
+        "#configure-executable-commands--配置可执行命令",
+        "#start-the-first-task--开始首个任务",
+        "#upgrade--更新",
+        "#uninstall--卸载",
+        "#restore-a-backup--恢复备份",
+        "#troubleshooting--故障排查",
+        "./adapter-author-guide.md",
+        "#canonical-identity--官方身份"
+      ]
+    },
+    {
+      "path": "docs/mcp.md",
+      "sha256": "6e366f0e7af036e4e82c67242bca57f797762c47c2c234865347178d68e8b2c7",
+      "lines": 303,
+      "hanCharacters": 20,
+      "headings": [
+        "# Coordinate Agents MCP",
+        "## Installation and lifecycle",
+        "## Tools",
+        "## Output and errors",
+        "## Workflow boundaries",
+        "## Fallback and security",
+        "## Protocol schemas"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./task-graph-v1.md"
+      ]
+    },
+    {
+      "path": "docs/native-auto-binding-plan.md",
+      "sha256": "5c445fe6a41803c055dd923c60ee2f829ed98a5131818da2a1592ea347a9ab8c",
+      "lines": 90,
+      "hanCharacters": 0,
+      "headings": [
+        "# Codex native auto-binding v1 implementation plan",
+        "## Source audit / design",
+        "## Tasks (execute inline, test first)",
+        "## Review focus",
+        "## Implementation decisions and review",
+        "## Final verification"
+      ],
+      "links": [
+        "codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/native-conversation-identity-store.md",
+      "sha256": "0fab5d970a103e0ba5d6fbb980992076473e95733b287776c6fe6b603187ac1a",
+      "lines": 120,
+      "hanCharacters": 0,
+      "headings": [
+        "# Native Conversation Identity Store v1",
+        "## Data and lifetime",
+        "## Internal event contract",
+        "## Still outside this release"
+      ],
+      "links": [
+        "codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/plugin-e2e.md",
+      "sha256": "e79083e8356c8bb86174149eb997a16d2a7e3b0e49e9063701c07cf2816b16cd",
+      "lines": 205,
+      "hanCharacters": 16,
+      "headings": [
+        "# Plugin-first E2E workflow",
+        "## Plugin-only Runtime and architecture audit",
+        "## Setup transaction",
+        "## Task dispatch",
+        "## Task state mapping",
+        "## Plugin-only acceptance gates"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html"
+      ]
+    },
+    {
+      "path": "docs/protocol.md",
+      "sha256": "babf8e13d760c0e08ff386c8e365156c03902d627bbb0d7e33afb9ab437953b6",
+      "lines": 55,
+      "hanCharacters": 16,
+      "headings": [
+        "# Protocol and recovery",
+        "## Architecture"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "https://github.com/hogancv/coordinate-agents/blob/main/skills/coordinate-agents/references/protocol.md"
+      ]
+    },
+    {
+      "path": "docs/releases/v3-changed-files.md",
+      "sha256": "8f66d3aea4049d76cfb531da6224b0751f47aa58dbefd5be6b85c54de9127d74",
+      "lines": 123,
+      "hanCharacters": 0,
+      "headings": [
+        "# V3 actual changed files",
+        "## Runtime and npm distribution",
+        "## Release and verification tooling",
+        "## Documentation and measured evidence",
+        "## Tests"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/releases/v3-ci.md",
+      "sha256": "d8c288d6b8a0e89cad41d25a82efec15cf46acf14bff2fa19d6435156a38c613",
+      "lines": 220,
+      "hanCharacters": 0,
+      "headings": [
+        "# V3 Web-first CI: daily scope and Windows verification",
+        "## Responsibilities and job counts",
+        "## Windows root causes and fixes",
+        "## Shared dependency audit and trigger tests",
+        "## One artifact, full release coverage",
+        "## Pages and required checks",
+        "## Verifiable timing and costs",
+        "## Verification and handoff"
+      ],
+      "links": [
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37874550313",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37874550340",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37874550350",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37879534383",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37876987253",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37876984391",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37876984420",
+        "https://github.com/hogancv/coordinate-agents/actions/runs/37876990562"
+      ]
+    },
+    {
+      "path": "docs/releases/v3-web-first.md",
+      "sha256": "2eb80c6d6e4e2cd40fc7acf28821832db3e1fc2ead09404752929fa5487b66f4",
+      "lines": 85,
+      "hanCharacters": 0,
+      "headings": [
+        "# npm 3.0.0 Web-first release evidence",
+        "## Baseline",
+        "## Architecture and dependency audit",
+        "## Validation and comparison",
+        "### Executed verification",
+        "### Release readiness",
+        "## Manual release steps"
+      ],
+      "links": [
+        "../v2.4.html",
+        "v3-baseline.json",
+        "v2-dependencies.json",
+        "v3-changed-files.md",
+        "v2-pack.json",
+        "v3-pack.json",
+        "v3-metrics.json",
+        "v3-dependencies.json",
+        "v2-startup-modules.json",
+        "v3-startup-modules.json",
+        "node18-verification.json",
+        "node22-verification.json",
+        "node24-verification.json",
+        "v3-ci.md"
+      ]
+    },
+    {
+      "path": "docs/releases/workspace-archive.md",
+      "sha256": "bbff029547cf63b5f2abf972d2da293042d1b3540a76c563e59e5dc84493a9e2",
+      "lines": 24,
+      "hanCharacters": 0,
+      "headings": [
+        "# Workspace archive follow-up — 2026-10-08",
+        "## Behavior",
+        "## Validation"
+      ],
+      "links": [
+        "workspace-archive-verification.json"
+      ]
+    },
+    {
+      "path": "docs/security.md",
+      "sha256": "504adfe7ffcf701bb2e6d2ba47b3b51f670460db1464a4e1ad8f65ace6dd52cb",
+      "lines": 105,
+      "hanCharacters": 0,
+      "headings": [
+        "# Security",
+        "## Web Workspace",
+        "## Shared Session Runtime and structured workflow"
+      ],
+      "links": [
+        "./inspector.html",
+        "./structured-workflow.html",
+        "https://github.com/hogancv/coordinate-agents/blob/main/.github/SECURITY.md"
+      ]
+    },
+    {
+      "path": "docs/session-runtime.md",
+      "sha256": "f673d86f5b43e11d301883e2ce7163518cd5ffa59862b505bb11e13702d97065",
+      "lines": 100,
+      "hanCharacters": 16,
+      "headings": [
+        "# Execution Session and PTY Runtime",
+        "## Lifecycle and tools",
+        "## Task and review loop",
+        "## Executable and platform rules"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./inspector.html"
+      ]
+    },
+    {
+      "path": "docs/structured-workflow.md",
+      "sha256": "f0ef46e9d27d40679fa31abe975e0553d2f2545988787f4f3d25b0f82478b81b",
+      "lines": 256,
+      "hanCharacters": 16,
+      "headings": [
+        "# Structured workflow: Plugin and Legacy CLI",
+        "## Install the optional Plugin",
+        "## Codex Plugin-first path",
+        "# Fallback/debug examples only; replace <skill-dir>",
+        "# with the absolute directory containing the active Skill's SKILL.md.",
+        "## Codex App path (recommended)",
+        "## 1. Check prerequisites and install both Skills",
+        "## 2. Initialize the first task",
+        "## 3. Complete one lifecycle",
+        "## Success and failure signals"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "./getting-started.md",
+        "./adapter-author-guide.html",
+        "./troubleshooting.html",
+        "./comparison.html",
+        "./protocol.html"
+      ]
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-08-web-first-v3.md",
+      "sha256": "e21c0c30278e1f33307dc087560c4b452d657008d515f04917d077cbc9e448d7",
+      "lines": 52,
+      "hanCharacters": 0,
+      "headings": [
+        "# Web-first npm 3.0 Implementation Plan",
+        "## Global Constraints",
+        "## Review Focus",
+        "## Task 1: Capture baseline and dependency boundaries",
+        "## Task 2: Separate Web runtime",
+        "## Task 3: npm package and release verification",
+        "## Task 4: Documentation, measurements and regression",
+        "## Completion evidence",
+        "## Integration follow-up — 2026-10-08"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-14-custom-terminal-workspace.md",
+      "sha256": "6d87d36930ff298e4b07438b216bd5db70d45f04f15e04db713532a001b29cbe",
+      "lines": 35,
+      "hanCharacters": 0,
+      "headings": [
+        "# Custom Terminal Workspace Implementation Plan",
+        "## Constraints and rulings",
+        "## Tasks",
+        "## Review focus",
+        "## Ledger"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-15-native-desktop-notifications.md",
+      "sha256": "68ba947eedb192e94b264096a700f18d42cf6300779ad849212296aa26c0703f",
+      "lines": 53,
+      "hanCharacters": 6,
+      "headings": [
+        "# Native Desktop Notifications Implementation Plan",
+        "## Constraints and decisions",
+        "## Tasks",
+        "## Review focus",
+        "## Execution record",
+        "## Final verification"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-16-collaboration-review-fixes.md",
+      "sha256": "6a7282465bd6bb6f46c057a557fccf01f40a5610fc70bbb21ca9506de28f664d",
+      "lines": 18,
+      "hanCharacters": 0,
+      "headings": [
+        "# Collaboration review fixes",
+        "## Verification"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-16-collaboration-timeline.md",
+      "sha256": "fe0b06e15ba73fc862af428ddb5450159d19d9e58a04329f806ba77db8adb5ef",
+      "lines": 22,
+      "hanCharacters": 0,
+      "headings": [
+        "# Collaboration Timeline v1",
+        "## Design",
+        "## Implementation sequence",
+        "## Review focus"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-19-native-identity-store.md",
+      "sha256": "18ab386090b37a4b878427fa2e49552279cb0e79ce101d19529bb48dc7c05baf",
+      "lines": 65,
+      "hanCharacters": 0,
+      "headings": [
+        "# Native Conversation Identity Store v1 implementation plan",
+        "## Implementation and verification"
+      ],
+      "links": [
+        "../../codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/superpowers/plans/2026-10-20-codex-conversation-resume.md",
+      "sha256": "845143a4b48817794e8004627ef5b141fe03917a3521a59710623c201dd68aba",
+      "lines": 63,
+      "hanCharacters": 0,
+      "headings": [
+        "# Codex-Centric Collaboration Resume Implementation Plan",
+        "## Global Constraints",
+        "## Review Focus",
+        "### Task 1: Explicit native target and exact launch",
+        "### Task 2: Resume lifecycle and manual identity confirmation",
+        "### Task 3: Collaboration isolation and interrupted rounds",
+        "### Task 4: Web entry, acceptance and delivery"
+      ],
+      "links": [
+        "../../codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/superpowers/specs/2026-10-08-web-first-v3-design.md",
+      "sha256": "3c4e143ae192b78148a691efc9726d8d097656dc31d975ad5fb6128d199a3d9f",
+      "lines": 19,
+      "hanCharacters": 0,
+      "headings": [
+        "# Web-first npm 3.0 design",
+        "## Choice",
+        "## Distribution",
+        "## Validation",
+        "## Integration follow-up — 2026-10-08"
+      ],
+      "links": []
+    },
+    {
+      "path": "docs/superpowers/specs/2026-10-20-codex-conversation-resume-design.md",
+      "sha256": "c4d608d19aee8c2f34023f3ff0da73749082798a8ad35c827cc0228a78d3c0dc",
+      "lines": 59,
+      "hanCharacters": 0,
+      "headings": [
+        "# Codex-Centric Collaboration Resume v1",
+        "## Identity and confirmation",
+        "## Lifecycle",
+        "## UI and validation"
+      ],
+      "links": [
+        "../../codex-conversation-resume.md#action-table"
+      ]
+    },
+    {
+      "path": "docs/superpowers/specs/2026-10-21-local-workbench-roadmap.md",
+      "sha256": "63f7ce378602535d0cbadb22d290bb4eb34600d511db824633143433190ccd75",
+      "lines": 265,
+      "hanCharacters": 4778,
+      "headings": [
+        "# Coordinate Agents：本地双 Agent 工作台整体规划",
+        "## 1. 产品目标",
+        "## 2. 现状判断",
+        "## 3. 路线选择",
+        "## 4. 用户流程与界面组织",
+        "### 4.1 开始任务",
+        "### 4.2 日常工作",
+        "### 4.3 中断与恢复",
+        "### 4.4 检查结果",
+        "## 5. 目标架构与模块职责",
+        "## 6. 状态与数据原则",
+        "## 7. 迭代路线",
+        "### 第一轮建议做的五个工作包",
+        "## 8. 验收与成功标准",
+        "### 必须守住的行为",
+        "### 建议的验证规模",
+        "## 9. 范围与延期项",
+        "## 10. 版本与支持策略",
+        "## 11. 主要风险与处理",
+        "## 12. 依据与后续使用"
+      ],
+      "links": [
+        "../../../README.zh-CN.md",
+        "./2026-10-08-web-first-v3-design.md",
+        "../../inspector.md",
+        "../../zh-CN/codex-conversation-resume.md",
+        "../../codex-native-auto-binding.md",
+        "../../../inspector/web-workspace/app.js",
+        "../../../skills/coordinate-agents/scripts/workspace-task-runtime.mjs",
+        "../../../skills/coordinate-agents/scripts/workspace-resume-state.mjs",
+        "../../../inspector/web-workspace/terminal-stream.mjs",
+        "../../../package.json"
+      ]
+    },
+    {
+      "path": "docs/task-graph-v1.md",
+      "sha256": "8b07cad4375b13aefdfd746ec13011c12102bd1b3a8ae2dcbbe7af1adcb5c82e",
+      "lines": 464,
+      "hanCharacters": 16,
+      "headings": [
+        "# Task Graph v1 Contract",
+        "## Input",
+        "## Validation boundary",
+        "## Durable graph create, status, and inspect",
+        "# equivalent nested form:",
+        "### Optional Intent Map v1 companion",
+        "## Read-only Graph Preflight",
+        "# equivalent nested form:",
+        "## Bounded parallel frontier execution",
+        "# equivalent nested form:",
+        "## Explicit bounded multi-wave advance",
+        "# equivalent nested form:",
+        "## Durable recovery, explicit resume, stop, and cleanup",
+        "# one subtask only:",
+        "# nested form:",
+        "# nested form:",
+        "## Deterministic integration and aggregate review",
+        "# equivalent nested form:",
+        "# or:",
+        "## Repository acceptance gate",
+        "## Subtask dispatch in an isolated Git worktree",
+        "# equivalent nested forms:",
+        "## Determinism and scope"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./getting-started.html",
+        "../schemas/task-graph-v1.schema.json"
+      ]
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "sha256": "0aad4bf9f369ea722a939f68f314328a65ecca47e955c66bc7440132ea6ea690",
+      "lines": 341,
+      "hanCharacters": 0,
+      "headings": [
+        "# Troubleshooting",
+        "## A documented feature is missing, or a command is unavailable",
+        "# From a source checkout, after npm ci:",
+        "## The server cannot start or the port is busy",
+        "## An agent command is missing or cannot log in",
+        "## Terminal display or resize is limited",
+        "## A task is quiet or the timeline has no DONE",
+        "## Review feedback or a Custom prompt cannot be sent",
+        "## A desktop notification is missing",
+        "## A closed browser left agents running, or a project disappeared",
+        "## Structured Plugin / Legacy troubleshooting",
+        "## Plugin-first diagnosis and structured errors",
+        "## Skill not discovered",
+        "## Codex App selects the wrong project or cannot start the Implementer",
+        "# Antigravity",
+        "# Claude Code as a registered custom agent",
+        "## Node version too low",
+        "## `codex` or `agy` is not found",
+        "## Implementer stops with `ERROR`",
+        "## Unknown installation directory",
+        "## `doctor` fails after installation",
+        "## Message remains in `processing`",
+        "## `.agent-bus` is damaged or unsafe",
+        "## Windows path normalization",
+        "## npm registry metadata is inconsistent"
+      ],
+      "links": [
+        "./v2.4.html",
+        "./structured-workflow.html",
+        "./legacy-ai-install.html",
+        "https://hogancv.github.io/coordinate-agents/install-with-ai.html",
+        "./security.html"
+      ]
+    },
+    {
+      "path": "docs/v2.4.md",
+      "sha256": "310c09d56d5e9267c6212d32441469ece5efae550784987292c75a1aa306c6e1",
+      "lines": 97,
+      "hanCharacters": 584,
+      "headings": [
+        "# v2.4 docs and v3 migration / 旧版文档与迁移",
+        "## What changed / 方向变化",
+        "## Original v2.4.0 documentation / 发布时的原始文档",
+        "## Retained structured reference / 继续查阅结构化路线",
+        "## Continue with v2.4 or move to Web / 继续旧流程或使用新版"
+      ],
+      "links": [
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/README.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/README.zh-CN.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/docs/index.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/docs/zh-CN/index.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/docs/getting-started.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/AI_INSTALL.md",
+        "https://github.com/hogancv/coordinate-agents/blob/3e36942ce52004ad3136c6f24be57a8255361c75/docs/inspector.md",
+        "https://github.com/hogancv/coordinate-agents/tree/3e36942ce52004ad3136c6f24be57a8255361c75/docs",
+        "./structured-workflow.html",
+        "./legacy-ai-install.html",
+        "./plugin-e2e.html",
+        "./mcp.html",
+        "./MCP_TROUBLESHOOTING.html",
+        "./protocol.html",
+        "./task-graph-v1.html",
+        "./session-runtime.html",
+        "./event-journal.html",
+        "./adapter-author-guide.html",
+        "./adapter-conformance.html",
+        "./getting-started.html",
+        "./inspector.html",
+        "./releases/v3-web-first.md",
+        "https://hogancv.github.io/coordinate-agents/changelog.html"
+      ]
+    },
+    {
+      "path": "docs/zh-CN/codex-conversation-resume.md",
+      "sha256": "aad3ddb642c610e9eb7da4f22d3e7069e9948409513e68652afd245dcb154ce9",
+      "lines": 89,
+      "hanCharacters": 2204,
+      "headings": [
+        "# 自动保存与恢复 Codex 原生对话",
+        "## 动作表",
+        "## 正常流程",
+        "## 何时需要人工处理",
+        "## 本地配置与隐私",
+        "## 历史方案与适用版本"
+      ],
+      "links": [
+        "../structured-workflow.md",
+        "../codex-native-auto-binding.md",
+        "../superpowers/specs/2026-10-20-codex-conversation-resume-design.md",
+        "../superpowers/plans/2026-10-20-codex-conversation-resume.md",
+        "../native-conversation-identity-store.md",
+        "../superpowers/plans/2026-10-19-native-identity-store.md",
+        "../native-auto-binding-plan.md",
+        "../diagnostics/codex-conversation-resume-macos.md",
+        "../codex-native-auto-binding.md#independent-native-acceptance"
+      ]
+    },
+    {
+      "path": "docs/zh-CN/index.md",
+      "sha256": "ca6d78998d04212d1c0a872a999f2a12a7d29a42efacba793de16985f93071d7",
+      "lines": 77,
+      "hanCharacters": 851,
+      "headings": [
+        "# Coordinate Agents：本地编码 Agent 工作台",
+        "## 快速开始",
+        "## 日常使用与边界",
+        "## 文档导航",
+        "## 可选的结构化工作流"
+      ],
+      "links": [
+        "../v2.4.html",
+        "https://github.com/hogancv/coordinate-agents",
+        "https://github.com/hogancv/coordinate-agents/blob/main/README.zh-CN.md",
+        "../getting-started.html",
+        "../inspector.html",
+        "../install-with-ai.html",
+        "../troubleshooting.html",
+        "../faq.html",
+        "../changelog.html",
+        "../comparison.html",
+        "../security.html",
+        "../index.html",
+        "../llms.txt",
+        "../structured-workflow.html",
+        "../legacy-ai-install.html",
+        "../plugin-e2e.html",
+        "../mcp.html",
+        "../protocol.html",
+        "../task-graph-v1.html",
+        "../session-runtime.html",
+        "../event-journal.html",
+        "../adapter-author-guide.html"
+      ]
+    },
+    {
+      "path": "examples/minimal-external-adapter/README.md",
+      "sha256": "7d7ced76caaf17e8cbb121383d7f7afa2d00db0bc5bacc3992cee49e7dcaadc0",
+      "lines": 24,
+      "hanCharacters": 0,
+      "headings": [
+        "# Minimal external Adapter example"
+      ],
+      "links": [
+        "../../docs/adapter-author-guide.md"
+      ]
+    },
+    {
+      "path": "skills/coordinate-agents/SKILL.md",
+      "sha256": "30446a031ff85b7191bc6db06c37cda730e4c45e632a9f5b2371d5b495753dc5",
+      "lines": 55,
+      "hanCharacters": 0,
+      "headings": [
+        "# Coordinate Agents",
+        "## Invocation and boundaries",
+        "## Read only when needed"
+      ],
+      "links": [
+        "../coordinate-task/references/task-graph.md",
+        "references/session-runtime.md",
+        "references/adapter-workflow.md",
+        "references/protocol.md",
+        "references/task-templates.md"
+      ]
+    },
+    {
+      "path": "skills/coordinate-agents/references/adapter-contract-v1.md",
+      "sha256": "c22fcde12fce1cf0a7410c8764e1b0b7a514b5e36dd4eefe045339f3b9fc0486",
+      "lines": 123,
+      "hanCharacters": 0,
+      "headings": [
+        "# Adapter Contract v1",
+        "## Descriptor",
+        "## Result shapes",
+        "## Ownership and trust boundary"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-agents/references/adapter-workflow.md",
+      "sha256": "083f1c2f6ac734ae6e06f71cc4b788ec64262558f93d153dafcd3743adcc6dda",
+      "lines": 26,
+      "hanCharacters": 0,
+      "headings": [
+        "# Adapter workflow"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-agents/references/protocol.md",
+      "sha256": "1175896feb4819fdd0f2a8392ba06e16041ef33d5d2c46ec6ee1c835ad6b8e3b",
+      "lines": 220,
+      "hanCharacters": 0,
+      "headings": [
+        "# Agent Bus Protocol and Runtime Architecture",
+        "## Architectural layers",
+        "## Agent Identity vs Workflow Role",
+        "## Dynamic configuration (`.agent-bus/config.json`)",
+        "### User-level executable configuration",
+        "## Queues and message routing",
+        "### Message lifecycle",
+        "### Message format",
+        "# Specification / Content",
+        "### Message types",
+        "## States and diagnostics",
+        "### Protocol states (persisted under `.agent-bus/state/<agent_id>/`)",
+        "### Adapter-observed normalized states",
+        "## Adapter subsystem and contracts",
+        "### Reference adapters",
+        "### Durable launch supervision",
+        "### Desktop and external adapter extension model",
+        "## Git ownership and release gate",
+        "## Recovery and cleanup"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-agents/references/session-runtime.md",
+      "sha256": "d3408096e07900f633d08cebbc3bfaa3961c8fba4fabca3e5278d2d24a29be27",
+      "lines": 159,
+      "hanCharacters": 0,
+      "headings": [
+        "# Execution Session and PTY Runtime",
+        "## Lifecycle",
+        "## Task and review semantics",
+        "## Executable identity and configuration",
+        "## Platform and security boundary",
+        "## Role boundary"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-agents/references/task-templates.md",
+      "sha256": "b3074e73b7f04b00f600dc9361edadd998bc25e0f5abe0d06f71d8b8b724b2f8",
+      "lines": 57,
+      "hanCharacters": 0,
+      "headings": [
+        "# Task templates",
+        "## Bug fix (`bug`)",
+        "## Feature development (`feature`)",
+        "## Refactor (`refactor`)"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-recover/SKILL.md",
+      "sha256": "6da9e840138fe6587ab9fc4dcf3536dbc74a7833209c91c274784578fe9f6c06",
+      "lines": 76,
+      "hanCharacters": 0,
+      "headings": [
+        "# Coordinate Recover"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-review/SKILL.md",
+      "sha256": "aeb19aafcc0d3d0bf20812b98602a5cf3f5a0b421d3c266aab13002968a874cf",
+      "lines": 48,
+      "hanCharacters": 0,
+      "headings": [
+        "# Coordinate Review"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-setup/SKILL.md",
+      "sha256": "18ef95273d7eefbe4e8d43c339b3b2b523972995999dfbda6ff747a7810c55ea",
+      "lines": 95,
+      "hanCharacters": 0,
+      "headings": [
+        "# Coordinate Setup"
+      ],
+      "links": []
+    },
+    {
+      "path": "skills/coordinate-task/SKILL.md",
+      "sha256": "9f369b1edf11cabfbe360a0de964ce54b2d2af4dbb811b58f674c58207fd30fd",
+      "lines": 102,
+      "hanCharacters": 0,
+      "headings": [
+        "# Coordinate Task",
+        "## Completion and authorization"
+      ],
+      "links": [
+        "references/task-graph.md",
+        "../coordinate-agents/references/session-runtime.md"
+      ]
+    },
+    {
+      "path": "skills/coordinate-task/references/task-graph.md",
+      "sha256": "71b2ef441bea0a5896a8364180da04001f42f559aec3907c46b6e3c229f76c58",
+      "lines": 70,
+      "hanCharacters": 0,
+      "headings": [
+        "# Task Graph workflow"
+      ],
+      "links": []
+    }
+  ]
+}

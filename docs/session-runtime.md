@@ -1,15 +1,16 @@
 ---
-layout: page
 title: Execution Session and PTY Runtime
 description: Persistent project-scoped coding-agent sessions, bounded PTY I/O, reuse, recovery, and security boundaries.
 ---
 
+<div id="执行会话与-pty-运行时" class="doc-anchor" aria-hidden="true"></div>
+
 # Execution Session and PTY Runtime
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 Web Workspace and the structured Plugin share Session Host and PTY infrastructure.
 Web creates a fresh task-bound terminal pair (Custom mode also binds each slot);
@@ -33,6 +34,8 @@ executable. A healthy match is reused across Task dispatches and review
 rework. A Task does not restart or close its Session simply because a review
 round changed.
 
+<div id="生命周期与工具" class="doc-anchor" aria-hidden="true"></div>
+
 ## Lifecycle and tools
 
 ```text
@@ -53,6 +56,8 @@ The Plugin exposes six bounded MCP tools:
 
 `resize` and `interrupt` are internal Runtime operations for adapters and
 diagnostics. They do not provide desktop UI automation.
+
+<div id="task-与审查循环" class="doc-anchor" aria-hidden="true"></div>
 
 ## Task and review loop
 
@@ -77,6 +82,8 @@ at the matching Runtime-owned worktree; an exited/failed Session is returned to
 `READY` for an explicit replacement dispatch. `graph-stop` and `graph-cleanup`
 close only Runtime-owned graph Sessions under a bounded timeout and preserve
 user worktrees, branches, refs, commits, and evidence when cleanup fails.
+
+<div id="可执行程序与平台规则" class="doc-anchor" aria-hidden="true"></div>
 
 ## Executable and platform rules
 

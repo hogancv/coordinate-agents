@@ -1,3 +1,15 @@
+---
+search: false
+title: "V3 actual changed files"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-v3-actual-changed-files" class="doc-anchor" aria-hidden="true"></div>
+
 # V3 actual changed files
 
 108 modified/added files for the Web-first refactor and Workspace archive follow-up. Source-only SDK examples and Legacy tests use explicit source entry points or independent distribution assumptions. No historical Plugin/MCP/Graph source tree was deleted.

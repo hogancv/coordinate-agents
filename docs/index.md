@@ -1,80 +1,76 @@
 ---
 layout: home
-title: Coordinate Agents
-description: A local Web Workspace for persistent coding-agent terminal pairs, default Codex and Antigravity collaboration, and custom CLIs.
-permalink: /
+title: Local coding-agent workspace
+description: Manage persistent Codex, Antigravity and custom CLI terminals in a local browser, with explicit collaboration and permission boundaries.
+hero:
+  name: Coordinate Agents
+  text: Two terminals. One local workspace.
+  tagline: Keep coding-agent sessions, changes and collaboration receipts together. Start with Web Workspace; choose the structured Plugin when you need its contracts.
+  actions:
+    - theme: brand
+      text: Get started
+      link: /getting-started.html
+    - theme: alt
+      text: Workspace guide
+      link: /inspector.html
+    - theme: alt
+      text: Migrate from v2.4
+      link: /v2.4.html
+features:
+  - title: Default Collaboration
+    details: Codex clarifies and reviews; Antigravity implements. A timeline preserves dispatches and formal reports, which still require independent verification.
+    link: /inspector.html#default-collaboration
+    linkText: Follow the workflow
+  - title: Your choice of terminals
+    details: Select two local CLIs and optional prompts. Each CLI owns its login and permissions; Custom mode does not add default roles or collaboration rounds.
+    link: /inspector.html#custom-terminals
+    linkText: Configure custom CLIs
+  - title: Optional structured Plugin
+    details: Agent Bus, durable Tasks, evidence review and Task Graphs remain available as a separately organized workflow, independent of the npm 3.x Web package.
+    link: /structured-workflow.html
+    linkText: Explore the Plugin
 ---
 
-# A local workspace for coding-agent terminals
-
-> **v2.4 users:** See [original v2.4.0 docs and v3 migration](./v2.4.html) for the
-> product-direction change, historical documentation, and retained structured workflow.
-
-Coordinate Agents brings two persistent agent terminals into a local browser
-workspace. Use **Default Collaboration** for Codex to delegate implementation
-to Antigravity and review the result, or **Custom Terminals** to choose your own
-CLI pair and prompts. Projects and task history stay on your machine; each CLI
-uses its own provider configuration and login.
+<div id="a-local-workspace-for-coding-agent-terminals" class="doc-anchor" aria-hidden="true"></div>
+<div id="启动工作台" class="doc-anchor" aria-hidden="true"></div>
+<div id="coordinate-agents本地编码-agent-工作台" class="doc-anchor" aria-hidden="true"></div>
+<div id="快速开始" class="doc-anchor" aria-hidden="true"></div>
+<div id="日常使用与边界" class="doc-anchor" aria-hidden="true"></div>
+<div id="文档导航" class="doc-anchor" aria-hidden="true"></div>
+<div id="可选的结构化工作流" class="doc-anchor" aria-hidden="true"></div>
 
 ## Start the Workspace
 
-Install Node.js >=18, Git, and your agent CLIs. For the default pair, make sure
-`codex` and `agy` work and are signed in. No Codex Plugin is required.
+Prepare Node.js ≥18, Git and your signed-in agent CLIs. Default Collaboration uses `codex` and `agy`; no Plugin installation is required.
 
 ```sh
-npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
+npx @hogancv/coordinate-agents@3.0.2 web --root "/path/to/project" --port 3000
 ```
 
-Open the printed localhost URL, check settings, create a task, and enter your
-request in Codex. The startup folder is registered automatically; a non-Git
-folder is initialized without a commit.
+Open the printed localhost URL, check settings, create a task, and enter your request in Codex. An ordinary startup directory initializes Git and local storage without a commit; choose your project deliberately.
 
-**Source and release differ.** As checked on 2026-10-20, npm `latest` is 3.0.1.
-The current source also includes Git Changes/review feedback, Custom Terminals,
-desktop notifications, Collaboration Timeline, and Collaboration Health added
-after that release. To use those additions:
+::: warning Permissions and evidence
+Agents run with their configured local CLI permissions. Role prompts provide no sandbox or technical release gate. Antigravity defaults to automatic tool approval; choose prompt mode in settings if needed. Web tasks share the project working directory without automatic worktree isolation. `DONE` and `APPROVED` are agent reports: inspect the real changes and tests.
+:::
 
-```sh
-git clone https://github.com/hogancv/coordinate-agents.git
-cd coordinate-agents
-npm ci
-node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
-```
+Closing the browser or Web server does not stop independent Session Hosts; use the explicit close controls. `.agent-bus/` is local plaintext. Providers still receive data according to each CLI's configuration.
 
-Merging source does not publish npm. See [Getting started](./getting-started.html)
-for prerequisites, settings, first-task steps, and release differences.
+<div id="继续阅读" class="doc-anchor" aria-hidden="true"></div>
 
-## Everyday use
+## Continue reading
 
-- [Workspace guide](./inspector.html): Default and Custom terminals, settings, Git Changes, review feedback, timeline, health, notifications, and archives.
-- [Install with AI](./install-with-ai.html): choose Web or the optional structured Plugin before installing.
-- [Troubleshooting](./troubleshooting.html): missing commands, ports, PTY limitations, receipts, and notifications.
-- [Changelog](./changelog.html): published release history.
-- [FAQ](./faq.html): local data, session persistence, supported CLIs, and workflow limits.
-- [Comparison](./comparison.html): a single agent, manual terminals, Workspace, and structured coordination.
-- [Security](./security.html): local storage, process permissions, loopback access, and diagnostics.
-- [简体中文](./zh-CN/): Chinese introduction and documentation routes.
+- [Getting started](./getting-started.html) → [Workspace guide](./inspector.html) → [Conversation recovery](./codex-conversation-resume.html)
+- [Install with AI](./install-with-ai.html), [Troubleshooting](./troubleshooting.html), [FAQ](./faq.html), [Security & permissions](./security.html)
+- [Structured Plugin](./structured-workflow.html), [Technical references and translation status](./reference.html)
+- [Changelog](./changelog.html), [Original v2.4 snapshot and migration](./v2.4.html), [Documentation migration and URL map](./documentation-migration.html)
 
-Task-list status describes terminal lifecycle. Collaboration states are explicit
-agent reports, not independent proof of implementation or review. Web tasks
-share the project's working directory; a terminal pair does not create an
-isolated worktree. Role prompts guide behavior and do not enforce a sandbox or
-release gate.
+Verified 2026-10-21: source and npm `latest` are **3.0.2**; the independently versioned Plugin is **2.4.0**. A source merge does not publish npm. Check dist-tags before installing.
+
+[Official source](https://github.com/hogancv/coordinate-agents) · [npm package](https://www.npmjs.com/package/@hogancv/coordinate-agents) · [Machine-readable documentation index](./llms.txt)
+
+<div id="everyday-use" class="doc-anchor" aria-hidden="true"></div>
+<div id="可选结构化工作流" class="doc-anchor" aria-hidden="true"></div>
 
 ## Optional structured workflow
 
-The GitHub Plugin and Legacy runtime retain the local-first Agent Bus, durable
-Tasks, Task Graphs, evidence-based review, and explicit recovery. They share
-Session infrastructure with Web, but have different APIs and workflow guarantees.
-The npm 3.x Web package does not include the structured CLI or MCP server.
-
-- [Structured workflow](./structured-workflow.html): Plugin installation, setup, dispatch, review, and recovery.
-- [Legacy Skill installation](./legacy-ai-install.html): npm 2.4.0 installation, upgrade, uninstall, and backup steps.
-- [Plugin end-to-end guide](./plugin-e2e.html), [MCP tools](./mcp.html), [MCP troubleshooting](./MCP_TROUBLESHOOTING.html).
-- [Protocol](./protocol.html), [Task Graph](./task-graph-v1.html), [Runtime events](./event-journal.html).
-- [Session Runtime](./session-runtime.html), [Adapter author guide](./adapter-author-guide.html), [Adapter conformance](./adapter-conformance.html).
-- [Codex reference role](./codex-cli.html), [Antigravity reference role](./antigravity-cli.html).
-
-[Machine-readable documentation index](./llms.txt)
-
-Canonical sources: [GitHub](https://github.com/hogancv/coordinate-agents) · [npm](https://www.npmjs.com/package/@hogancv/coordinate-agents)
+The retained local-first coordination protocol and runtime supports durable Tasks, Agent Bus, review evidence and explicit recovery. Codex and Antigravity are reference adapters; other registered agents can use the same contracts. Start with [structured onboarding](./structured-workflow.html), then [Plugin end-to-end evidence](./plugin-e2e.html) or the [reference directory](./reference.html).

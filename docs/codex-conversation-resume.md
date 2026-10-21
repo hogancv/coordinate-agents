@@ -1,3 +1,12 @@
+---
+title: "Resume a Codex collaboration conversation"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+<div id="自动保存与恢复-codex-原生对话" class="doc-anchor" aria-hidden="true"></div>
+
+<div id="恢复-codex-协作对话" class="doc-anchor" aria-hidden="true"></div>
+
 # Resume a Codex collaboration conversation
 
 Applies to the source implementation at **`f9f0210` and later**, checked on
@@ -11,6 +20,8 @@ Codex binding and collaboration timeline. **Restart Pair is not Resume.** Once a
 Task has a native binding or reserved Resume target, fresh-pair restart is refused
 before closing terminals: use Reopen for its original conversation, or create a
 new Task for a new context. Unbound Tasks and Custom Terminals retain fresh restart.
+
+<div id="动作表" class="doc-anchor" aria-hidden="true"></div>
 
 ## Action table
 
@@ -39,6 +50,10 @@ gate. Close confirmations, CLI login/trust prompts, Custom Prompt readiness and
 review-feedback send confirmations remain separate operations. These are Web
 Workspace Task actions, distinct from the Legacy structured `task resume` command
 described in [structured workflow](structured-workflow.md).
+
+<div id="正常流程" class="doc-anchor" aria-hidden="true"></div>
+
+<div id="首次绑定与后续继续" class="doc-anchor" aria-hidden="true"></div>
 
 ## First binding and continuing later
 
@@ -92,6 +107,10 @@ Codex configuration. Unknown CLI versions, remote runtimes, unsupported provenan
 missing/ambiguous records or capture failure retain manual recovery. No newest-file
 selection or unbounded polling runs. See the [source/trust and native acceptance notes](codex-native-auto-binding.md).
 
+<div id="何时需要人工处理" class="doc-anchor" aria-hidden="true"></div>
+
+<div id="执行者与中断工作" class="doc-anchor" aria-hidden="true"></div>
+
 ## Executor and interrupted work
 
 An existing healthy, correctly owned Antigravity Session is reconnected. Otherwise
@@ -129,6 +148,10 @@ Startup intent is persisted before launching processes;
 after a backend crash an exact owned pending Session can be adopted, while an
 ambiguous orphan requires inspection. No automatic dispatch retries run.
 
+<div id="本地配置与隐私" class="doc-anchor" aria-hidden="true"></div>
+
+<div id="验证边界" class="doc-anchor" aria-hidden="true"></div>
+
 ## Validation boundary
 
 Automated tests use deterministic native-record and CLI fixtures through the real
@@ -137,6 +160,10 @@ and package behavior; they do not establish model memory. Separate [macOS native
 records live conversation memory, executor completion and WORKING interruption. Windows CI storage/PTY checks do
 not claim Windows 10 native CLI Resume acceptance. The cited native acceptance
 reports are historical results, not fresh acceptance of the current readiness policy.
+
+<div id="历史方案与适用版本" class="doc-anchor" aria-hidden="true"></div>
+
+<div id="历史范围" class="doc-anchor" aria-hidden="true"></div>
 
 ## Historical scope
 

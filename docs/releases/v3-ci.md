@@ -1,3 +1,15 @@
+---
+search: false
+title: "V3 Web-first CI: daily scope and Windows verification"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-v3-web-first-ci-daily-scope-and-windows-verification" class="doc-anchor" aria-hidden="true"></div>
+
 # V3 Web-first CI: daily scope and Windows verification
 
 This second tightening is based on main `b4ebf051721f046c4dc382cef76398dff90dd077`

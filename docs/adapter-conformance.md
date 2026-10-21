@@ -1,18 +1,19 @@
 ---
-layout: page
 title: Adapter Conformance Kit
 description: Run deterministic, offline Adapter Contract v1 checks for built-in and third-party adapters.
 permalink: /adapter-conformance.html
 ---
 
+<div id="技术参考-adapter-conformance-kit" class="doc-anchor" aria-hidden="true"></div>
+
 # Adapter Conformance Kit
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
-> **V3 distribution / 分发说明:** Adapter conformance remains a source/Plugin gate, independent of the Web-first npm 3.x payload. npm 3 no longer packages this kit or the author example. Web package installation has its own cross-platform acceptance workflow.
+> **V3 distribution:** Adapter conformance remains a source/Plugin gate, independent of the Web-first npm 3.x payload. npm 3 no longer packages this kit or the author example. Web package installation has its own cross-platform acceptance workflow.
 
 
 The public Adapter Conformance Kit lets an adapter author run the same
@@ -39,7 +40,7 @@ The package and Plugin versions are independent from both
 
 For a complete external module, offline executable, and explicit registration
 walkthrough, see the [External Adapter Author Guide](./adapter-author-guide.md)
-and the [minimal external Adapter example](../examples/minimal-external-adapter/README.md).
+and the [minimal external Adapter example](https://github.com/hogancv/coordinate-agents/blob/main/examples/minimal-external-adapter/README.md).
 
 ## Run the kit
 

@@ -26,7 +26,7 @@ test('AI installation guide defaults to Web and preserves the separate Legacy li
   for (const value of ['https://github.com/hogancv/coordinate-agents',
     '@hogancv/coordinate-agents', 'GitHub owner', 'dist-tags.latest',
     'node --version', 'git --version', 'codex --version', 'agy --version',
-    '## Upgrade / 更新', '## Uninstall / 卸载', '## Troubleshooting / 故障排查',
+    '## Upgrade', '## Uninstall', '## Troubleshooting',
     'structured-workflow.html', 'legacy-ai-install.html']) {
     assert.ok(guide.includes(value), `Installation guide is missing ${value}`);
   }
@@ -41,7 +41,7 @@ test('AI installation guide defaults to Web and preserves the separate Legacy li
     'doctor --lang zh-CN', 'doctor --codex --lang zh-CN',
     'doctor --antigravity --lang zh-CN', '~/.codex/skills/coordinate-agents',
     '~/.gemini/skills/coordinate-agents', 'coordinate-agents.backup-',
-    '## Restore a backup / 恢复备份']) {
+    '## Restore a backup']) {
     assert.ok(legacy.includes(fact), `Legacy installation is missing ${fact}`);
   }
 });
@@ -99,10 +99,11 @@ test('documentation site exposes stable task-focused pages and canonical metadat
     const content = read(join('docs', page));
     assert.match(content, /^---\r?\n[\s\S]*?description:/, `${page} has no page metadata`);
   }
-  const config = read(join('docs', '_config.yml'));
-  assert.match(config, /url: https:\/\/hogancv\.github\.io/);
-  assert.match(config, /baseurl: \/coordinate-agents/);
-  assert.match(config, /jekyll-sitemap/);
+  const config = read('docs/.vitepress/config.mts');
+  assert.match(config, /base: '\/coordinate-agents\/'/);
+  assert.match(config, /https:\/\/hogancv\.github\.io\/coordinate-agents\//);
+  assert.match(config, /sitemap:/);
+  assert.match(config, /'zh-CN':/);
   assert.match(read(join('docs', 'index.md')), /https:\/\/github\.com\/hogancv\/coordinate-agents/);
 });
 
@@ -399,7 +400,7 @@ test('v2.4 readers have visible migration routes and immutable release documenta
     'docs/zh-CN/index.md', 'docs/changelog.md']) {
     assert.match(read(path), /\]\([^)]*v2\.4\.(?:md|html)\)/, `${path} must link the v2.4 entry`);
   }
-  assert.ok(read('docs/_config.yml').includes('  - v2.4.md'));
+  assert.ok(read('docs/.vitepress/config.mts').includes("item('migration', 'v2.4')"));
   assert.ok(read('docs/llms.txt').includes('/v2.4.html'));
 
   const archive = read('docs/v2.4.md');

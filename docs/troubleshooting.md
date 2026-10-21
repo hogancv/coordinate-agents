@@ -1,12 +1,15 @@
 ---
-layout: page
 title: Troubleshooting
 description: Diagnose Web Workspace releases, startup, terminal settings, collaboration receipts, notifications, and optional Legacy Plugin or Agent Bus failures.
 ---
 
+<div id="故障排查" class="doc-anchor" aria-hidden="true"></div>
+
 # Troubleshooting
 
 For the previous product direction, see [v2.4 original docs and migration](./v2.4.html).
+
+<div id="文档中的功能缺失-或命令不可用" class="doc-anchor" aria-hidden="true"></div>
 
 ## A documented feature is missing, or a command is unavailable
 
@@ -25,12 +28,16 @@ npm 3.x exposes Web/help/version only. `doctor`, `install`, `config`, `task`,
 `quickstart`, and `inspector` require the GitHub Plugin, source Legacy entry, or
 npm 2.4.0. Do not install npm latest as a repair for a missing Plugin runtime.
 
+<div id="服务器无法启动-或端口被占用" class="doc-anchor" aria-hidden="true"></div>
+
 ## The server cannot start or the port is busy
 
 Check Node.js >=18, Git, a regular non-symlink project directory, and dependency
 installation (`npm ci` for source). Use `--port 0` to choose a free port instead
 of terminating an unrelated process. Inspect the printed error and selected
 `--root`; a non-Git startup folder initializes Git and Workspace storage.
+
+<div id="智能体命令缺失或无法登录" class="doc-anchor" aria-hidden="true"></div>
 
 ## An agent command is missing or cannot log in
 
@@ -45,6 +52,8 @@ quota. Open that CLI directly to fix its own authentication/configuration; do
 not copy credentials between agents. If Node cannot load the native dependency
 in source, rerun `npm ci` for the current Node version.
 
+<div id="终端显示或尺寸调整受限" class="doc-anchor" aria-hidden="true"></div>
+
 ## Terminal display or resize is limited
 
 Check Session diagnostics for `backend`. Native PTY availability depends on
@@ -55,6 +64,8 @@ selecting the native backend. Fallback requires confirmed owned-process cleanup.
 An actual Session failure does not automatically retry a task. Fix the cause
 and use explicit restart; do not resend implementation instructions blindly.
 
+<div id="任务没有动静-或时间线中没有-done" class="doc-anchor" aria-hidden="true"></div>
+
 ## A task is quiet or the timeline has no DONE
 
 Expand the timeline and inspect formal receipts plus linked Session facts.
@@ -63,6 +74,8 @@ Health silence hints identify missing observable progress, not proven failure.
 A pending `wait` should continue with its returned cursor/revision, not repeat
 `send`. History from versions that did not record events cannot be backfilled.
 Custom tasks have no default cooperation rounds or reports.
+
+<div id="无法发送审查反馈或-custom-提示" class="doc-anchor" aria-hidden="true"></div>
 
 ## Review feedback or a Custom prompt cannot be sent
 
@@ -75,6 +88,8 @@ For a Custom prompt, check the CLI accepts multiline bracketed paste, then
 confirm readiness in its preview. Closing the preview cancels pending delivery;
 uncertain or already dispatched input is not retried automatically. Copy and
 paste manually when readiness is unknown.
+
+<div id="没有收到桌面通知" class="doc-anchor" aria-hidden="true"></div>
 
 ## A desktop notification is missing
 
@@ -90,6 +105,8 @@ Custom output, Session exits, archive, and idle are not notification events.
 At-most-once dispatch means failed or interrupted attempts are not retried.
 Changing a summary does not resend; a new round can notify again.
 
+<div id="关闭浏览器后智能体仍在运行-或项目消失了" class="doc-anchor" aria-hidden="true"></div>
+
 ## A closed browser left agents running, or a project disappeared
 
 Independent Session Hosts can outlive the browser and Web server. Reopen Web
@@ -98,12 +115,17 @@ and hides records, while retaining source files. Archived projects stay hidden
 until you explicitly add the same folder again. Clearing archived conversations
 is permanent and removes their timeline history.
 
+<div id="structured-plugin--legacy-troubleshooting" class="doc-anchor" aria-hidden="true"></div>
+<div id="结构化-plugin-legacy-故障排查" class="doc-anchor" aria-hidden="true"></div>
+
 ## Structured Plugin / Legacy troubleshooting
 
 The remaining sections apply to the optional GitHub Plugin and Legacy runtime,
 not npm 3.x Web. Use `node bin/coordinate-agents-legacy.mjs` from source or pin
 npm **2.4.0**. See [Structured workflow](./structured-workflow.html) and
 [Legacy installation](./legacy-ai-install.html).
+
+<div id="优先通过-plugin-诊断与结构化错误" class="doc-anchor" aria-hidden="true"></div>
 
 ## Plugin-first diagnosis and structured errors
 
@@ -158,6 +180,8 @@ npx --yes @hogancv/coordinate-agents@2.4.0 doctor --antigravity
 
 Preserve redacted output and the exit status. Do not paste credentials or force a destructive repair.
 
+<div id="未发现-skill" class="doc-anchor" aria-hidden="true"></div>
+
 ## Skill not discovered
 
 **Observed behavior:** mentioning collaboration does not trigger `$coordinate-agents`, or the
@@ -170,6 +194,8 @@ CLI says the Skill is unavailable.
 
 If `doctor` reports a missing or invalid copy, reinstall only the selected target. Do not copy the
 other CLI's credential directory.
+
+<div id="codex-app-选错项目-或无法启动-implementer" class="doc-anchor" aria-hidden="true"></div>
 
 ## Codex App selects the wrong project or cannot start the Implementer
 
@@ -216,6 +242,8 @@ sessions use the single argument `--prompt-interactive=` to preserve the empty
 value through that forwarding step. Restart the Web server after updating the
 source, then explicitly restart the failed task pair; no automatic retry is needed.
 
+<div id="node-版本过低" class="doc-anchor" aria-hidden="true"></div>
+
 ## Node version too low
 
 ```text
@@ -224,6 +252,8 @@ Node.js 18+: missing or requires attention
 
 Run `node --version`. Install a supported Node.js LTS from an official source, open a new terminal,
 and check that PATH resolves the new executable. The package refuses to claim support below Node 18.
+
+<div id="找不到-codex-或-agy" class="doc-anchor" aria-hidden="true"></div>
 
 ## `codex` or `agy` is not found
 
@@ -245,6 +275,8 @@ npx @hogancv/coordinate-agents@2.4.0 doctor
 
 The project-level command in `.agent-bus/config.json` takes precedence over this user setting.
 
+<div id="implementer-以-error-停止" class="doc-anchor" aria-hidden="true"></div>
+
 ## Implementer stops with `ERROR`
 
 `launch` performs an executable check before starting the Implementer. A missing command, unsafe
@@ -253,6 +285,8 @@ for the current activation. Inspect the reported Agent, Adapter, configured comm
 and `.agent-bus/logs/*-ERROR.json` artifact. Do not keep polling or automatically resend
 `IMPLEMENT`; fix the command/runtime and explicitly launch again when ready. Coordinate Agents
 does not perform login-status or provider-health preflight checks.
+
+<div id="未知安装目录" class="doc-anchor" aria-hidden="true"></div>
 
 ## Unknown installation directory
 
@@ -266,6 +300,8 @@ overwrite it because a forged metadata file is not proof of ownership. Inspect a
 directory. Use `--force` only after the user explicitly accepts replacement or deletion of that
 exact path.
 
+<div id="安装后-doctor-失败" class="doc-anchor" aria-hidden="true"></div>
+
 ## `doctor` fails after installation
 
 ```text
@@ -276,6 +312,8 @@ The lines above the summary identify the failing component. Check the command's 
 the suggested repair matches the actual platform and package manager, apply one repair at a time,
 and rerun the identical `doctor` command. Linux repair commands are suggestions to review, not a
 guarantee that a distribution repository supplies Node 18+.
+
+<div id="消息一直处于-processing" class="doc-anchor" aria-hidden="true"></div>
 
 ## Message remains in `processing`
 
@@ -291,6 +329,8 @@ node <skill>/scripts/agent-bus.mjs recover --agent antigravity \
 lease state. Rerun `status`, then let exactly one worker call `wait`. Never manually copy a message
 between queue folders while a worker is alive.
 
+<div id="agent-bus-损坏或不安全" class="doc-anchor" aria-hidden="true"></div>
+
 ## `.agent-bus` is damaged or unsafe
 
 Possible errors include malformed message quarantine, invalid state records, or refusal of an
@@ -301,6 +341,8 @@ explicit confirmation after saving required specs, reviews, and evidence.
 
 Do not repair YAML frontmatter or move queue files by hand unless you can prove no process holds a
 claim; manual edits destroy evidence lineage.
+
+<div id="windows-路径规范化" class="doc-anchor" aria-hidden="true"></div>
 
 ## Windows path normalization
 
@@ -316,6 +358,8 @@ npx --yes @hogancv/coordinate-agents@2.4.0 doctor
 
 Do not manually translate `C:\project` to `/mnt/c/project` unless both CLIs execute in WSL. Windows
 and WSL paths that refer to the same files are still different process environments.
+
+<div id="npm-registry-元数据不一致" class="doc-anchor" aria-hidden="true"></div>
 
 ## npm registry metadata is inconsistent
 

@@ -1,3 +1,10 @@
+---
+title: "Native identity capture: implementation and acceptance"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+<div id="技术参考-native-identity-capture-implementation-and-acceptance" class="doc-anchor" aria-hidden="true"></div>
+
 # Native identity capture: implementation and acceptance
 
 Implementation sections below apply to source **`f9f0210` and later**, packaged in

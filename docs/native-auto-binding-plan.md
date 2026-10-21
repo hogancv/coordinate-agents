@@ -1,3 +1,10 @@
+---
+title: "Codex native auto-binding v1 implementation plan"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+<div id="技术参考-codex-native-auto-binding-v1-implementation-plan" class="doc-anchor" aria-hidden="true"></div>
+
 # Codex native auto-binding v1 implementation plan
 
 > Historical implementation plan — applies to source `5fad370` (2026-10-21,
@@ -10,6 +17,8 @@ Intent: automatically retain the original Codex conversation for a Workspace Tas
 then reopen it with one click. Identity uncertainty must remain visible and must
 never authorize collaboration. Use the existing Task identity transaction and
 resume lifecycle; do not add another persistent identity store.
+
+<div id="source-audit--design" class="doc-anchor" aria-hidden="true"></div>
 
 ## Source audit / design
 

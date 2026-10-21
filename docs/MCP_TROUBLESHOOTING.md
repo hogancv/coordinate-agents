@@ -1,15 +1,16 @@
 ---
-layout: default
 title: MCP troubleshooting
 description: Diagnose a loaded Coordinate Agents Plugin whose MCP tools are not callable in Codex.
 ---
 
+<div id="技术参考-mcp-troubleshooting" class="doc-anchor" aria-hidden="true"></div>
+
 # MCP troubleshooting
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 Use this page when the `coordinate-agents` Skill is visible but Codex says that
 `coordinate_agents_setup_discover` (or another Coordinate Agents tool) is not a
@@ -18,6 +19,8 @@ callable MCP tool.
 The checks must be made in order. A visible Skill does not prove that the
 Plugin payload was refreshed, that `.mcp.json` was ingested, or that the MCP
 server completed `initialize` and `tools/list`.
+
+<div id="1-confirm-the-installed-plugin-payload" class="doc-anchor" aria-hidden="true"></div>
 
 ## 1. Confirm the installed Plugin payload
 
@@ -67,6 +70,8 @@ Do not delete the whole Codex home directory. If an existing marketplace has
 the same name, refresh or remove only that marketplace before adding the
 intended source.
 
+<div id="2-confirm-mcp-registration" class="doc-anchor" aria-hidden="true"></div>
+
 ## 2. Confirm MCP registration
 
 Inspect the server registration separately from Plugin discovery:
@@ -101,6 +106,8 @@ process directory, or the user home directory. The server resolves its own
 imports from its file location, so its runtime remains independent of the
 launching working directory.
 
+<div id="3-run-the-standalone-handshake" class="doc-anchor" aria-hidden="true"></div>
+
 ## 3. Run the standalone handshake
 
 From any working directory, run the packaged self-test:
@@ -126,6 +133,8 @@ prove that Codex injected the tools into an active conversation.
 The stdio transport is newline-delimited JSON-RPC. stdout must contain only
 valid MCP messages. Diagnostics are allowed on stderr only.
 
+<div id="4-collect-optional-stderr-diagnostics" class="doc-anchor" aria-hidden="true"></div>
+
 ## 4. Collect optional stderr diagnostics
 
 Enable diagnostics without contaminating the MCP stream:
@@ -140,6 +149,8 @@ The server reports startup, server/runtime roots, negotiated protocol, tool
 count, `initialize`, and `tools/list` on stderr. Never redirect these messages
 into stdout or add startup banners to the stdio process.
 
+<div id="5-complete-the-codex-restart" class="doc-anchor" aria-hidden="true"></div>
+
 ## 5. Complete the Codex restart
 
 MCP processes and Plugin payloads can live at the App/session boundary. After
@@ -153,6 +164,8 @@ refreshing a Plugin or changing `.mcp.json`:
 
 Creating only a new thread is not a substitute for a complete App restart when
 the Plugin cache or MCP registry changed.
+
+<div id="6-isolate-plugin-ingestion-from-codex-mcp-support" class="doc-anchor" aria-hidden="true"></div>
 
 ## 6. Isolate Plugin ingestion from Codex MCP support
 

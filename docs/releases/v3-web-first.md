@@ -1,3 +1,16 @@
+---
+search: false
+title: "npm 3.0.0 Web-first release evidence"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="npm-300-web-first-release-evidence" class="doc-anchor" aria-hidden="true"></div>
+<div id="技术参考-npm-3-0-0-web-first-release-evidence" class="doc-anchor" aria-hidden="true"></div>
+
 # npm 3.0.0 Web-first release evidence
 
 For the user-facing direction change and original v2.4.0 documentation, see
@@ -80,6 +93,6 @@ The npm interfaces removed are installer/update/uninstall, doctor, quickstart/la
 
 ## Manual release steps
 
-After reviewing/committing this change and obtaining explicit release authorization, run npm ci, npm run check, npm run test:web and npm run test:plugin from a clean checkout. Pack with npm pack --ignore-scripts --json --pack-destination <temporary-directory>. Run npm run release:verify -- <tarball> --expected-version 3.0.0 --expected-source-commit <full-commit-SHA> --expected-tag v3.0.0. The verifier's tag argument asserts candidate facts; it does not create a tag.
+After reviewing/committing this change and obtaining explicit release authorization, run npm ci, npm run check, npm run test:web and npm run test:plugin from a clean checkout. Pack with npm pack --ignore-scripts --json --pack-destination &lt;temporary-directory&gt;. Run npm run release:verify -- &lt;tarball&gt; --expected-version 3.0.0 --expected-source-commit &lt;full-commit-SHA&gt; --expected-tag v3.0.0. The verifier's tag argument asserts candidate facts; it does not create a tag.
 
 An authorized maintainer may then create/push v3.0.0 and manually dispatch .github/workflows/release.yml with release_tag=v3.0.0 and confirmation=PUBLISH. The workflow verifies the tag/version, installs/tests the actual tarball, and transfers that exact artifact to Linux/macOS/Windows × Node 18/20/22/24 acceptance. Publishing waits for every combination, then uses the same tarball with Trusted Publishing/OIDC/provenance. Do not add a long-lived npm token. The original development request did not authorize tag/push/workflow execution. A subsequent user request authorized committing and pushing the source changes; npm publishing, tags and release dispatch remain separate.

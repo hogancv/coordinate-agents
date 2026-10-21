@@ -1,3 +1,15 @@
+---
+search: false
+title: "Collaboration review fixes"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-collaboration-review-fixes" class="doc-anchor" aria-hidden="true"></div>
+
 # Collaboration review fixes
 
 Fix the two reported P2 issues in the current checkout. Keep cooperation revision semantics and preserve every recorded event.

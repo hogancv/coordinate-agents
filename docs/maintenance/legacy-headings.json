@@ -1,0 +1,2186 @@
+[
+  {
+    "source": "MCP_TROUBLESHOOTING.md",
+    "url": "https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "mcp-troubleshooting",
+        "level": 1,
+        "title": "MCP troubleshooting"
+      },
+      {
+        "id": "1-confirm-the-installed-plugin-payload",
+        "level": 2,
+        "title": "1. Confirm the installed Plugin payload"
+      },
+      {
+        "id": "2-confirm-mcp-registration",
+        "level": 2,
+        "title": "2. Confirm MCP registration"
+      },
+      {
+        "id": "3-run-the-standalone-handshake",
+        "level": 2,
+        "title": "3. Run the standalone handshake"
+      },
+      {
+        "id": "4-collect-optional-stderr-diagnostics",
+        "level": 2,
+        "title": "4. Collect optional stderr diagnostics"
+      },
+      {
+        "id": "5-complete-the-codex-restart",
+        "level": 2,
+        "title": "5. Complete the Codex restart"
+      },
+      {
+        "id": "6-isolate-plugin-ingestion-from-codex-mcp-support",
+        "level": 2,
+        "title": "6. Isolate Plugin ingestion from Codex MCP support"
+      },
+      {
+        "id": "expected-tool-catalog",
+        "level": 2,
+        "title": "Expected tool catalog"
+      }
+    ]
+  },
+  {
+    "source": "adapter-author-guide.md",
+    "url": "https://hogancv.github.io/coordinate-agents/adapter-author-guide.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "external-adapter-author-guide",
+        "level": 1,
+        "title": "External Adapter Author Guide"
+      },
+      {
+        "id": "public-boundary",
+        "level": 2,
+        "title": "Public boundary"
+      },
+      {
+        "id": "required-methods-and-facts",
+        "level": 2,
+        "title": "Required methods and facts"
+      },
+      {
+        "id": "offline-conformance",
+        "level": 2,
+        "title": "Offline conformance"
+      },
+      {
+        "id": "explicit-trusted-local-registration",
+        "level": 2,
+        "title": "Explicit trusted-local registration"
+      },
+      {
+        "id": "packaging-and-identity-checklist",
+        "level": 2,
+        "title": "Packaging and identity checklist"
+      }
+    ]
+  },
+  {
+    "source": "adapter-conformance.md",
+    "url": "https://hogancv.github.io/coordinate-agents/adapter-conformance.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "adapter-conformance-kit",
+        "level": 1,
+        "title": "Adapter Conformance Kit"
+      },
+      {
+        "id": "public-import",
+        "level": 2,
+        "title": "Public import"
+      },
+      {
+        "id": "run-the-kit",
+        "level": 2,
+        "title": "Run the kit"
+      },
+      {
+        "id": "explicit-trusted-local-modules",
+        "level": 2,
+        "title": "Explicit trusted-local modules"
+      },
+      {
+        "id": "what-is-proved",
+        "level": 2,
+        "title": "What is proved"
+      },
+      {
+        "id": "repository-acceptance-gate",
+        "level": 2,
+        "title": "Repository acceptance gate"
+      }
+    ]
+  },
+  {
+    "source": "antigravity-cli.md",
+    "url": "https://hogancv.github.io/coordinate-agents/antigravity-cli.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "antigravity-cli-role-reference-implementer",
+        "level": 1,
+        "title": "Antigravity CLI role (Reference implementer)"
+      },
+      {
+        "id": "permission-and-sandbox-arguments",
+        "level": 2,
+        "title": "Permission and sandbox arguments"
+      }
+    ]
+  },
+  {
+    "source": "changelog.md",
+    "url": "https://hogancv.github.io/coordinate-agents/changelog.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "changelog",
+        "level": 1,
+        "title": "Changelog"
+      },
+      {
+        "id": "302---2026-10-21",
+        "level": 2,
+        "title": "[3.0.2] - 2026-10-21"
+      },
+      {
+        "id": "web-workspace",
+        "level": 3,
+        "title": "Web Workspace"
+      },
+      {
+        "id": "conversation-recovery",
+        "level": 3,
+        "title": "Conversation recovery"
+      },
+      {
+        "id": "settings-documentation-and-compatibility",
+        "level": 3,
+        "title": "Settings, documentation and compatibility"
+      },
+      {
+        "id": "301---2026-10-13",
+        "level": 2,
+        "title": "[3.0.1] - 2026-10-13"
+      },
+      {
+        "id": "windows-terminals",
+        "level": 3,
+        "title": "Windows terminals"
+      },
+      {
+        "id": "web-workspace-1",
+        "level": 3,
+        "title": "Web Workspace"
+      },
+      {
+        "id": "performance-and-safety",
+        "level": 3,
+        "title": "Performance and safety"
+      },
+      {
+        "id": "compatibility",
+        "level": 3,
+        "title": "Compatibility"
+      },
+      {
+        "id": "300--web-first-npm-distribution",
+        "level": 2,
+        "title": "3.0.0 — Web-first npm distribution"
+      },
+      {
+        "id": "240--lightweight-web-workspace",
+        "level": 2,
+        "title": "2.4.0 — Lightweight Web Workspace"
+      },
+      {
+        "id": "230--multi-agent-task-graph-v1",
+        "level": 2,
+        "title": "2.3.0 — Multi-Agent Task Graph v1"
+      },
+      {
+        "id": "added",
+        "level": 3,
+        "title": "Added"
+      },
+      {
+        "id": "changed",
+        "level": 3,
+        "title": "Changed"
+      },
+      {
+        "id": "verification",
+        "level": 3,
+        "title": "Verification"
+      },
+      {
+        "id": "220--adapter-sdk-contract-v1",
+        "level": 2,
+        "title": "2.2.0 — Adapter SDK Contract v1"
+      },
+      {
+        "id": "added-1",
+        "level": 3,
+        "title": "Added"
+      },
+      {
+        "id": "changed-1",
+        "level": 3,
+        "title": "Changed"
+      },
+      {
+        "id": "verification-1",
+        "level": 3,
+        "title": "Verification"
+      }
+    ]
+  },
+  {
+    "source": "codex-cli.md",
+    "url": "https://hogancv.github.io/coordinate-agents/codex-cli.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "codex-appcli-role-reference-planner--reviewer",
+        "level": 1,
+        "title": "Codex App/CLI role (Reference planner & reviewer)"
+      }
+    ]
+  },
+  {
+    "source": "codex-conversation-resume.md",
+    "url": "https://hogancv.github.io/coordinate-agents/codex-conversation-resume.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "resume-a-codex-collaboration-conversation",
+        "level": 1,
+        "title": "Resume a Codex collaboration conversation"
+      },
+      {
+        "id": "action-table",
+        "level": 2,
+        "title": "Action table"
+      },
+      {
+        "id": "first-binding-and-continuing-later",
+        "level": 2,
+        "title": "First binding and continuing later"
+      },
+      {
+        "id": "executor-and-interrupted-work",
+        "level": 2,
+        "title": "Executor and interrupted work"
+      },
+      {
+        "id": "validation-boundary",
+        "level": 2,
+        "title": "Validation boundary"
+      },
+      {
+        "id": "historical-scope",
+        "level": 2,
+        "title": "Historical scope"
+      }
+    ]
+  },
+  {
+    "source": "codex-native-auto-binding.md",
+    "url": "https://hogancv.github.io/coordinate-agents/codex-native-auto-binding.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "native-identity-capture-implementation-and-acceptance",
+        "level": 1,
+        "title": "Native identity capture: implementation and acceptance"
+      },
+      {
+        "id": "audited-sources-2026-10-21",
+        "level": 2,
+        "title": "Audited sources (2026-10-21)"
+      },
+      {
+        "id": "boundaries-and-responsibilities",
+        "level": 2,
+        "title": "Boundaries and responsibilities"
+      },
+      {
+        "id": "independent-native-acceptance",
+        "level": 2,
+        "title": "Independent native acceptance"
+      }
+    ]
+  },
+  {
+    "source": "comparison.md",
+    "url": "https://hogancv.github.io/coordinate-agents/comparison.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "compare-workflows",
+        "level": 1,
+        "title": "Compare workflows"
+      },
+      {
+        "id": "when-web-workspace-helps",
+        "level": 2,
+        "title": "When Web Workspace helps"
+      },
+      {
+        "id": "when-the-structured-workflow-helps",
+        "level": 2,
+        "title": "When the structured workflow helps"
+      },
+      {
+        "id": "do-not-use-this-project-when",
+        "level": 2,
+        "title": "Do not use this project when"
+      }
+    ]
+  },
+  {
+    "source": "development/performance-notes.md",
+    "url": "https://hogancv.github.io/coordinate-agents/development/performance-notes.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "historical-performance-notes",
+        "level": 1,
+        "title": "Historical performance notes"
+      },
+      {
+        "id": "bolts-journal---critical-learnings",
+        "level": 1,
+        "title": "Bolt’s Journal - Critical Learnings"
+      },
+      {
+        "id": "2025-05-19---pattern-compilation-in-scope-audit",
+        "level": 2,
+        "title": "2025-05-19 - Pattern compilation in scope audit"
+      },
+      {
+        "id": "2025-05-20---precomputed-declarations-and-pattern-facts-in-intent-map-scheduling",
+        "level": 2,
+        "title": "2025-05-20 - Precomputed declarations and pattern facts in Intent Map scheduling"
+      },
+      {
+        "id": "2025-05-20---write-intent-conflict-detection-and-wave-scheduling",
+        "level": 2,
+        "title": "2025-05-20 - Write-intent conflict detection and wave scheduling"
+      },
+      {
+        "id": "2025-05-21---precomputed-declarations-map-in-validatestoredgraph-scope-evidence-check",
+        "level": 2,
+        "title": "2025-05-21 - Precomputed declarations Map in validateStoredGraph scope evidence check"
+      },
+      {
+        "id": "2025-05-21---regex-guaranteed-lowercase-ascii-strings-in-agent-and-subtask-id-validation",
+        "level": 2,
+        "title": "2025-05-21 - Regex-guaranteed lowercase ASCII strings in Agent and Subtask ID validation"
+      },
+      {
+        "id": "2026-09-17---single-pass-parent-state-evaluation",
+        "level": 2,
+        "title": "2026-09-17 - Single-pass parent state evaluation"
+      },
+      {
+        "id": "2026-09-18---pre-built-adaptermap-in-task-graph-planning",
+        "level": 2,
+        "title": "2026-09-18 - Pre-built adapterMap in task graph planning"
+      },
+      {
+        "id": "2026-09-18---weakmap-declarations-lookup-cache-and-set-lookups-in-task-graph-scheduling",
+        "level": 2,
+        "title": "2026-09-18 - WeakMap declarations lookup cache and Set lookups in task graph scheduling"
+      },
+      {
+        "id": "2026-09-18---allocation-free-subtask-frontier-state-evaluation",
+        "level": 2,
+        "title": "2026-09-18 - Allocation-free subtask frontier state evaluation"
+      },
+      {
+        "id": "2026-09-18---targeted-subtask-filtering-in-inspecttaskgraphrecovery",
+        "level": 2,
+        "title": "2026-09-18 - Targeted subtask filtering in inspectTaskGraphRecovery"
+      },
+      {
+        "id": "2026-09-18---single-pass-subtask-state-counting-and-pre-aggregated-agent-roles-in-inspector-data",
+        "level": 2,
+        "title": "2026-09-18 - Single-pass subtask state counting and pre-aggregated agent roles in Inspector data"
+      },
+      {
+        "id": "2026-09-18---pre-indexed-tasks-map-in-readsessions",
+        "level": 2,
+        "title": "2026-09-18 - Pre-indexed tasks Map in readSessions"
+      },
+      {
+        "id": "2026-09-18---precomputed-conflictdeferred-set-in-taskgraphplancommand",
+        "level": 2,
+        "title": "2026-09-18 - Precomputed conflictDeferred Set in taskGraphPlanCommand"
+      },
+      {
+        "id": "2026-09-19---single-pass-configured-agents-set-and-array-allocations-in-task-graph-validation",
+        "level": 2,
+        "title": "2026-09-19 - Single-pass configured agents Set and array allocations in Task Graph validation"
+      },
+      {
+        "id": "2026-09-20---targeted-session-fact-lookups-in-single-task-reads",
+        "level": 2,
+        "title": "2026-09-20 - Targeted Session Fact Lookups in Single-Task Reads"
+      },
+      {
+        "id": "2026-09-20---skipping-full-object-sanitization-on-summary-views-and-single-pass-graph-detail-mapping",
+        "level": 2,
+        "title": "2026-09-20 - Skipping full object sanitization on summary views and single-pass graph detail mapping"
+      },
+      {
+        "id": "2026-09-20---pre-indexed-session-task-map-and-pre-read-session-records-in-workspace-archive-cleanup",
+        "level": 2,
+        "title": "2026-09-20 - Pre-indexed session task map and pre-read session records in workspace archive cleanup"
+      },
+      {
+        "id": "2026-09-20---fast-path-byte-length-check-and-precomputed-path-reuse-in-readruntimeevents",
+        "level": 2,
+        "title": "2026-09-20 - Fast-path byte length check and precomputed path reuse in readRuntimeEvents"
+      },
+      {
+        "id": "2026-09-21---fast-path-length-checks-and-bounded-slicing-for-code-point-arrays-in-string-summary-generation",
+        "level": 2,
+        "title": "2026-09-21 - Fast-path length checks and bounded slicing for code point arrays in string summary generation"
+      },
+      {
+        "id": "2026-09-21---precomputed-valid_from_statuses-set-and-string-length-fast-path-in-workspace-collaboration",
+        "level": 2,
+        "title": "2026-09-21 - Precomputed VALID_FROM_STATUSES Set and string length fast-path in workspace collaboration"
+      },
+      {
+        "id": "2026-09-21---single-pass-maximum-filename-search-in-currentstate",
+        "level": 2,
+        "title": "2026-09-21 - Single-pass maximum filename search in currentState"
+      }
+    ]
+  },
+  {
+    "source": "development/v3.1-conpty-reliability.md",
+    "url": "https://hogancv.github.io/coordinate-agents/development/v3.1-conpty-reliability.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "v31-windows-conpty-与终端可靠性开发记录",
+        "level": 1,
+        "title": "V3.1 Windows ConPTY 与终端可靠性开发记录"
+      },
+      {
+        "id": "结论与验收边界",
+        "level": 2,
+        "title": "结论与验收边界"
+      },
+      {
+        "id": "历史证据与故障分类",
+        "level": 2,
+        "title": "历史证据与故障分类"
+      },
+      {
+        "id": "实现范围",
+        "level": 2,
+        "title": "实现范围"
+      },
+      {
+        "id": "最小复现与运行方法",
+        "level": 2,
+        "title": "最小复现与运行方法"
+      },
+      {
+        "id": "测试结果",
+        "level": 2,
+        "title": "测试结果"
+      },
+      {
+        "id": "手动-ci-与默认策略的闸门",
+        "level": 2,
+        "title": "手动 CI 与默认策略的闸门"
+      },
+      {
+        "id": "交付状态首次本地验收",
+        "level": 2,
+        "title": "交付状态（首次本地验收）"
+      },
+      {
+        "id": "runner-验收补录",
+        "level": 2,
+        "title": "Runner 验收补录"
+      }
+    ]
+  },
+  {
+    "source": "diagnostics/codex-conversation-resume-macos.md",
+    "url": "https://hogancv.github.io/coordinate-agents/diagnostics/codex-conversation-resume-macos.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "codex-centric-resume-v1-macos-native-acceptance",
+        "level": 1,
+        "title": "Codex-Centric Resume v1: macOS native acceptance"
+      },
+      {
+        "id": "a--continuing-native-conversation",
+        "level": 2,
+        "title": "A — continuing native conversation"
+      },
+      {
+        "id": "b--rebuilt-executor-completes-a-new-implementation",
+        "level": 2,
+        "title": "B — rebuilt executor completes a new implementation"
+      },
+      {
+        "id": "c--interruption-in-working",
+        "level": 2,
+        "title": "C — interruption in WORKING"
+      },
+      {
+        "id": "de--automated-boundary-and-regression-evidence",
+        "level": 2,
+        "title": "D/E — automated boundary and regression evidence"
+      },
+      {
+        "id": "capability-boundary",
+        "level": 2,
+        "title": "Capability boundary"
+      }
+    ]
+  },
+  {
+    "source": "diagnostics/windows-native-conpty.md",
+    "url": "https://hogancv.github.io/coordinate-agents/diagnostics/windows-native-conpty.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "windows-原生-conpty-本地开发与验证报告",
+        "level": 1,
+        "title": "Windows 原生 ConPTY 本地开发与验证报告"
+      },
+      {
+        "id": "结论",
+        "level": 2,
+        "title": "结论"
+      },
+      {
+        "id": "1-本机环境",
+        "level": 2,
+        "title": "1. 本机环境"
+      },
+      {
+        "id": "2-根因与证据边界",
+        "level": 2,
+        "title": "2. 根因与证据边界"
+      },
+      {
+        "id": "3-独立最小复现",
+        "level": 2,
+        "title": "3. 独立最小复现"
+      },
+      {
+        "id": "4-最小生产修补",
+        "level": 2,
+        "title": "4. 最小生产修补"
+      },
+      {
+        "id": "5-native-backend-实测矩阵",
+        "level": 2,
+        "title": "5. Native backend 实测矩阵"
+      },
+      {
+        "id": "6-输入输出与浏览器实测",
+        "level": 2,
+        "title": "6. 输入输出与浏览器实测"
+      },
+      {
+        "id": "7-resize-证据",
+        "level": 2,
+        "title": "7. Resize 证据"
+      },
+      {
+        "id": "8-关闭与清理",
+        "level": 2,
+        "title": "8. 关闭与清理"
+      },
+      {
+        "id": "9-自动化与回归",
+        "level": 2,
+        "title": "9. 自动化与回归"
+      },
+      {
+        "id": "10-未解决事项及发布边界",
+        "level": 2,
+        "title": "10. 未解决事项及发布边界"
+      },
+      {
+        "id": "english-summary",
+        "level": 2,
+        "title": "English summary"
+      }
+    ]
+  },
+  {
+    "source": "event-journal.md",
+    "url": "https://hogancv.github.io/coordinate-agents/event-journal.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "durable-runtime-event-journal",
+        "level": 1,
+        "title": "Durable Runtime Event Journal"
+      },
+      {
+        "id": "purpose",
+        "level": 2,
+        "title": "Purpose"
+      },
+      {
+        "id": "architecture",
+        "level": 2,
+        "title": "Architecture"
+      },
+      {
+        "id": "contract-and-storage",
+        "level": 2,
+        "title": "Contract and storage"
+      },
+      {
+        "id": "recorded-transitions",
+        "level": 2,
+        "title": "Recorded transitions"
+      },
+      {
+        "id": "security",
+        "level": 2,
+        "title": "Security"
+      },
+      {
+        "id": "compatibility",
+        "level": 2,
+        "title": "Compatibility"
+      }
+    ]
+  },
+  {
+    "source": "faq.md",
+    "url": "https://hogancv.github.io/coordinate-agents/faq.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "frequently-asked-questions",
+        "level": 1,
+        "title": "Frequently asked questions"
+      },
+      {
+        "id": "what-is-coordinate-agents-now",
+        "level": 2,
+        "title": "What is Coordinate Agents now?"
+      },
+      {
+        "id": "why-are-features-in-the-docs-missing-from-my-npm-installation",
+        "level": 2,
+        "title": "Why are features in the docs missing from my npm installation?"
+      },
+      {
+        "id": "do-i-need-a-codex-plugin-or-a-global-npm-installation",
+        "level": 2,
+        "title": "Do I need a Codex Plugin or a global npm installation?"
+      },
+      {
+        "id": "which-clis-can-i-use",
+        "level": 2,
+        "title": "Which CLIs can I use?"
+      },
+      {
+        "id": "does-local-first-mean-the-agents-work-offline",
+        "level": 2,
+        "title": "Does local-first mean the agents work offline?"
+      },
+      {
+        "id": "does-creating-a-task-isolate-its-file-changes",
+        "level": 2,
+        "title": "Does creating a task isolate its file changes?"
+      },
+      {
+        "id": "what-does-approved-mean-does-it-authorize-a-release",
+        "level": 2,
+        "title": "What does APPROVED mean? Does it authorize a release?"
+      },
+      {
+        "id": "is-a-quiet-terminal-a-failed-task",
+        "level": 2,
+        "title": "Is a quiet terminal a failed task?"
+      },
+      {
+        "id": "what-survives-refresh-or-closing-the-browser",
+        "level": 2,
+        "title": "What survives refresh or closing the browser?"
+      },
+      {
+        "id": "how-do-notifications-work",
+        "level": 2,
+        "title": "How do notifications work?"
+      },
+      {
+        "id": "what-does-git-changes-include",
+        "level": 2,
+        "title": "What does Git Changes include?"
+      },
+      {
+        "id": "how-do-i-archive-or-remove-local-history",
+        "level": 2,
+        "title": "How do I archive or remove local history?"
+      },
+      {
+        "id": "where-are-the-original-protocol-and-adapter-docs",
+        "level": 2,
+        "title": "Where are the original protocol and adapter docs?"
+      }
+    ]
+  },
+  {
+    "source": "getting-started.md",
+    "url": "https://hogancv.github.io/coordinate-agents/getting-started.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "getting-started",
+        "level": 1,
+        "title": "Getting started"
+      },
+      {
+        "id": "1-check-prerequisites",
+        "level": 2,
+        "title": "1. Check prerequisites"
+      },
+      {
+        "id": "2-choose-published-npm-or-current-source",
+        "level": 2,
+        "title": "2. Choose published npm or current source"
+      },
+      {
+        "id": "published-npm",
+        "level": 3,
+        "title": "Published npm"
+      },
+      {
+        "id": "current-source",
+        "level": 3,
+        "title": "Current source"
+      },
+      {
+        "id": "3-check-workspace-settings",
+        "level": 2,
+        "title": "3. Check Workspace settings"
+      },
+      {
+        "id": "4-run-your-first-default-task",
+        "level": 2,
+        "title": "4. Run your first default task"
+      },
+      {
+        "id": "5-keep-or-close-your-sessions",
+        "level": 2,
+        "title": "5. Keep or close your sessions"
+      },
+      {
+        "id": "success-and-failure-signals",
+        "level": 2,
+        "title": "Success and failure signals"
+      },
+      {
+        "id": "if-you-need-structured-tasks-or-a-codex-plugin",
+        "level": 2,
+        "title": "If you need structured Tasks or a Codex Plugin"
+      }
+    ]
+  },
+  {
+    "source": "index.md",
+    "url": "https://hogancv.github.io/coordinate-agents/",
+    "status": 200,
+    "headings": [
+      {
+        "id": "a-local-workspace-for-coding-agent-terminals",
+        "level": 1,
+        "title": "A local workspace for coding-agent terminals"
+      },
+      {
+        "id": "start-the-workspace",
+        "level": 2,
+        "title": "Start the Workspace"
+      },
+      {
+        "id": "everyday-use",
+        "level": 2,
+        "title": "Everyday use"
+      },
+      {
+        "id": "optional-structured-workflow",
+        "level": 2,
+        "title": "Optional structured workflow"
+      }
+    ]
+  },
+  {
+    "source": "inspector.md",
+    "url": "https://hogancv.github.io/coordinate-agents/inspector.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "web-workspace-guide",
+        "level": 1,
+        "title": "Web Workspace guide"
+      },
+      {
+        "id": "start-and-select-a-project",
+        "level": 2,
+        "title": "Start and select a project"
+      },
+      {
+        "id": "default-collaboration",
+        "level": 2,
+        "title": "Default Collaboration"
+      },
+      {
+        "id": "reopen-a-conversation-or-recover-its-executor",
+        "level": 3,
+        "title": "Reopen a conversation or recover its executor"
+      },
+      {
+        "id": "custom-terminals",
+        "level": 2,
+        "title": "Custom Terminals"
+      },
+      {
+        "id": "terminals-and-session-lifecycle",
+        "level": 2,
+        "title": "Terminals and session lifecycle"
+      },
+      {
+        "id": "workspace-settings",
+        "level": 2,
+        "title": "Workspace settings"
+      },
+      {
+        "id": "git-changes-and-review-feedback",
+        "level": 2,
+        "title": "Git Changes and review feedback"
+      },
+      {
+        "id": "collaboration-timeline",
+        "level": 2,
+        "title": "Collaboration Timeline"
+      },
+      {
+        "id": "collaboration-health",
+        "level": 2,
+        "title": "Collaboration Health"
+      },
+      {
+        "id": "desktop-notifications",
+        "level": 2,
+        "title": "Desktop notifications"
+      },
+      {
+        "id": "storage-and-archives",
+        "level": 2,
+        "title": "Storage and archives"
+      },
+      {
+        "id": "local-http-boundary",
+        "level": 2,
+        "title": "Local HTTP boundary"
+      },
+      {
+        "id": "read-only-inspector-and-structured-workflows",
+        "level": 2,
+        "title": "Read-only Inspector and structured workflows"
+      },
+      {
+        "id": "security",
+        "level": 2,
+        "title": "Security"
+      }
+    ]
+  },
+  {
+    "source": "install-with-ai.md",
+    "url": "https://hogancv.github.io/coordinate-agents/install-with-ai.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "install-with-ai--ai-安装指南",
+        "level": 1,
+        "title": "Install with AI / AI 安装指南"
+      },
+      {
+        "id": "canonical-identity--官方身份",
+        "level": 2,
+        "title": "Canonical identity / 官方身份"
+      },
+      {
+        "id": "check-prerequisites--安装前检查",
+        "level": 2,
+        "title": "Check prerequisites / 安装前检查"
+      },
+      {
+        "id": "choose-installation-path--选择安装方式",
+        "level": 2,
+        "title": "Choose installation path / 选择安装方式"
+      },
+      {
+        "id": "published-web-package--已发布-web-包",
+        "level": 3,
+        "title": "Published Web package / 已发布 Web 包"
+      },
+      {
+        "id": "current-source--当前源码",
+        "level": 3,
+        "title": "Current source / 当前源码"
+      },
+      {
+        "id": "verify-and-report--验证与汇报",
+        "level": 2,
+        "title": "Verify and report / 验证与汇报"
+      },
+      {
+        "id": "upgrade--更新",
+        "level": 2,
+        "title": "Upgrade / 更新"
+      },
+      {
+        "id": "uninstall--卸载",
+        "level": 2,
+        "title": "Uninstall / 卸载"
+      },
+      {
+        "id": "optional-structured-installation--可选结构化安装",
+        "level": 2,
+        "title": "Optional structured installation / 可选结构化安装"
+      },
+      {
+        "id": "troubleshooting--故障排查",
+        "level": 2,
+        "title": "Troubleshooting / 故障排查"
+      },
+      {
+        "id": "request-the-web-workspace",
+        "level": 2,
+        "title": "Request the Web Workspace"
+      },
+      {
+        "id": "commands-the-ai-may-execute",
+        "level": 2,
+        "title": "Commands the AI may execute"
+      },
+      {
+        "id": "commands-the-ai-must-not-execute-implicitly",
+        "level": 2,
+        "title": "Commands the AI must not execute implicitly"
+      },
+      {
+        "id": "installation-result-report",
+        "level": 2,
+        "title": "Installation result report"
+      },
+      {
+        "id": "explicit-plugin-or-legacy-skill-requests",
+        "level": 2,
+        "title": "Explicit Plugin or Legacy Skill requests"
+      }
+    ]
+  },
+  {
+    "source": "legacy-ai-install.md",
+    "url": "https://hogancv.github.io/coordinate-agents/legacy-ai-install.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "legacy-skill-installation-guide--旧版-skill-安装指南",
+        "level": 1,
+        "title": "Legacy Skill installation guide / 旧版 Skill 安装指南"
+      },
+      {
+        "id": "contents--目录",
+        "level": 2,
+        "title": "Contents / 目录"
+      },
+      {
+        "id": "architecture--scope-host-skill-vs-project-agent--架构与范围宿主技能与项目代理",
+        "level": 2,
+        "title": "Architecture & Scope: Host Skill vs Project Agent / 架构与范围：宿主技能与项目代理"
+      },
+      {
+        "id": "plugin-first-onboarding--插件优先的首次使用",
+        "level": 2,
+        "title": "Plugin-first onboarding / 插件优先的首次使用"
+      },
+      {
+        "id": "installation-strategy-by-target-host--按目标环境选择安装策略",
+        "level": 2,
+        "title": "Installation Strategy by Target Host / 按目标环境选择安装策略"
+      },
+      {
+        "id": "canonical-identity--官方身份",
+        "level": 2,
+        "title": "Canonical identity / 官方身份"
+      },
+      {
+        "id": "security-rules--安全规则",
+        "level": 2,
+        "title": "Security rules / 安全规则"
+      },
+      {
+        "id": "preflight-checks--安装前检查",
+        "level": 2,
+        "title": "Preflight checks / 安装前检查"
+      },
+      {
+        "id": "install-both-agents--安装两个代理",
+        "level": 2,
+        "title": "Install both agents / 安装两个代理"
+      },
+      {
+        "id": "install-codex-only--只安装-codex",
+        "level": 2,
+        "title": "Install Codex only / 只安装 Codex"
+      },
+      {
+        "id": "install-antigravity-only--只安装-antigravity",
+        "level": 2,
+        "title": "Install Antigravity only / 只安装 Antigravity"
+      },
+      {
+        "id": "verify-installation--验证安装",
+        "level": 2,
+        "title": "Verify installation / 验证安装"
+      },
+      {
+        "id": "use-in-codex-app--在-codex-app-中使用",
+        "level": 2,
+        "title": "Use in Codex App / 在 Codex App 中使用"
+      },
+      {
+        "id": "configure-executable-commands--配置可执行命令",
+        "level": 2,
+        "title": "Configure executable commands / 配置可执行命令"
+      },
+      {
+        "id": "start-the-first-task--开始首个任务",
+        "level": 2,
+        "title": "Start the first task / 开始首个任务"
+      },
+      {
+        "id": "upgrade--更新",
+        "level": 2,
+        "title": "Upgrade / 更新"
+      },
+      {
+        "id": "uninstall--卸载",
+        "level": 2,
+        "title": "Uninstall / 卸载"
+      },
+      {
+        "id": "restore-a-backup--恢复备份",
+        "level": 2,
+        "title": "Restore a backup / 恢复备份"
+      },
+      {
+        "id": "troubleshooting--故障排查",
+        "level": 2,
+        "title": "Troubleshooting / 故障排查"
+      }
+    ]
+  },
+  {
+    "source": "mcp.md",
+    "url": "https://hogancv.github.io/coordinate-agents/mcp.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "coordinate-agents-mcp",
+        "level": 1,
+        "title": "Coordinate Agents MCP"
+      },
+      {
+        "id": "installation-and-lifecycle",
+        "level": 2,
+        "title": "Installation and lifecycle"
+      },
+      {
+        "id": "tools",
+        "level": 2,
+        "title": "Tools"
+      },
+      {
+        "id": "output-and-errors",
+        "level": 2,
+        "title": "Output and errors"
+      },
+      {
+        "id": "workflow-boundaries",
+        "level": 2,
+        "title": "Workflow boundaries"
+      },
+      {
+        "id": "fallback-and-security",
+        "level": 2,
+        "title": "Fallback and security"
+      },
+      {
+        "id": "protocol-schemas",
+        "level": 2,
+        "title": "Protocol schemas"
+      }
+    ]
+  },
+  {
+    "source": "native-auto-binding-plan.md",
+    "url": "https://hogancv.github.io/coordinate-agents/native-auto-binding-plan.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "codex-native-auto-binding-v1-implementation-plan",
+        "level": 1,
+        "title": "Codex native auto-binding v1 implementation plan"
+      },
+      {
+        "id": "source-audit--design",
+        "level": 2,
+        "title": "Source audit / design"
+      },
+      {
+        "id": "tasks-execute-inline-test-first",
+        "level": 2,
+        "title": "Tasks (execute inline, test first)"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review focus"
+      },
+      {
+        "id": "implementation-decisions-and-review",
+        "level": 2,
+        "title": "Implementation decisions and review"
+      },
+      {
+        "id": "final-verification",
+        "level": 2,
+        "title": "Final verification"
+      }
+    ]
+  },
+  {
+    "source": "native-conversation-identity-store.md",
+    "url": "https://hogancv.github.io/coordinate-agents/native-conversation-identity-store.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "native-conversation-identity-store-v1",
+        "level": 1,
+        "title": "Native Conversation Identity Store v1"
+      },
+      {
+        "id": "data-and-lifetime",
+        "level": 2,
+        "title": "Data and lifetime"
+      },
+      {
+        "id": "internal-event-contract",
+        "level": 2,
+        "title": "Internal event contract"
+      },
+      {
+        "id": "still-outside-this-release",
+        "level": 2,
+        "title": "Still outside this release"
+      }
+    ]
+  },
+  {
+    "source": "plugin-e2e.md",
+    "url": "https://hogancv.github.io/coordinate-agents/plugin-e2e.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "plugin-first-e2e-workflow",
+        "level": 1,
+        "title": "Plugin-first E2E workflow"
+      },
+      {
+        "id": "plugin-only-runtime-and-architecture-audit",
+        "level": 2,
+        "title": "Plugin-only Runtime and architecture audit"
+      },
+      {
+        "id": "setup-transaction",
+        "level": 2,
+        "title": "Setup transaction"
+      },
+      {
+        "id": "task-dispatch",
+        "level": 2,
+        "title": "Task dispatch"
+      },
+      {
+        "id": "task-state-mapping",
+        "level": 2,
+        "title": "Task state mapping"
+      },
+      {
+        "id": "plugin-only-acceptance-gates",
+        "level": 2,
+        "title": "Plugin-only acceptance gates"
+      }
+    ]
+  },
+  {
+    "source": "protocol.md",
+    "url": "https://hogancv.github.io/coordinate-agents/protocol.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "protocol-and-recovery",
+        "level": 1,
+        "title": "Protocol and recovery"
+      },
+      {
+        "id": "architecture",
+        "level": 2,
+        "title": "Architecture"
+      }
+    ]
+  },
+  {
+    "source": "releases/v3-changed-files.md",
+    "url": "https://hogancv.github.io/coordinate-agents/releases/v3-changed-files.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "v3-actual-changed-files",
+        "level": 1,
+        "title": "V3 actual changed files"
+      },
+      {
+        "id": "runtime-and-npm-distribution",
+        "level": 2,
+        "title": "Runtime and npm distribution"
+      },
+      {
+        "id": "release-and-verification-tooling",
+        "level": 2,
+        "title": "Release and verification tooling"
+      },
+      {
+        "id": "documentation-and-measured-evidence",
+        "level": 2,
+        "title": "Documentation and measured evidence"
+      },
+      {
+        "id": "tests",
+        "level": 2,
+        "title": "Tests"
+      }
+    ]
+  },
+  {
+    "source": "releases/v3-ci.md",
+    "url": "https://hogancv.github.io/coordinate-agents/releases/v3-ci.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "v3-web-first-ci-daily-scope-and-windows-verification",
+        "level": 1,
+        "title": "V3 Web-first CI: daily scope and Windows verification"
+      },
+      {
+        "id": "responsibilities-and-job-counts",
+        "level": 2,
+        "title": "Responsibilities and job counts"
+      },
+      {
+        "id": "windows-root-causes-and-fixes",
+        "level": 2,
+        "title": "Windows root causes and fixes"
+      },
+      {
+        "id": "shared-dependency-audit-and-trigger-tests",
+        "level": 2,
+        "title": "Shared dependency audit and trigger tests"
+      },
+      {
+        "id": "one-artifact-full-release-coverage",
+        "level": 2,
+        "title": "One artifact, full release coverage"
+      },
+      {
+        "id": "pages-and-required-checks",
+        "level": 2,
+        "title": "Pages and required checks"
+      },
+      {
+        "id": "verifiable-timing-and-costs",
+        "level": 2,
+        "title": "Verifiable timing and costs"
+      },
+      {
+        "id": "verification-and-handoff",
+        "level": 2,
+        "title": "Verification and handoff"
+      }
+    ]
+  },
+  {
+    "source": "releases/v3-web-first.md",
+    "url": "https://hogancv.github.io/coordinate-agents/releases/v3-web-first.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "npm-300-web-first-release-evidence",
+        "level": 1,
+        "title": "npm 3.0.0 Web-first release evidence"
+      },
+      {
+        "id": "baseline",
+        "level": 2,
+        "title": "Baseline"
+      },
+      {
+        "id": "architecture-and-dependency-audit",
+        "level": 2,
+        "title": "Architecture and dependency audit"
+      },
+      {
+        "id": "validation-and-comparison",
+        "level": 2,
+        "title": "Validation and comparison"
+      },
+      {
+        "id": "executed-verification",
+        "level": 3,
+        "title": "Executed verification"
+      },
+      {
+        "id": "release-readiness",
+        "level": 3,
+        "title": "Release readiness"
+      },
+      {
+        "id": "manual-release-steps",
+        "level": 2,
+        "title": "Manual release steps"
+      }
+    ]
+  },
+  {
+    "source": "releases/workspace-archive.md",
+    "url": "https://hogancv.github.io/coordinate-agents/releases/workspace-archive.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "workspace-archive-follow-up--2026-10-08",
+        "level": 1,
+        "title": "Workspace archive follow-up — 2026-10-08"
+      },
+      {
+        "id": "behavior",
+        "level": 2,
+        "title": "Behavior"
+      },
+      {
+        "id": "validation",
+        "level": 2,
+        "title": "Validation"
+      }
+    ]
+  },
+  {
+    "source": "security.md",
+    "url": "https://hogancv.github.io/coordinate-agents/security.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "security",
+        "level": 1,
+        "title": "Security"
+      },
+      {
+        "id": "web-workspace",
+        "level": 2,
+        "title": "Web Workspace"
+      },
+      {
+        "id": "shared-session-runtime-and-structured-workflow",
+        "level": 2,
+        "title": "Shared Session Runtime and structured workflow"
+      }
+    ]
+  },
+  {
+    "source": "session-runtime.md",
+    "url": "https://hogancv.github.io/coordinate-agents/session-runtime.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "execution-session-and-pty-runtime",
+        "level": 1,
+        "title": "Execution Session and PTY Runtime"
+      },
+      {
+        "id": "lifecycle-and-tools",
+        "level": 2,
+        "title": "Lifecycle and tools"
+      },
+      {
+        "id": "task-and-review-loop",
+        "level": 2,
+        "title": "Task and review loop"
+      },
+      {
+        "id": "executable-and-platform-rules",
+        "level": 2,
+        "title": "Executable and platform rules"
+      }
+    ]
+  },
+  {
+    "source": "structured-workflow.md",
+    "url": "https://hogancv.github.io/coordinate-agents/structured-workflow.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "structured-workflow-plugin-and-legacy-cli",
+        "level": 1,
+        "title": "Structured workflow: Plugin and Legacy CLI"
+      },
+      {
+        "id": "install-the-optional-plugin",
+        "level": 2,
+        "title": "Install the optional Plugin"
+      },
+      {
+        "id": "codex-plugin-first-path",
+        "level": 2,
+        "title": "Codex Plugin-first path"
+      },
+      {
+        "id": "codex-app-path-recommended",
+        "level": 2,
+        "title": "Codex App path (recommended)"
+      },
+      {
+        "id": "1-check-prerequisites-and-install-both-skills",
+        "level": 2,
+        "title": "1. Check prerequisites and install both Skills"
+      },
+      {
+        "id": "2-initialize-the-first-task",
+        "level": 2,
+        "title": "2. Initialize the first task"
+      },
+      {
+        "id": "3-complete-one-lifecycle",
+        "level": 2,
+        "title": "3. Complete one lifecycle"
+      },
+      {
+        "id": "success-and-failure-signals",
+        "level": 2,
+        "title": "Success and failure signals"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-08-web-first-v3.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-08-web-first-v3.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "web-first-npm-30-implementation-plan",
+        "level": 1,
+        "title": "Web-first npm 3.0 Implementation Plan"
+      },
+      {
+        "id": "global-constraints",
+        "level": 2,
+        "title": "Global Constraints"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review Focus"
+      },
+      {
+        "id": "task-1-capture-baseline-and-dependency-boundaries",
+        "level": 2,
+        "title": "Task 1: Capture baseline and dependency boundaries"
+      },
+      {
+        "id": "task-2-separate-web-runtime",
+        "level": 2,
+        "title": "Task 2: Separate Web runtime"
+      },
+      {
+        "id": "task-3-npm-package-and-release-verification",
+        "level": 2,
+        "title": "Task 3: npm package and release verification"
+      },
+      {
+        "id": "task-4-documentation-measurements-and-regression",
+        "level": 2,
+        "title": "Task 4: Documentation, measurements and regression"
+      },
+      {
+        "id": "completion-evidence",
+        "level": 2,
+        "title": "Completion evidence"
+      },
+      {
+        "id": "integration-follow-up--2026-10-08",
+        "level": 2,
+        "title": "Integration follow-up — 2026-10-08"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-14-custom-terminal-workspace.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-14-custom-terminal-workspace.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "custom-terminal-workspace-implementation-plan",
+        "level": 1,
+        "title": "Custom Terminal Workspace Implementation Plan"
+      },
+      {
+        "id": "constraints-and-rulings",
+        "level": 2,
+        "title": "Constraints and rulings"
+      },
+      {
+        "id": "tasks",
+        "level": 2,
+        "title": "Tasks"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review focus"
+      },
+      {
+        "id": "ledger",
+        "level": 2,
+        "title": "Ledger"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-15-native-desktop-notifications.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-15-native-desktop-notifications.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "native-desktop-notifications-implementation-plan",
+        "level": 1,
+        "title": "Native Desktop Notifications Implementation Plan"
+      },
+      {
+        "id": "constraints-and-decisions",
+        "level": 2,
+        "title": "Constraints and decisions"
+      },
+      {
+        "id": "tasks",
+        "level": 2,
+        "title": "Tasks"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review focus"
+      },
+      {
+        "id": "execution-record",
+        "level": 2,
+        "title": "Execution record"
+      },
+      {
+        "id": "final-verification",
+        "level": 2,
+        "title": "Final verification"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-16-collaboration-review-fixes.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-16-collaboration-review-fixes.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "collaboration-review-fixes",
+        "level": 1,
+        "title": "Collaboration review fixes"
+      },
+      {
+        "id": "verification",
+        "level": 2,
+        "title": "Verification"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-16-collaboration-timeline.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-16-collaboration-timeline.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "collaboration-timeline-v1",
+        "level": 1,
+        "title": "Collaboration Timeline v1"
+      },
+      {
+        "id": "design",
+        "level": 2,
+        "title": "Design"
+      },
+      {
+        "id": "implementation-sequence",
+        "level": 2,
+        "title": "Implementation sequence"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review focus"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-19-native-identity-store.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-19-native-identity-store.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "native-conversation-identity-store-v1-implementation-plan",
+        "level": 1,
+        "title": "Native Conversation Identity Store v1 implementation plan"
+      },
+      {
+        "id": "implementation-and-verification",
+        "level": 2,
+        "title": "Implementation and verification"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/plans/2026-10-20-codex-conversation-resume.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/plans/2026-10-20-codex-conversation-resume.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "codex-centric-collaboration-resume-implementation-plan",
+        "level": 1,
+        "title": "Codex-Centric Collaboration Resume Implementation Plan"
+      },
+      {
+        "id": "global-constraints",
+        "level": 2,
+        "title": "Global Constraints"
+      },
+      {
+        "id": "review-focus",
+        "level": 2,
+        "title": "Review Focus"
+      },
+      {
+        "id": "task-1-explicit-native-target-and-exact-launch",
+        "level": 3,
+        "title": "Task 1: Explicit native target and exact launch"
+      },
+      {
+        "id": "task-2-resume-lifecycle-and-manual-identity-confirmation",
+        "level": 3,
+        "title": "Task 2: Resume lifecycle and manual identity confirmation"
+      },
+      {
+        "id": "task-3-collaboration-isolation-and-interrupted-rounds",
+        "level": 3,
+        "title": "Task 3: Collaboration isolation and interrupted rounds"
+      },
+      {
+        "id": "task-4-web-entry-acceptance-and-delivery",
+        "level": 3,
+        "title": "Task 4: Web entry, acceptance and delivery"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/specs/2026-10-08-web-first-v3-design.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/specs/2026-10-08-web-first-v3-design.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "web-first-npm-30-design",
+        "level": 1,
+        "title": "Web-first npm 3.0 design"
+      },
+      {
+        "id": "choice",
+        "level": 2,
+        "title": "Choice"
+      },
+      {
+        "id": "distribution",
+        "level": 2,
+        "title": "Distribution"
+      },
+      {
+        "id": "validation",
+        "level": 2,
+        "title": "Validation"
+      },
+      {
+        "id": "integration-follow-up--2026-10-08",
+        "level": 2,
+        "title": "Integration follow-up — 2026-10-08"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/specs/2026-10-20-codex-conversation-resume-design.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/specs/2026-10-20-codex-conversation-resume-design.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "codex-centric-collaboration-resume-v1",
+        "level": 1,
+        "title": "Codex-Centric Collaboration Resume v1"
+      },
+      {
+        "id": "identity-and-confirmation",
+        "level": 2,
+        "title": "Identity and confirmation"
+      },
+      {
+        "id": "lifecycle",
+        "level": 2,
+        "title": "Lifecycle"
+      },
+      {
+        "id": "ui-and-validation",
+        "level": 2,
+        "title": "UI and validation"
+      }
+    ]
+  },
+  {
+    "source": "superpowers/specs/2026-10-21-local-workbench-roadmap.md",
+    "url": "https://hogancv.github.io/coordinate-agents/superpowers/specs/2026-10-21-local-workbench-roadmap.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "coordinate-agents本地双-agent-工作台整体规划",
+        "level": 1,
+        "title": "Coordinate Agents：本地双 Agent 工作台整体规划"
+      },
+      {
+        "id": "1-产品目标",
+        "level": 2,
+        "title": "1. 产品目标"
+      },
+      {
+        "id": "2-现状判断",
+        "level": 2,
+        "title": "2. 现状判断"
+      },
+      {
+        "id": "3-路线选择",
+        "level": 2,
+        "title": "3. 路线选择"
+      },
+      {
+        "id": "4-用户流程与界面组织",
+        "level": 2,
+        "title": "4. 用户流程与界面组织"
+      },
+      {
+        "id": "41-开始任务",
+        "level": 3,
+        "title": "4.1 开始任务"
+      },
+      {
+        "id": "42-日常工作",
+        "level": 3,
+        "title": "4.2 日常工作"
+      },
+      {
+        "id": "43-中断与恢复",
+        "level": 3,
+        "title": "4.3 中断与恢复"
+      },
+      {
+        "id": "44-检查结果",
+        "level": 3,
+        "title": "4.4 检查结果"
+      },
+      {
+        "id": "5-目标架构与模块职责",
+        "level": 2,
+        "title": "5. 目标架构与模块职责"
+      },
+      {
+        "id": "6-状态与数据原则",
+        "level": 2,
+        "title": "6. 状态与数据原则"
+      },
+      {
+        "id": "7-迭代路线",
+        "level": 2,
+        "title": "7. 迭代路线"
+      },
+      {
+        "id": "第一轮建议做的五个工作包",
+        "level": 3,
+        "title": "第一轮建议做的五个工作包"
+      },
+      {
+        "id": "8-验收与成功标准",
+        "level": 2,
+        "title": "8. 验收与成功标准"
+      },
+      {
+        "id": "必须守住的行为",
+        "level": 3,
+        "title": "必须守住的行为"
+      },
+      {
+        "id": "建议的验证规模",
+        "level": 3,
+        "title": "建议的验证规模"
+      },
+      {
+        "id": "9-范围与延期项",
+        "level": 2,
+        "title": "9. 范围与延期项"
+      },
+      {
+        "id": "10-版本与支持策略",
+        "level": 2,
+        "title": "10. 版本与支持策略"
+      },
+      {
+        "id": "11-主要风险与处理",
+        "level": 2,
+        "title": "11. 主要风险与处理"
+      },
+      {
+        "id": "12-依据与后续使用",
+        "level": 2,
+        "title": "12. 依据与后续使用"
+      }
+    ]
+  },
+  {
+    "source": "task-graph-v1.md",
+    "url": "https://hogancv.github.io/coordinate-agents/task-graph-v1.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "task-graph-v1-contract",
+        "level": 1,
+        "title": "Task Graph v1 Contract"
+      },
+      {
+        "id": "input",
+        "level": 2,
+        "title": "Input"
+      },
+      {
+        "id": "validation-boundary",
+        "level": 2,
+        "title": "Validation boundary"
+      },
+      {
+        "id": "durable-graph-create-status-and-inspect",
+        "level": 2,
+        "title": "Durable graph create, status, and inspect"
+      },
+      {
+        "id": "optional-intent-map-v1-companion",
+        "level": 3,
+        "title": "Optional Intent Map v1 companion"
+      },
+      {
+        "id": "read-only-graph-preflight",
+        "level": 2,
+        "title": "Read-only Graph Preflight"
+      },
+      {
+        "id": "bounded-parallel-frontier-execution",
+        "level": 2,
+        "title": "Bounded parallel frontier execution"
+      },
+      {
+        "id": "explicit-bounded-multi-wave-advance",
+        "level": 2,
+        "title": "Explicit bounded multi-wave advance"
+      },
+      {
+        "id": "durable-recovery-explicit-resume-stop-and-cleanup",
+        "level": 2,
+        "title": "Durable recovery, explicit resume, stop, and cleanup"
+      },
+      {
+        "id": "deterministic-integration-and-aggregate-review",
+        "level": 2,
+        "title": "Deterministic integration and aggregate review"
+      },
+      {
+        "id": "repository-acceptance-gate",
+        "level": 2,
+        "title": "Repository acceptance gate"
+      },
+      {
+        "id": "subtask-dispatch-in-an-isolated-git-worktree",
+        "level": 2,
+        "title": "Subtask dispatch in an isolated Git worktree"
+      },
+      {
+        "id": "determinism-and-scope",
+        "level": 2,
+        "title": "Determinism and scope"
+      }
+    ]
+  },
+  {
+    "source": "troubleshooting.md",
+    "url": "https://hogancv.github.io/coordinate-agents/troubleshooting.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "troubleshooting",
+        "level": 1,
+        "title": "Troubleshooting"
+      },
+      {
+        "id": "a-documented-feature-is-missing-or-a-command-is-unavailable",
+        "level": 2,
+        "title": "A documented feature is missing, or a command is unavailable"
+      },
+      {
+        "id": "the-server-cannot-start-or-the-port-is-busy",
+        "level": 2,
+        "title": "The server cannot start or the port is busy"
+      },
+      {
+        "id": "an-agent-command-is-missing-or-cannot-log-in",
+        "level": 2,
+        "title": "An agent command is missing or cannot log in"
+      },
+      {
+        "id": "terminal-display-or-resize-is-limited",
+        "level": 2,
+        "title": "Terminal display or resize is limited"
+      },
+      {
+        "id": "a-task-is-quiet-or-the-timeline-has-no-done",
+        "level": 2,
+        "title": "A task is quiet or the timeline has no DONE"
+      },
+      {
+        "id": "review-feedback-or-a-custom-prompt-cannot-be-sent",
+        "level": 2,
+        "title": "Review feedback or a Custom prompt cannot be sent"
+      },
+      {
+        "id": "a-desktop-notification-is-missing",
+        "level": 2,
+        "title": "A desktop notification is missing"
+      },
+      {
+        "id": "a-closed-browser-left-agents-running-or-a-project-disappeared",
+        "level": 2,
+        "title": "A closed browser left agents running, or a project disappeared"
+      },
+      {
+        "id": "structured-plugin--legacy-troubleshooting",
+        "level": 2,
+        "title": "Structured Plugin / Legacy troubleshooting"
+      },
+      {
+        "id": "plugin-first-diagnosis-and-structured-errors",
+        "level": 2,
+        "title": "Plugin-first diagnosis and structured errors"
+      },
+      {
+        "id": "skill-not-discovered",
+        "level": 2,
+        "title": "Skill not discovered"
+      },
+      {
+        "id": "codex-app-selects-the-wrong-project-or-cannot-start-the-implementer",
+        "level": 2,
+        "title": "Codex App selects the wrong project or cannot start the Implementer"
+      },
+      {
+        "id": "node-version-too-low",
+        "level": 2,
+        "title": "Node version too low"
+      },
+      {
+        "id": "codex-or-agy-is-not-found",
+        "level": 2,
+        "title": "codex or agy is not found"
+      },
+      {
+        "id": "implementer-stops-with-error",
+        "level": 2,
+        "title": "Implementer stops with ERROR"
+      },
+      {
+        "id": "unknown-installation-directory",
+        "level": 2,
+        "title": "Unknown installation directory"
+      },
+      {
+        "id": "doctor-fails-after-installation",
+        "level": 2,
+        "title": "doctor fails after installation"
+      },
+      {
+        "id": "message-remains-in-processing",
+        "level": 2,
+        "title": "Message remains in processing"
+      },
+      {
+        "id": "agent-bus-is-damaged-or-unsafe",
+        "level": 2,
+        "title": ".agent-bus is damaged or unsafe"
+      },
+      {
+        "id": "windows-path-normalization",
+        "level": 2,
+        "title": "Windows path normalization"
+      },
+      {
+        "id": "npm-registry-metadata-is-inconsistent",
+        "level": 2,
+        "title": "npm registry metadata is inconsistent"
+      }
+    ]
+  },
+  {
+    "source": "v2.4.md",
+    "url": "https://hogancv.github.io/coordinate-agents/v2.4.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "v24-docs-and-v3-migration--旧版文档与迁移",
+        "level": 1,
+        "title": "v2.4 docs and v3 migration / 旧版文档与迁移"
+      },
+      {
+        "id": "what-changed--方向变化",
+        "level": 2,
+        "title": "What changed / 方向变化"
+      },
+      {
+        "id": "original-v240-documentation--发布时的原始文档",
+        "level": 2,
+        "title": "Original v2.4.0 documentation / 发布时的原始文档"
+      },
+      {
+        "id": "retained-structured-reference--继续查阅结构化路线",
+        "level": 2,
+        "title": "Retained structured reference / 继续查阅结构化路线"
+      },
+      {
+        "id": "continue-with-v24-or-move-to-web--继续旧流程或使用新版",
+        "level": 2,
+        "title": "Continue with v2.4 or move to Web / 继续旧流程或使用新版"
+      }
+    ]
+  },
+  {
+    "source": "zh-CN/codex-conversation-resume.md",
+    "url": "https://hogancv.github.io/coordinate-agents/zh-CN/codex-conversation-resume.html",
+    "status": 200,
+    "headings": [
+      {
+        "id": "自动保存与恢复-codex-原生对话",
+        "level": 1,
+        "title": "自动保存与恢复 Codex 原生对话"
+      },
+      {
+        "id": "动作表",
+        "level": 2,
+        "title": "动作表"
+      },
+      {
+        "id": "正常流程",
+        "level": 2,
+        "title": "正常流程"
+      },
+      {
+        "id": "何时需要人工处理",
+        "level": 2,
+        "title": "何时需要人工处理"
+      },
+      {
+        "id": "本地配置与隐私",
+        "level": 2,
+        "title": "本地配置与隐私"
+      },
+      {
+        "id": "历史方案与适用版本",
+        "level": 2,
+        "title": "历史方案与适用版本"
+      }
+    ]
+  },
+  {
+    "source": "zh-CN/index.md",
+    "url": "https://hogancv.github.io/coordinate-agents/zh-CN/",
+    "status": 200,
+    "headings": [
+      {
+        "id": "coordinate-agents本地编码-agent-工作台",
+        "level": 1,
+        "title": "Coordinate Agents：本地编码 Agent 工作台"
+      },
+      {
+        "id": "快速开始",
+        "level": 2,
+        "title": "快速开始"
+      },
+      {
+        "id": "日常使用与边界",
+        "level": 2,
+        "title": "日常使用与边界"
+      },
+      {
+        "id": "文档导航",
+        "level": 2,
+        "title": "文档导航"
+      },
+      {
+        "id": "可选的结构化工作流",
+        "level": 2,
+        "title": "可选的结构化工作流"
+      }
+    ]
+  }
+]

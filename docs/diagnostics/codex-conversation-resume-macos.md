@@ -1,3 +1,15 @@
+---
+search: false
+title: "Codex-Centric Resume v1: macOS native acceptance"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-codex-centric-resume-v1-macos-native-acceptance" class="doc-anchor" aria-hidden="true"></div>
+
 # Codex-Centric Resume v1: macOS native acceptance
 
 > Historical acceptance — applies to the 2026-10-20 Resume v1 manual-confirmation
@@ -12,6 +24,8 @@ Codex CLI 0.162.1; Antigravity through the user's existing agy-proxy wrapper.
 Real user model, authentication, environment and native approval settings were
 retained. All implementation files used for the test lived in a disposable Git
 project. No npm publication, version change or Release was performed.
+
+<div id="a--continuing-native-conversation" class="doc-anchor" aria-hidden="true"></div>
 
 ## A — continuing native conversation
 
@@ -35,6 +49,8 @@ earlier? Reply with that phrase only. No tools." The response was
 `amber lantern 739182`. The question did not contain the phrase. The application
 sent no previous prompt or history to the new Codex process. Native launch used
 the explicit UUID. This establishes real context continuity, beyond process startup.
+
+<div id="b--rebuilt-executor-completes-a-new-implementation" class="doc-anchor" aria-hidden="true"></div>
 
 ## B — rebuilt executor completes a new implementation
 
@@ -61,6 +77,8 @@ no false approval was recorded. That executor was replaced, and subsequent
 instructions explicitly left native approvals to the operator. Resume neither
 answers native approval dialogs nor changes the user's permission configuration.
 
+<div id="c--interruption-in-working" class="doc-anchor" aria-hidden="true"></div>
+
 ## C — interruption in WORKING
 
 The real executor reported WORKING for
@@ -70,6 +88,8 @@ interrupted WORKING round for inspection. Before/after cooperation and Timeline
 JSON were equal. No work was automatically dispatched. A call replaying the old
 executor's actual Session/generation claims was rejected without a new event.
 Only a subsequent explicit Codex dispatch started the successful round above.
+
+<div id="de--automated-boundary-and-regression-evidence" class="doc-anchor" aria-hidden="true"></div>
 
 ## D/E — automated boundary and regression evidence
 

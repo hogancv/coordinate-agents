@@ -1,15 +1,16 @@
 ---
-layout: page
 title: Protocol and recovery
 description: How the local-first Agent Bus coordinates messages, claims, reviews, adapters, and interrupted work.
 ---
 
+<div id="协议与恢复" class="doc-anchor" aria-hidden="true"></div>
+
 # Protocol and recovery
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 `.agent-bus` is a local-first coordination runtime with atomic message publication, atomic claiming,
 deduplication keys, leases, quarantine, append-only agent state, idempotent completion, and
@@ -18,6 +19,8 @@ Runtime-owned Execution Session records. It does not require an external CAO ser
 Key Task, Session, review, recovery, and Bus lifecycle hooks also append sanitized
 schema-v1 records to `.agent-bus/events/runtime.jsonl`. This journal is
 observability history, not an event-sourced replacement for current state.
+
+<div id="架构" class="doc-anchor" aria-hidden="true"></div>
 
 ## Architecture
 

@@ -1,3 +1,10 @@
+---
+title: "Native Conversation Identity Store v1"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+<div id="技术参考-native-conversation-identity-store-v1" class="doc-anchor" aria-hidden="true"></div>
+
 # Native Conversation Identity Store v1
 
 > Historical storage-stage document — applies to PR #137's Identity Store v1

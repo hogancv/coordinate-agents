@@ -1,3 +1,15 @@
+---
+search: false
+title: "Collaboration Timeline v1"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-collaboration-timeline-v1" class="doc-anchor" aria-hidden="true"></div>
+
 # Collaboration Timeline v1
 
 Observe formal Default Collaboration facts without changing dispatch, receipt transitions, prompts, terminal IO, notifications, or user workflow. The user authorizes autonomous design, implementation, checks, review, PR and merge.

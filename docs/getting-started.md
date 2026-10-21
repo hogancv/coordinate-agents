@@ -1,8 +1,9 @@
 ---
-layout: page
 title: Getting started
 description: Start the local Web Workspace, choose npm or current source, configure terminals, and complete a first Codex and Antigravity collaboration task.
 ---
+
+<div id="快速开始" class="doc-anchor" aria-hidden="true"></div>
 
 # Getting started
 
@@ -11,6 +12,9 @@ For the previous product direction, see [v2.4 original docs and migration](./v2.
 The main entry is the **Web Workspace**, a local browser workbench with two
 persistent coding-agent terminals. No Codex Plugin, Skill installation, MCP
 setup, or global npm installation is needed for this path.
+
+<div id="1-check-prerequisites" class="doc-anchor" aria-hidden="true"></div>
+<div id="_1-检查前置条件" class="doc-anchor" aria-hidden="true"></div>
 
 ## 1. Check prerequisites
 
@@ -33,7 +37,12 @@ Native PTY support depends on the installed Node/platform combination. Node 18
 retains an owned-stdio fallback; it cannot provide full TUI or child-observed
 resize behavior. See [terminal troubleshooting](./troubleshooting.html#terminal-display-or-resize-is-limited).
 
+<div id="2-choose-published-npm-or-current-source" class="doc-anchor" aria-hidden="true"></div>
+<div id="_2-选择已发布的-npm-包或当前源码" class="doc-anchor" aria-hidden="true"></div>
+
 ## 2. Choose published npm or current source
+
+<div id="已发布的-npm-包" class="doc-anchor" aria-hidden="true"></div>
 
 ### Published npm
 
@@ -44,6 +53,8 @@ npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
 This guide covers the **3.0.2 Web release**. Use `@3.0.2` in place of `@latest`
 for a pinned installation; verify `npm view @hogancv/coordinate-agents dist-tags`
 before assuming which release `latest` selects.
+
+<div id="当前源码" class="doc-anchor" aria-hidden="true"></div>
 
 ### Current source
 
@@ -70,6 +81,9 @@ The npm 3.x command surface is `web`, `--help`, and `--version`. Web accepts
 `--root`, `--port`, and `--json`. Older `install`, `doctor`, `config`, `task`,
 `quickstart`, and `inspector` commands require the separate Legacy runtime.
 
+<div id="3-check-workspace-settings" class="doc-anchor" aria-hidden="true"></div>
+<div id="_3-检查工作台设置" class="doc-anchor" aria-hidden="true"></div>
+
 ## 3. Check Workspace settings
 
 Settings has three independently saved tabs in current source:
@@ -81,6 +95,9 @@ Settings has three independently saved tabs in current source:
 Executable fields accept a command name or absolute path, without inline
 arguments or shell syntax. Leave the Codex model blank to use the CLI default.
 Save the active tab; switching tabs retains unsaved edits.
+
+<div id="4-run-your-first-default-task" class="doc-anchor" aria-hidden="true"></div>
+<div id="_4-运行第一个默认任务" class="doc-anchor" aria-hidden="true"></div>
 
 ## 4. Run your first default task
 
@@ -100,6 +117,9 @@ add review notes, and confirm Codex is at a blank input prompt before sending.
 That readiness confirmation is cleared after each successful send. Diffs may
 include earlier user edits and do not cover changes already committed.
 
+<div id="5-keep-or-close-your-sessions" class="doc-anchor" aria-hidden="true"></div>
+<div id="_5-保留或关闭会话" class="doc-anchor" aria-hidden="true"></div>
+
 ## 5. Keep or close your sessions
 
 Refresh reconnects to the saved sessions. Switching projects leaves background
@@ -116,6 +136,8 @@ Web tasks share the project's working directory and do not create isolated
 worktrees. Avoid simultaneous conflicting edits. Prompts require authorization
 for commit, push, and release; they are behavioral instructions, not a sandbox.
 
+<div id="成功与失败信号" class="doc-anchor" aria-hidden="true"></div>
+
 ## Success and failure signals
 
 A successful first run shows both configured CLIs, a single task-bound dispatch,
@@ -126,6 +148,8 @@ On startup failure, inspect the executable and session diagnostics before
 explicitly restarting. A timeout means pending, not permission to resend input.
 Health hints identify missing evidence or session problems; silence alone does
 not prove an agent is stuck. See [Troubleshooting](./troubleshooting.html).
+
+<div id="如果需要结构化-task-或-codex-plugin" class="doc-anchor" aria-hidden="true"></div>
 
 ## If you need structured Tasks or a Codex Plugin
 

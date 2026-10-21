@@ -1,0 +1,19 @@
+{
+  "name": "coordinate-agents-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview .",
+    "check": "node ../scripts/docs/check-site.mjs && node ../scripts/docs/check-compatibility.mjs",
+    "test": "node --test ../scripts/docs/*.test.mjs",
+    "audit": "node ../scripts/docs/generate-audit.mjs && node ../scripts/docs/preserve-anchors.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

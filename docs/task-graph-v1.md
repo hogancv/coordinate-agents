@@ -1,15 +1,16 @@
 ---
-layout: default
 title: Task Graph v1 Contract
 description: Additive Task Graph input, deterministic execution, durable recovery, and ownership-safe cleanup.
 ---
 
+<div id="技术参考-task-graph-v1-contract" class="doc-anchor" aria-hidden="true"></div>
+
 # Task Graph v1 Contract
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 Task Graph v1 is an additive input contract over the canonical Coordinate
 Agents Runtime. It does not reinterpret or replace schema-version-1 single
@@ -58,7 +59,7 @@ non-empty and configured. No Agent identity is inferred from an executable
 name. The file-based CLI input is bounded to 64 MiB before JSON parsing.
 
 The machine-readable input schema is
-[`schemas/task-graph-v1.schema.json`](../schemas/task-graph-v1.schema.json).
+[`schemas/task-graph-v1.schema.json`](https://github.com/hogancv/coordinate-agents/blob/main/schemas/task-graph-v1.schema.json).
 Runtime validation additionally proves identifier uniqueness, configured Agent
 membership, dependency existence, absence of self-edges and duplicate edges,
 and acyclicity.
@@ -363,8 +364,8 @@ refuses any graph with an unresolved, failed, stopped, or unverified subtask.
 It captures one base commit, sorts source subtasks by identifier, verifies the
 exact Runtime branch/ref and commit reachability, then cherry-picks the
 verified commits into the separate Runtime-owned
-.agent-bus/worktrees/<parentTaskId>/__integration__ worktree and
-coordinate-agents/<parentTaskId>/__integration__ branch. The current user
+`.agent-bus/worktrees/<parentTaskId>/__integration__` worktree and
+`coordinate-agents/<parentTaskId>/__integration__` branch. The current user
 checkout, subtask worktrees, source branches, and source commits are not
 modified.
 

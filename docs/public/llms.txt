@@ -1,0 +1,149 @@
+# Coordinate Agents
+
+> Local Web Workspace for coding-agent terminal pairs. Default Collaboration
+> uses Codex to clarify, delegate and review, and Antigravity to implement.
+> Custom Terminals supports two user-selected CLI executables and optional prompts.
+
+## Product and version boundary
+
+The main entry is Web Workspace, not a Skill installer or Task Graph orchestrator.
+Node.js >=18 and Git are required. Agent CLIs and provider login are installed
+and managed separately. No Codex Plugin or global npm install is required for Web.
+
+Web 3.0.2 includes the additions made after 3.0.1: Git Changes/review feedback,
+Custom Terminals, desktop notifications, Timeline, Health and native Codex recovery.
+Pin @3.0.2 for a reproducible install; verify registry dist-tags before selecting
+latest. Source development remains separate; a merge to main does not publish npm.
+Package and Plugin versions are independent.
+
+Published: npx @hogancv/coordinate-agents@latest web --root "/path/to/project" --port 3000
+Current source: npm ci, then node bin/coordinate-agents.mjs web --root "/path/to/project" --port 3000
+Use --port 0 for a free port. The startup directory is registered automatically;
+a non-Git startup folder initializes Git/storage without a commit.
+
+npm 3.x exposes web, help, version and Web --root/--port/--json only. It excludes
+Skill installation, Legacy CLI, structured Task/Graph API, MCP server, read-only
+Inspector, and public Adapter SDK. Do not use npm latest for install/doctor/config/
+quickstart/task/inspector. Those require the Plugin, source Legacy entry, or npm 2.4.0.
+
+## Web behavior and limits
+
+Each task creates fresh task-bound Sessions; Custom also binds each terminal slot.
+Default commands are codex and agy, with executable overrides in project settings.
+Workspace settings allow Antigravity prompt mode or automatic tool approval.
+The adapter defaults to --dangerously-skip-permissions; project/user args override it;
+args: [] opts out. Custom Terminals retain their separate Generic CLI configuration.
+Custom supports the same CLI twice. Commands are executable names or absolute
+paths, without inline arguments or shell syntax. Custom prompt defaults are saved
+per project; each task snapshots commands/prompts, including for restart.
+Shared prompts are bounded to 8 KB UTF-8, each terminal prompt to 4 KB.
+Custom prompt delivery requires explicit readiness/multiline-paste confirmation;
+unknown CLI readiness is not inferred. Custom has no default roles, rounds, or
+Send to Codex review feedback. Diff viewing/copying remains available.
+
+Default prompt version is 2.3.0-web-lite-3. The task-supplied workspace-message.mjs
+helper supports send/read/wait/report/changes with saved task/session binding.
+Web does not automatically invoke Skills, scan Agent Bus, restore structured
+Tasks, discover plugins, or create Task/Graph records. Pending wait is not
+permission to resend. Terminal output and idle do not prove completion.
+SENT confirms dispatch only; WORKING, DONE, REVIEWING, CHANGES_REQUESTED,
+APPROVED and FAILED are formal agent reports, not independently verified facts.
+Workspace task status is terminal lifecycle, not implementation or review completion.
+Role prompts are not an enforced state machine, sandbox, or technical release gate.
+They require user authorization for commit/push/release. Web tasks share one
+project worktree; creating a terminal pair does not create an isolated worktree.
+
+Git Changes shows current working-tree diffs, including earlier user edits,
+not an agent-only diff or committed history. Default feedback requires a blank
+Codex input prompt and fresh confirmation per send. Preflight cancellation on
+file change, diff refresh or drawer close prevents pending dispatch.
+Timeline persists recorded round history across refresh/server/pair restart.
+History not recorded by earlier versions cannot be reconstructed.
+Health shows missing receipts and Session facts; silence is not proof of failure.
+It never dispatches, retries, restarts or sends desktop notifications.
+Desktop notifications are opt-in per project, Windows 10/11 and macOS only;
+Linux is unsupported. Only formal Default receipts trigger them. Dispatch is
+at most once per project/task/round/status and OS acceptance is not visible proof.
+The browser can close while backend/agents/interactive OS session continue running.
+
+Refresh reconnects to independent Session Hosts. Browser/server shutdown does
+not itself close agents; use explicit close/restart controls. Archive closes
+associated terminals and hides records, preserving project source. Clearing
+archived conversations permanently removes stored task/timeline history.
+Recovery actions introduced at source f9f0210 and packaged in Web 3.0.2: Reopen task
+uses the saved original Codex UUID; without one, the fallback accepts an exact
+local primary CLI UUID. Recover executor preserves live owned Codex and opens
+only a missing Antigravity session. Both current owned terminals must finish
+startup with no identity conflict; no /status or extra UUID confirmation is
+required. Legacy AWAITING_CONFIRMATION is read compatibility, not a required step.
+Bound/reserved Default tasks refuse fresh-pair restart; use New task for a new
+context. Recovery never replays old work, and a new executor cannot complete an
+old executor's round. Close confirmations and send-readiness confirmations remain.
+Current action table: https://hogancv.github.io/coordinate-agents/codex-conversation-resume.html#action-table
+Earlier Resume v1 designs and macOS acceptance reports describe their historical
+manual-confirmation stage, not the current flow; see their applicability banners.
+Data under .agent-bus and the user project registry is local plaintext.
+Agent providers still receive data according to each CLI's configuration.
+Server is loopback-only; per-launch capability and Host/Origin checks are not
+multi-user authentication. HTTP root binding does not sandbox agent commands.
+
+## Current documentation
+
+Canonical documentation: https://hogancv.github.io/coordinate-agents/
+Getting started: https://hogancv.github.io/coordinate-agents/getting-started.html
+Workspace guide: https://hogancv.github.io/coordinate-agents/inspector.html
+Install with AI: https://hogancv.github.io/coordinate-agents/install-with-ai.html
+Troubleshooting: https://hogancv.github.io/coordinate-agents/troubleshooting.html
+FAQ: https://hogancv.github.io/coordinate-agents/faq.html
+Comparison: https://hogancv.github.io/coordinate-agents/comparison.html
+Security: https://hogancv.github.io/coordinate-agents/security.html
+Simplified Chinese: https://hogancv.github.io/coordinate-agents/zh-CN/
+
+## v2.4 historical documentation and migration
+
+v2.4 already had lightweight Web collaboration. v3 changes the main product and
+npm distribution to Web-first; it does not delete the structured source.
+Original v2.4.0 docs and v3 migration: https://hogancv.github.io/coordinate-agents/v2.4.html
+Original release docs are pinned to commit 3e36942ce52004ad3136c6f24be57a8255361c75.
+Current pages marked v2.4 lineage follow retained Plugin/Legacy code and can
+include later corrections; do not treat them as immutable v2.4.0 snapshots.
+Web tasks do not automatically convert or replace structured Task/Graph records.
+
+## Optional structured workflow
+
+The repository retains a local-first coordination protocol and runtime through
+the GitHub Plugin / Legacy CLI / MCP. Agent Bus, durable Tasks, implementation
+evidence, recorded review, Task Graphs, Intent Maps, and explicit recovery are
+separate from Web task receipts. Codex and Antigravity are reference adapters;
+generic-cli and trusted-local Contract v1 adapters extend the default reference workflow.
+Planner/Implementer/Reviewer roles are configurable in that structured runtime.
+
+Install Plugin with codex plugin marketplace add hogancv/coordinate-agents, then
+codex plugin add coordinate-agents@coordinate-agents. It bundles its runtime
+and does not require a global npm CLI. Source Legacy entry is
+node bin/coordinate-agents-legacy.mjs; published Legacy CLI must pin 2.4.0.
+Structured Tasks record a non-owning sessionId and can reuse a healthy Session
+through review rework. Failed/exited Sessions require explicit recovery/dispatch.
+Task Graph contracts provide explicit isolated-worktree dispatch, bounded waves,
+facts-first recovery, aggregate integration and review. REVIEW_APPROVED is not
+RELEASE_APPROVED. Never infer release authorization from an implementation receipt.
+The read-only Inspector is a separate Legacy UI, absent from npm 3.x Web.
+
+Structured workflow: https://hogancv.github.io/coordinate-agents/structured-workflow.html
+Legacy Skill install/upgrade/uninstall/restore: https://hogancv.github.io/coordinate-agents/legacy-ai-install.html
+Plugin E2E: https://hogancv.github.io/coordinate-agents/plugin-e2e.html
+Protocol: https://hogancv.github.io/coordinate-agents/protocol.html
+Session Runtime: https://hogancv.github.io/coordinate-agents/session-runtime.html
+Runtime events: https://hogancv.github.io/coordinate-agents/event-journal.html
+Task Graph: https://hogancv.github.io/coordinate-agents/task-graph-v1.html
+MCP: https://hogancv.github.io/coordinate-agents/mcp.html
+MCP troubleshooting: https://hogancv.github.io/coordinate-agents/MCP_TROUBLESHOOTING.html
+Adapter author guide: https://hogancv.github.io/coordinate-agents/adapter-author-guide.html
+Adapter conformance: https://hogancv.github.io/coordinate-agents/adapter-conformance.html
+Codex reference role: https://hogancv.github.io/coordinate-agents/codex-cli.html
+Antigravity reference role: https://hogancv.github.io/coordinate-agents/antigravity-cli.html
+
+Canonical repository: https://github.com/hogancv/coordinate-agents
+Canonical npm package: https://www.npmjs.com/package/@hogancv/coordinate-agents
+AI installation guide: https://hogancv.github.io/coordinate-agents/install-with-ai.html
+Release history: https://hogancv.github.io/coordinate-agents/changelog.html

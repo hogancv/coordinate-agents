@@ -1,25 +1,26 @@
 ---
-layout: page
 title: External Adapter Author Guide
 description: Build, validate, and explicitly register a local external Adapter Contract v1 module.
 permalink: /adapter-author-guide.html
 ---
 
+<div id="技术参考-external-adapter-author-guide" class="doc-anchor" aria-hidden="true"></div>
+
 # External Adapter Author Guide
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
-> **V3 distribution / 分发说明:** The SDK, conformance kit and external examples are GitHub Plugin/source and npm 2.4.0 resources. npm 3.x retains internal launch validation but does not publish Adapter SDK exports, conformance or examples.
+> **V3 distribution:** The SDK, conformance kit and external examples are GitHub Plugin/source and npm 2.4.0 resources. npm 3.x retains internal launch validation but does not publish Adapter SDK exports, conformance or examples.
 
 
 This guide describes the smallest supported external Adapter Contract v1
 module. The complete offline example is
-[`examples/minimal-external-adapter/adapter.mjs`](../examples/minimal-external-adapter/adapter.mjs),
+[`examples/minimal-external-adapter/adapter.mjs`](https://github.com/hogancv/coordinate-agents/blob/main/examples/minimal-external-adapter/adapter.mjs),
 with a deterministic executable in
-[`fake-agent.mjs`](../examples/minimal-external-adapter/fake-agent.mjs). It is
+[`fake-agent.mjs`](https://github.com/hogancv/coordinate-agents/blob/main/examples/minimal-external-adapter/fake-agent.mjs). It is
 not imported by the built-in registry: an adapter becomes available only after
 the user explicitly registers its exact local module path.
 

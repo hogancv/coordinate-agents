@@ -1,15 +1,16 @@
 ---
-layout: page
 title: Plugin-first E2E workflow
 description: Architecture audit, bundled Runtime resolution, Setup transaction, Task dispatch, state mapping, and Plugin-only acceptance gates.
 ---
 
+<div id="技术参考-plugin-first-e2e-workflow" class="doc-anchor" aria-hidden="true"></div>
+
 # Plugin-first E2E workflow
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 This page records the implementation audit and the acceptance path for a user
 who installs only the Codex Plugin. The Plugin is the product surface; the npm

@@ -1,8 +1,9 @@
 ---
-layout: page
 title: Compare workflows
 description: Compare one coding agent, manually managed terminals, the local Web Workspace, and optional structured Plugin and Task Graph coordination.
 ---
+
+<div id="工作流对比" class="doc-anchor" aria-hidden="true"></div>
 
 # Compare workflows
 
@@ -21,6 +22,8 @@ coordination that helps your task.
 Web 3.0.2 packages the Git Changes/review, Custom, notification, Timeline, Health
 and recovery additions made after 3.0.1. See [Getting started](./getting-started.html).
 
+<div id="适合使用-web-工作台的场景" class="doc-anchor" aria-hidden="true"></div>
+
 ## When Web Workspace helps
 
 Use it when you want two coding CLIs in one local browser, persistent sessions,
@@ -31,6 +34,8 @@ Custom mode suits a CLI pair whose behavior you want to control yourself.
 Git Changes, review notes, timeline, health hints, and optional notifications
 make the current source easier to observe. They do not verify correctness,
 ensure the agent followed its prompt, or automatically recover failed work.
+
+<div id="适合使用结构化工作流的场景" class="doc-anchor" aria-hidden="true"></div>
 
 ## When the structured workflow helps
 
@@ -44,6 +49,8 @@ implementation and Codex for planning/review; adapters allow other agents.
 Use [Structured workflow](./structured-workflow.html) when those records and
 contracts matter. Task Graphs add explicit dependency planning and isolated
 subtask worktrees. These APIs are not available through npm 3.x Web tasks.
+
+<div id="以下情况不适合使用本项目" class="doc-anchor" aria-hidden="true"></div>
 
 ## Do not use this project when
 

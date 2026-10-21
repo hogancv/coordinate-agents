@@ -1,0 +1,381 @@
+{
+  "checkedOn": "2026-10-21",
+  "base": "/coordinate-agents/",
+  "sourceCommit": "1341ae73daf182cca9b63df728e0e2e1a0b821a9",
+  "routes": [
+    {
+      "old": "/coordinate-agents/MCP_TROUBLESHOOTING.html",
+      "new": "/coordinate-agents/MCP_TROUBLESHOOTING.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/adapter-author-guide.html",
+      "new": "/coordinate-agents/adapter-author-guide.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/adapter-conformance.html",
+      "new": "/coordinate-agents/adapter-conformance.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/antigravity-cli.html",
+      "new": "/coordinate-agents/antigravity-cli.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/changelog.html",
+      "new": "/coordinate-agents/changelog.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/codex-cli.html",
+      "new": "/coordinate-agents/codex-cli.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/codex-conversation-resume.html",
+      "new": "/coordinate-agents/codex-conversation-resume.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/codex-native-auto-binding.html",
+      "new": "/coordinate-agents/codex-native-auto-binding.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/comparison.html",
+      "new": "/coordinate-agents/comparison.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/development/performance-notes.html",
+      "new": "/coordinate-agents/development/performance-notes.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/development/v3.1-conpty-reliability.html",
+      "new": "/coordinate-agents/development/v3.1-conpty-reliability.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/diagnostics/codex-conversation-resume-macos.html",
+      "new": "/coordinate-agents/diagnostics/codex-conversation-resume-macos.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/diagnostics/windows-native-conpty.html",
+      "new": "/coordinate-agents/diagnostics/windows-native-conpty.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/event-journal.html",
+      "new": "/coordinate-agents/event-journal.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/faq.html",
+      "new": "/coordinate-agents/faq.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/getting-started.html",
+      "new": "/coordinate-agents/getting-started.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/",
+      "new": "/coordinate-agents/",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/inspector.html",
+      "new": "/coordinate-agents/inspector.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/install-with-ai.html",
+      "new": "/coordinate-agents/install-with-ai.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/legacy-ai-install.html",
+      "new": "/coordinate-agents/legacy-ai-install.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/mcp.html",
+      "new": "/coordinate-agents/mcp.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/native-auto-binding-plan.html",
+      "new": "/coordinate-agents/native-auto-binding-plan.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/native-conversation-identity-store.html",
+      "new": "/coordinate-agents/native-conversation-identity-store.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/plugin-e2e.html",
+      "new": "/coordinate-agents/plugin-e2e.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/protocol.html",
+      "new": "/coordinate-agents/protocol.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/releases/v3-changed-files.html",
+      "new": "/coordinate-agents/releases/v3-changed-files.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/releases/v3-ci.html",
+      "new": "/coordinate-agents/releases/v3-ci.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/releases/v3-web-first.html",
+      "new": "/coordinate-agents/releases/v3-web-first.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/releases/workspace-archive.html",
+      "new": "/coordinate-agents/releases/workspace-archive.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/security.html",
+      "new": "/coordinate-agents/security.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/session-runtime.html",
+      "new": "/coordinate-agents/session-runtime.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/structured-workflow.html",
+      "new": "/coordinate-agents/structured-workflow.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-08-web-first-v3.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-08-web-first-v3.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-14-custom-terminal-workspace.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-14-custom-terminal-workspace.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-15-native-desktop-notifications.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-15-native-desktop-notifications.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-16-collaboration-review-fixes.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-16-collaboration-review-fixes.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-16-collaboration-timeline.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-16-collaboration-timeline.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-19-native-identity-store.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-19-native-identity-store.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/plans/2026-10-20-codex-conversation-resume.html",
+      "new": "/coordinate-agents/superpowers/plans/2026-10-20-codex-conversation-resume.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/specs/2026-10-08-web-first-v3-design.html",
+      "new": "/coordinate-agents/superpowers/specs/2026-10-08-web-first-v3-design.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/specs/2026-10-20-codex-conversation-resume-design.html",
+      "new": "/coordinate-agents/superpowers/specs/2026-10-20-codex-conversation-resume-design.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/superpowers/specs/2026-10-21-local-workbench-roadmap.html",
+      "new": "/coordinate-agents/superpowers/specs/2026-10-21-local-workbench-roadmap.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/task-graph-v1.html",
+      "new": "/coordinate-agents/task-graph-v1.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/troubleshooting.html",
+      "new": "/coordinate-agents/troubleshooting.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/v2.4.html",
+      "new": "/coordinate-agents/v2.4.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/zh-CN/codex-conversation-resume.html",
+      "new": "/coordinate-agents/zh-CN/codex-conversation-resume.html",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/zh-CN/",
+      "new": "/coordinate-agents/zh-CN/",
+      "policy": "preserved"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "old": "/coordinate-agents/llms.txt",
+      "new": "/coordinate-agents/llms.txt",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/feed.xml",
+      "new": "/coordinate-agents/feed.xml",
+      "policy": "preserved"
+    },
+    {
+      "old": "/coordinate-agents/sitemap.xml",
+      "new": "/coordinate-agents/sitemap.xml",
+      "policy": "preserved"
+    }
+  ],
+  "pending": [
+    {
+      "path": "zh-CN/MCP_TROUBLESHOOTING.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/adapter-author-guide.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/adapter-conformance.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/antigravity-cli.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/codex-cli.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/codex-native-auto-binding.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/development/performance-notes.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "development/v3.1-conpty-reliability.md",
+      "language": "en"
+    },
+    {
+      "path": "zh-CN/diagnostics/codex-conversation-resume-macos.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "diagnostics/windows-native-conpty.md",
+      "language": "en"
+    },
+    {
+      "path": "zh-CN/event-journal.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/mcp.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/native-auto-binding-plan.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/native-conversation-identity-store.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/plugin-e2e.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/releases/v3-changed-files.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/releases/v3-ci.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/releases/v3-web-first.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/releases/workspace-archive.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-08-web-first-v3.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-14-custom-terminal-workspace.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-15-native-desktop-notifications.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-16-collaboration-review-fixes.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-16-collaboration-timeline.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-19-native-identity-store.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/plans/2026-10-20-codex-conversation-resume.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/specs/2026-10-08-web-first-v3-design.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "zh-CN/superpowers/specs/2026-10-20-codex-conversation-resume-design.md",
+      "language": "zh-CN"
+    },
+    {
+      "path": "superpowers/specs/2026-10-21-local-workbench-roadmap.md",
+      "language": "en"
+    },
+    {
+      "path": "zh-CN/task-graph-v1.md",
+      "language": "zh-CN"
+    }
+  ]
+}

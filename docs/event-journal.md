@@ -1,15 +1,16 @@
 ---
-layout: page
 title: Durable Runtime Event Journal
 description: The repository-local append-only lifecycle history used by Inspector and recovery diagnostics.
 ---
 
+<div id="技术参考-durable-runtime-event-journal" class="doc-anchor" aria-hidden="true"></div>
+
 # Durable Runtime Event Journal
 
-> **Structured workflow (v2.4 lineage) / v2.4 结构化路线**
+> **Structured workflow (v2.4 lineage)**
 > This reference follows the retained Plugin / source Legacy runtime and may include later fixes;
 > it is not a frozen v2.4.0 snapshot. npm 3.x Web does not expose these structured APIs.
-> [Original v2.4.0 docs and migration / 旧版原文与迁移](./v2.4.html) · [Current Web guide / 新版入口](./getting-started.html).
+> [Original v2.4.0 docs and migration](./v2.4.html) · [Current Web guide](./getting-started.html).
 
 ## Purpose
 
@@ -45,7 +46,7 @@ Event `schemaVersion: 1`. Event schema versions are independent from Task schema
 versions. Every event includes a unique `eventId`, repository-monotonic
 `sequence`, ISO timestamp, uppercase `type`, and sanitized `data`. Optional
 associations include `taskId`, `sessionId`, `agentId`, `role`, and `messageId`.
-The formal contract is [`schemas/event.schema.json`](../schemas/event.schema.json).
+The formal contract is [`schemas/event.schema.json`](https://github.com/hogancv/coordinate-agents/blob/main/schemas/event.schema.json).
 
 The writer serializes appenders with a bounded repository-local lock, appends
 without rewriting the journal, and fsyncs the appended line. Current state is

@@ -1,3 +1,15 @@
+---
+search: false
+title: "Codex-Centric Collaboration Resume v1"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="技术参考-codex-centric-collaboration-resume-v1" class="doc-anchor" aria-hidden="true"></div>
+
 # Codex-Centric Collaboration Resume v1
 
 > Historical design — applies to the 2026-10-20 Resume v1 manual-confirmation

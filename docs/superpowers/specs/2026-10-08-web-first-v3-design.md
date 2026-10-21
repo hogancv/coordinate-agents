@@ -1,3 +1,16 @@
+---
+search: false
+title: "Web-first npm 3.0 design"
+description: Retained technical reference; applicability follows the implementation stage described in this document.
+---
+
+::: info Historical engineering record
+This page preserves the design, plan or acceptance evidence for its recorded implementation stage. Earlier behavior, proposed capabilities and old deployment settings do not supersede the [current Workspace guide](/inspector.html) or [release history](/changelog.html).
+:::
+
+<div id="web-first-npm-30-design" class="doc-anchor" aria-hidden="true"></div>
+<div id="技术参考-web-first-npm-3-0-design" class="doc-anchor" aria-hidden="true"></div>
+
 # Web-first npm 3.0 design
 
 The user authorizes autonomous implementation and decisions, with no questions or release actions. The target is the existing dual-terminal Workspace, preserving role prompts, persistence, independent Session Host recovery, custom executable paths/arguments, and all loopback/capability/path/session guards. GitHub Plugin, MCP, Inspector, Task Graph and Adapter authoring remain source products with independent versions.
@@ -13,6 +26,8 @@ An exact package.json file whitelist includes only runtime modules, all Workspac
 ## Validation
 
 Measure actual tarballs and isolated production installs on the same host; report allocated node_modules disk and five startup samples, with no cross-platform claims. Tarball verifier independently installs dependencies and runs help/version, static import closure and dynamic import loading, HTTP assets/APIs, mock dual CLI startup, role injection, task isolation, input/read/resize, directed messaging, reconnect/restart and cleanup. Fake CLIs run offline in isolated homes. CI adds Windows/macOS/Linux with supported Node versions. Trusted Publishing/OIDC and manual PUBLISH remain; publish the exact verified tarball. No publish/tag/release/push/merge is authorized.
+
+<div id="integration-follow-up--2026-10-08" class="doc-anchor" aria-hidden="true"></div>
 
 ## Integration follow-up — 2026-10-08
 
