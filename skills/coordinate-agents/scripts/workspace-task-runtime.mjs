@@ -671,7 +671,7 @@ async function closeSessionIds(root, sessionIds) {
         root,
         sessionId,
         graceful: false,
-        timeoutMs: 1_000,
+        timeoutMs: 3_000,
       });
       results.push(result.session || null);
     } catch (error) {
