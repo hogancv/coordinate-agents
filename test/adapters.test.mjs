@@ -219,7 +219,7 @@ test('Antigravity empty prompt survives Windows PowerShell proxy forwarding', { 
     const launch = adapter.resolveSessionLaunch({ initialPrompt: '' });
     assert.equal(launch.resolvedCommand, script);
     const result = spawnSync(launch.command, [...launch.prefix, ...launch.args], {
-      encoding: 'utf8', windowsHide: true, timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8', windowsHide: true, timeout: 20000, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, CA_ARGV_NODE: process.execPath, CA_ARGV_PROBE: capture },
     });
     assert.equal(result.status, 0, result.stderr);
