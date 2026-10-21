@@ -8,6 +8,44 @@ const task = (status, age = 31) => ({ id: 'task1', mode: 'default', status: 'RUN
   sessions: { codex: { sessionId: 'c1', state: 'idle' }, antigravity: { sessionId: 'a1', state: 'busy' } } });
 const health = value => collaborationHealth(value, { now });
 
+test('session evidence requires the current repository in both task detail and list views', async t => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { readWorkspaceTask, readWorkspaceTasks } = await import('../skills/coordinate-agents/scripts/workspace-task-runtime.mjs');
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'health-ownership-')));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const foreign = join(root, 'copied-project');
+  for (const directory of ['workspace-tasks', 'sessions', 'tmp']) mkdirSync(join(root, '.agent-bus', directory), { recursive: true });
+  mkdirSync(join(foreign, '.agent-bus'), { recursive: true });
+  const id = 'workspace-ownership123';
+  for (const mode of ['default', 'custom']) {
+    const slots = mode === 'custom' ? ['terminal1', 'terminal2'] : ['codex', 'antigravity'];
+    const sessions = Object.fromEntries(slots.map((slot, i) => [slot, { slot, agent: mode === 'custom' ? 'workspace-custom' : slot,
+      role: mode === 'custom' ? 'custom' : i ? 'implementer' : 'planner-reviewer', sessionId: `session_ownership${i}` }]));
+    const record = { schemaVersion: 1, id, mode, title: 'Ownership', status: 'RUNNING', promptVersion: 'test',
+      createdAt: '2026-10-16T00:00:00Z', updatedAt: '2026-10-16T00:00:00Z', sessions,
+      ...(mode === 'custom' ? { custom: { terminal1: { command: 'codex' }, terminal2: { command: 'agy' }, prompts: { project: '', terminal1: '', terminal2: '' } } }
+        : { cooperation: { status: 'WORKING', roundId: 'round-one', revision: 2, summary: '', updatedAt: new Date(now).toISOString() } }) };
+    writeFileSync(join(root, '.agent-bus/workspace-tasks', `${id}.json`), JSON.stringify(record));
+    for (const [slot, session] of Object.entries(sessions)) writeFileSync(join(root, '.agent-bus/sessions', `${session.sessionId}.json`), JSON.stringify({
+      id: session.sessionId, command: 'unused', cwd: root, taskId: id, agent: session.agent, subtaskId: slot, state: 'running' }));
+    const session = sessions[slots[1]], file = join(root, '.agent-bus/sessions', `${session.sessionId}.json`);
+    for (const cwd of [foreign, join(root, 'missing'), '', null, {}, root]) {
+      for (const state of ['running', 'failed']) {
+        writeFileSync(file, JSON.stringify({ id: session.sessionId, command: 'unused', cwd, taskId: id, agent: session.agent, subtaskId: session.slot, state }));
+        for (const view of [await readWorkspaceTask(root, id), (await readWorkspaceTasks(root))[0]]) {
+          const available = cwd === root, shown = view.sessions[slots[1]];
+          assert.equal(shown.recordAvailable, available, `${mode}: ${JSON.stringify(cwd)}`);
+          assert.equal(shown.state, available ? state : null, 'foreign lifecycle data must not affect task status');
+          assert.equal(view.status, available && state === 'running' ? 'RUNNING' : 'DEGRADED');
+          const signal = health(view).signals.find(s => s.kind === 'session');
+          assert.equal(signal?.sessionState, available ? state === 'failed' ? 'failed' : undefined : 'unavailable');
+        }
+      }
+    }
+  }
+});
+
 test('dispatch, execution and review silence are distinct observations, never failures', () => {
   for (const [status, kind, agent] of [['SENT', 'awaiting-start', 'antigravity'], ['WORKING', 'quiet', 'antigravity'], ['DONE', 'awaiting-review', 'codex'], ['REVIEWING', 'quiet', 'codex'], ['CHANGES_REQUESTED', 'awaiting-dispatch', 'codex']]) {
     const value = task(status); const before = structuredClone(value);

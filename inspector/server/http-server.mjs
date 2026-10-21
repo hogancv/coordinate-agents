@@ -308,7 +308,7 @@ export function createLocalServer({
       }
       if (ui === 'workspace' && pathname.startsWith('/api/workspace-tasks/') && typeof data.readWorkspaceTask === 'function') {
         const id = decodeURIComponent(pathname.slice('/api/workspace-tasks/'.length));
-        json(response, 200, await data.readWorkspaceTask(id));
+        json(response, 200, await data.readWorkspaceTask(id, { historyPage: url.searchParams.get('historyPage') }));
         return;
       }
       if (pathname === '/api/tasks' && typeof data.readTasks === 'function') {

@@ -109,6 +109,8 @@ const WORKSPACE_TASK_ID_PATTERN = /^workspace-[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const SESSION_ID_PATTERN = /^session_[a-zA-Z0-9][a-zA-Z0-9_-]{7,127}$/;
 const MAX_ERROR_BYTES = 4 * 1024;
 const MAX_HISTORY = 32;
+// Recent events stay in the Task transaction; older events are immutable pages.
+const COLLABORATION_PAGE_SIZE = 128;
 const WORKSPACE_STARTUP_TIMEOUT_MS = 20_000;
 const WORKSPACE_READY_QUIET_MS = 900;
 const ANSI_ESCAPE_PATTERN = /(?:\u001B\][^\u0007]*?(?:\u0007|\u001B\\)|\u001B\[[0-?]*[ -/]*[@-~]|\u001B[@-_]|\u009B[0-?]*[ -/]*[@-~])/g;
@@ -254,6 +256,16 @@ function validateWorkspaceTaskRecord(value) {
   const custom = mode === 'custom' ? validateCustomWorkspaceConfig(value.custom) : null;
   if (mode === 'custom' && (value.cooperation != null || value.startup != null || (value.collaborationEvents != null && (!Array.isArray(value.collaborationEvents) || value.collaborationEvents.length)))) throw new Error('Custom tasks cannot contain default collaboration startup or rounds.');
   const cooperation = mode === 'custom' ? null : validateCooperation(value.cooperation);
+  const collaborationEvents = mode === 'custom' ? [] : validateCollaborationEvents(value.collaborationEvents, value.id, cooperation.revision);
+  const collaborationArchive = value.collaborationArchive ?? { pageCount: 0, eventCount: 0, lastRevision: 0 };
+  if (!collaborationArchive || !Number.isSafeInteger(collaborationArchive.pageCount) || collaborationArchive.pageCount < 0
+    || !Number.isSafeInteger(collaborationArchive.eventCount) || collaborationArchive.eventCount !== collaborationArchive.pageCount * COLLABORATION_PAGE_SIZE
+    || !Number.isSafeInteger(collaborationArchive.lastRevision) || collaborationArchive.lastRevision < 0
+    || (collaborationArchive.pageCount === 0 ? collaborationArchive.lastRevision !== 0
+      : mode === 'custom' || collaborationArchive.lastRevision < collaborationArchive.eventCount || collaborationArchive.lastRevision > cooperation.revision)
+    || (collaborationEvents.length && collaborationEvents[0].revision <= collaborationArchive.lastRevision)) {
+    throw new Error('Invalid Workspace collaboration archive.');
+  }
   const slots = taskSlots({ mode });
   if (Object.keys(value.sessions).some(slot => !slots.some(expected => expected.slot === slot))) throw new Error('Unexpected Workspace task slot.');
   const sessions = Object.fromEntries(slots.map(expected => [
@@ -296,7 +308,9 @@ function validateWorkspaceTaskRecord(value) {
     ...(value.archivedAt ? { archivedAt: value.archivedAt } : {}),
     sessions,
     cooperation,
-    collaborationEvents: mode === 'custom' ? [] : validateCollaborationEvents(value.collaborationEvents, value.id, cooperation.revision),
+    collaborationEvents,
+    ...(mode === 'custom' ? {} : { collaborationArchive: { pageCount: collaborationArchive.pageCount,
+      eventCount: collaborationArchive.eventCount, lastRevision: collaborationArchive.lastRevision } }),
     startup: mode === 'custom' ? null : validateStartup(value.startup),
     sessionHistory,
     error,
@@ -309,6 +323,44 @@ function workspaceTaskFile(root, id, { create = false } = {}) {
   const path = join(directory, `${id}.json`);
   assertContained(directory, path);
   return path;
+}
+
+function collaborationArchiveDirectory(root, id) {
+  validateWorkspaceTaskId(id);
+  const directory = join(workspaceTaskDirectory(root).directory, 'collaboration-history', id);
+  assertSafePath(root, directory);
+  return directory;
+}
+
+function compactCollaborationHistory(root, record) {
+  if (record.mode === 'custom' || record.collaborationEvents.length <= COLLABORATION_PAGE_SIZE) return record;
+  const directory = collaborationArchiveDirectory(root, record.id);
+  mkdirSync(directory, { recursive: true });
+  const archive = { ...record.collaborationArchive };
+  let offset = 0;
+  while (record.collaborationEvents.length - offset > COLLABORATION_PAGE_SIZE) {
+    const events = record.collaborationEvents.slice(offset, offset + COLLABORATION_PAGE_SIZE);
+    const path = join(directory, `${archive.pageCount + 1}.json`);
+    assertSafePath(root, path);
+    // Publish the page before the Task pointer. Failed Task commits leave only
+    // unreferenced pages, which a later writer can safely replace under the lock.
+    atomicWrite(path, `${JSON.stringify(events)}\n`, join(root, '.agent-bus', 'tmp'));
+    archive.pageCount++;
+    archive.eventCount += events.length;
+    archive.lastRevision = events.at(-1).revision;
+    offset += events.length;
+  }
+  return { ...record, collaborationEvents: record.collaborationEvents.slice(offset), collaborationArchive: archive };
+}
+
+function readCollaborationPage(root, record, page) {
+  const path = join(collaborationArchiveDirectory(root, record.id), `${page}.json`);
+  const events = validateCollaborationEvents(JSON.parse(readInternalFile(join(root, '.agent-bus'), path)), record.id, record.collaborationArchive.lastRevision);
+  if (events.length !== COLLABORATION_PAGE_SIZE
+    || (page === record.collaborationArchive.pageCount && events.at(-1).revision !== record.collaborationArchive.lastRevision)) {
+    throw new Error('Invalid Workspace collaboration archive page.');
+  }
+  return events;
 }
 
 function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary } = {}) {
@@ -338,14 +390,15 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
     }
     const cooperation = record.mode === 'custom' ? null : resetCooperation ? idleCooperation((current?.cooperation?.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
-    // One atomic record commits the receipt and its history together. Lifecycle
-    // writes always retain the latest history, even when their snapshot is stale.
+    // One atomic record commits the receipt, recent history and archive pointer.
+    // Lifecycle writes retain the latest history even when their snapshot is stale.
     const collaborationEvents = [...(current?.collaborationEvents || record.collaborationEvents || [])];
     if (replaceCooperation && current) {
       const event = collaborationTransition(record.id, current.cooperation, { ...cooperation, summary: eventSummary ?? cooperation.summary });
       if (event) collaborationEvents.push(event);
     }
-    const validated = validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents });
+    const validated = compactCollaborationHistory(repository, validateWorkspaceTaskRecord({ ...base, cooperation, collaborationEvents,
+      collaborationArchive: current?.collaborationArchive ?? record.collaborationArchive }));
     atomicWrite(path, `${JSON.stringify(validated, null, 2)}\n`, join(repository, '.agent-bus', 'tmp'));
     Object.assign(record, validated); // Keep lifecycle responses consistent with persisted receipts.
     return validated;
@@ -423,12 +476,16 @@ function sessionFactMap(root, sessionIds = null) {
   }
 }
 
-function sessionView(slot, facts, taskId) {
-  const fact = slot.sessionId ? facts.get(slot.sessionId) : null;
+function sessionView(root, record, slot, facts) {
+  const candidate = slot.sessionId ? facts.get(slot.sessionId) : null;
+  let fact = null;
+  try {
+    if (candidate && candidate.id === slot.sessionId && typeof candidate.cwd === 'string' && candidate.cwd.trim()
+      && sessionBelongsToTask(root, record, candidate, slot)) fact = candidate;
+  } catch { /* Missing, invalid or foreign repositories provide no Session evidence. */ }
   return {
     // Record availability includes ownership, not a liveness probe.
-    recordAvailable: Boolean(fact && fact.taskId === taskId && fact.agent === slot.agent
-      && (slot.role !== 'custom' || fact.subtaskId === slot.slot)),
+    recordAvailable: Boolean(fact),
     slot: slot.slot,
     agent: slot.agent,
     role: slot.role,
@@ -461,10 +518,10 @@ function statusFromFacts(record, sessions) {
   return record.status;
 }
 
-function workspaceTaskView(record, facts = new Map(), { includeHistory = true } = {}) {
+function workspaceTaskView(root, record, facts = new Map(), { includeHistory = true, historyPage = null } = {}) {
   const sessions = Object.fromEntries(taskSlots(record).map(expected => [
     expected.slot,
-    sessionView(record.sessions[expected.slot], facts, record.id),
+    sessionView(root, record, record.sessions[expected.slot], facts),
   ]));
   return {
     id: record.id,
@@ -478,7 +535,9 @@ function workspaceTaskView(record, facts = new Map(), { includeHistory = true } 
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     sessions,
     cooperation: record.cooperation,
-    ...(includeHistory ? { collaborationEvents: record.collaborationEvents } : {}),
+    ...(includeHistory ? { collaborationEvents: record.collaborationEvents,
+      collaborationHistory: { archivedEvents: record.collaborationArchive?.eventCount || 0,
+        previousPage: historyPage === null ? record.collaborationArchive?.pageCount || null : historyPage > 1 ? historyPage - 1 : null } } : {}),
     startup: record.startup,
     sessionIds: Object.fromEntries(taskSlots(record).map(({ slot }) => [slot, record.sessions[slot].sessionId])),
     sessionHistory: record.sessionHistory,
@@ -489,15 +548,23 @@ function workspaceTaskView(record, facts = new Map(), { includeHistory = true } 
 export async function readWorkspaceTasks(root, { includeArchived = false } = {}) {
   const repository = repositoryRoot(root);
   const facts = sessionFactMap(repository);
-  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(record, facts, { includeHistory: false }));
+  return listWorkspaceTaskRecords(repository).filter(record => includeArchived || !record.archivedAt).map(record => workspaceTaskView(root, record, facts, { includeHistory: false }));
 }
 
-export async function readWorkspaceTask(root, id) {
+export async function readWorkspaceTask(root, id, { historyPage = null } = {}) {
   const repository = repositoryRoot(root);
-  const record = readWorkspaceTaskRecord(repository, id);
+  let record = readWorkspaceTaskRecord(repository, id);
+  if (historyPage !== null) {
+    const page = typeof historyPage === 'number' ? historyPage : typeof historyPage === 'string' && /^[1-9]\d*$/.test(historyPage) ? Number(historyPage) : NaN;
+    if (!Number.isSafeInteger(page) || page < 1 || page > (record.collaborationArchive?.pageCount || 0)) {
+      throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Invalid Workspace collaboration history page.', { recoverable: false, taskId: id });
+    }
+    historyPage = page;
+    record = { ...record, collaborationEvents: readCollaborationPage(repository, record, page) };
+  }
   // Pass targeted session IDs to sessionFactMap to avoid scanning all workspace session files
   const sessionIds = sessionIdsFor(record);
-  return workspaceTaskView(record, sessionFactMap(repository, sessionIds));
+  return workspaceTaskView(root, record, sessionFactMap(repository, sessionIds), { historyPage });
 }
 
 async function closeSessionIds(root, sessionIds) {
@@ -783,7 +850,7 @@ export async function runtimeWorkspaceTaskContinue(input = {}) {
         writeWorkspaceTask(repository, record, { replaceStartup: true });
       }
     }
-    return jsonSuccess('workspace.task.continue', { workspaceTask: workspaceTaskView(record, sessionFactMap(repository, sessionIdsFor(record))) });
+    return jsonSuccess('workspace.task.continue', { workspaceTask: workspaceTaskView(root, record, sessionFactMap(repository, sessionIdsFor(record))) });
   });
 }
 
@@ -879,7 +946,7 @@ export async function runtimeWorkspaceTaskCreate(input = {}) {
       record = updateRecord(record, { status: record.mode === 'custom' ? 'RUNNING' : startupStatus(record), error: null });
       writeWorkspaceTask(root, record);
       return jsonSuccess('workspace.task.create', {
-        workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
+        workspaceTask: workspaceTaskView(root, record, sessionFactMap(root)),
       });
     } catch (error) {
       await attachDiscoveredSessions(root, record);
@@ -913,7 +980,7 @@ async function closeWorkspaceTask(root, id) {
   record.updatedAt = now();
   writeWorkspaceTask(root, record);
   return jsonSuccess('workspace.task.close', {
-    workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
+    workspaceTask: workspaceTaskView(root, record, sessionFactMap(root)),
     closedSessions: closed.results,
     closeErrors: closed.errors.map(error => serializeRuntimeError(error, { includeLegacy: true })),
   });
@@ -961,7 +1028,7 @@ export async function runtimeWorkspaceTaskRestart(input = {}) {
       record = updateRecord(record, { status: record.mode === 'custom' ? 'RUNNING' : startupStatus(record), error: null });
       writeWorkspaceTask(root, record);
       return jsonSuccess('workspace.task.restart', {
-        workspaceTask: workspaceTaskView(record, sessionFactMap(root)),
+        workspaceTask: workspaceTaskView(root, record, sessionFactMap(root)),
         closedSessions: closed.results,
       });
     } catch (error) {
@@ -1014,7 +1081,7 @@ export async function runtimeWorkspaceTaskArchive(input = {}) {
 
 async function archiveWorkspaceTask(root, id) {
   let record = readWorkspaceTaskRecord(root, id);
-  if (record.archivedAt) return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(record, sessionFactMap(root)) });
+  if (record.archivedAt) return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(root, record, sessionFactMap(root)) });
   const files = ownedTaskSessionFiles(root, record);
   const closed = await closeSessionIds(root, files.map(file => file.id));
   if (closed.errors.length || closed.results.some(session => ACTIVE_SESSION_STATES.has(session?.state))) {
@@ -1022,7 +1089,7 @@ async function archiveWorkspaceTask(root, id) {
   }
   record = updateRecord(record, { status: 'CLOSED', archivedAt: now() });
   writeWorkspaceTask(root, record);
-  return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(record, sessionFactMap(root)) });
+  return jsonSuccess('workspace.task.archive', { workspaceTask: workspaceTaskView(root, record, sessionFactMap(root)) });
 }
 
 export async function runtimeWorkspaceArchivesClear(input = {}) {
@@ -1062,6 +1129,8 @@ export async function runtimeWorkspaceArchivesClear(input = {}) {
     // Validate all paths before deleting any record; never recurse into a project.
     const taskFile = workspaceTaskFile(root, record.id);
     safeInternalStat(workspaceTaskDirectory(root).directory, taskFile);
+    const historyDirectory = collaborationArchiveDirectory(root, record.id);
+    if (existsSync(historyDirectory)) rmSync(historyDirectory, { recursive: true });
     for (const file of files) { safeInternalStat(join(root, '.agent-bus', 'sessions'), file.path); unlinkSync(file.path); deletedSessions++; }
     unlinkSync(taskFile); deletedTasks++;
   }

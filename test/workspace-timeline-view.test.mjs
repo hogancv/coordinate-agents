@@ -8,10 +8,45 @@ import { I18N } from '../inspector/web-workspace/i18n.mjs';
 const moduleUrl = new URL('../inspector/web-workspace/collaboration-timeline.mjs', import.meta.url);
 function dom() {
   const document = listDocument();
-  document.body.innerHTML = '<section id="collaboration-timeline"><h3 id="timeline-heading"></h3><div class="timeline-content"><label id="timeline-filter-label"></label><select id="timeline-round"></select><p id="timeline-note"></p><ol id="timeline-events"></ol><p id="timeline-empty"></p></div></section>';
+  document.body.innerHTML = '<section id="collaboration-timeline"><h3 id="timeline-heading"></h3><div class="timeline-content"><label id="timeline-filter-label"></label><select id="timeline-round"></select><p id="timeline-note"></p><button id="timeline-more"></button><p id="timeline-error"></p><ol id="timeline-events"></ol><p id="timeline-empty"></p></div></section>';
   return document;
 }
 const events = ['SENT', 'WORKING', 'DONE', 'REVIEWING', 'APPROVED'].map((status, i) => ({ taskId: 'task1', roundId: 'round-first', revision: i + 1, timestamp: '2026-10-16T01:00:00Z', agent: i === 1 || i === 2 ? 'antigravity' : 'codex', fromStatus: i ? ['SENT', 'WORKING', 'DONE', 'REVIEWING'][i - 1] : 'IDLE', status, summary: i ? '<script>receipt</script>' : '' }));
+
+test('older history loads on demand, retries errors, survives polling and ignores selection ABA responses', async () => {
+  const { mountCollaborationTimeline } = await import(moduleUrl);
+  const document = dom(), requests = [];
+  let context = { projectId: 'p1', selectedId: 'task1', task: { id: 'task1', mode: 'default', cooperation: { roundId: 'round-first' },
+    collaborationEvents: events.slice(3), collaborationHistory: { archivedEvents: 3, previousPage: 1 } } };
+  let locale = 'en';
+  const view = mountCollaborationTimeline({ document, getContext: () => context, t: key => I18N[locale][key] || key,
+    loadPage: target => new Promise((resolve, reject) => requests.push({ target, resolve, reject })) });
+  const more = document.querySelector('#timeline-more'), list = document.querySelector('#timeline-events');
+  const click = () => more.listeners.get('click')[0]();
+  view.update();
+  assert.match(document.querySelector('#timeline-note').textContent, /3.*archiv/i);
+  assert.equal(more.hidden, false); assert.equal(requests.length, 0);
+  let pending = click(); assert.equal(more.disabled, true);
+  assert.deepEqual(requests[0].target, { projectId: 'p1', taskId: 'task1', historyPage: 1 });
+  requests[0].reject(Error('offline')); await pending;
+  assert.equal(more.disabled, false); assert.match(document.querySelector('#timeline-error').textContent, /retry/i);
+  pending = click();
+  requests[1].resolve({ ...context.task, collaborationEvents: events.slice(0, 3), collaborationHistory: { archivedEvents: 3, previousPage: null } }); await pending;
+  assert.equal(list.children.length, 5); assert.equal(more.hidden, true);
+  view.update(); assert.equal(list.children.length, 5, 'polling cannot erase explicitly loaded pages');
+  assert.deepEqual(list.children.map(row => row.dataset.revision), ['1', '2', '3', '4', '5']);
+  locale = 'zh'; view.update(); assert.match(document.querySelector('#timeline-note').textContent, /3.*归档/);
+  context.task = { ...context.task, collaborationEvents: events.slice(4), collaborationHistory: { archivedEvents: 4, previousPage: 2 } };
+  view.update(); pending = click();
+  requests[2].resolve({ ...context.task, collaborationEvents: events.slice(2, 4), collaborationHistory: { archivedEvents: 4, previousPage: 1 } }); await pending;
+  assert.equal(list.children.length, 5, 'overlapping snapshots and pages cannot duplicate revisions');
+  context = { ...context, projectId: 'p2' }; view.update();
+  pending = click(); context = { ...context, projectId: 'p1' }; view.update();
+  context = { ...context, projectId: 'p2' }; view.update();
+  requests[3].resolve({ ...context.task, collaborationEvents: events.slice(0, 4), collaborationHistory: { archivedEvents: 4, previousPage: null } }); await pending;
+  assert.equal(list.children.length, 1, 'a stale page must not survive project ABA');
+  assert.equal(more.disabled, false); assert.equal(more.hidden, false);
+});
 
 test('timeline renders persisted facts as text, filters rounds, keeps focus/scroll and resets on task/project switches', async () => {
   const { mountCollaborationTimeline } = await import(moduleUrl);
