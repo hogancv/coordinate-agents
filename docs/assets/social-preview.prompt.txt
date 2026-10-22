@@ -1,0 +1,9 @@
+Generated with: built-in image_gen
+Final export: social-preview.png, 1280 x 640 pixels
+
+Use case: ads-marketing.
+Asset type: final GitHub repository social preview, exactly 1280 x 640 pixels, landscape 2:1.
+Create a beautifully finished developer-tool cover for the open-source project "Coordinate Agents": a local web workspace for Codex + Antigravity with two persistent terminals and implementation/review collaboration.
+Design: premium restrained editorial technology graphic, bold typographic identity, crisp readable text, no generic AI robots or mascots. Deep ink/navy background, subtle fine-grain texture, a faint architectural grid, restrained cyan and cool-blue light, almost white typography. Flat straight-on artboard with no outer border or mockup.
+Composition: 64px minimum safe margins. Left half: a small cyan abstract paired-node mark, then enormous clean geometric sans-serif title in two lines, exactly "Coordinate" / "Agents". Below, a smaller highly readable line "Local workspace for coding agents". At bottom-left, a small calm label "Codex + Antigravity". Text must be exact and correctly spelled.
+Right half: an elegant bespoke illustration of two interlocking, slightly offset terminal panels, with precise thin borders, translucent dark blue surfaces, cyan and pale blue accents, subtle dimensional depth, abstract code lines and a cursor. Connect the terminals with one luminous cyan loop or routed line with two distinct nodes, communicating handoff and review. Avoid dense unreadable interface text. Small panel labels exactly "CODEX" and "ANTIGRAVITY". Composition feels deliberate, balanced and spacious, terminal artwork secondary to title. Ensure title stays clearly separated from artwork. The central glow is very restrained. Clean corners, exceptional polish and contrast. No extra text, no logos belonging to providers, no watermark, no website URL. Render the complete finished image, not a sketch.

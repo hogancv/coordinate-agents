@@ -1,9 +1,28 @@
-# Coordinate Agents
+<p align="center">
+  <img src="./docs/assets/social-preview.jpg" alt="Coordinate Agents — local workspace for coding agents" width="960">
+</p>
 
-[简体中文](./README.zh-CN.md) · [Getting started](./docs/getting-started.md) · [Documentation](./docs/index.md)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@hogancv/coordinate-agents"><img src="https://img.shields.io/npm/v/%40hogancv%2Fcoordinate-agents?style=flat&amp;color=216384" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@hogancv/coordinate-agents"><img src="https://img.shields.io/npm/dm/%40hogancv%2Fcoordinate-agents?style=flat&amp;color=317c9d" alt="npm monthly downloads"></a>
+  <a href="https://github.com/hogancv/coordinate-agents/actions/workflows/web-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hogancv/coordinate-agents/web-ci.yml?branch=main&amp;style=flat&amp;label=Web%20CI" alt="Web CI status"></a>
+  <a href="./package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18-43853d?style=flat" alt="Node.js 18 or newer"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-216384?style=flat" alt="MIT license"></a>
+</p>
 
-> **Coming from v2.4?** v3 focuses the npm product on Web Workspace. Find the
-> [original v2.4.0 docs and migration guide](./docs/v2.4.md) for the old workflow and version-specific commands.
+<p align="center"><strong>Two coding agents. One local workspace.</strong></p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#what-you-can-do">Features</a> ·
+  <a href="#how-default-collaboration-works">How it works</a> ·
+  <a href="./docs/index.md">Documentation</a> ·
+  <a href="./docs/changelog.md">Changelog</a>
+</p>
+
+<p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
+
+## Overview
 
 A local Web Workspace for working with coding agents in two persistent terminals.
 Use the default **Codex + Antigravity** pair to delegate implementation and review
@@ -12,7 +31,10 @@ results, or choose **Custom Terminals** to bring your own CLI pair.
 Your projects, task history, terminal sessions, and collaboration receipts stay
 on your machine. Each agent uses its own CLI configuration and provider login.
 
-![Web Workspace preview](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png)
+![Web Workspace preview](./docs/assets/web-workspace.png)
+
+> **Coming from v2.4?** v3 focuses the npm product on Web Workspace. Find the
+> [original v2.4.0 docs and migration guide](./docs/v2.4.md) for the old workflow and version-specific commands.
 
 ## Quick Start
 

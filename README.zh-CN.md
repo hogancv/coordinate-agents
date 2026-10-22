@@ -1,9 +1,28 @@
-# Coordinate Agents
+<p align="center">
+  <img src="./docs/assets/social-preview.jpg" alt="Coordinate Agents — 编码 Agent 的本地协作工作区" width="960">
+</p>
 
-[English](./README.md) · [快速开始](./docs/getting-started.md) · [中文文档入口](./docs/zh-CN/index.md)
+<p align="center">
+  <a href="https://www.npmjs.com/package/@hogancv/coordinate-agents"><img src="https://img.shields.io/npm/v/%40hogancv%2Fcoordinate-agents?style=flat&amp;color=216384" alt="npm 版本"></a>
+  <a href="https://www.npmjs.com/package/@hogancv/coordinate-agents"><img src="https://img.shields.io/npm/dm/%40hogancv%2Fcoordinate-agents?style=flat&amp;color=317c9d" alt="npm 月下载量"></a>
+  <a href="https://github.com/hogancv/coordinate-agents/actions/workflows/web-ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/hogancv/coordinate-agents/web-ci.yml?branch=main&amp;style=flat&amp;label=Web%20CI" alt="Web CI 状态"></a>
+  <a href="./package.json"><img src="https://img.shields.io/badge/Node.js-%3E%3D18-43853d?style=flat" alt="Node.js 18 及以上"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-216384?style=flat" alt="MIT 许可证"></a>
+</p>
 
-> **v2.4 用户请看：** v3 将 npm 产品重心转向 Web Workspace。
-> [旧版原始文档与迁移说明](./docs/v2.4.md) 保留 v2.4.0 查阅入口，并说明旧流程如何继续使用。
+<p align="center"><strong>两个编码 Agent，一个本地协作工作区。</strong></p>
+
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#当前能做什么">功能介绍</a> ·
+  <a href="#默认协作如何运行">协作流程</a> ·
+  <a href="./docs/zh-CN/index.md">使用文档</a> ·
+  <a href="./docs/zh-CN/changelog.md">更新日志</a>
+</p>
+
+<p align="center"><a href="./README.md">English</a> · <strong>简体中文</strong></p>
+
+## 项目简介
 
 在浏览器中使用两个持久终端，与本机的编码 Agent 协作。
 默认使用 **Codex + Antigravity**：Codex 理解需求、派发和审查，Antigravity 负责实现；
@@ -11,7 +30,10 @@
 
 项目、任务历史、终端会话和协作回执保存在本机。每个 Agent 使用自己的 CLI 配置和登录状态。
 
-![Web Workspace 预览](https://raw.githubusercontent.com/hogancv/coordinate-agents/main/docs/assets/web-workspace.png)
+![Web Workspace 预览](./docs/assets/web-workspace.png)
+
+> **v2.4 用户请看：** v3 将 npm 产品重心转向 Web Workspace。
+> [旧版原始文档与迁移说明](./docs/v2.4.md) 保留 v2.4.0 查阅入口，并说明旧流程如何继续使用。
 
 ## 快速开始
 
