@@ -222,6 +222,12 @@ h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .task-heading { min-width: 8rem; flex: 1; }
 .task-heading-title-row { min-width: 0; gap: .6rem; flex-wrap: wrap; }
 .task-heading-title-row h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-title-button { display: block; max-width: 100%; padding: 0; border: 0; border-radius: .2rem; background: transparent; color: inherit; font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }
+.task-title-button:hover:not(:disabled) { color: var(--accent); }
+.task-title-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.project-dialog.task-rename-dialog { width: min(28rem, 90vw); }
+.task-rename-dialog h2 { margin: 0 0 1.25rem; font-size: 1.1rem; }
+.task-rename-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1.25rem; }
 .task-heading-title-row .status-pill { flex-shrink: 0; white-space: nowrap; }
 .task-meta-row { flex-wrap: wrap; gap: .5rem; margin-top: .42rem; color: var(--muted); font-size: .68rem; }
 .task-meta-row code, .terminal-card-footer code { color: var(--muted); font: .64rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }

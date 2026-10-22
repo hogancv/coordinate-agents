@@ -2,7 +2,7 @@
 import { saveNotificationConfig } from './workspace-notification-config.mjs';
 import { testWorkspaceNotification } from './workspace-notifications.mjs';
 import * as sessions from './session-service.mjs';
-import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive, runtimeWorkspaceTaskPromptSend } from './workspace-task-runtime.mjs';
+import { readWorkspaceTask, runtimeWorkspaceTaskContinue, runtimeWorkspaceTaskCreate, runtimeWorkspaceTaskClose, runtimeWorkspaceTaskRestart, runtimeWorkspaceTaskArchive, runtimeWorkspaceTaskPromptSend, runtimeWorkspaceTaskRename } from './workspace-task-runtime.mjs';
 import { saveCustomWorkspaceConfig } from './workspace-custom-config.mjs';
 import { runtimeWorkspaceTaskResume, runtimeWorkspaceTaskConfirmConversation } from './workspace-task-runtime.mjs';
 import { resolve } from 'node:path';
@@ -26,6 +26,7 @@ export const WORKSPACE_OPERATIONS = Object.freeze({
   workspaceTaskClose: runtimeWorkspaceTaskClose,
   workspaceTaskRestart: runtimeWorkspaceTaskRestart,
   workspaceTaskArchive: runtimeWorkspaceTaskArchive,
+  workspaceTaskRename: runtimeWorkspaceTaskRename,
   workspaceTaskPromptSend: runtimeWorkspaceTaskPromptSend,
   workspaceCustomSettingsSave: async input => ({ ok: true, custom: saveCustomWorkspaceConfig(input.root, input.custom) }),
   sessionStatus: sessionHandler(sessions.runtimeSessionStatus),

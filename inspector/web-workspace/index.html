@@ -90,7 +90,7 @@
           </div>
           <div id="task-heading" class="task-heading" hidden>
             <div class="task-heading-title-row">
-              <h2 id="selected-task-title">—</h2>
+              <h2><button id="selected-task-title" class="task-title-button" type="button" aria-haspopup="dialog" aria-controls="task-rename-dialog">—</button></h2>
               <div class="task-status-control" role="group">
                 <span id="selected-task-status" class="status-pill">—</span>
                 <button id="close-task-button" class="task-status-button" type="button" aria-label="Close task" title="Close task">
@@ -193,6 +193,22 @@
         <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
       </main>
     </div>
+
+    <dialog id="task-rename-dialog" class="project-dialog task-rename-dialog" aria-labelledby="task-rename-title">
+      <form id="task-rename-form">
+        <h2 id="task-rename-title" data-i18n="task.rename">Rename task</h2>
+        <label class="settings-field" for="task-rename-input">
+          <span data-i18n="task.renameLabel">Task name</span>
+          <input id="task-rename-input" type="text" maxlength="128" autocomplete="off" required aria-describedby="task-rename-hint task-rename-error">
+        </label>
+        <p id="task-rename-hint" class="settings-hint" data-i18n="task.renameHint">Enter to save · Esc to cancel</p>
+        <p id="task-rename-error" class="settings-error" role="alert" hidden></p>
+        <footer class="task-rename-actions">
+          <button id="task-rename-cancel" class="secondary-button" type="button" data-i18n="task.renameCancel">Cancel</button>
+          <button id="task-rename-save" class="primary-button" type="submit" data-i18n="task.renameSave">Save</button>
+        </footer>
+      </form>
+    </dialog>
 
     <dialog id="conversation-resume" class="conversation-resume-dialog" aria-labelledby="conversation-resume-title">
       <section class="conversation-resume">

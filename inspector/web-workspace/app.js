@@ -78,6 +78,8 @@ const state = {
   archives: { tasks: 0, projects: 0, unavailableProjects: 0 },
   contextTarget: null,
   contextTrigger: null,
+  renameTarget: null,
+  renameBusy: false,
 };
 
 const collaborationTimeline = mountCollaborationTimeline({ document, t,
@@ -1192,6 +1194,67 @@ function bindProjectDialog() {
   };
 }
 
+function openTaskRename(projectId = state.projectId, taskId = state.selectedId) {
+  if (state.actionBusy || state.renameBusy || !projectId || !taskId) return;
+  const tasks = projectId === state.projectId ? state.tasks : state.projectTasks.get(projectId) || [];
+  const task = tasks.find(item => item.id === taskId)
+    || (projectId === state.projectId && state.selectedTask?.id === taskId ? state.selectedTask : null);
+  if (!task || task.archivedAt) return;
+  state.renameTarget = { projectId, taskId, title: task.title };
+  const input = document.querySelector('#task-rename-input');
+  input.value = task.title;
+  document.querySelector('#task-rename-error').hidden = true;
+  const dialog = document.querySelector('#task-rename-dialog');
+  if (!dialog.open) dialog.showModal();
+  input.focus(); input.select();
+}
+
+function closeTaskRename() {
+  if (state.renameBusy) return;
+  document.querySelector('#task-rename-dialog').close();
+  state.renameTarget = null;
+}
+
+async function saveTaskRename(event) {
+  event.preventDefault();
+  const target = state.renameTarget;
+  if (!target || state.renameBusy) return;
+  const input = document.querySelector('#task-rename-input');
+  const title = input.value.trim();
+  const errorBox = document.querySelector('#task-rename-error');
+  if (!title || title.length > 128 || /[\u0000-\u001f\u007f]/u.test(title)) {
+    errorBox.hidden = false; errorBox.textContent = t('task.renameInvalid'); input.focus(); return;
+  }
+  if (title === target.title) { closeTaskRename(); return; }
+  state.renameBusy = true; errorBox.hidden = true;
+  for (const id of ['task-rename-input', 'task-rename-save', 'task-rename-cancel']) document.querySelector(`#${id}`).disabled = true;
+  let saved = false;
+  try {
+    const payload = await postAction('workspaceTaskRename', { workspaceTaskId: target.taskId, title }, target.projectId);
+    const rename = task => task.id === target.taskId ? { ...task, title: payload.workspaceTask.title, updatedAt: payload.workspaceTask.updatedAt } : task;
+    state.projectTasks.set(target.projectId, (state.projectTasks.get(target.projectId) || []).map(rename));
+    if (state.projectId === target.projectId) {
+      // Ignore reads started before the rename response and retain live Session facts.
+      state.taskListRequest = (state.taskListRequest || 0) + 1;
+      state.tasks = state.tasks.map(rename);
+      state.projectTasks.set(target.projectId, state.tasks);
+      if (state.selectedId === target.taskId) {
+        state.selectedTaskRequest = (state.selectedTaskRequest || 0) + 1;
+        state.selectedTask = state.selectedTask?.id === target.taskId ? rename(state.selectedTask) : payload.workspaceTask;
+      }
+    }
+    saved = true;
+    renderTaskList(); renderSelectedTask();
+    showToast(t('task.renamed'), 'success');
+  } catch (error) {
+    errorBox.hidden = false; errorBox.textContent = error.message;
+  } finally {
+    state.renameBusy = false;
+    for (const id of ['task-rename-input', 'task-rename-save', 'task-rename-cancel']) document.querySelector(`#${id}`).disabled = false;
+    if (saved) closeTaskRename(); else input.focus();
+  }
+}
+
 function renderTaskList() {
   for (const id of ['new-task-button', 'empty-new-task']) { const button = document.querySelector(`#${id}`); if (button) button.disabled = state.actionBusy || !state.projectId; }
   renderProjects();
@@ -1223,6 +1286,10 @@ function createTaskItem(task, projectId) {
     const id = element.dataset.workspaceTaskId;
     if (element.dataset.projectId === state.projectId) void selectTask(id);
     else void selectProject(element.dataset.projectId, id);
+  };
+  element.ondblclick = event => {
+    event.preventDefault();
+    openTaskRename(element.dataset.projectId, element.dataset.workspaceTaskId);
   };
   return element;
 }
@@ -1428,7 +1495,9 @@ function renderSelectedTask() {
   const version = document.querySelector('#selected-task-prompt-version');
   if (title) {
     title.textContent = task.title || '—';
-    title.title = `${task.title || '—'}\n${task.id || ''}\nv${task.promptVersion || '2.3.0'}`;
+    title.title = `${t('task.rename')}\n${task.title || '—'}\n${task.id || ''}\nv${task.promptVersion || '2.3.0'}`;
+    title.disabled = state.actionBusy || Boolean(task.archivedAt);
+    title.setAttribute('aria-label', `${t('task.rename')}: ${task.title || '—'}`);
   }
   if (status) {
     status.textContent = statusLabel(task.status);
@@ -2481,6 +2550,14 @@ function bindEvents() {
     catch { showToast(t('health.copyError'), 'error'); }
   });
   document.querySelector('#close-task-button')?.addEventListener('click', closeTask);
+  document.querySelector('#selected-task-title')?.addEventListener('click', () => openTaskRename());
+  document.querySelector('#task-rename-form')?.addEventListener('submit', event => void saveTaskRename(event));
+  document.querySelector('#task-rename-cancel')?.addEventListener('click', closeTaskRename);
+  document.querySelector('#task-rename-dialog')?.addEventListener('cancel', event => { event.preventDefault(); closeTaskRename(); });
+  document.querySelector('#task-rename-dialog')?.addEventListener('keydown', event => {
+    // Enter used to confirm an IME candidate must not submit a Chinese task name.
+    if (event.key === 'Enter' && (event.isComposing || event.keyCode === 229)) event.preventDefault();
+  });
   document.querySelector('#conversation-resume-open')?.addEventListener('click', () => void reopenConversationTask());
   for (const id of ['conversation-resume-close', 'conversation-resume-dismiss']) document.querySelector(`#${id}`)?.addEventListener('click', () => closeConversationResume());
   document.querySelector('#conversation-resume')?.addEventListener('cancel', event => { event.preventDefault(); closeConversationResume(); });

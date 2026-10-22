@@ -379,7 +379,7 @@ function readCollaborationPage(root, record, page) {
   return events;
 }
 
-function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, eventSummary, executorReceipt = false } = {}) {
+function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCooperation = false, replaceStartup = false, replaceTitle = false, eventSummary, executorReceipt = false } = {}) {
   const repository = repositoryRoot(root);
   const path = workspaceTaskFile(repository, record.id, { create: true });
   // Reuse the existing short file transaction lock for every task-file writer.
@@ -411,6 +411,13 @@ function writeWorkspaceTask(root, record, { replaceCooperation = false, resetCoo
         throw new Error('Task pair changed during startup; no automatic retry will run.');
       }
       base = { ...current, status: record.status, startup: record.startup, error: record.error, updatedAt: record.updatedAt };
+    }
+    if (replaceTitle && current) {
+      if (current.archivedAt) throw new Error('Cannot rename an archived Workspace Task.');
+      base = { ...current, title: record.title, updatedAt: record.updatedAt };
+    } else if (current) {
+      // Session/startup snapshots must not undo a name changed in the meantime.
+      base = { ...base, title: current.title };
     }
     const cooperation = record.mode === 'custom' ? null : resetCooperation ? idleCooperation((current?.cooperation?.revision || 0) + 1)
       : (!replaceCooperation && current ? current.cooperation : record.cooperation);
@@ -1066,6 +1073,20 @@ export async function runtimeWorkspaceTaskCreate(input = {}) {
       writeWorkspaceTask(root, record);
       throw normalized;
     }
+  });
+}
+
+export async function runtimeWorkspaceTaskRename(input = {}) {
+  const root = repositoryRoot(input.root);
+  const title = typeof input.title === 'string' ? input.title.trim() : '';
+  if (!title || title.length > 128 || /[\u0000-\u001f\u007f]/u.test(title)) {
+    throw runtimeError('WORKSPACE_TASK_STATE_CONFLICT', 'Task name must be 1–128 characters without line breaks or control characters.', { recoverable: false });
+  }
+  return withCooperationLock(root, input.workspaceTaskId || input.id, () => {
+    const record = readWorkspaceTaskRecord(root, input.workspaceTaskId || input.id);
+    if (record.archivedAt) throw new Error('Cannot rename an archived Workspace Task.');
+    const updated = writeWorkspaceTask(root, updateRecord(record, { title }), { replaceTitle: true });
+    return jsonSuccess('workspace.task.rename', { workspaceTask: workspaceTaskView(root, updated, sessionFactMap(root)) });
   });
 }
 

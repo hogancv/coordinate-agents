@@ -71,6 +71,11 @@ const ACTION_DEFINITIONS = Object.freeze({
     operation: 'workspaceTaskArchive', command: 'workspace.task.archive',
     params: { workspaceTaskId: { type: 'string', required: true, max: 128 } },
   },
+  workspaceTaskRename: {
+    operation: 'workspaceTaskRename', command: 'workspace.task.rename',
+    params: { workspaceTaskId: { type: 'string', required: true, max: 128 },
+      title: { type: 'string', required: true, max: 128 } },
+  },
   workspaceTaskClose: {
     operation: 'workspaceTaskClose',
     command: 'workspace.task.close',
