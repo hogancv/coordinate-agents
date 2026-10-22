@@ -219,9 +219,12 @@ test('Antigravity empty prompt survives Windows PowerShell proxy forwarding', { 
     const launch = adapter.resolveSessionLaunch({ initialPrompt: '' });
     assert.equal(launch.resolvedCommand, script);
     const result = spawnSync(launch.command, [...launch.prefix, ...launch.args], {
-      encoding: 'utf8', windowsHide: true, timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'],
+      // The first inbox PowerShell launch on a fresh Windows runner can be slow.
+      // Bound startup separately from the argument-forwarding assertions below.
+      encoding: 'utf8', windowsHide: true, timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'],
       env: { ...process.env, CA_ARGV_NODE: process.execPath, CA_ARGV_PROBE: capture },
     });
+    assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout.trim()), ['--dangerously-skip-permissions', '--prompt-interactive=']);
     assert.equal(launch.initialInputConsumed, false);
