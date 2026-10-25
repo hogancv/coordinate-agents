@@ -101,7 +101,12 @@ function getRegisteredAgentMap(bus) {
 }
 
 function getRegisteredAgentIds(bus) {
-  return new Set(getRegisteredAgentMap(bus).keys());
+  // Direct Set construction eliminates intermediate Map and iterator allocations
+  const set = new Set();
+  for (const agent of readConfig(bus).agents) {
+    set.add(agent.id);
+  }
+  return set;
 }
 
 function ensureAgentDirectories(bus, agentId, root) {
