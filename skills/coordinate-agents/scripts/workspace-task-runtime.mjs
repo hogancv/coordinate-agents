@@ -474,6 +474,8 @@ function readWorkspaceTaskRecord(root, id) {
 export function listWorkspaceTaskRecords(root) {
   const { directory, repository } = workspaceTaskDirectory(root);
   if (!existsSync(directory)) return [];
+  // Filename order is the tie-breaker for the stable timestamp sort below.
+  // Compare timestamps directly without locale-aware collation or coercion.
   return readdirSync(directory)
     .filter(name => name.endsWith('.json'))
     .sort()
@@ -486,7 +488,7 @@ export function listWorkspaceTaskRecords(root) {
         throw normalizeRuntimeError(error, 'WORKSPACE_TASK_STATE_CONFLICT');
       }
     })
-    .sort((left, right) => `${right.updatedAt}`.localeCompare(`${left.updatedAt}`));
+    .sort((left, right) => (right.updatedAt > left.updatedAt ? 1 : right.updatedAt < left.updatedAt ? -1 : 0));
 }
 
 function normalizeLanguage(language) {
