@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import {
   existsSync,
   mkdirSync,
@@ -16,6 +18,7 @@ import { collaborationHealth } from '../inspector/web-workspace/collaboration-he
 import { createTask } from '../skills/coordinate-agents/scripts/task-runtime.mjs';
 import { readConfig, writeConfig } from '../skills/coordinate-agents/scripts/config.mjs';
 import {
+  listWorkspaceTaskRecords,
   readWorkspaceTask,
   readWorkspaceTasks,
   runtimeWorkspaceTaskClose,
@@ -210,6 +213,47 @@ function repository(prefix = 'coordinate-agents-workspace-task-') {
   assert.equal(init.status, 0, init.stderr || init.stdout);
   return realpathSync.native(root);
 }
+
+test('task listing preserves filename ties and descending timestamps across directory orders', t => {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'workspace-task-sort-')));
+  const directory = join(root, '.agent-bus', 'workspace-tasks');
+  mkdirSync(directory, { recursive: true });
+  const timestamp = '2026-10-26T00:00:00.000Z';
+  const fixtures = [
+    ['workspace-aaaaaaaa', timestamp],
+    ['workspace-Bbbbbbbb', timestamp],
+    ['workspace-new00000', '2026-10-26T00:00:01.000Z'],
+    ['workspace-old00000', '2026-10-25T23:59:59.000Z'],
+  ];
+  try {
+    for (const [id, updatedAt] of fixtures) {
+      writeFileSync(join(directory, `${id}.json`), JSON.stringify({ schemaVersion: 1, id,
+        title: 'Sorting fixture', status: 'CLOSED', promptVersion: 'test', createdAt: timestamp, updatedAt,
+        sessions: { codex: { slot: 'codex', agent: 'codex', role: 'planner-reviewer', sessionId: null },
+          antigravity: { slot: 'antigravity', agent: 'antigravity', role: 'implementer', sessionId: null } },
+        sessionHistory: [], error: null }));
+    }
+    writeFileSync(join(directory, 'ignored.txt'), 'not a task record');
+    const readdir = fs.readdirSync;
+    let reverse = false;
+    t.mock.method(fs, 'readdirSync', (path, ...args) => {
+      const names = readdir(path, ...args);
+      if (path !== directory) return names;
+      names.sort();
+      return reverse ? names.reverse() : names;
+    });
+    syncBuiltinESMExports();
+    for (reverse of [false, true]) {
+      assert.deepEqual(listWorkspaceTaskRecords(root).map(record => record.id), [
+        'workspace-new00000', 'workspace-Bbbbbbbb', 'workspace-aaaaaaaa', 'workspace-old00000',
+      ], `directory order reversed: ${reverse}`);
+    }
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('single-task reads ignore Session payload identities that differ from the requested file', async () => {
   const root = repository();

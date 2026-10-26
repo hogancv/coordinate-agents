@@ -474,10 +474,11 @@ function readWorkspaceTaskRecord(root, id) {
 export function listWorkspaceTaskRecords(root) {
   const { directory, repository } = workspaceTaskDirectory(root);
   if (!existsSync(directory)) return [];
-  // Performance optimization: Avoid redundant name sorting before mapping files
-  // and use direct string comparison instead of localeCompare/template literal allocations.
+  // Filename order is the tie-breaker for the stable timestamp sort below.
+  // Compare timestamps directly without locale-aware collation or coercion.
   return readdirSync(directory)
     .filter(name => name.endsWith('.json'))
+    .sort()
     .map(name => {
       const path = join(directory, name);
       try {
