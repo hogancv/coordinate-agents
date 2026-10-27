@@ -1,4 +1,7 @@
 // Small fetch-based SSE reader: custom Capability headers stay out of URLs.
+// Precompute event type Set for O(1) event verification.
+const STREAM_EVENTS = new Set(['terminal-output', 'terminal-gap', 'terminal-state']);
+
 export async function consumeTerminalStream(response, { onEvent, signal } = {}) {
   if (!response.ok || !response.body || !response.headers.get('content-type')?.startsWith('text/event-stream')) {
     const error = new Error('Terminal streaming is unavailable.');
@@ -10,6 +13,8 @@ export async function consumeTerminalStream(response, { onEvent, signal } = {}) 
   let buffer = '';
   let event = '';
   let data = [];
+  // Track accumulated data length incrementally to avoid data.join('\n').length string allocations per stream chunk.
+  let dataLength = 0;
   const abort = () => { void reader.cancel().catch(() => {}); };
   signal?.addEventListener('abort', abort, { once: true });
   try {
@@ -24,18 +29,22 @@ export async function consumeTerminalStream(response, { onEvent, signal } = {}) 
         return;
       }
       buffer += decoder.decode(result.value, { stream: true });
-      if (buffer.length + data.join('\n').length > 1024 * 1024) throw new Error('Terminal stream frame exceeds its size limit.');
+      if (buffer.length + dataLength > 1024 * 1024) throw new Error('Terminal stream frame exceeds its size limit.');
       let newline;
       while (!signal?.aborted && (newline = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, newline).replace(/\r$/, '');
         buffer = buffer.slice(newline + 1);
         if (!line) {
-          if (data.length && ['terminal-output', 'terminal-gap', 'terminal-state'].includes(event)) {
+          if (data.length && STREAM_EVENTS.has(event)) {
             await onEvent(event, JSON.parse(data.join('\n')));
           }
-          event = ''; data = [];
+          event = ''; data = []; dataLength = 0;
         } else if (line.startsWith('event:')) event = line.slice(6).trim();
-        else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+        else if (line.startsWith('data:')) {
+          const chunk = line.slice(5).replace(/^ /, '');
+          dataLength += (data.length ? 1 : 0) + chunk.length;
+          data.push(chunk);
+        }
       }
     }
   } catch (error) {

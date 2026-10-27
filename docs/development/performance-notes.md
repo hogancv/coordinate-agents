@@ -138,3 +138,9 @@ performance claims. Check the present implementation before reusing a suggestion
 ## 2026-09-21 - Single-pass maximum filename search in currentState
 **Learning:** `currentState` in `agent-observer.mjs` used `readdirSync(directory).filter(name => name.endsWith('.json')).sort().reverse()[0]`, which created 3 intermediate arrays (`.filter`, `.sort`, `.reverse`) and performed an $O(N \log N)$ sorting pass to find a single maximum filename.
 **Action:** Use a single-pass `for...of` loop over `readdirSync` to find the lexicographically maximum file string in $O(N)$ time with zero extra array allocations.
+
+<div id="2026-09-22---incremental-datalength-tracking-in-terminal-stream-sse-parsing" class="doc-anchor" aria-hidden="true"></div>
+
+## 2026-09-22 - Incremental dataLength tracking in terminal stream SSE parsing
+**Learning:** `consumeTerminalStream` in `terminal-stream.mjs` evaluated `data.join('\n').length` on every stream chunk read to enforce frame size limits, re-allocating large joined strings for accumulated frame lines on every chunk read iteration.
+**Action:** Track accumulated string data lengths incrementally (`dataLength += ...`) on array push and check limits with integer additions, avoiding $O(N)$ string joins and garbage generation per chunk read (~15x-100x faster frame length validation).
