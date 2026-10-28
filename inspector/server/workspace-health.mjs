@@ -78,10 +78,20 @@ async function checkCli(settings, timeout, root) {
 }
 
 export function terminalHealth(sessions = [], nodeVersion = process.version) {
-  const backends = sessions.filter(session => (session?.sessionId || session?.id)
-    && ACTIVE_SESSION_STATES.has(`${session.status || session.state || ''}`.toLowerCase())).map(session => session.backend);
-  if (backends.includes('stdio-fallback')) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
-  if (backends.includes('node-pty')) return { status: 'ok', backend: 'node-pty' };
+  // Performance optimization: evaluate active session backends in a single pass
+  // without allocating intermediate filter/map arrays or performing multiple includes scans.
+  let hasStdioFallback = false;
+  let hasNodePty = false;
+  for (let i = 0; i < sessions.length; i++) {
+    const session = sessions[i];
+    if ((session?.sessionId || session?.id)
+      && ACTIVE_SESSION_STATES.has(`${session?.status || session?.state || ''}`.toLowerCase())) {
+      if (session.backend === 'stdio-fallback') hasStdioFallback = true;
+      else if (session.backend === 'node-pty') hasNodePty = true;
+    }
+  }
+  if (hasStdioFallback) return { status: 'warning', backend: 'stdio-fallback', reason: 'STDIO_FALLBACK' };
+  if (hasNodePty) return { status: 'ok', backend: 'node-pty' };
   return { status: 'pending', backend: null,
     ...(Number(nodeVersion.replace(/^v/, '').split('.')[0]) === 18 ? { reason: 'NODE18_STDIO_COMPATIBILITY' } : {}) };
 }
