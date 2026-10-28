@@ -31,7 +31,7 @@ results, or choose **Custom Terminals** to bring your own CLI pair.
 Your projects, task history, terminal sessions, and collaboration receipts stay
 on your machine. Each agent uses its own CLI configuration and provider login.
 
-![Coordinate Agents animated product demo](./docs/assets/coordinate-agents-promo.gif)
+<img src="./docs/assets/coordinate-agents-promo.gif" alt="Coordinate Agents animated product demo" width="100%">
 
 ![Web Workspace preview](./docs/assets/web-workspace.png)
 
