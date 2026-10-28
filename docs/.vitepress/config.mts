@@ -8,23 +8,23 @@ const pages = {
     recovery: 'Conversation recovery', troubleshooting: 'Troubleshooting', faq: 'FAQ', compare: 'Compare workflows',
     security: 'Security & permissions', plugin: 'Structured Plugin', structured: 'Onboarding & lifecycle',
     reference: 'Technical reference', versions: 'Versions & migration', changelog: 'Changelog', migration: 'v2.4 → v3 migration',
-    protocol: 'Protocol & recovery', session: 'Session Runtime', map: 'Documentation migration',
+    protocol: 'Protocol & recovery', session: 'Session Runtime', map: 'Documentation migration', graph: 'Knowledge graph',
   },
   zh: {
     guide: 'Web 工作台', start: '快速开始', workspace: '使用指南', install: '让 AI 安装',
     recovery: '对话恢复', troubleshooting: '故障排查', faq: '常见问题', compare: '方案比较',
     security: '安全与权限', plugin: '结构化 Plugin', structured: '上手与生命周期',
     reference: '技术参考', versions: '版本与迁移', changelog: '版本记录', migration: 'v2.4 → v3 迁移',
-    protocol: '协议与恢复', session: 'Session Runtime', map: '文档迁移记录',
+    protocol: '协议与恢复', session: 'Session Runtime', map: '文档迁移记录', graph: '知识图谱',
   },
 }
 function theme(lang: 'en' | 'zh') {
   const t = pages[lang], prefix = lang === 'zh' ? '/zh-CN/' : '/'
   const item = (key: keyof typeof t, slug: string) => ({ text: t[key], link: `${prefix}${slug}.html` })
   return {
-    nav: [item('guide', 'getting-started'), item('plugin', 'structured-workflow'), item('reference', 'reference'), item('versions', 'v2.4')],
+    nav: [item('guide', 'getting-started'), item('graph', 'knowledge-graph'), item('plugin', 'structured-workflow'), item('reference', 'reference'), item('versions', 'v2.4')],
     sidebar: [
-      { text: t.guide, items: [item('start', 'getting-started'), item('workspace', 'inspector'), item('install', 'install-with-ai'), item('recovery', 'codex-conversation-resume')] },
+      { text: t.guide, items: [item('start', 'getting-started'), item('workspace', 'inspector'), item('install', 'install-with-ai'), item('recovery', 'codex-conversation-resume'), item('graph', 'knowledge-graph')] },
       { text: lang === 'zh' ? '帮助与安全' : 'Help & safety', items: [item('troubleshooting', 'troubleshooting'), item('faq', 'faq'), item('compare', 'comparison'), item('security', 'security')] },
       { text: t.plugin, items: [item('structured', 'structured-workflow'), item('protocol', 'protocol'), item('session', 'session-runtime'), item('reference', 'reference')] },
       { text: t.versions, items: [item('changelog', 'changelog'), item('migration', 'v2.4'), item('map', 'documentation-migration')] },

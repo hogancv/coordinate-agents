@@ -62,7 +62,7 @@ Closing the browser or Web server does not stop independent Session Hosts; use t
 - [Getting started](./getting-started.html) → [Workspace guide](./inspector.html) → [Conversation recovery](./codex-conversation-resume.html)
 - [Install with AI](./install-with-ai.html), [Troubleshooting](./troubleshooting.html), [FAQ](./faq.html), [Security & permissions](./security.html)
 - [Structured Plugin](./structured-workflow.html), [Technical references and translation status](./reference.html)
-- <a href="./knowledge-graph.html?lang=en" target="_self">Interactive knowledge graph</a>: explore the supplied repository snapshot with English / 中文 controls. Open the HTML file locally or from this documentation site; rendering loads vis-network from a CDN.
+- [Knowledge graph](./knowledge-graph.html): explore the repository's code, documentation and relationships with English / 中文 controls.
 - [Changelog](./changelog.html), [Original v2.4 snapshot and migration](./v2.4.html), [Documentation migration and URL map](./documentation-migration.html)
 
 Verified 2026-10-21: source and npm `latest` are **3.0.2**; the independently versioned Plugin is **2.4.0**. A source merge does not publish npm. Check dist-tags before installing.

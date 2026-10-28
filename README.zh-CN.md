@@ -178,7 +178,7 @@ npm test
 - 结构化能力：[Plugin 与 Legacy CLI](./docs/structured-workflow.md)、[Plugin E2E](./docs/plugin-e2e.md)、[协议](./docs/protocol.md)、[MCP](./docs/mcp.md)、[Task Graph](./docs/task-graph-v1.md)。
 - 运行时与扩展：[Session](./docs/session-runtime.md)、[事件日志](./docs/event-journal.md)、[Adapter 开发](./docs/adapter-author-guide.md)、[一致性验证](./docs/adapter-conformance.md)。
 - 入口：[中文文档](./docs/zh-CN/index.md)、[文档首页](./docs/index.md)、[机器可读索引](./docs/llms.txt)。
-- [知识图谱 HTML](./docs/public/knowledge-graph.html)：下载后用浏览器打开，或通过文档首页的图谱链接访问。支持界面与说明性标签的中文 / English 切换。此文件为导入的静态快照，渲染需联网加载 vis-network CDN。
+- [知识图谱](./docs/zh-CN/knowledge-graph.md)：直接在文档站内浏览双语交互图谱，也可下载[独立 HTML](./docs/public/graphs/coordinate-agents.html) 后在本地打开。此图谱为导入的静态快照，渲染需联网加载 vis-network CDN。
 
 ## 许可证
 
