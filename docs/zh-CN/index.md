@@ -60,6 +60,7 @@ npx @hogancv/coordinate-agents@3.0.2 web --root "/path/to/project" --port 3000
 - [快速开始](./getting-started.html) → [完整使用指南](./inspector.html) → [对话恢复](./codex-conversation-resume.html)
 - [让 AI 安装](./install-with-ai.html)、[故障排查](./troubleshooting.html)、[常见问题](./faq.html)、[安全与权限](./security.html)
 - [结构化 Plugin](./structured-workflow.html)、[技术参考与翻译状态](./reference.html)
+- <a href="../knowledge-graph.html?lang=zh-CN" target="_self">交互式知识图谱</a>：浏览导入的仓库快照，支持中文 / English 切换。可从文档站访问，也可直接打开 HTML 文件；渲染需联网加载 CDN 上的 vis-network。
 - [版本记录](./changelog.html)、[v2.4 原始快照与迁移](./v2.4.html)、[文档迁移与路径映射](./documentation-migration.html)
 
 核对日期：2026-10-21。源码与 npm `latest` 均为 **3.0.2**；Plugin 独立版本为 **2.4.0**。合并源码不会发布 npm，安装前仍应检查 dist-tags。

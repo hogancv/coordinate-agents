@@ -196,6 +196,7 @@ Release history is in [Changelog](./docs/changelog.md); distribution details are
 - Structured workflow: [Plugin and Legacy CLI](./docs/structured-workflow.md), [Plugin E2E](./docs/plugin-e2e.md), [Protocol](./docs/protocol.md), [MCP](./docs/mcp.md), [Task Graph](./docs/task-graph-v1.md).
 - Runtime and adapters: [Sessions](./docs/session-runtime.md), [Event Journal](./docs/event-journal.md), [Adapter author guide](./docs/adapter-author-guide.md), [Conformance](./docs/adapter-conformance.md).
 - Indexes: [Documentation home](./docs/index.md), [中文入口](./docs/zh-CN/index.md), [Machine-readable index](./docs/llms.txt).
+- [Knowledge graph HTML](./docs/public/knowledge-graph.html): download and open in a browser, or follow the graph link on the documentation home page. English / 中文 switching covers controls and descriptive labels. This is an imported snapshot; rendering requires the vis-network CDN.
 
 ## License
 
