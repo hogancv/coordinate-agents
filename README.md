@@ -31,6 +31,8 @@ results, or choose **Custom Terminals** to bring your own CLI pair.
 Your projects, task history, terminal sessions, and collaboration receipts stay
 on your machine. Each agent uses its own CLI configuration and provider login.
 
+![Coordinate Agents animated product demo](./docs/assets/coordinate-agents-promo.gif)
+
 ![Web Workspace preview](./docs/assets/web-workspace.png)
 
 > **Coming from v2.4?** v3 focuses the npm product on Web Workspace. Find the

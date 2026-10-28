@@ -30,6 +30,8 @@
 
 项目、任务历史、终端会话和协作回执保存在本机。每个 Agent 使用自己的 CLI 配置和登录状态。
 
+![Coordinate Agents 动态产品演示](./docs/assets/coordinate-agents-promo.gif)
+
 ![Web Workspace 预览](./docs/assets/web-workspace.png)
 
 > **v2.4 用户请看：** v3 将 npm 产品重心转向 Web Workspace。
