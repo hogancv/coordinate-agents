@@ -552,24 +552,57 @@ function sessionView(root, record, slot, facts, nativeConversation) {
   };
 }
 
+// Performance optimization: Evaluate task status in a single pass over session properties
+// and check startup slots without allocating intermediate arrays (e.g. Object.values, .map, .filter).
 function statusFromFacts(record, sessions) {
   if (record.status === 'ERROR' || record.status === 'CLOSED') return record.status;
-  if (record.startup && Object.values(record.startup.slots).some(state => state !== 'READY')) return record.status;
-  const states = sessions.map(session => session.state).filter(Boolean);
-  if (record.mode === 'custom' && record.status === 'STARTING') return states.some(state => TERMINAL_SESSION_STATES.has(state)) ? 'ERROR' : 'STARTING';
-  const active = states.filter(state => ACTIVE_SESSION_STATES.has(state)).length;
+  if (record.startup) {
+    const slots = record.startup.slots;
+    for (const slot in slots) {
+      if (slots[slot] !== 'READY') return record.status;
+    }
+  }
+
+  let active = 0;
+  let nonNullCount = 0;
+  let hasTerminal = false;
+  let allTerminal = true;
+
+  for (const slot in sessions) {
+    const state = sessions[slot]?.state;
+    if (state) {
+      nonNullCount++;
+      if (ACTIVE_SESSION_STATES.has(state)) active++;
+      if (TERMINAL_SESSION_STATES.has(state)) {
+        hasTerminal = true;
+      } else {
+        allTerminal = false;
+      }
+    } else {
+      allTerminal = false;
+    }
+  }
+
+  if (record.mode === 'custom' && record.status === 'STARTING') return hasTerminal ? 'ERROR' : 'STARTING';
   if (active === 2) return 'RUNNING';
   if (active === 1) return 'DEGRADED';
-  if (record.status === 'STARTING') return states.some(state => TERMINAL_SESSION_STATES.has(state)) ? 'ERROR' : 'STARTING';
-  if (states.length === 2 && states.every(state => TERMINAL_SESSION_STATES.has(state))) return 'EXITED';
+  if (record.status === 'STARTING') return hasTerminal ? 'ERROR' : 'STARTING';
+  if (nonNullCount === 2 && allTerminal) return 'EXITED';
   return record.status;
 }
 
+// Performance optimization: Direct object building for sessions and sessionIds in a single loop,
+// avoiding array tuple allocations from Object.fromEntries(taskSlots.map(...)).
 function workspaceTaskView(root, record, facts = new Map(), { includeHistory = true, historyPage = null } = {}) {
-  const sessions = Object.fromEntries(taskSlots(record).map(expected => [
-    expected.slot,
-    sessionView(root, record, record.sessions[expected.slot], facts, record.nativeConversations?.[expected.slot]),
-  ]));
+  const slots = taskSlots(record);
+  const sessions = {};
+  const sessionIds = {};
+  for (let i = 0; i < slots.length; i++) {
+    const expected = slots[i];
+    const slot = expected.slot;
+    sessions[slot] = sessionView(root, record, record.sessions[slot], facts, record.nativeConversations?.[slot]);
+    sessionIds[slot] = record.sessions[slot].sessionId;
+  }
   const codexFact = sessions.codex?.recordAvailable ? facts.get(sessions.codex.sessionId) : null;
   const executorFact = sessions.antigravity?.recordAvailable ? facts.get(sessions.antigravity.sessionId) : null;
   if (record.mode !== 'custom' && manualConfirmationCurrent(record, codexFact)) {
@@ -583,7 +616,7 @@ function workspaceTaskView(root, record, facts = new Map(), { includeHistory = t
     ...(record.runtimeFencing ? { runtimeFencing: true } : {}),
     ...(record.custom ? { custom: record.custom } : {}),
     title: record.title,
-    status: statusFromFacts(record, Object.values(sessions)),
+    status: statusFromFacts(record, sessions),
     promptVersion: record.promptVersion,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -595,7 +628,7 @@ function workspaceTaskView(root, record, facts = new Map(), { includeHistory = t
       collaborationHistory: { archivedEvents: record.collaborationArchive?.eventCount || 0,
         previousPage: historyPage === null ? record.collaborationArchive?.pageCount || null : historyPage > 1 ? historyPage - 1 : null } } : {}),
     startup: record.startup,
-    sessionIds: Object.fromEntries(taskSlots(record).map(({ slot }) => [slot, record.sessions[slot].sessionId])),
+    sessionIds,
     sessionHistory: record.sessionHistory,
     error: record.error,
   };
