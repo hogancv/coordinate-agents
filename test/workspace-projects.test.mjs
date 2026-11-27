@@ -220,3 +220,10 @@ test('multi-project gateway isolates settings, task groups and raw PTY operation
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('repository facts support a directory nested within a Git worktree', async () => {
+  const { repositoryFacts } = await import('../inspector/server/workspace-data.mjs');
+  const facts = repositoryFacts(join(process.cwd(), 'inspector'));
+  assert.ok(facts.head);
+  assert.equal(facts.branch, repositoryFacts(process.cwd()).branch);
+});
