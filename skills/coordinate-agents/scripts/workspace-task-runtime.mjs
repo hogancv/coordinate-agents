@@ -458,8 +458,6 @@ function readWorkspaceTaskRecord(root, id) {
     });
   }
   try {
-    const directory = workspaceTaskDirectory(repository).directory;
-    safeInternalStat(directory, path);
     return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(join(repository, '.agent-bus'), path)), { root: repository });
   } catch (error) {
     if (error?.code === 'WORKSPACE_TASK_NOT_FOUND' || error?.code === 'WORKSPACE_TASK_STATE_CONFLICT') throw error;
@@ -482,7 +480,6 @@ export function listWorkspaceTaskRecords(root) {
     .map(name => {
       const path = join(directory, name);
       try {
-        safeInternalStat(directory, path);
         return validateWorkspaceTaskRecord(JSON.parse(readInternalFile(directory, path)), { root: repository });
       } catch (error) {
         throw normalizeRuntimeError(error, 'WORKSPACE_TASK_STATE_CONFLICT');
