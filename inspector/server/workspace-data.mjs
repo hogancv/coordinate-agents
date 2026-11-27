@@ -106,9 +106,7 @@ function readWorkspaceSettings(root, { forDetection = false } = {}) {
 }
 
 
-// Performance optimization: fast .git check to avoid spawning git sub-processes for non-git repositories (~50ms speedup per check)
 function gitFact(root, args) {
-  if (!root || !existsSync(join(root, '.git'))) return null;
   const result = spawnSync('git', ['-C', root, ...args], {
     encoding: 'utf8',
     windowsHide: true,

@@ -32,7 +32,8 @@ function gitRoot(path) {
     if (parent === curr) break;
     curr = parent;
   }
-  if (!hasGitFolder) return null;
+  // Explicit Git environment settings can locate metadata outside this tree.
+  if (!hasGitFolder && !process.env.GIT_DIR && !process.env.GIT_WORK_TREE) return null;
   const result = spawnSync('git', ['-C', path, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', timeout: 5000, maxBuffer: 512 * 1024, windowsHide: true });
   return result.status === 0 ? directory(result.stdout.trim()) : null;
 }
