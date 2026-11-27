@@ -225,5 +225,5 @@ test('repository facts support a directory nested within a Git worktree', async 
   const { repositoryFacts } = await import('../inspector/server/workspace-data.mjs');
   const facts = repositoryFacts(join(process.cwd(), 'inspector'));
   assert.ok(facts.head);
-  assert.ok(facts.branch);
+  assert.equal(facts.branch, repositoryFacts(process.cwd()).branch);
 });
